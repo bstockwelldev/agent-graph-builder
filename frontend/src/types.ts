@@ -1,3 +1,5 @@
+export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "google";
+
 export type NodeType = "input" | "prompt" | "llm" | "tool" | "router" | "output";
 export type EdgeKind = "sequence" | "conditional" | "default";
 
@@ -34,6 +36,7 @@ export interface Diagnostic {
   severity: "error" | "warning";
   code: string;
   node_id?: string | null;
+  edge_id?: string | null;
   message: string;
   blocking: boolean;
 }
@@ -50,6 +53,11 @@ export interface RunSummary {
   graph_id: string;
   status: "queued" | "running" | "succeeded" | "failed";
   result: unknown;
+  input?: Record<string, unknown>;
+  provider?: string | null;
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface NodeTrace {

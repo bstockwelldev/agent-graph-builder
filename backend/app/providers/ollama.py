@@ -38,5 +38,5 @@ class OllamaChatModel:
             return data["message"]["content"]
 
 
-def get_chat_model(model: str | None = None) -> OllamaChatModel:
+def get_ollama_chat_model(model: str | None = None) -> OllamaChatModel:
     return OllamaChatModel(model=model or "qwen2.5:3b")

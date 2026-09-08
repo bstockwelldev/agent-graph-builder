@@ -20,7 +20,8 @@ from .compiler import compile_graph as validate_and_diagnose
 from .events import RunEventBus, create_bus, now_iso
 from .models import CompileResult, GraphDefinition, NodeTrace, NodeType, RunSummary
 from .nodes import EXECUTORS, ExecContext
-from .providers.ollama import get_chat_model
+from .providers.base import get_chat_model, resolve_chat_provider
+from . import storage
 
 
 def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -34,14 +35,33 @@ class RunState(TypedDict, total=False):
     result: Any
 
 
-# In-memory stores. The POC intentionally excludes durable/replayable
-# execution (EDD section 24 is out of scope) -- runs and compiled workflows
-# live only as long as the process does. Saved graph *definitions* persist
-# to SQLite (storage.py); compiled/run state does not need to.
+# In-memory stores for live execution. Completed runs are snapshotted to SQLite
+# (storage.py); compiled workflows remain process-local only.
 COMPILED_WORKFLOWS: dict[str, GraphDefinition] = {}
 RUN_STORE: dict[str, RunSummary] = {}
 RUN_TRACES: dict[str, dict[str, NodeTrace]] = {}
 RUN_BUSES: dict[str, RunEventBus] = {}
+
+
+def get_run_summary(run_id: str) -> RunSummary | None:
+    summary = RUN_STORE.get(run_id)
+    if summary is not None:
+        return summary
+    return storage.get_run(run_id)
+
+
+def get_run_node_traces(run_id: str) -> list[NodeTrace]:
+    if run_id in RUN_TRACES:
+        return list(RUN_TRACES[run_id].values())
+    return storage.get_run_traces(run_id)
+
+
+def _persist_run_snapshot(run_id: str) -> None:
+    summary = RUN_STORE.get(run_id)
+    if summary is None or summary.completed_at is None:
+        return
+    traces = list(RUN_TRACES.get(run_id, {}).values())
+    storage.save_run_snapshot(summary, traces)
 
 
 def compile_workflow(graph: GraphDefinition) -> CompileResult:
@@ -50,6 +70,11 @@ def compile_workflow(graph: GraphDefinition) -> CompileResult:
     if result.ok:
         COMPILED_WORKFLOWS[compiled_workflow_id] = graph
     return result
+
+
+def validate_only(graph: GraphDefinition) -> CompileResult:
+    """Validate graph structure without persisting or registering a compiled workflow."""
+    return validate_and_diagnose(graph, None)
 
 
 def _build_langgraph(graph: GraphDefinition, ctx: ExecContext):
@@ -146,22 +171,41 @@ async def _execute(run_id: str, graph: GraphDefinition, compiled_app, run_input:
         bus.emit("run.completed", {"result": _jsonable(final_state.get("result"))})
     except Exception as exc:  # noqa: BLE001 - reported via run status + SSE, not raised further
         RUN_STORE[run_id].status = "failed"
+        RUN_STORE[run_id].error = str(exc)
         bus.emit("run.failed", {"error": str(exc)})
     finally:
+        RUN_STORE[run_id].completed_at = now_iso()
+        _persist_run_snapshot(run_id)
         bus.close()
 
 
-def start_run(compiled_workflow_id: str, run_input: dict[str, Any]) -> tuple[str, RunEventBus]:
+def start_run(
+    compiled_workflow_id: str,
+    run_input: dict[str, Any],
+    provider: str | None = None,
+) -> tuple[str, RunEventBus]:
     """Creates run bookkeeping and returns immediately; caller schedules `_execute`."""
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
-    RUN_STORE[run_id] = RunSummary(run_id=run_id, graph_id=graph.id, status="queued")
+    resolved_provider = resolve_chat_provider(provider)
+
+    RUN_STORE[run_id] = RunSummary(
+        run_id=run_id,
+        graph_id=graph.id,
+        status="queued",
+        input=run_input,
+        provider=resolved_provider.value,
+        started_at=now_iso(),
+    )
     RUN_TRACES[run_id] = {}
 
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
 
-    ctx = ExecContext(run_id=run_id, graph=graph, bus=bus, chat_model_factory=get_chat_model)
+    def chat_model_factory(model: str | None):
+        return get_chat_model(model, provider=resolved_provider.value)
+
+    ctx = ExecContext(run_id=run_id, graph=graph, bus=bus, chat_model_factory=chat_model_factory)
     compiled_app = _build_langgraph(graph, ctx)
 
     import asyncio

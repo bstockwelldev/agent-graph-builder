@@ -64,6 +64,7 @@ class Diagnostic(BaseModel):
     severity: Literal["error", "warning"]
     code: str
     node_id: str | None = None
+    edge_id: str | None = None
     message: str
     blocking: bool = False
 
@@ -78,6 +79,12 @@ class CompileResult(BaseModel):
 class RunRequest(BaseModel):
     graph_id: str
     input: dict[str, Any] = Field(default_factory=dict)
+    provider: Literal["ollama", "stub", "openai_compat", "groq", "google"] | None = None
+
+
+class CreateGraphRequest(BaseModel):
+    name: str = "Untitled graph"
+    template: Literal["blank", "demo"] = "blank"
 
 
 class RunSummary(BaseModel):
@@ -85,6 +92,11 @@ class RunSummary(BaseModel):
     graph_id: str
     status: Literal["queued", "running", "succeeded", "failed"]
     result: Any | None = None
+    input: dict[str, Any] = Field(default_factory=dict)
+    provider: str | None = None
+    error: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 class NodeTrace(BaseModel):

@@ -27,12 +27,10 @@ export function NodePalette({ onAdd }: { onAdd: (type: NodeType) => void }) {
 }
 
 const panelStyle: CSSProperties = {
-  width: 200,
+  width: "100%",
   padding: spacing[3],
-  borderRight: `1px solid ${surface.border}`,
   background: surface.panel,
   color: text.primary,
-  overflowY: "auto",
 };
 
 const headingStyle: CSSProperties = {

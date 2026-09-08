@@ -35,6 +35,7 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     severity="error",
                     code="GRAPH_EDGE_UNKNOWN_SOURCE",
                     node_id=edge.source,
+                    edge_id=edge.id,
                     message=f"Edge {edge.id!r} references unknown source node {edge.source!r}",
                     blocking=True,
                 )
@@ -45,6 +46,7 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     severity="error",
                     code="GRAPH_EDGE_UNKNOWN_TARGET",
                     node_id=edge.target,
+                    edge_id=edge.id,
                     message=f"Edge {edge.id!r} references unknown target node {edge.target!r}",
                     blocking=True,
                 )
@@ -55,6 +57,7 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     severity="error",
                     code="GRAPH_CONDITIONAL_EDGE_MISSING_CONDITION",
                     node_id=edge.source,
+                    edge_id=edge.id,
                     message=f"Conditional edge {edge.id!r} has no condition string",
                     blocking=True,
                 )

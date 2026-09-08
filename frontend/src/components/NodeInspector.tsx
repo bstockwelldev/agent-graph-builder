@@ -1,15 +1,38 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { GraphEdge, GraphNode } from "../types";
-import { fontFamily, localType, spacing, surface, text, typeScale } from "../theme";
+import type { GraphEdge, GraphNode, Diagnostic } from "../types";
+import { accentSurface, color, fontFamily, localType, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
 import { Select, TextArea, TextInput } from "./ui/fields";
 
+function IssueList({ issues }: { issues: Diagnostic[] }) {
+  if (issues.length === 0) return null;
+  return (
+    <div style={{ marginBottom: spacing[3] }}>
+      {issues.map((issue, index) => (
+        <div
+          key={`${issue.code}-${index}`}
+          style={{
+            ...typeScale.caption,
+            color: issue.severity === "error" ? accentSurface.destructive.text : color.warning[500],
+            marginBottom: spacing[1],
+            lineHeight: "16px",
+          }}
+        >
+          {issue.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function NodeInspector({
   node,
+  issues = [],
   onConfigChange,
   onDelete,
 }: {
   node: GraphNode;
+  issues?: Diagnostic[];
   onConfigChange: (config: Record<string, unknown>) => void;
   onDelete: () => void;
 }) {
@@ -19,6 +42,7 @@ export function NodeInspector({
     <div style={panelStyle}>
       <div style={headingStyle}>Configure: {node.type}</div>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
+      <IssueList issues={issues} />
 
       {node.type === "input" && (
         <Field label="Variable name">
@@ -100,10 +124,12 @@ export function NodeInspector({
 
 export function EdgeInspector({
   edge,
+  issues = [],
   onChange,
   onDelete,
 }: {
   edge: GraphEdge;
+  issues?: Diagnostic[];
   onChange: (patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
 }) {
@@ -113,6 +139,7 @@ export function EdgeInspector({
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>
         {edge.source} → {edge.target}
       </div>
+      <IssueList issues={issues} />
 
       <Field label="Kind">
         <Select value={edge.kind} onChange={(e) => onChange({ kind: e.target.value as GraphEdge["kind"] })}>

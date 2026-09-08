@@ -11,14 +11,25 @@ import {
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, streamRunEvents } from "./api";
+import {
+  applyCompileIssueToEdge,
+  applyCompileIssueToNodeData,
+  buildIssueMaps,
+  diagnosticsForEdge,
+  diagnosticsForNode,
+  edgeStrokeForKind,
+  validationSummary,
+} from "./diagnostics";
 import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
+import { GraphLibrary } from "./components/GraphLibrary";
 import { NodePalette } from "./components/NodePalette";
 import { RunPanel } from "./components/RunPanel";
 import { GraphNodeView, type GraphNodeData } from "./components/nodes/GraphNodeView";
 import { color, spacing, surface, text, typeScale } from "./theme";
-import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RunSummary } from "./types";
+import { TextInput } from "./components/ui/fields";
+import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RunSummary, ChatProvider } from "./types";
 
 const DEMO_GRAPH_ID = "demo_classify_and_route";
 
@@ -67,31 +78,65 @@ function labelFor(type: NodeType, config: Record<string, unknown>): string {
   }
 }
 
-function edgeColor(kind: EdgeKind): string {
-  if (kind === "conditional") return color.primary[600];
-  if (kind === "default") return color.warning[600];
-  return color.neutral[400];
-}
-
 function toFlowNode(n: GraphNode): Node<GraphNodeData> {
   return {
     id: n.id,
     type: n.type,
     position: n.position,
-    data: { nodeType: n.type, label: labelFor(n.type, n.config), config: n.config, status: "idle" },
+    data: { nodeType: n.type, label: labelFor(n.type, n.config), config: n.config, status: "idle", compileIssue: null },
   };
 }
 
-function toFlowEdge(e: GraphEdge): Edge {
+function toFlowEdge(e: GraphEdge, issue?: { severity: "error" | "warning"; caption: string }): Edge {
+  const { stroke, strokeWidth } = edgeStrokeForKind(e.kind, issue);
   return {
     id: e.id,
     source: e.source,
     target: e.target,
     label: e.kind === "conditional" ? `if: ${e.condition ?? ""}` : e.kind,
     animated: e.kind === "conditional",
-    style: { stroke: edgeColor(e.kind) },
+    style: { stroke, strokeWidth },
     data: { kind: e.kind, condition: e.condition ?? null },
   };
+}
+
+function syncIdCounter(graph: GraphDefinition) {
+  let max = idCounter;
+  for (const item of [...graph.nodes, ...graph.edges]) {
+    const match = item.id.match(/_(\d+)$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  idCounter = max;
+}
+
+function applyGraphToCanvas(
+  graph: GraphDefinition,
+  setters: {
+    setGraphId: (id: string) => void;
+    setGraphName: (name: string) => void;
+    setNodes: ReturnType<typeof useNodesState<Node<GraphNodeData>>>[1];
+    setEdges: ReturnType<typeof useEdgesState<Edge>>[1];
+    setSelectedNodeId: (id: string | null) => void;
+    setSelectedEdgeId: (id: string | null) => void;
+    setDiagnostics: (d: Diagnostic[]) => void;
+    setRunSummary: (r: RunSummary | null) => void;
+    setEvents: (e: PlatformEvent[]) => void;
+    setNodeTraces: (t: Record<string, NodeTrace>) => void;
+    closeStream: () => void;
+  },
+) {
+  syncIdCounter(graph);
+  setters.setGraphId(graph.id);
+  setters.setGraphName(graph.name);
+  setters.setNodes(graph.nodes.map(toFlowNode));
+  setters.setEdges(graph.edges.map((edge) => toFlowEdge(edge)));
+  setters.setSelectedNodeId(null);
+  setters.setSelectedEdgeId(null);
+  setters.setDiagnostics([]);
+  setters.setRunSummary(null);
+  setters.setEvents([]);
+  setters.setNodeTraces({});
+  setters.closeStream();
 }
 
 let idCounter = 1;
@@ -108,35 +153,188 @@ const headerBarStyle = {
 } as const;
 
 export default function App() {
-  const [graphId] = useState(DEMO_GRAPH_ID);
-  const [graphName, setGraphName] = useState("Classify & Route (demo)");
+  const [graphId, setGraphId] = useState<string | null>(null);
+  const [graphName, setGraphName] = useState("");
+  const [graphs, setGraphs] = useState<GraphDefinition[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
+  const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
   const [events, setEvents] = useState<PlatformEvent[]>([]);
   const [nodeTraces, setNodeTraces] = useState<Record<string, NodeTrace>>({});
   const closeStreamRef = useRef<(() => void) | null>(null);
+  const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
+  const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
+
+  const focusDiagnostics = useCallback(() => {
+    diagnosticsSectionRef.current?.focus();
+    diagnosticsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+
+  const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
+    if (diagnostic.edge_id) {
+      setSelectedEdgeId(diagnostic.edge_id);
+      setSelectedNodeId(null);
+      return;
+    }
+    if (diagnostic.node_id) {
+      setSelectedNodeId(diagnostic.node_id);
+      setSelectedEdgeId(null);
+    }
+  }, []);
+
+  const applyDiagnosticsToCanvas = useCallback(
+    (nextDiagnostics: Diagnostic[]) => {
+      const { nodeIssues, edgeIssues } = buildIssueMaps(nextDiagnostics);
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          data: applyCompileIssueToNodeData(node.data, nodeIssues.get(node.id)),
+        })),
+      );
+      setEdges((eds) => eds.map((edge) => applyCompileIssueToEdge(edge, edgeIssues.get(edge.id))));
+    },
+    [setNodes, setEdges],
+  );
+
+  const closeStream = useCallback(() => {
+    closeStreamRef.current?.();
+    closeStreamRef.current = null;
+  }, []);
 
   useEffect(() => {
-    api.getGraph(DEMO_GRAPH_ID).then((graph) => {
-      setGraphName(graph.name);
-      setNodes(graph.nodes.map(toFlowNode));
-      setEdges(graph.edges.map(toFlowEdge));
+    applyDiagnosticsToCanvas(diagnostics);
+  }, [diagnostics, applyDiagnosticsToCanvas]);
+
+  const canvasSetters = useCallback(
+    () => ({
+      setGraphId,
+      setGraphName,
+      setNodes,
+      setEdges,
+      setSelectedNodeId,
+      setSelectedEdgeId,
+      setDiagnostics,
+      setRunSummary,
+      setEvents,
+      setNodeTraces,
+      closeStream,
+    }),
+    [setNodes, setEdges, closeStream],
+  );
+
+  const refreshGraphList = useCallback(async () => {
+    const list = await api.listGraphs();
+    setGraphs(list);
+    return list;
+  }, []);
+
+  const refreshRunHistory = useCallback(async (targetGraphId: string) => {
+    const runs = await api.listRuns(targetGraphId);
+    setRunHistory(runs);
+    return runs;
+  }, []);
+
+  useEffect(() => {
+    if (!graphId) {
+      setRunHistory([]);
+      return;
+    }
+    refreshRunHistory(graphId).catch((err: unknown) => {
+      console.error("Failed to load run history:", err);
     });
-  }, [setNodes, setEdges]);
+  }, [graphId, refreshRunHistory]);
+
+  const applyRunInspection = useCallback(
+    (summary: RunSummary, traces: NodeTrace[]) => {
+      closeStreamRef.current?.();
+      closeStreamRef.current = null;
+      setEvents([]);
+      setRunSummary(summary);
+      const byId = Object.fromEntries(traces.map((t) => [t.node_id, t]));
+      setNodeTraces(byId);
+      setNodes((nds) =>
+        nds.map((n) => ({
+          ...n,
+          data: { ...n.data, status: byId[n.id]?.status ?? "idle" },
+        })),
+      );
+    },
+    [setNodes],
+  );
+
+  const handleSelectHistoricalRun = useCallback(
+    async (runId: string) => {
+      const [summary, traces] = await Promise.all([api.getRun(runId), api.getRunNodeTraces(runId)]);
+      applyRunInspection(summary, traces);
+    },
+    [applyRunInspection],
+  );
+
+  const loadGraphById = useCallback(
+    async (targetId: string) => {
+      const graph = await api.getGraph(targetId);
+      applyGraphToCanvas(graph, canvasSetters());
+    },
+    [canvasSetters],
+  );
+
+  useEffect(() => {
+    refreshGraphList()
+      .then((list) => {
+        const preferred = list.find((g) => g.id === DEMO_GRAPH_ID) ?? list[0];
+        if (preferred) {
+          applyGraphToCanvas(preferred, {
+            setGraphId,
+            setGraphName,
+            setNodes,
+            setEdges,
+            setSelectedNodeId,
+            setSelectedEdgeId,
+            setDiagnostics,
+            setRunSummary,
+            setEvents,
+            setNodeTraces,
+            closeStream: () => closeStreamRef.current?.(),
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to load graphs:", err);
+      });
+  }, [refreshGraphList, setNodes, setEdges, closeStream]);
+
+  const handleSelectGraph = useCallback(
+    async (targetId: string) => {
+      if (targetId === graphId) return;
+      await loadGraphById(targetId);
+    },
+    [graphId, loadGraphById],
+  );
+
+  const handleCreateGraph = useCallback(
+    async (name: string, template: "blank" | "demo") => {
+      const graph = await api.createGraph(name, template);
+      await refreshGraphList();
+      applyGraphToCanvas(graph, canvasSetters());
+    },
+    [refreshGraphList, canvasSetters],
+  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      const kind: EdgeKind = "sequence";
+      const { stroke, strokeWidth } = edgeStrokeForKind(kind);
       const edge: Edge = {
         id: nextId("e"),
         source: connection.source!,
         target: connection.target!,
         label: "sequence",
-        style: { stroke: edgeColor("sequence") },
-        data: { kind: "sequence" as EdgeKind, condition: null },
+        style: { stroke, strokeWidth },
+        data: { kind, condition: null },
       };
       setEdges((eds) => addEdge(edge, eds));
     },
@@ -151,7 +349,7 @@ export default function App() {
         id,
         type,
         position: { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
-        data: { nodeType: type, label: labelFor(type, config), config, status: "idle" },
+        data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
       setNodes((nds) => [...nds, node]);
     },
@@ -159,6 +357,9 @@ export default function App() {
   );
 
   const buildGraphDefinition = useCallback((): GraphDefinition => {
+    if (!graphId) {
+      throw new Error("No graph loaded");
+    }
     const entryNode = nodes.find((n) => n.data.nodeType === "input");
     return {
       id: graphId,
@@ -180,12 +381,35 @@ export default function App() {
     };
   }, [nodes, edges, graphId, graphName]);
 
+  useEffect(() => {
+    if (!graphId || nodes.length === 0) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const graph = buildGraphDefinition();
+        api
+          .validateGraph(graph)
+          .then((result) => setDiagnostics(result.diagnostics))
+          .catch((err: unknown) => {
+            console.error("Live validation failed:", err);
+          });
+      } catch {
+        // Graph not ready yet.
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [buildGraphDefinition, graphId, nodes, edges, graphName]);
+
   const handleCompile = useCallback(async () => {
+    if (!graphId) return;
     const graph = buildGraphDefinition();
     await api.saveGraph(graph);
     const result = await api.compileGraph(graph.id);
     setDiagnostics(result.diagnostics);
-  }, [buildGraphDefinition]);
+    if (!result.ok) {
+      focusDiagnostics();
+    }
+    await refreshGraphList();
+  }, [buildGraphDefinition, graphId, focusDiagnostics, refreshGraphList]);
 
   const setNodeStatus = useCallback(
     (nodeId: string, status: GraphNodeData["status"]) => {
@@ -195,19 +419,23 @@ export default function App() {
   );
 
   const handleRun = useCallback(
-    async (question: string) => {
+    async (question: string, provider: ChatProvider) => {
+      if (!graphId) return;
       const graph = buildGraphDefinition();
       await api.saveGraph(graph);
       const compileResult = await api.compileGraph(graph.id);
       setDiagnostics(compileResult.diagnostics);
-      if (!compileResult.ok) return;
+      if (!compileResult.ok) {
+        focusDiagnostics();
+        return;
+      }
 
       setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, status: "idle" } })));
       setEvents([]);
       setNodeTraces({});
       closeStreamRef.current?.();
 
-      const summary = await api.startRun(graph.id, { question });
+      const summary = await api.startRun(graph.id, { question }, provider);
       setRunSummary(summary);
 
       const nodeTypeById = new Map(nodes.map((n) => [n.id, n.data.nodeType]));
@@ -263,20 +491,16 @@ export default function App() {
           void (async () => {
             const traces = await api.getRunNodeTraces(summary.run_id);
             setNodeTraces(Object.fromEntries(traces.map((t) => [t.node_id, t])));
+            const latest = await api.getRun(summary.run_id);
+            setRunSummary(latest);
+            if (graphId) {
+              await refreshRunHistory(graphId);
+            }
           })();
-          setRunSummary((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  status: event.event_type === "run.completed" ? "succeeded" : "failed",
-                  result: event.payload.result ?? prev.result,
-                }
-              : prev,
-          );
         }
       });
     },
-    [buildGraphDefinition, nodes, setNodes, setNodeStatus],
+    [buildGraphDefinition, graphId, focusDiagnostics, nodes, refreshRunHistory, setNodes, setNodeStatus],
   );
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -285,40 +509,82 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
-      <NodePalette onAdd={addNode} />
+      <aside
+        style={{
+          width: 220,
+          display: "flex",
+          flexDirection: "column",
+          borderRight: `1px solid ${surface.border}`,
+          background: surface.panel,
+          overflowY: "auto",
+        }}
+      >
+        <GraphLibrary
+          graphs={graphs}
+          activeGraphId={graphId}
+          onSelect={(id) => void handleSelectGraph(id)}
+          onCreate={handleCreateGraph}
+        />
+        <NodePalette onAdd={addNode} />
+      </aside>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <div style={headerBarStyle}>
-          <div style={typeScale.subheading}>{graphName}</div>
-          <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId}</div>
-        </div>
-        <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            onNodeClick={(_, node) => {
-              setSelectedNodeId(node.id);
-              setSelectedEdgeId(null);
+          <TextInput
+            value={graphName}
+            onChange={(e) => setGraphName(e.target.value)}
+            aria-label="Graph name"
+            style={{ ...typeScale.subheading, fontWeight: 600, marginBottom: spacing[1] }}
+          />
+          <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId ?? "No graph selected"}</div>
+          <button
+            type="button"
+            onClick={focusDiagnostics}
+            aria-live="polite"
+            style={{
+              ...typeScale.caption,
+              marginTop: spacing[1],
+              padding: `${spacing[1]}px ${spacing[2]}px`,
+              borderRadius: 999,
+              border: `1px solid ${surface.borderStrong}`,
+              background: surface.raised,
+              color: validationLabel === "Ready" ? color.success[500] : color.warning[500],
+              cursor: "pointer",
             }}
-            onEdgeClick={(_, edge) => {
-              setSelectedEdgeId(edge.id);
-              setSelectedNodeId(null);
-            }}
-            onPaneClick={() => {
-              setSelectedNodeId(null);
-              setSelectedEdgeId(null);
-            }}
-            colorMode="dark"
-            fitView
           >
-            <Background />
-            <Controls />
-            <MiniMap />
-          </ReactFlow>
+            Validation: {validationLabel}
+          </button>
+        </div>
+        <div style={{ flex: 1, position: "relative", minHeight: 0, minWidth: 0 }}>
+          <div style={{ position: "absolute", inset: 0 }}>
+            <ReactFlow
+              style={{ width: "100%", height: "100%" }}
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              onNodeClick={(_, node) => {
+                setSelectedNodeId(node.id);
+                setSelectedEdgeId(null);
+              }}
+              onEdgeClick={(_, edge) => {
+                setSelectedEdgeId(edge.id);
+                setSelectedNodeId(null);
+              }}
+              onPaneClick={() => {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+              }}
+              colorMode="dark"
+              fitView
+            >
+              <Background />
+              <Controls />
+              <MiniMap />
+            </ReactFlow>
+          </div>
         </div>
       </div>
 
@@ -330,6 +596,7 @@ export default function App() {
             position: selectedNode.position,
             config: selectedNode.data.config,
           }}
+          issues={diagnosticsForNode(diagnostics, selectedNode.id)}
           onConfigChange={(config) =>
             setNodes((nds) =>
               nds.map((n) =>
@@ -356,17 +623,20 @@ export default function App() {
             kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
             condition: (selectedEdge.data?.condition as string | null) ?? null,
           }}
+          issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
           onChange={(patch) =>
             setEdges((eds) =>
               eds.map((e) => {
                 if (e.id !== selectedEdge.id) return e;
                 const kind = (patch.kind ?? (e.data?.kind as EdgeKind)) ?? "sequence";
                 const condition = patch.condition !== undefined ? patch.condition : (e.data?.condition as string | null);
+                const issue = buildIssueMaps(diagnostics).edgeIssues.get(e.id);
+                const { stroke, strokeWidth } = edgeStrokeForKind(kind, issue);
                 return {
                   ...e,
                   data: { ...e.data, kind, condition },
                   label: kind === "conditional" ? `if: ${condition ?? ""}` : kind,
-                  style: { stroke: edgeColor(kind) },
+                  style: { stroke, strokeWidth },
                   animated: kind === "conditional",
                 };
               }),
@@ -381,9 +651,13 @@ export default function App() {
 
       <RunPanel
         diagnostics={diagnostics}
+        diagnosticsSectionRef={diagnosticsSectionRef}
         onCompile={handleCompile}
         onRun={handleRun}
+        onDiagnosticClick={handleDiagnosticClick}
         runSummary={runSummary}
+        runHistory={runHistory}
+        onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
         events={events}
         selectedTrace={selectedTrace}
       />
