@@ -7,6 +7,8 @@ body,
 #root {
   margin: 0;
   height: 100%;
+  /* Keep in sync with theme.ts's `surface.page` (color.neutral[950]) --
+     plain CSS here since this file loads before any component mounts. */
   background: #111318;
   font-family: system-ui, -apple-system, sans-serif;
 }

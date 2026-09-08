@@ -17,6 +17,7 @@ import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { NodePalette } from "./components/NodePalette";
 import { RunPanel } from "./components/RunPanel";
 import { GraphNodeView, type GraphNodeData } from "./components/nodes/GraphNodeView";
+import { color } from "./theme";
 import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RunSummary } from "./types";
 
 const DEMO_GRAPH_ID = "demo_classify_and_route";
@@ -67,9 +68,9 @@ function labelFor(type: NodeType, config: Record<string, unknown>): string {
 }
 
 function edgeColor(kind: EdgeKind): string {
-  if (kind === "conditional") return "#6ea8fe";
-  if (kind === "default") return "#d8a92c";
-  return "#5c6270";
+  if (kind === "conditional") return color.primary[600];
+  if (kind === "default") return color.warning[600];
+  return color.neutral[400];
 }
 
 function toFlowNode(n: GraphNode): Node<GraphNodeData> {

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { GraphEdge, GraphNode } from "../types";
+import { accentSurface, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
 
 export function NodeInspector({
   node,
@@ -15,7 +16,7 @@ export function NodeInspector({
   return (
     <div style={panelStyle}>
       <div style={headingStyle}>Configure: {node.type}</div>
-      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>{node.id}</div>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
 
       {node.type === "input" && (
         <Field label="Variable name">
@@ -30,7 +31,7 @@ export function NodeInspector({
       {node.type === "prompt" && (
         <Field label="Template (use {question}, {upstream}, and any run variable)">
           <textarea
-            style={{ ...inputStyle, height: 120, fontFamily: "monospace" }}
+            style={{ ...inputStyle, height: 120, fontFamily: fontFamily.mono }}
             value={(node.config.template as string) ?? ""}
             onChange={(e) => set("template", e.target.value)}
           />
@@ -78,7 +79,7 @@ export function NodeInspector({
       )}
 
       {node.type === "router" && (
-        <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.5 }}>
+        <div style={{ ...typeScale.caption, opacity: 0.75, lineHeight: "18px" }}>
           Routing is driven entirely by this node's outgoing edges: mark an
           edge <b>conditional</b> with a condition string matched against the
           upstream LLM's output, and exactly one edge <b>default</b> as the
@@ -87,7 +88,7 @@ export function NodeInspector({
       )}
 
       {node.type === "output" && (
-        <div style={{ fontSize: 12, opacity: 0.75 }}>
+        <div style={{ ...typeScale.caption, opacity: 0.75 }}>
           No configuration -- returns whatever reaches it as the run result.
         </div>
       )}
@@ -111,7 +112,7 @@ export function EdgeInspector({
   return (
     <div style={panelStyle}>
       <div style={headingStyle}>Configure edge</div>
-      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>
         {edge.source} → {edge.target}
       </div>
 
@@ -146,8 +147,8 @@ export function EdgeInspector({
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{ display: "block", fontSize: 11, opacity: 0.6, marginBottom: 4 }}>{label}</label>
+    <div style={{ marginBottom: spacing[3] }}>
+      <label style={{ display: "block", ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>{label}</label>
       {children}
     </div>
   );
@@ -155,39 +156,37 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 const panelStyle: CSSProperties = {
   width: 300,
-  padding: 12,
-  borderLeft: "1px solid #2a2d35",
-  background: "#181a20",
-  color: "#e8eaed",
+  padding: spacing[3],
+  borderLeft: `1px solid ${surface.border}`,
+  background: surface.panel,
+  color: text.primary,
   overflowY: "auto",
 };
 
 const headingStyle: CSSProperties = {
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
+  ...localType.label,
   opacity: 0.6,
-  marginBottom: 4,
+  marginBottom: spacing[1],
 };
 
 const inputStyle: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "6px 8px",
-  borderRadius: 6,
-  border: "1px solid #2f333d",
-  background: "#20232b",
-  color: "#e8eaed",
-  fontSize: 13,
+  padding: `${spacing[2]}px`,
+  borderRadius: radius.lg,
+  border: `1px solid ${surface.borderStrong}`,
+  background: surface.raised,
+  color: text.primary,
+  ...localType.ui,
 };
 
 const deleteButtonStyle: CSSProperties = {
-  marginTop: 8,
-  padding: "6px 10px",
-  borderRadius: 6,
-  border: "1px solid #5a2c2c",
-  background: "#2b1c1c",
-  color: "#f0a0a0",
+  marginTop: spacing[2],
+  padding: `${spacing[2]}px ${spacing[3]}px`,
+  borderRadius: radius.lg,
+  border: `1px solid ${accentSurface.destructive.border}`,
+  background: accentSurface.destructive.bg,
+  color: accentSurface.destructive.text,
   cursor: "pointer",
-  fontSize: 12,
+  ...typeScale.caption,
 };

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import type { Diagnostic, NodeTrace, PlatformEvent, RunSummary } from "../types";
+import { accentSurface, color, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
 
 export function RunPanel({
   diagnostics,
@@ -30,11 +31,15 @@ export function RunPanel({
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="User question (fed into the Input node)"
         />
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[2] }}>
           <button style={buttonStyle} onClick={onCompile}>
             Compile
           </button>
-          <button style={{ ...buttonStyle, background: "#1f3a2a", borderColor: "#2f5a3f" }} disabled={running} onClick={() => onRun(question)}>
+          <button
+            style={{ ...buttonStyle, background: accentSurface.successAction.bg, borderColor: accentSurface.successAction.border }}
+            disabled={running}
+            onClick={() => onRun(question)}
+          >
             {running ? "Running…" : "Run"}
           </button>
         </div>
@@ -44,7 +49,10 @@ export function RunPanel({
         <div style={sectionStyle}>
           <div style={headingStyle}>Diagnostics</div>
           {diagnostics.map((d, i) => (
-            <div key={i} style={{ fontSize: 12, color: d.severity === "error" ? "#f0a0a0" : "#e8d090", marginBottom: 4 }}>
+            <div
+              key={i}
+              style={{ ...typeScale.caption, color: d.severity === "error" ? accentSurface.destructive.text : color.warning[500], marginBottom: spacing[1] }}
+            >
               [{d.severity}] {d.code}
               {d.node_id ? ` (${d.node_id})` : ""}: {d.message}
             </div>
@@ -55,11 +63,11 @@ export function RunPanel({
       {runSummary && (
         <div style={sectionStyle}>
           <div style={headingStyle}>Run status</div>
-          <div style={{ fontSize: 12 }}>
+          <div style={typeScale.caption}>
             {runSummary.run_id} — <b>{runSummary.status}</b>
           </div>
           {runSummary.status === "succeeded" && (
-            <div style={{ fontSize: 13, marginTop: 6, whiteSpace: "pre-wrap" }}>
+            <div style={{ ...localType.ui, marginTop: spacing[2] - 2, whiteSpace: "pre-wrap" }}>
               {String(runSummary.result)}
             </div>
           )}
@@ -71,18 +79,20 @@ export function RunPanel({
           <div style={headingStyle}>
             Node trace: {selectedTrace.node_id} ({selectedTrace.status})
           </div>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>Input</div>
+          <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
           <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>Output</div>
+          <div style={{ ...typeScale.caption, opacity: 0.6 }}>Output</div>
           <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
-          {selectedTrace.error && <div style={{ color: "#f0a0a0", fontSize: 12 }}>{selectedTrace.error}</div>}
+          {selectedTrace.error && (
+            <div style={{ ...typeScale.caption, color: accentSurface.destructive.text }}>{selectedTrace.error}</div>
+          )}
         </div>
       )}
 
       <div style={{ ...sectionStyle, flex: 1, overflowY: "auto" }}>
         <div style={headingStyle}>Event log</div>
         {events.map((e) => (
-          <div key={e.sequence} style={{ fontSize: 11, marginBottom: 3, fontFamily: "monospace" }}>
+          <div key={e.sequence} style={{ ...typeScale.caption, marginBottom: spacing[1] - 1, fontFamily: fontFamily.mono }}>
             <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
             {e.node_id ? ` · ${e.node_id}` : ""}
           </div>
@@ -94,54 +104,52 @@ export function RunPanel({
 
 const containerStyle: CSSProperties = {
   width: 340,
-  borderLeft: "1px solid #2a2d35",
-  background: "#181a20",
-  color: "#e8eaed",
+  borderLeft: `1px solid ${surface.border}`,
+  background: surface.panel,
+  color: text.primary,
   display: "flex",
   flexDirection: "column",
   overflowY: "auto",
 };
 
 const sectionStyle: CSSProperties = {
-  padding: 12,
-  borderBottom: "1px solid #2a2d35",
+  padding: spacing[3],
+  borderBottom: `1px solid ${surface.border}`,
 };
 
 const headingStyle: CSSProperties = {
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
+  ...localType.label,
   opacity: 0.6,
-  marginBottom: 8,
+  marginBottom: spacing[2],
 };
 
 const inputStyle: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "6px 8px",
-  borderRadius: 6,
-  border: "1px solid #2f333d",
-  background: "#20232b",
-  color: "#e8eaed",
-  fontSize: 13,
+  padding: `${spacing[2]}px`,
+  borderRadius: radius.lg,
+  border: `1px solid ${surface.borderStrong}`,
+  background: surface.raised,
+  color: text.primary,
+  ...localType.ui,
 };
 
 const buttonStyle: CSSProperties = {
-  padding: "6px 12px",
-  borderRadius: 6,
-  border: "1px solid #2f333d",
-  background: "#20232b",
-  color: "#e8eaed",
+  padding: `${spacing[2]}px ${spacing[3]}px`,
+  borderRadius: radius.lg,
+  border: `1px solid ${surface.borderStrong}`,
+  background: surface.raised,
+  color: text.primary,
   cursor: "pointer",
-  fontSize: 13,
+  ...localType.ui,
 };
 
 const preStyle: CSSProperties = {
-  fontSize: 11,
-  background: "#111318",
-  padding: 8,
-  borderRadius: 6,
+  ...typeScale.caption,
+  background: surface.page,
+  padding: spacing[2],
+  borderRadius: radius.lg,
   overflowX: "auto",
   marginTop: 2,
-  marginBottom: 8,
+  marginBottom: spacing[2],
 };

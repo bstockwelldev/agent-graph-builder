@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { NodeType } from "../types";
+import { localType, radius, spacing, surface, text, typeScale } from "../theme";
 
 const NODE_TYPES: { type: NodeType; label: string; hint: string }[] = [
   { type: "input", label: "Input", hint: "Accept user input" },
@@ -17,7 +18,7 @@ export function NodePalette({ onAdd }: { onAdd: (type: NodeType) => void }) {
       {NODE_TYPES.map((n) => (
         <button key={n.type} onClick={() => onAdd(n.type)} style={buttonStyle} title={n.hint}>
           <div style={{ fontWeight: 600 }}>{n.label}</div>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>{n.hint}</div>
+          <div style={{ ...typeScale.caption, opacity: 0.6 }}>{n.hint}</div>
         </button>
       ))}
     </div>
@@ -26,30 +27,28 @@ export function NodePalette({ onAdd }: { onAdd: (type: NodeType) => void }) {
 
 const panelStyle: CSSProperties = {
   width: 200,
-  padding: 12,
-  borderRight: "1px solid #2a2d35",
-  background: "#181a20",
-  color: "#e8eaed",
+  padding: spacing[3],
+  borderRight: `1px solid ${surface.border}`,
+  background: surface.panel,
+  color: text.primary,
   overflowY: "auto",
 };
 
 const headingStyle: CSSProperties = {
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
+  ...localType.label,
   opacity: 0.6,
-  marginBottom: 10,
+  marginBottom: spacing[3],
 };
 
 const buttonStyle: CSSProperties = {
   display: "block",
   width: "100%",
   textAlign: "left",
-  padding: "8px 10px",
-  marginBottom: 6,
-  borderRadius: 6,
-  border: "1px solid #2f333d",
-  background: "#20232b",
-  color: "#e8eaed",
+  padding: `${spacing[2]}px ${spacing[3]}px`,
+  marginBottom: spacing[2],
+  borderRadius: radius.lg,
+  border: `1px solid ${surface.borderStrong}`,
+  background: surface.raised,
+  color: text.primary,
   cursor: "pointer",
 };
