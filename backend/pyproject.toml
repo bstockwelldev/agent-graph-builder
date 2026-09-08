@@ -1,0 +1,19 @@
+[project]
+name = "agent-graph-builder-poc"
+version = "0.1.0"
+description = "POC: visual graph authoring + LangGraph execution + streamed node-level observability"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "httpx>=0.27",
+    "langgraph>=0.2.45",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
