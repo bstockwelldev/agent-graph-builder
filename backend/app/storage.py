@@ -10,12 +10,14 @@ POC excludes durable execution / replay, so run state lives in memory
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 from .models import GraphDefinition
 
-DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
+_DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
+DB_PATH = Path(os.environ["GRAPH_DB_PATH"]) if os.environ.get("GRAPH_DB_PATH") else _DEFAULT_DB_PATH
 
 
 def _connect() -> sqlite3.Connection:

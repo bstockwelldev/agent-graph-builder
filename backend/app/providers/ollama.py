@@ -25,7 +25,10 @@ class OllamaChatModel:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_prompt})
 
-        async with httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=60.0) as client:
+        # A local Ollama instance can be slow under contention (e.g. another
+        # process holding a larger model loaded) rather than genuinely stuck,
+        # so this is generous rather than a tight liveness check.
+        async with httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=180.0) as client:
             response = await client.post(
                 "/api/chat",
                 json={"model": self.model, "messages": messages, "stream": False},

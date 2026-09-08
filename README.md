@@ -41,6 +41,38 @@ answer.
 
 ## Running it
 
+### Option A: Docker (recommended)
+
+Prerequisites: Docker Desktop, and a local [Ollama](https://ollama.com)
+instance running on the host with a model pulled (defaults to `qwen2.5:3b`).
+Ollama itself is **not** containerized on purpose — it's kept on the host so
+the containers reuse whatever models you've already pulled instead of
+re-downloading them into a fresh container volume; the backend container
+reaches it at `http://host.docker.internal:11434`.
+
+```bash
+docker compose up --build
+```
+
+- Backend: http://localhost:8000 (FastAPI + LangGraph, live-reloads on edits
+  to `backend/app/`)
+- Frontend: http://localhost:5173 (Vite dev server, live-reloads on edits to
+  `frontend/src/`)
+- Saved graphs persist in a named volume (`graph_db`) instead of a bare file,
+  so `docker compose down` (without `-v`) keeps them across restarts.
+
+Both services bind-mount their source directories, so the containers behave
+exactly like the bare-metal dev servers below — same hot reload, same code —
+just process-isolated. Stop with `docker compose down` (add `-v` to also
+drop the saved-graphs volume).
+
+If your Ollama instance is slow or under load from something else on the
+host, LLM node calls can legitimately take a while; the provider adapter
+uses a generous (180s) timeout rather than treating a slow local model as a
+hard failure (`backend/app/providers/ollama.py`).
+
+### Option B: bare metal
+
 Prerequisites: Python 3.11+, `uv`, Node 18+, and a local
 [Ollama](https://ollama.com) instance with a model pulled (defaults to
 `qwen2.5:3b`; override per-node in the LLM node's config).
@@ -57,11 +89,12 @@ npm install
 npm run dev
 ```
 
+### Either way
+
 Open http://localhost:5173 — the canonical demo graph loads automatically
-(seeded into `backend/graphs.db` on first backend startup). Click **Run**,
-inspect the live event log and node traces, then try editing a node's
-prompt/model, adding a node from the palette, or changing an edge's
-condition and re-running.
+(seeded on first backend startup). Click **Run**, inspect the live event log
+and node traces, then try editing a node's prompt/model, adding a node from
+the palette, or changing an edge's condition and re-running.
 
 `backend/smoke_test.py` is a standalone script (`uv run python
 smoke_test.py`) that compiles and executes the demo graph twice — once with
