@@ -13,7 +13,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from .models import GraphDefinition, NodeTrace, RunSummary
+from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
 DB_PATH = Path(os.environ["GRAPH_DB_PATH"]) if os.environ.get("GRAPH_DB_PATH") else _DEFAULT_DB_PATH
@@ -62,7 +62,16 @@ def _connect() -> sqlite3.Connection:
         )
         """
     )
+    _ensure_run_schema(conn)
     return conn
+
+
+def _ensure_run_schema(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("pragma table_info(run)").fetchall()}
+    if "route_decisions_json" not in columns:
+        conn.execute(
+            "alter table run add column route_decisions_json text not null default '[]'"
+        )
 
 
 def save_graph(graph: GraphDefinition) -> None:
@@ -94,18 +103,35 @@ def list_graphs() -> list[GraphDefinition]:
 
 
 def _row_to_run_summary(row: tuple) -> RunSummary:
-    (
-        run_id,
-        graph_id,
-        status,
-        input_json,
-        provider,
-        result_json,
-        error,
-        started_at,
-        completed_at,
-    ) = row
+    if len(row) == 9:
+        (
+            run_id,
+            graph_id,
+            status,
+            input_json,
+            provider,
+            result_json,
+            error,
+            started_at,
+            completed_at,
+        ) = row
+        route_decisions_json = "[]"
+    else:
+        (
+            run_id,
+            graph_id,
+            status,
+            input_json,
+            provider,
+            result_json,
+            error,
+            started_at,
+            completed_at,
+            route_decisions_json,
+        ) = row
     result = json.loads(result_json) if result_json else None
+    route_decisions_raw = json.loads(route_decisions_json or "[]")
+    route_decisions = [RouteDecision.model_validate(item) for item in route_decisions_raw]
     return RunSummary(
         run_id=run_id,
         graph_id=graph_id,
@@ -116,23 +142,28 @@ def _row_to_run_summary(row: tuple) -> RunSummary:
         error=error,
         started_at=started_at,
         completed_at=completed_at,
+        route_decisions=route_decisions,
     )
 
 
 def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
     result_json = json.dumps(summary.result) if summary.result is not None else None
+    route_decisions_json = json.dumps(
+        [decision.model_dump(by_alias=True) for decision in summary.route_decisions]
+    )
     with _connect() as conn:
         conn.execute(
             """
             insert into run (
                 run_id, graph_id, status, input_json, provider,
-                result_json, error, started_at, completed_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                result_json, error, started_at, completed_at, route_decisions_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(run_id) do update set
                 status = excluded.status,
                 result_json = excluded.result_json,
                 error = excluded.error,
-                completed_at = excluded.completed_at
+                completed_at = excluded.completed_at,
+                route_decisions_json = excluded.route_decisions_json
             """,
             (
                 summary.run_id,
@@ -144,6 +175,7 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
                 summary.error,
                 summary.started_at or "",
                 summary.completed_at or "",
+                route_decisions_json,
             ),
         )
         conn.execute("delete from run_node_trace where run_id = ?", (summary.run_id,))
@@ -158,7 +190,7 @@ def get_run(run_id: str) -> RunSummary | None:
         row = conn.execute(
             """
             select run_id, graph_id, status, input_json, provider,
-                   result_json, error, started_at, completed_at
+                   result_json, error, started_at, completed_at, route_decisions_json
             from run where run_id = ?
             """,
             (run_id,),
@@ -173,7 +205,7 @@ def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
         rows = conn.execute(
             """
             select run_id, graph_id, status, input_json, provider,
-                   result_json, error, started_at, completed_at
+                   result_json, error, started_at, completed_at, route_decisions_json
             from run
             where graph_id = ?
             order by started_at desc

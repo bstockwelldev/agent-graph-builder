@@ -24,9 +24,8 @@ answer.
 3. **Agent/model nodes are configured independently of the graph** — the LLM
    node calls a provider-neutral `ChatModel` protocol
    (`backend/app/providers/base.py`); adapters include **Stub** (offline),
-   **Groq**, **Google Gemini**, **Ollama** (local), and **OpenAI-compatible
-   HTTP** (OpenAI, OpenRouter, LM Studio, etc.). **Azure AI Foundry** is
-   documented as a follow-up adapter only (see below). Swapping providers means
+   **Groq**, **Google Gemini**, **Azure OpenAI**, **Ollama** (local), and **OpenAI-compatible
+   HTTP** (OpenAI, OpenRouter, LM Studio, etc.). Swapping providers means
    adding an adapter, not touching the compiler or node executors.
 4. **Execution is observable at the node level** — every node emits
    `node.started` / `node.completed` / `node.failed` events over SSE, and the
@@ -37,11 +36,11 @@ answer.
 
 - **Backend**: Python + FastAPI + LangGraph, `uv` for dependency management.
 - **Frontend**: Vite + React + TypeScript + `@xyflow/react` (React Flow).
-- **Model provider**: Stub, Groq, Google Gemini, Ollama, or OpenAI-compatible
-  HTTP; selected per run; factory in `backend/app/providers/base.py`. Azure
-  (Foundry) planned — not implemented yet.
-- **Persistence**: SQLite for saved graph definitions. Runs are in-memory
-  only (no durable execution in this POC — see Simplifications below).
+- **Model provider**: Stub, Groq, Google Gemini, Azure OpenAI, Ollama, or OpenAI-compatible
+  HTTP; selected per run; factory in `backend/app/providers/base.py`.
+- **Persistence**: SQLite for saved graph definitions and run snapshots (node traces,
+  route decisions, and run metadata). Live SSE streams are in-memory only for
+  active runs.
 
 ## Running it
 
@@ -152,12 +151,15 @@ SSE streams are lost.
 | **Stub** | Offline demos, CI, fast routing proof | UI default; or `provider: "stub"`; or `CHAT_PROVIDER=stub` |
 | **Groq** | Hosted Llama via Groq | UI **Groq**; or `provider: "groq"`; uses `GROQ_API_KEY` |
 | **Google Gemini** | Gemini models via Generative Language API | UI **Google Gemini**; or `provider: "google"`; uses `GOOGLE_GENAI_API_KEY` or `GOOGLE_API_KEY` |
+| **Azure OpenAI** | Hosted chat via Azure deployment id | UI **Azure OpenAI**; or `provider: "azure"`; uses `AZURE_OPENAI_*` env vars |
 | **Ollama** | Real local LLM via Ollama | UI **Ollama (local LLM)**; or `provider: "ollama"`; or `CHAT_PROVIDER=ollama` (API default when omitted) |
 | **OpenAI-compatible** | OpenAI, OpenRouter, LM Studio, vLLM, etc. | UI **OpenAI-compatible (HTTP)**; or `provider: "openai_compat"` |
 
 Stub classifies using the same lookup keywords as the demo tool node; non-classifier LLM nodes return a short deterministic `[stub answer] …` string.
 
-When an LLM node still has the demo default model (`qwen2.5:3b`), cloud providers automatically use their default model (or `AI_MODEL` when set) — matching tabletop-studio defaults (`llama-3.3-70b-versatile`, `gemini-2.5-flash`).
+When an LLM node still has the demo default model (`qwen2.5:3b`), cloud providers automatically use their default model (or `AI_MODEL` when set) — matching tabletop-studio defaults (`llama-3.3-70b-versatile`, `gemini-2.5-flash`, Azure deployment name).
+
+For **Ollama**, **Groq**, and **Azure**, the Run panel loads up to five chat-capable models from a cached catalog (`GET /api/providers/{provider}/models?graph_id=`). Graph LLM node models are ranked first so demos can switch models at run time without editing every LLM node.
 
 ### Shared env with tabletop-studio
 
@@ -168,7 +170,7 @@ On backend startup the POC loads AI keys from a sibling repo dotenv file when pr
 | `SHARED_ENV_FILE` | Explicit file path |
 | `BSTOCKWELL_DEV_ROOT` | `<dev-root>/tabletop-studio/.env.local` |
 
-Set `$env:BSTOCKWELL_DEV_ROOT` to your polyrepo root (the parent of `tabletop-studio` and this repo). Keys already in the process environment are **not** overwritten. See [`backend/env.template`](backend/env.template) and tabletop-studio [`env.template`](../tabletop-studio/env.template) for variable names (`GROQ_API_KEY`, `GOOGLE_GENAI_API_KEY`, `GOOGLE_API_KEY`, `AI_MODEL`, `AI_PROVIDER`).
+Set `$env:BSTOCKWELL_DEV_ROOT` to your polyrepo root (the parent of `tabletop-studio` and this repo). Keys already in the process environment are **not** overwritten. See [`backend/env.template`](backend/env.template) and tabletop-studio [`env.template`](../tabletop-studio/env.template) for variable names (`GROQ_API_KEY`, `GOOGLE_GENAI_API_KEY`, `GOOGLE_API_KEY`, `AZURE_OPENAI_*`, `AI_MODEL`, `AI_PROVIDER`).
 
 ```powershell
 # From agent-graph-builder-poc (uses tabletop-studio/.env.local automatically)
@@ -182,6 +184,10 @@ uv run uvicorn app.main:app --reload --port 8000
 | `OPENAI_COMPAT_BASE_URL` | `https://api.openai.com/v1` | Chat completions base URL |
 | `OPENAI_COMPAT_API_KEY` | *(empty)* | Bearer token; omit for local servers that skip auth |
 | `OPENAI_COMPAT_DEFAULT_MODEL` | `gpt-4o-mini` | Used when an LLM node's config has no `model` |
+| `AZURE_OPENAI_API_KEY` | *(empty)* | Azure OpenAI resource key |
+| `AZURE_OPENAI_ENDPOINT` | *(empty)* | Resource endpoint (e.g. `https://<resource>.openai.azure.com`) |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | *(empty)* | Default deployment id for chat + catalog fallback |
+| `AZURE_OPENAI_API_VERSION` | `2024-02-15-preview` | API version query param for Azure requests |
 
 Examples:
 
@@ -197,36 +203,17 @@ set OPENAI_COMPAT_DEFAULT_MODEL=your-loaded-model
 
 Set each LLM node's **Model** field to the provider-specific model id (e.g.
 `gpt-4o-mini` or `qwen2.5:3b`); the run-level provider selector chooses which
-adapter handles the call.
+adapter handles the call. For Ollama/Groq/Azure, the Run panel **Model** select
+overrides the node config for that run (`POST /api/runs` accepts optional `model`).
 
-### Planned follow-up: Azure provider
+### Model catalog API
 
-**Not implemented in this POC slice.** The full EDD targets **Azure AI Foundry**
-(or Azure OpenAI) as the production adapter behind the same `ChatModel` seam
-(`providers/`). When we add it, the work should mirror Groq/Google:
+| Action | UI | API |
+|---|---|---|
+| List chat models (≤5, ranked) | Run panel **Model** select | `GET /api/providers/{provider}/models?graph_id=` |
+| Provider readiness | Run blocked with message | `GET /api/providers/{provider}/ready` |
 
-| Step | Target |
-|---|---|
-| Adapter | `backend/app/providers/azure.py` — chat completions against Azure deployment endpoint |
-| Factory | `ChatProvider.AZURE`, `get_chat_model(..., provider="azure")` |
-| API / UI | Extend `RunRequest.provider` and Run panel select |
-| Config | Env vars loaded via existing `load_shared_env()` (same tabletop-studio `.env.local` path); do **not** hardcode `<dev-root>` paths in git |
-| Tests | `pytest-httpx` mocks; no live Azure calls in CI |
-
-**Expected env vars** (finalize against org / tabletop-studio when Azure lands
-there; names may match Azure OpenAI SDK conventions):
-
-| Variable | Purpose |
-|---|---|
-| `AZURE_OPENAI_API_KEY` | API key or token for the Azure resource |
-| `AZURE_OPENAI_ENDPOINT` | Resource endpoint URL (e.g. `https://<resource>.openai.azure.com`) |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | Deployment id used as the effective model for chat |
-| `AZURE_OPENAI_API_VERSION` | API version query param (optional; adapter picks a sensible default) |
-
-Foundry-specific endpoint/key names can be aliased in `env_config.py` once the
-platform standard is fixed. Until then, use **OpenAI-compatible (HTTP)** with
-`OPENAI_COMPAT_BASE_URL` pointed at an Azure OpenAI `/openai/v1`-compatible
-base if you need Azure before the dedicated adapter exists.
+Live catalogs are fetched from Ollama `/api/tags`, Groq `/v1/models`, and Azure `/openai/models` (with 60s in-process cache). Stub, Google, and OpenAI-compatible providers return a static fallback of the provider default only.
 
 ### Verification
 
@@ -256,6 +243,19 @@ once without — printing the full event stream. Uses `CHAT_PROVIDER` (default
 CHAT_PROVIDER=stub uv run python smoke_test.py
 ```
 
+## CI and publishing
+
+GitHub Actions runs `uv run pytest` in `backend/` on push and pull requests
+(see `.github/workflows/ci.yml`). No secrets are required — tests use the
+Stub provider.
+
+To push this repo to GitHub, add a remote and push:
+
+```bash
+git remote add origin https://github.com/<org>/agent-graph-builder-poc.git
+git push -u origin master
+```
+
 ## Deliberate simplifications vs. the full EDD
 
 Everything here is a scoped-down stand-in for a real platform concept, kept
@@ -266,7 +266,7 @@ swappable behind the same seams the EDD specifies:
 | SQLite for graphs + completed run snapshots | Supabase PostgreSQL + immutable run store | `storage.py` |
 | In-memory live runs + SSE buses | Durable checkpoints + replay | `runtime.py` (`RUN_STORE`, `RUN_BUSES`) |
 | No auth, no multi-tenancy, no Next.js BFF | Supabase Auth + RLS + org/project hierarchy + BFF | frontend talks directly to FastAPI |
-| Stub, Groq, Google, Ollama, OpenAI-compatible adapters (**Azure pending**) | Ollama (dev) + Azure AI Foundry (prod), adapter-selected | `providers/` |
+| Stub, Groq, Google, Azure, Ollama, OpenAI-compatible adapters | Ollama (dev) + Azure OpenAI (prod), adapter-selected | `providers/` |
 | 6 node types, 3 edge kinds, no loops | Full node taxonomy incl. memory/RAG/approval/parallel, 8 edge kinds | `models.py` |
 | No entity versioning/immutability | Versioned agents/prompts/tools/models with lifecycle states | `models.py` (`GraphNode.config` is inline, not a `definitionRef`) |
 | No replay, no approvals, no MCP | Sections 22-25 of the EDD | out of scope per POC spec |

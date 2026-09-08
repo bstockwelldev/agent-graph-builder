@@ -20,7 +20,7 @@ class ChatProvider(StrEnum):
     OPENAI_COMPAT = "openai_compat"
     GROQ = "groq"
     GOOGLE = "google"
-    # AZURE = "azure"  # follow-up: Azure AI Foundry adapter — see README
+    AZURE = "azure"
 
 
 _AI_PROVIDER_TO_CHAT: dict[str, ChatProvider] = {
@@ -30,6 +30,7 @@ _AI_PROVIDER_TO_CHAT: dict[str, ChatProvider] = {
     "openai": ChatProvider.OPENAI_COMPAT,
     "groq": ChatProvider.GROQ,
     "google": ChatProvider.GOOGLE,
+    "azure": ChatProvider.AZURE,
 }
 
 
@@ -50,7 +51,7 @@ def resolve_chat_provider(explicit: str | None = None) -> ChatProvider:
     return ChatProvider.OLLAMA
 
 
-def get_chat_model(model: str | None = None, provider: str | None = None) -> ChatModel:
+def get_chat_model(model: str | None = None, provider: str | None = None, *, api_key: str | None = None) -> ChatModel:
     resolved = resolve_chat_provider(provider)
     resolved_model = resolve_model_for_provider(resolved, model)
 
@@ -61,15 +62,19 @@ def get_chat_model(model: str | None = None, provider: str | None = None) -> Cha
     if resolved == ChatProvider.OPENAI_COMPAT:
         from .openai_compat import OpenAICompatChatModel
 
-        return OpenAICompatChatModel(model=resolved_model)
+        return OpenAICompatChatModel(model=resolved_model, api_key=api_key)
     if resolved == ChatProvider.GROQ:
         from .groq import GroqChatModel
 
-        return GroqChatModel(model=resolved_model)
+        return GroqChatModel(model=resolved_model, api_key=api_key)
     if resolved == ChatProvider.GOOGLE:
         from .google import GoogleGenAIChatModel
 
-        return GoogleGenAIChatModel(model=resolved_model)
+        return GoogleGenAIChatModel(model=resolved_model, api_key=api_key)
+    if resolved == ChatProvider.AZURE:
+        from .azure import AzureOpenAIChatModel
+
+        return AzureOpenAIChatModel(model=resolved_model, api_key=api_key)
 
     from .ollama import OllamaChatModel
 

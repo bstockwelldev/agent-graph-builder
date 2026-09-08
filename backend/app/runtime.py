@@ -18,7 +18,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .compiler import compile_graph as validate_and_diagnose
 from .events import RunEventBus, create_bus, now_iso
-from .models import CompileResult, GraphDefinition, NodeTrace, NodeType, RunSummary
+from .models import CompileResult, GraphDefinition, NodeTrace, NodeType, RouteDecision, RunSummary
 from .nodes import EXECUTORS, ExecContext
 from .providers.base import get_chat_model, resolve_chat_provider
 from . import storage
@@ -168,6 +168,10 @@ async def _execute(run_id: str, graph: GraphDefinition, compiled_app, run_input:
         final_state = await compiled_app.ainvoke(initial_state)
         RUN_STORE[run_id].status = "succeeded"
         RUN_STORE[run_id].result = final_state.get("result")
+        RUN_STORE[run_id].route_decisions = [
+            RouteDecision.model_validate(decision)
+            for decision in final_state.get("route_decisions") or []
+        ]
         bus.emit("run.completed", {"result": _jsonable(final_state.get("result"))})
     except Exception as exc:  # noqa: BLE001 - reported via run status + SSE, not raised further
         RUN_STORE[run_id].status = "failed"
@@ -183,6 +187,8 @@ def start_run(
     compiled_workflow_id: str,
     run_input: dict[str, Any],
     provider: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[str, RunEventBus]:
     """Creates run bookkeeping and returns immediately; caller schedules `_execute`."""
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
@@ -202,8 +208,9 @@ def start_run(
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
 
-    def chat_model_factory(model: str | None):
-        return get_chat_model(model, provider=resolved_provider.value)
+    def chat_model_factory(node_model: str | None):
+        effective_model = model or node_model
+        return get_chat_model(effective_model, provider=resolved_provider.value, api_key=api_key)
 
     ctx = ExecContext(run_id=run_id, graph=graph, bus=bus, chat_model_factory=chat_model_factory)
     compiled_app = _build_langgraph(graph, ctx)

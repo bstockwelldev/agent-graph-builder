@@ -22,6 +22,7 @@ import {
   edgeStrokeForKind,
   validationSummary,
 } from "./diagnostics";
+import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions } from "./runInspection";
 import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { GraphLibrary } from "./components/GraphLibrary";
 import { NodePalette } from "./components/NodePalette";
@@ -29,7 +30,7 @@ import { RunPanel } from "./components/RunPanel";
 import { GraphNodeView, type GraphNodeData } from "./components/nodes/GraphNodeView";
 import { color, spacing, surface, text, typeScale } from "./theme";
 import { TextInput } from "./components/ui/fields";
-import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RunSummary, ChatProvider } from "./types";
+import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RouteDecision, RunSummary, ChatProvider } from "./types";
 
 const DEMO_GRAPH_ID = "demo_classify_and_route";
 
@@ -100,6 +101,16 @@ function toFlowEdge(e: GraphEdge, issue?: { severity: "error" | "warning"; capti
   };
 }
 
+function fingerprintGraph(graph: GraphDefinition): string {
+  return JSON.stringify({
+    id: graph.id,
+    name: graph.name,
+    entry_node_id: graph.entry_node_id,
+    nodes: graph.nodes,
+    edges: graph.edges,
+  });
+}
+
 function syncIdCounter(graph: GraphDefinition) {
   let max = idCounter;
   for (const item of [...graph.nodes, ...graph.edges]) {
@@ -165,6 +176,10 @@ export default function App() {
   const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
   const [events, setEvents] = useState<PlatformEvent[]>([]);
   const [nodeTraces, setNodeTraces] = useState<Record<string, NodeTrace>>({});
+  const [inspectionRunId, setInspectionRunId] = useState<string | null>(null);
+  const [inspectionRouteDecisions, setInspectionRouteDecisions] = useState<RouteDecision[]>([]);
+  const [savedGraphFingerprint, setSavedGraphFingerprint] = useState<string>("");
+  const [providerBlockMessage, setProviderBlockMessage] = useState<string | null>(null);
   const closeStreamRef = useRef<(() => void) | null>(null);
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
@@ -200,14 +215,71 @@ export default function App() {
     [setNodes, setEdges],
   );
 
+  const paintInspectionPath = useCallback(
+    (traces: Record<string, NodeTrace>, routeDecisions: RouteDecision[]) => {
+      const graphEdges: GraphEdge[] = edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        kind: (edge.data?.kind as EdgeKind) ?? "sequence",
+        condition: (edge.data?.condition as string | null) ?? null,
+      }));
+      const path = buildExecutedPath(traces, routeDecisions, graphEdges, nodes.map((node) => node.id));
+      const { nodeIssues } = buildIssueMaps(diagnostics);
+
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          data: {
+            ...applyCompileIssueToNodeData(node.data, nodeIssues.get(node.id)),
+            status: traces[node.id]?.status ?? "idle",
+            inspectionDimmed: path.dimNodeIds.has(node.id),
+          },
+        })),
+      );
+
+      setEdges((eds) =>
+        eds.map((edge) => {
+          const kind = (edge.data?.kind as EdgeKind) ?? "sequence";
+          const { stroke, strokeWidth, opacity } = edgeStrokeForInspection(edge, path, kind);
+          return {
+            ...edge,
+            style: { stroke, strokeWidth, opacity },
+            animated: kind === "conditional" && path.highlightEdgeIds.has(edge.id),
+          };
+        }),
+      );
+    },
+    [diagnostics, edges, nodes, setEdges, setNodes],
+  );
+
+  const exitInspection = useCallback(() => {
+    setInspectionRunId(null);
+    setInspectionRouteDecisions([]);
+    setNodeTraces({});
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: { ...node.data, status: "idle", inspectionDimmed: false },
+      })),
+    );
+    applyDiagnosticsToCanvas(diagnostics);
+  }, [applyDiagnosticsToCanvas, diagnostics, setNodes]);
+
+  useEffect(() => {
+    if (!inspectionRunId) return;
+    paintInspectionPath(nodeTraces, inspectionRouteDecisions);
+  }, [inspectionRunId, inspectionRouteDecisions, nodeTraces, paintInspectionPath]);
+
   const closeStream = useCallback(() => {
     closeStreamRef.current?.();
     closeStreamRef.current = null;
   }, []);
 
   useEffect(() => {
+    if (inspectionRunId) return;
     applyDiagnosticsToCanvas(diagnostics);
-  }, [diagnostics, applyDiagnosticsToCanvas]);
+  }, [diagnostics, applyDiagnosticsToCanvas, inspectionRunId]);
 
   const canvasSetters = useCallback(
     () => ({
@@ -254,16 +326,13 @@ export default function App() {
       closeStreamRef.current = null;
       setEvents([]);
       setRunSummary(summary);
-      const byId = Object.fromEntries(traces.map((t) => [t.node_id, t]));
+      setInspectionRunId(summary.run_id);
+      const routeDecisions = normalizeRouteDecisions(summary.route_decisions ?? []);
+      setInspectionRouteDecisions(routeDecisions);
+      const byId = Object.fromEntries(traces.map((trace) => [trace.node_id, trace]));
       setNodeTraces(byId);
-      setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          data: { ...n.data, status: byId[n.id]?.status ?? "idle" },
-        })),
-      );
     },
-    [setNodes],
+    [],
   );
 
   const handleSelectHistoricalRun = useCallback(
@@ -278,6 +347,9 @@ export default function App() {
     async (targetId: string) => {
       const graph = await api.getGraph(targetId);
       applyGraphToCanvas(graph, canvasSetters());
+      setInspectionRunId(null);
+      setInspectionRouteDecisions([]);
+      setSavedGraphFingerprint(fingerprintGraph(graph));
     },
     [canvasSetters],
   );
@@ -300,6 +372,7 @@ export default function App() {
             setNodeTraces,
             closeStream: () => closeStreamRef.current?.(),
           });
+          setSavedGraphFingerprint(fingerprintGraph(preferred));
         }
       })
       .catch((err: unknown) => {
@@ -307,19 +380,14 @@ export default function App() {
       });
   }, [refreshGraphList, setNodes, setEdges, closeStream]);
 
-  const handleSelectGraph = useCallback(
-    async (targetId: string) => {
-      if (targetId === graphId) return;
-      await loadGraphById(targetId);
-    },
-    [graphId, loadGraphById],
-  );
-
   const handleCreateGraph = useCallback(
     async (name: string, template: "blank" | "demo") => {
       const graph = await api.createGraph(name, template);
       await refreshGraphList();
       applyGraphToCanvas(graph, canvasSetters());
+      setInspectionRunId(null);
+      setInspectionRouteDecisions([]);
+      setSavedGraphFingerprint(fingerprintGraph(graph));
     },
     [refreshGraphList, canvasSetters],
   );
@@ -381,6 +449,52 @@ export default function App() {
     };
   }, [nodes, edges, graphId, graphName]);
 
+  const isCanvasDirty = useCallback(() => {
+    if (!graphId) return false;
+    try {
+      return fingerprintGraph(buildGraphDefinition()) !== savedGraphFingerprint;
+    } catch {
+      return false;
+    }
+  }, [buildGraphDefinition, graphId, savedGraphFingerprint]);
+
+  const handleSelectGraph = useCallback(
+    async (targetId: string) => {
+      if (targetId === graphId) return;
+      if (isCanvasDirty()) {
+        const confirmed = window.confirm("You have unsaved canvas changes. Switch graphs anyway?");
+        if (!confirmed) return;
+      }
+      await loadGraphById(targetId);
+    },
+    [graphId, isCanvasDirty, loadGraphById],
+  );
+
+  const handleExportGraph = useCallback(() => {
+    try {
+      const graph = buildGraphDefinition();
+      const blob = new Blob([JSON.stringify(graph, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${graph.id}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      console.error("Export failed:", err);
+    }
+  }, [buildGraphDefinition]);
+
+  const handleImportGraph = useCallback(
+    async (file: File) => {
+      const graph = JSON.parse(await file.text()) as GraphDefinition;
+      await api.saveGraph(graph);
+      await refreshGraphList();
+      await loadGraphById(graph.id);
+    },
+    [loadGraphById, refreshGraphList],
+  );
+
   useEffect(() => {
     if (!graphId || nodes.length === 0) return;
     const timer = window.setTimeout(() => {
@@ -403,6 +517,7 @@ export default function App() {
     if (!graphId) return;
     const graph = buildGraphDefinition();
     await api.saveGraph(graph);
+    setSavedGraphFingerprint(fingerprintGraph(graph));
     const result = await api.compileGraph(graph.id);
     setDiagnostics(result.diagnostics);
     if (!result.ok) {
@@ -411,18 +526,23 @@ export default function App() {
     await refreshGraphList();
   }, [buildGraphDefinition, graphId, focusDiagnostics, refreshGraphList]);
 
-  const setNodeStatus = useCallback(
-    (nodeId: string, status: GraphNodeData["status"]) => {
-      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status } } : n)));
-    },
-    [setNodes],
-  );
-
   const handleRun = useCallback(
-    async (question: string, provider: ChatProvider) => {
+    async (question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
       if (!graphId) return;
+      setProviderBlockMessage(null);
+
+      const needsServerKey = provider === "groq" || provider === "google" || provider === "azure";
+      if (needsServerKey && !apiKey?.trim()) {
+        const readiness = await api.providerReady(provider);
+        if (!readiness.ready) {
+          setProviderBlockMessage(readiness.message);
+          return;
+        }
+      }
+
       const graph = buildGraphDefinition();
       await api.saveGraph(graph);
+      setSavedGraphFingerprint(fingerprintGraph(graph));
       const compileResult = await api.compileGraph(graph.id);
       setDiagnostics(compileResult.diagnostics);
       if (!compileResult.ok) {
@@ -430,22 +550,31 @@ export default function App() {
         return;
       }
 
-      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, status: "idle" } })));
       setEvents([]);
       setNodeTraces({});
+      setInspectionRouteDecisions([]);
       closeStreamRef.current?.();
 
-      const summary = await api.startRun(graph.id, { question }, provider);
+      const summary = await api.startRun(graph.id, { question }, provider, model, apiKey);
       setRunSummary(summary);
+      setInspectionRunId(summary.run_id);
 
       const nodeTypeById = new Map(nodes.map((n) => [n.id, n.data.nodeType]));
 
       closeStreamRef.current = streamRunEvents(summary.run_id, (event) => {
         setEvents((evts) => [...evts, event]);
 
+        if (event.event_type === "edge.selected" && event.node_id) {
+          const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
+          const selectedTargetNodeId = String(event.payload.selectedTargetNodeId ?? "");
+          setInspectionRouteDecisions((decisions) => [
+            ...decisions.filter((decision) => decision.nodeId !== event.node_id),
+            { nodeId: event.node_id!, selectedEdgeId, selectedTargetNodeId },
+          ]);
+        }
+
         if (event.node_id) {
           if (event.event_type === "node.started") {
-            setNodeStatus(event.node_id, "running");
             setNodeTraces((traces) => ({
               ...traces,
               [event.node_id!]: {
@@ -458,7 +587,6 @@ export default function App() {
               },
             }));
           } else if (event.event_type === "node.completed") {
-            setNodeStatus(event.node_id, "succeeded");
             setNodeTraces((traces) => ({
               ...traces,
               [event.node_id!]: {
@@ -472,7 +600,6 @@ export default function App() {
               },
             }));
           } else if (event.event_type === "node.failed") {
-            setNodeStatus(event.node_id, "failed");
             setNodeTraces((traces) => ({
               ...traces,
               [event.node_id!]: {
@@ -490,9 +617,10 @@ export default function App() {
         if (event.event_type === "run.completed" || event.event_type === "run.failed") {
           void (async () => {
             const traces = await api.getRunNodeTraces(summary.run_id);
-            setNodeTraces(Object.fromEntries(traces.map((t) => [t.node_id, t])));
+            setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
             const latest = await api.getRun(summary.run_id);
             setRunSummary(latest);
+            setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
             if (graphId) {
               await refreshRunHistory(graphId);
             }
@@ -500,7 +628,7 @@ export default function App() {
         }
       });
     },
-    [buildGraphDefinition, graphId, focusDiagnostics, nodes, refreshRunHistory, setNodes, setNodeStatus],
+    [buildGraphDefinition, graphId, focusDiagnostics, nodes, refreshRunHistory],
   );
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -524,6 +652,8 @@ export default function App() {
           activeGraphId={graphId}
           onSelect={(id) => void handleSelectGraph(id)}
           onCreate={handleCreateGraph}
+          onExport={handleExportGraph}
+          onImport={(file) => handleImportGraph(file)}
         />
         <NodePalette onAdd={addNode} />
       </aside>
@@ -537,23 +667,39 @@ export default function App() {
             style={{ ...typeScale.subheading, fontWeight: 600, marginBottom: spacing[1] }}
           />
           <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId ?? "No graph selected"}</div>
-          <button
-            type="button"
-            onClick={focusDiagnostics}
-            aria-live="polite"
-            style={{
-              ...typeScale.caption,
-              marginTop: spacing[1],
-              padding: `${spacing[1]}px ${spacing[2]}px`,
-              borderRadius: 999,
-              border: `1px solid ${surface.borderStrong}`,
-              background: surface.raised,
-              color: validationLabel === "Ready" ? color.success[500] : color.warning[500],
-              cursor: "pointer",
-            }}
-          >
-            Validation: {validationLabel}
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: spacing[2], marginTop: spacing[1] }}>
+            {inspectionRunId && runSummary && (
+              <div
+                style={{
+                  ...typeScale.caption,
+                  padding: `${spacing[1]}px ${spacing[2]}px`,
+                  borderRadius: 999,
+                  border: `1px solid ${color.primary[700]}`,
+                  background: color.neutral[900],
+                  color: color.primary[500],
+                }}
+              >
+                Inspecting run · <b>{runSummary.status}</b>
+                {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={focusDiagnostics}
+              aria-live="polite"
+              style={{
+                ...typeScale.caption,
+                padding: `${spacing[1]}px ${spacing[2]}px`,
+                borderRadius: 999,
+                border: `1px solid ${surface.borderStrong}`,
+                background: surface.raised,
+                color: validationLabel === "Ready" ? color.success[500] : color.warning[500],
+                cursor: "pointer",
+              }}
+            >
+              Validation: {validationLabel}
+            </button>
+          </div>
         </div>
         <div style={{ flex: 1, position: "relative", minHeight: 0, minWidth: 0 }}>
           <div style={{ position: "absolute", inset: 0 }}>
@@ -650,8 +796,12 @@ export default function App() {
       )}
 
       <RunPanel
+        graphId={graphId}
         diagnostics={diagnostics}
         diagnosticsSectionRef={diagnosticsSectionRef}
+        providerBlockMessage={providerBlockMessage}
+        inspectionRunId={inspectionRunId}
+        onExitInspection={exitInspection}
         onCompile={handleCompile}
         onRun={handleRun}
         onDiagnosticClick={handleDiagnosticClick}

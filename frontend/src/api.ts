@@ -1,4 +1,4 @@
-import type { CompileResult, GraphDefinition, NodeTrace, PlatformEvent, RunSummary, ChatProvider } from "./types";
+import type { CompileResult, GraphDefinition, NodeTrace, PlatformEvent, ProviderCredentials, ProviderModelCatalog, RunSummary, ChatProvider } from "./types";
 
 // Same-origin requests go through the Vite dev proxy (/api -> backend), so the
 // UI works on any local port (5173, 5174, …) without CORS. Override only when
@@ -38,12 +38,20 @@ export const api = {
       body: JSON.stringify(graph),
     }),
   compileGraph: (id: string) => jsonFetch<CompileResult>(`/api/graphs/${id}/compile`, { method: "POST" }),
-  startRun: (graphId: string, input: Record<string, unknown>, provider?: ChatProvider) =>
+  startRun: (graphId: string, input: Record<string, unknown>, provider?: ChatProvider, model?: string, apiKey?: string) =>
     jsonFetch<RunSummary>("/api/runs", {
       method: "POST",
-      body: JSON.stringify({ graph_id: graphId, input, provider }),
+      body: JSON.stringify({ graph_id: graphId, input, provider, model, api_key: apiKey }),
     }),
   getRunNodeTraces: (runId: string) => jsonFetch<NodeTrace[]>(`/api/runs/${runId}/nodes`),
+  providerReady: (provider: ChatProvider) =>
+    jsonFetch<{ ready: boolean; message: string }>(`/api/providers/${provider}/ready`),
+  providerCredentials: (provider: ChatProvider) =>
+    jsonFetch<ProviderCredentials>(`/api/providers/${provider}/credentials`),
+  listProviderModels: (provider: ChatProvider, graphId?: string) => {
+    const query = graphId ? `?graph_id=${encodeURIComponent(graphId)}` : "";
+    return jsonFetch<ProviderModelCatalog>(`/api/providers/${provider}/models${query}`);
+  },
 };
 
 export function streamRunEvents(runId: string, onEvent: (event: PlatformEvent) => void, onClose?: () => void): () => void {

@@ -45,6 +45,27 @@ async def test_completed_run_persists_summary_and_traces(demo_graph, tmp_path, m
 
 
 @pytest.mark.asyncio
+async def test_route_decisions_persisted_for_technical_question(demo_graph, tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "runs.db")
+
+    compile_result = runtime.compile_workflow(demo_graph)
+    run_id = await run_graph_and_wait(
+        compile_result.compiled_workflow_id,
+        "How does a database index work?",
+    )
+
+    runtime.RUN_STORE.pop(run_id, None)
+    runtime.RUN_TRACES.pop(run_id, None)
+
+    stored = storage.get_run(run_id)
+    assert stored is not None
+    assert len(stored.route_decisions) >= 1
+    router_decision = next(d for d in stored.route_decisions if d.node_id == "router_1")
+    assert router_decision.selected_edge_id == "e_router_tool"
+    assert router_decision.selected_target_node_id == "tool_lookup"
+
+
+@pytest.mark.asyncio
 async def test_list_runs_for_graph_returns_newest_first(demo_graph, tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DB_PATH", tmp_path / "runs.db")
 

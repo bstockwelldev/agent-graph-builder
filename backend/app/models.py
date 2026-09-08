@@ -79,12 +79,22 @@ class CompileResult(BaseModel):
 class RunRequest(BaseModel):
     graph_id: str
     input: dict[str, Any] = Field(default_factory=dict)
-    provider: Literal["ollama", "stub", "openai_compat", "groq", "google"] | None = None
+    provider: Literal["ollama", "stub", "openai_compat", "groq", "google", "azure"] | None = None
+    model: str | None = None
+    api_key: str | None = None
 
 
 class CreateGraphRequest(BaseModel):
     name: str = "Untitled graph"
     template: Literal["blank", "demo"] = "blank"
+
+
+class RouteDecision(BaseModel):
+    node_id: str = Field(alias="nodeId")
+    selected_edge_id: str = Field(alias="selectedEdgeId")
+    selected_target_node_id: str = Field(alias="selectedTargetNodeId")
+
+    model_config = {"populate_by_name": True}
 
 
 class RunSummary(BaseModel):
@@ -97,6 +107,7 @@ class RunSummary(BaseModel):
     error: str | None = None
     started_at: str | None = None
     completed_at: str | None = None
+    route_decisions: list[RouteDecision] = Field(default_factory=list)
 
 
 class NodeTrace(BaseModel):

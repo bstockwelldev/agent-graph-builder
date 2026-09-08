@@ -19,6 +19,7 @@ export interface GraphNodeData extends Record<string, unknown> {
   config: Record<string, unknown>;
   status?: "idle" | "running" | "succeeded" | "failed";
   compileIssue?: CompileIssue | null;
+  inspectionDimmed?: boolean;
 }
 
 function issueBorderColor(issue: CompileIssue | null | undefined): string {
@@ -35,6 +36,7 @@ export function GraphNodeView({ data, selected }: NodeProps) {
   const nodeData = data as GraphNodeData;
   const nodeStatus = nodeData.status ?? "idle";
   const compileIssue = nodeData.compileIssue ?? null;
+  const inspectionDimmed = nodeData.inspectionDimmed ?? false;
   const showTargetHandle = nodeData.nodeType !== "input";
   const showSourceHandle = nodeData.nodeType !== "output";
   const Icon = ICONS[nodeData.nodeType];
@@ -55,6 +57,7 @@ export function GraphNodeView({ data, selected }: NodeProps) {
         background: surface.raised,
         border: `2px solid ${borderColor}`,
         color: text.primary,
+        opacity: inspectionDimmed ? 0.35 : 1,
         boxShadow: nodeStatus === "running" ? shadow.runningGlow : shadow.none,
         fontFamily: fontFamily.ui,
         transition: "border-color 150ms, box-shadow 150ms",

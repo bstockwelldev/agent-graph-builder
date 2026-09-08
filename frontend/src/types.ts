@@ -1,4 +1,4 @@
-export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "google";
+export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "google" | "azure";
 
 export type NodeType = "input" | "prompt" | "llm" | "tool" | "router" | "output";
 export type EdgeKind = "sequence" | "conditional" | "default";
@@ -48,6 +48,12 @@ export interface CompileResult {
   ok: boolean;
 }
 
+export interface RouteDecision {
+  nodeId: string;
+  selectedEdgeId: string;
+  selectedTargetNodeId: string;
+}
+
 export interface RunSummary {
   run_id: string;
   graph_id: string;
@@ -58,6 +64,7 @@ export interface RunSummary {
   error?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  route_decisions?: RouteDecision[];
 }
 
 export interface NodeTrace {
@@ -85,4 +92,26 @@ export interface PlatformEvent {
   occurred_at: string;
   sequence: number;
   payload: Record<string, unknown>;
+}
+
+export interface ProviderModelOption {
+  id: string;
+  label: string;
+}
+
+export interface ProviderModelCatalog {
+  provider: ChatProvider;
+  models: ProviderModelOption[];
+  source: "live" | "fallback";
+  cached: boolean;
+  message: string;
+}
+
+export interface ProviderCredentials {
+  provider: ChatProvider | string;
+  requires_api_key: boolean;
+  label: string;
+  env_var: string;
+  configured: boolean;
+  value: string;
 }

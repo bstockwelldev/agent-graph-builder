@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import { useState } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
+import { useRef, useState } from "react";
 import type { GraphDefinition } from "../types";
 import { color, localType, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
@@ -10,15 +10,21 @@ export function GraphLibrary({
   activeGraphId,
   onSelect,
   onCreate,
+  onExport,
+  onImport,
 }: {
   graphs: GraphDefinition[];
   activeGraphId: string | null;
   onSelect: (graphId: string) => void;
   onCreate: (name: string, template: "blank" | "demo") => Promise<void>;
+  onExport?: () => void;
+  onImport?: (file: File) => Promise<void>;
 }) {
   const [name, setName] = useState("Untitled graph");
   const [template, setTemplate] = useState<"blank" | "demo">("blank");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -28,6 +34,18 @@ export function GraphLibrary({
       setTemplate("blank");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !onImport) return;
+    setImporting(true);
+    try {
+      await onImport(file);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -58,6 +76,35 @@ export function GraphLibrary({
           );
         })}
       </div>
+
+      {(onExport || onImport) && (
+        <div style={{ display: "flex", gap: spacing[2], marginBottom: spacing[3] }}>
+          {onExport && (
+            <Button variant="secondary" disabled={!activeGraphId} onClick={onExport} style={{ flex: 1 }}>
+              Export JSON
+            </Button>
+          )}
+          {onImport && (
+            <>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: "none" }}
+                onChange={(event) => void handleImportChange(event)}
+              />
+              <Button
+                variant="secondary"
+                disabled={importing}
+                onClick={() => importInputRef.current?.click()}
+                style={{ flex: 1 }}
+              >
+                {importing ? "Importing…" : "Import JSON"}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       <div style={headingStyle}>New graph</div>
       <TextInput

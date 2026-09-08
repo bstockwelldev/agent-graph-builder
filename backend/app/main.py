@@ -10,10 +10,19 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 
 from . import runtime, storage
 from .demo_graph import build_demo_graph
-from .env_config import load_shared_env
+from .env_config import (
+    load_shared_env,
+    resolve_azure_api_key,
+    resolve_azure_deployment_name,
+    resolve_azure_endpoint,
+    resolve_google_api_key,
+    resolve_groq_api_key,
+)
 from .events import get_bus
 from .graph_templates import create_graph_definition
 from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunSummary
+from .model_catalog import list_provider_models
+from .provider_credentials import get_provider_credentials
 
 app = FastAPI(title="Agent Graph Builder POC")
 
@@ -99,6 +108,41 @@ def list_graph_runs(graph_id: str) -> list[RunSummary]:
     return storage.list_runs_for_graph(graph_id)
 
 
+@app.get("/api/providers/{provider}/ready")
+def provider_ready(provider: str) -> dict[str, bool | str]:
+    if provider == "groq":
+        ready = bool(resolve_groq_api_key())
+        return {
+            "ready": ready,
+            "message": "" if ready else "Missing GROQ_API_KEY. Set it in the backend environment or SHARED_ENV_FILE.",
+        }
+    if provider == "google":
+        ready = bool(resolve_google_api_key())
+        return {
+            "ready": ready,
+            "message": "" if ready else "Missing GOOGLE_GENAI_API_KEY or GOOGLE_API_KEY.",
+        }
+    if provider == "azure":
+        ready = bool(resolve_azure_api_key() and resolve_azure_endpoint() and resolve_azure_deployment_name())
+        return {
+            "ready": ready,
+            "message": ""
+            if ready
+            else "Missing AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, or AZURE_OPENAI_DEPLOYMENT_NAME.",
+        }
+    return {"ready": True, "message": ""}
+
+
+@app.get("/api/providers/{provider}/credentials")
+def provider_credentials(provider: str) -> dict[str, str | bool]:
+    return get_provider_credentials(provider)
+
+
+@app.get("/api/providers/{provider}/models")
+async def provider_models(provider: str, graph_id: str | None = None) -> dict:
+    return await list_provider_models(provider, graph_id)
+
+
 @app.post("/api/runs")
 async def start_run(request: RunRequest) -> RunSummary:
     graph = storage.get_graph(request.graph_id)
@@ -113,6 +157,8 @@ async def start_run(request: RunRequest) -> RunSummary:
         compile_result.compiled_workflow_id,
         request.input,
         provider=request.provider,
+        model=request.model,
+        api_key=request.api_key,
     )
     return runtime.RUN_STORE[run_id]
 

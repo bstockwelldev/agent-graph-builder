@@ -19,6 +19,8 @@ TABLETOP_STUDIO_ENV_RELATIVE = Path("tabletop-studio") / ".env.local"
 # Env names aligned with tabletop-studio `env.template` / `src/config/ai.ts`
 GROQ_API_KEY_NAMES = ("GROQ_API_KEY",)
 GOOGLE_API_KEY_NAMES = ("GOOGLE_GENAI_API_KEY", "GOOGLE_API_KEY")
+AZURE_OPENAI_API_KEY_NAMES = ("AZURE_OPENAI_API_KEY",)
+AZURE_OPENAI_DEFAULT_API_VERSION = "2024-02-15-preview"
 
 
 def resolve_shared_env_file() -> Path | None:
@@ -88,6 +90,26 @@ def resolve_google_api_key() -> str:
     return first_env(*GOOGLE_API_KEY_NAMES)
 
 
+def resolve_azure_api_key() -> str:
+    return first_env(*AZURE_OPENAI_API_KEY_NAMES)
+
+
+def resolve_azure_endpoint() -> str:
+    return first_env("AZURE_OPENAI_ENDPOINT")
+
+
+def resolve_azure_deployment_name() -> str:
+    return first_env("AZURE_OPENAI_DEPLOYMENT_NAME")
+
+
+def resolve_azure_api_version() -> str:
+    return first_env("AZURE_OPENAI_API_VERSION") or AZURE_OPENAI_DEFAULT_API_VERSION
+
+
 def resolve_ai_model_override() -> str | None:
     value = os.environ.get("AI_MODEL", "").strip()
     return value or None
+
+
+def resolve_openai_compat_api_key() -> str:
+    return first_env("OPENAI_COMPAT_API_KEY")
