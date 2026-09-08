@@ -1,7 +1,10 @@
 """Provider credential metadata for the Run panel (local dev POC).
 
-Returns configured env values so the UI can prepopulate key fields. Keys are
-never persisted server-side from run requests — only used for that execution.
+Tells the UI whether a provider's API key is already configured server-side
+(via env var) so it can say so, WITHOUT ever sending the key's actual value
+over the wire -- the browser has no legitimate need to see a secret it isn't
+the one holding. Keys a user types into the Run panel to override the
+server's own are sent with that run request and never persisted server-side.
 """
 
 from __future__ import annotations
@@ -46,18 +49,19 @@ def provider_requires_api_key(provider: str) -> bool:
 
 
 def get_provider_credentials(provider: str) -> dict[str, str | bool]:
+    """Never include the resolved key value in the return -- only whether one
+    is configured. See module docstring."""
     field = PROVIDER_API_KEY_FIELDS.get(provider)
     if field is None:
-        return {"provider": provider, "requires_api_key": False, "label": "", "env_var": "", "configured": False, "value": ""}
+        return {"provider": provider, "requires_api_key": False, "label": "", "env_var": "", "configured": False}
 
     resolve = field["resolve"]
     assert callable(resolve)
-    value = resolve()
+    configured = bool(resolve())
     return {
         "provider": provider,
         "requires_api_key": True,
         "label": str(field["label"]),
         "env_var": str(field["env_var"]),
-        "configured": bool(value),
-        "value": value,
+        "configured": configured,
     }

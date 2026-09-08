@@ -30,7 +30,7 @@ def test_groq_provider_ready_with_key(monkeypatch) -> None:
     assert response.json()["ready"] is True
 
 
-def test_groq_credentials_returns_configured_value(monkeypatch) -> None:
+def test_groq_credentials_reports_configured_without_leaking_the_key(monkeypatch) -> None:
     monkeypatch.setenv("GROQ_API_KEY", "groq-secret-key")
     response = client.get("/api/providers/groq/credentials")
     assert response.status_code == 200
@@ -38,7 +38,10 @@ def test_groq_credentials_returns_configured_value(monkeypatch) -> None:
     assert body["requires_api_key"] is True
     assert body["env_var"] == "GROQ_API_KEY"
     assert body["configured"] is True
-    assert body["value"] == "groq-secret-key"
+    # The actual key must never be sent to the client -- only whether one is
+    # configured server-side. See app/provider_credentials.py.
+    assert "value" not in body
+    assert "groq-secret-key" not in response.text
 
 
 def test_stub_credentials_not_required() -> None:
@@ -46,4 +49,4 @@ def test_stub_credentials_not_required() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["requires_api_key"] is False
-    assert body["value"] == ""
+    assert "value" not in body

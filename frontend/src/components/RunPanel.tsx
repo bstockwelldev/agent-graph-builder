@@ -66,6 +66,7 @@ export function RunPanel({
   const [modelCatalogMessage, setModelCatalogMessage] = useState("");
   const [apiKeyLabel, setApiKeyLabel] = useState("API key");
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const summary = validationSummary(diagnostics);
@@ -74,10 +75,14 @@ export function RunPanel({
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
 
   useEffect(() => {
+    // Always clear any typed key on provider change -- never carry a key
+    // entered for one provider over to another.
+    setApiKey("");
+
     if (!showApiKeyField) {
       setApiKeyLabel("API key");
       setApiKeyEnvVar("");
-      setApiKey("");
+      setApiKeyConfigured(false);
       return;
     }
 
@@ -88,12 +93,16 @@ export function RunPanel({
         if (cancelled) return;
         setApiKeyLabel(credentials.label || "API key");
         setApiKeyEnvVar(credentials.env_var);
-        setApiKey(credentials.value ?? "");
+        // The server only ever tells us whether a key is configured, never
+        // the value -- see backend/app/provider_credentials.py. Leaving the
+        // field blank means "use the server's own key"; typing one here
+        // sends it as a per-run override instead.
+        setApiKeyConfigured(credentials.configured);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error("Failed to load provider credentials:", err);
-        setApiKey("");
+        setApiKeyConfigured(false);
       });
 
     return () => {
@@ -187,11 +196,12 @@ export function RunPanel({
             <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>
               {apiKeyLabel}
               {apiKeyEnvVar ? ` (${apiKeyEnvVar})` : ""}
+              {apiKeyConfigured ? " -- configured on server, leave blank to use it" : ""}
             </div>
             <PasswordInput
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={`Enter ${apiKeyEnvVar || "API key"}`}
+              placeholder={apiKeyConfigured ? "Leave blank to use the server's key, or override here" : `Enter ${apiKeyEnvVar || "API key"}`}
               autoComplete="off"
               spellCheck={false}
             />
