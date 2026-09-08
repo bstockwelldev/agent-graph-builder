@@ -114,12 +114,12 @@ export const fontFamily = {
  * title/version header belongs at `heading`, not a new one-off value).
  */
 export const typeScale = {
-  display: { fontSize: 32, lineHeight: 40, fontWeight: 700 },
-  heading: { fontSize: 24, lineHeight: 32, fontWeight: 600 },
-  subheading: { fontSize: 18, lineHeight: 28, fontWeight: 500 },
-  body: { fontSize: 16, lineHeight: 24, fontWeight: 400 },
-  small: { fontSize: 14, lineHeight: 20, fontWeight: 500 },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: 400 },
+  display: { fontSize: 32, lineHeight: "40px", fontWeight: 700 },
+  heading: { fontSize: 24, lineHeight: "32px", fontWeight: 600 },
+  subheading: { fontSize: 18, lineHeight: "28px", fontWeight: 500 },
+  body: { fontSize: 16, lineHeight: "24px", fontWeight: 400 },
+  small: { fontSize: 14, lineHeight: "20px", fontWeight: 500 },
+  caption: { fontSize: 12, lineHeight: "16px", fontWeight: 400 },
 } as const;
 
 /**
@@ -129,9 +129,9 @@ export const typeScale = {
  */
 export const localType = {
   /** Node status word under the label (idle/running/succeeded/failed). */
-  micro: { fontSize: 10, lineHeight: 14, fontWeight: 500 },
+  micro: { fontSize: 10, lineHeight: "14px", fontWeight: 500 },
   /** Primary UI text: inputs, buttons, node labels, run result text. */
-  ui: { fontSize: 13, lineHeight: 18, fontWeight: 400 },
+  ui: { fontSize: 13, lineHeight: "18px", fontWeight: 400 },
   /** Uppercase section labels/eyebrows (reuses caption's size). */
   label: { ...typeScale.caption, textTransform: "uppercase" as const, letterSpacing: 0.5 },
 } as const;

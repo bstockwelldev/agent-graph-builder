@@ -284,15 +284,15 @@ export default function App() {
   const selectedTrace = selectedNodeId ? nodeTraces[selectedNodeId] ?? null : null;
 
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
+    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
       <NodePalette onAdd={addNode} />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <div style={headerBarStyle}>
           <div style={typeScale.subheading}>{graphName}</div>
           <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId}</div>
         </div>
-        <div style={{ flex: 1, position: "relative" }}>
+        <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
