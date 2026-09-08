@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { GraphEdge, GraphNode } from "../types";
-import { accentSurface, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
+import { fontFamily, localType, spacing, surface, text, typeScale } from "../theme";
+import { Button } from "./ui/Button";
+import { Select, TextArea, TextInput } from "./ui/fields";
 
 export function NodeInspector({
   node,
@@ -20,8 +22,7 @@ export function NodeInspector({
 
       {node.type === "input" && (
         <Field label="Variable name">
-          <input
-            style={inputStyle}
+          <TextInput
             value={(node.config.variableName as string) ?? ""}
             onChange={(e) => set("variableName", e.target.value)}
           />
@@ -30,8 +31,8 @@ export function NodeInspector({
 
       {node.type === "prompt" && (
         <Field label="Template (use {question}, {upstream}, and any run variable)">
-          <textarea
-            style={{ ...inputStyle, height: 120, fontFamily: fontFamily.mono }}
+          <TextArea
+            style={{ height: 120, fontFamily: fontFamily.mono }}
             value={(node.config.template as string) ?? ""}
             onChange={(e) => set("template", e.target.value)}
           />
@@ -41,15 +42,14 @@ export function NodeInspector({
       {node.type === "llm" && (
         <>
           <Field label="Model">
-            <input
-              style={inputStyle}
+            <TextInput
               value={(node.config.model as string) ?? "qwen2.5:3b"}
               onChange={(e) => set("model", e.target.value)}
             />
           </Field>
           <Field label="System prompt">
-            <textarea
-              style={{ ...inputStyle, height: 80 }}
+            <TextArea
+              style={{ height: 80 }}
               value={(node.config.systemPrompt as string) ?? ""}
               onChange={(e) => set("systemPrompt", e.target.value)}
             />
@@ -60,17 +60,15 @@ export function NodeInspector({
       {node.type === "tool" && (
         <>
           <Field label="Tool">
-            <select
-              style={inputStyle}
+            <Select
               value={(node.config.toolName as string) ?? "lookup_topic"}
               onChange={(e) => set("toolName", e.target.value)}
             >
               <option value="lookup_topic">lookup_topic</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Input variable">
-            <input
-              style={inputStyle}
+            <TextInput
               value={(node.config.inputVariable as string) ?? "question"}
               onChange={(e) => set("inputVariable", e.target.value)}
             />
@@ -93,9 +91,9 @@ export function NodeInspector({
         </div>
       )}
 
-      <button style={deleteButtonStyle} onClick={onDelete}>
+      <Button variant="destructive" style={{ marginTop: spacing[2] }} onClick={onDelete}>
         Delete node
-      </button>
+      </Button>
     </div>
   );
 }
@@ -117,30 +115,22 @@ export function EdgeInspector({
       </div>
 
       <Field label="Kind">
-        <select
-          style={inputStyle}
-          value={edge.kind}
-          onChange={(e) => onChange({ kind: e.target.value as GraphEdge["kind"] })}
-        >
+        <Select value={edge.kind} onChange={(e) => onChange({ kind: e.target.value as GraphEdge["kind"] })}>
           <option value="sequence">sequence</option>
           <option value="conditional">conditional</option>
           <option value="default">default</option>
-        </select>
+        </Select>
       </Field>
 
       {edge.kind === "conditional" && (
         <Field label="Condition (substring match against upstream router input)">
-          <input
-            style={inputStyle}
-            value={edge.condition ?? ""}
-            onChange={(e) => onChange({ condition: e.target.value })}
-          />
+          <TextInput value={edge.condition ?? ""} onChange={(e) => onChange({ condition: e.target.value })} />
         </Field>
       )}
 
-      <button style={deleteButtonStyle} onClick={onDelete}>
+      <Button variant="destructive" style={{ marginTop: spacing[2] }} onClick={onDelete}>
         Delete edge
-      </button>
+      </Button>
     </div>
   );
 }
@@ -167,26 +157,4 @@ const headingStyle: CSSProperties = {
   ...localType.label,
   opacity: 0.6,
   marginBottom: spacing[1],
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: `${spacing[2]}px`,
-  borderRadius: radius.lg,
-  border: `1px solid ${surface.borderStrong}`,
-  background: surface.raised,
-  color: text.primary,
-  ...localType.ui,
-};
-
-const deleteButtonStyle: CSSProperties = {
-  marginTop: spacing[2],
-  padding: `${spacing[2]}px ${spacing[3]}px`,
-  borderRadius: radius.lg,
-  border: `1px solid ${accentSurface.destructive.border}`,
-  background: accentSurface.destructive.bg,
-  color: accentSurface.destructive.text,
-  cursor: "pointer",
-  ...typeScale.caption,
 };

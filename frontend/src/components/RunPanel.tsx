@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import type { Diagnostic, NodeTrace, PlatformEvent, RunSummary } from "../types";
 import { accentSurface, color, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
+import { Button } from "./ui/Button";
+import { TextArea } from "./ui/fields";
 
 export function RunPanel({
   diagnostics,
@@ -25,23 +27,19 @@ export function RunPanel({
     <div style={containerStyle}>
       <div style={sectionStyle}>
         <div style={headingStyle}>Run</div>
-        <textarea
-          style={{ ...inputStyle, height: 60 }}
+        <TextArea
+          style={{ height: 60 }}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="User question (fed into the Input node)"
         />
         <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[2] }}>
-          <button style={buttonStyle} onClick={onCompile}>
+          <Button variant="secondary" onClick={onCompile}>
             Compile
-          </button>
-          <button
-            style={{ ...buttonStyle, background: accentSurface.successAction.bg, borderColor: accentSurface.successAction.border }}
-            disabled={running}
-            onClick={() => onRun(question)}
-          >
+          </Button>
+          <Button variant="primary" disabled={running} onClick={() => onRun(question)}>
             {running ? "Running…" : "Run"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -121,27 +119,6 @@ const headingStyle: CSSProperties = {
   ...localType.label,
   opacity: 0.6,
   marginBottom: spacing[2],
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: `${spacing[2]}px`,
-  borderRadius: radius.lg,
-  border: `1px solid ${surface.borderStrong}`,
-  background: surface.raised,
-  color: text.primary,
-  ...localType.ui,
-};
-
-const buttonStyle: CSSProperties = {
-  padding: `${spacing[2]}px ${spacing[3]}px`,
-  borderRadius: radius.lg,
-  border: `1px solid ${surface.borderStrong}`,
-  background: surface.raised,
-  color: text.primary,
-  cursor: "pointer",
-  ...localType.ui,
 };
 
 const preStyle: CSSProperties = {
