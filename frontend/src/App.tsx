@@ -17,7 +17,7 @@ import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { NodePalette } from "./components/NodePalette";
 import { RunPanel } from "./components/RunPanel";
 import { GraphNodeView, type GraphNodeData } from "./components/nodes/GraphNodeView";
-import { color } from "./theme";
+import { color, spacing, surface, text, typeScale } from "./theme";
 import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RunSummary } from "./types";
 
 const DEMO_GRAPH_ID = "demo_classify_and_route";
@@ -99,6 +99,13 @@ function nextId(prefix: string): string {
   idCounter += 1;
   return `${prefix}_${idCounter}`;
 }
+
+const headerBarStyle = {
+  padding: `${spacing[2]}px ${spacing[3]}px`,
+  borderBottom: `1px solid ${surface.border}`,
+  background: surface.panel,
+  color: text.primary,
+} as const;
 
 export default function App() {
   const [graphId] = useState(DEMO_GRAPH_ID);
@@ -280,33 +287,39 @@ export default function App() {
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
       <NodePalette onAdd={addNode} />
 
-      <div style={{ flex: 1, position: "relative" }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          onNodeClick={(_, node) => {
-            setSelectedNodeId(node.id);
-            setSelectedEdgeId(null);
-          }}
-          onEdgeClick={(_, edge) => {
-            setSelectedEdgeId(edge.id);
-            setSelectedNodeId(null);
-          }}
-          onPaneClick={() => {
-            setSelectedNodeId(null);
-            setSelectedEdgeId(null);
-          }}
-          colorMode="dark"
-          fitView
-        >
-          <Background />
-          <Controls />
-          <MiniMap />
-        </ReactFlow>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div style={headerBarStyle}>
+          <div style={typeScale.subheading}>{graphName}</div>
+          <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId}</div>
+        </div>
+        <div style={{ flex: 1, position: "relative" }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            onNodeClick={(_, node) => {
+              setSelectedNodeId(node.id);
+              setSelectedEdgeId(null);
+            }}
+            onEdgeClick={(_, edge) => {
+              setSelectedEdgeId(edge.id);
+              setSelectedNodeId(null);
+            }}
+            onPaneClick={() => {
+              setSelectedNodeId(null);
+              setSelectedEdgeId(null);
+            }}
+            colorMode="dark"
+            fitView
+          >
+            <Background />
+            <Controls />
+            <MiniMap />
+          </ReactFlow>
+        </div>
       </div>
 
       {selectedNode && (

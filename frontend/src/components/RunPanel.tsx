@@ -5,6 +5,13 @@ import { accentSurface, color, fontFamily, localType, radius, spacing, surface, 
 import { Button } from "./ui/Button";
 import { TextArea } from "./ui/fields";
 
+function formatDuration(trace: NodeTrace): string | null {
+  if (!trace.completed_at) return null;
+  const ms = new Date(trace.completed_at).getTime() - new Date(trace.started_at).getTime();
+  if (ms < 0) return null;
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
 export function RunPanel({
   diagnostics,
   onCompile,
@@ -75,7 +82,8 @@ export function RunPanel({
       {selectedTrace && (
         <div style={sectionStyle}>
           <div style={headingStyle}>
-            Node trace: {selectedTrace.node_id} ({selectedTrace.status})
+            Node trace: {selectedTrace.node_id} ({selectedTrace.status}
+            {formatDuration(selectedTrace) ? ` · ${formatDuration(selectedTrace)}` : ""})
           </div>
           <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
           <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
