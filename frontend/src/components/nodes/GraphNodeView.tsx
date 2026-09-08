@@ -1,14 +1,15 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Bot, GitBranch, LogIn, LogOut, PenLine, Wrench, type LucideIcon } from "lucide-react";
 import type { NodeType } from "../../types";
 import { color, fontFamily, localType, radius, shadow, spacing, status as statusColor, surface, text } from "../../theme";
 
-const ICONS: Record<NodeType, string> = {
-  input: "→□",
-  prompt: "✎",
-  llm: "◈",
-  tool: "⚙",
-  router: "⥂",
-  output: "□→",
+const ICONS: Record<NodeType, LucideIcon> = {
+  input: LogIn,
+  prompt: PenLine,
+  llm: Bot,
+  tool: Wrench,
+  router: GitBranch,
+  output: LogOut,
 };
 
 export interface GraphNodeData extends Record<string, unknown> {
@@ -23,6 +24,7 @@ export function GraphNodeView({ data, selected }: NodeProps) {
   const nodeStatus = nodeData.status ?? "idle";
   const showTargetHandle = nodeData.nodeType !== "input";
   const showSourceHandle = nodeData.nodeType !== "output";
+  const Icon = ICONS[nodeData.nodeType];
 
   return (
     <div
@@ -39,8 +41,9 @@ export function GraphNodeView({ data, selected }: NodeProps) {
       }}
     >
       {showTargetHandle && <Handle type="target" position={Position.Left} />}
-      <div style={{ ...localType.label, opacity: 0.6 }}>
-        {ICONS[nodeData.nodeType]} {nodeData.nodeType}
+      <div style={{ ...localType.label, opacity: 0.6, display: "flex", alignItems: "center", gap: spacing[1] }}>
+        <Icon size={12} strokeWidth={2} />
+        <span>{nodeData.nodeType}</span>
       </div>
       <div style={{ ...localType.ui, fontWeight: 600, marginTop: 2 }}>{nodeData.label}</div>
       {nodeStatus !== "idle" && (
