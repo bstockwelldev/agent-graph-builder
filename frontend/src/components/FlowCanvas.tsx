@@ -94,9 +94,12 @@ function FlowCanvasInner({
       if (!canFitView(paneSize.width, paneSize.height)) return;
       window.requestAnimationFrame(() => {
         if (layoutRequestRef.current !== requestId) return;
-        reactFlow.fitView({
-          padding: FIT_VIEW_PADDING,
-          duration: reducedMotion ? 0 : shell.motion.drawerMs,
+        window.requestAnimationFrame(() => {
+          if (layoutRequestRef.current !== requestId) return;
+          reactFlow.fitView({
+            padding: FIT_VIEW_PADDING,
+            duration: reducedMotion ? 0 : shell.motion.drawerMs,
+          });
         });
       });
     },

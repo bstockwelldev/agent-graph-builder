@@ -148,6 +148,11 @@ export const shell = {
   touchTarget: {
     min: 44,
   },
+  rail: {
+    library: 220,
+    run: 340,
+    inspector: 300,
+  },
   zIndex: {
     backdrop: 40,
     drawer: 50,

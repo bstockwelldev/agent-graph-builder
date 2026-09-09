@@ -49,6 +49,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       );
     }
 
-    return <div key={resetKey} style={{ height: "100%", width: "100%", minHeight: 0 }}>{children}</div>;
+    return <div key={resetKey} style={{ height: "100%", minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", flex: 1 }}>{children}</div>;
   }
 }

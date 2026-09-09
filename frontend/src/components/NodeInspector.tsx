@@ -265,12 +265,11 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
 
 function panelStyle(fullWidth: boolean): CSSProperties {
   return {
-    width: fullWidth ? "100%" : 300,
+    width: "100%",
+    height: "100%",
     padding: shell.panelPadding,
-    borderLeft: fullWidth ? undefined : `1px solid ${surface.border}`,
     background: surface.panel,
     color: text.primary,
     overflowY: "auto",
-    height: fullWidth ? "100%" : undefined,
   };
 }

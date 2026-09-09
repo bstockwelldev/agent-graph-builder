@@ -416,7 +416,7 @@ function diagnosticButtonStyle(severity: Diagnostic["severity"]): CSSProperties 
 }
 
 const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
-  width: layout === "drawer" ? "100%" : 340,
+  width: "100%",
   height: "100%",
   minHeight: 0,
   borderLeft: layout === "drawer" ? undefined : `1px solid ${surface.border}`,

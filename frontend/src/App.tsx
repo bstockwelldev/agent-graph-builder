@@ -977,19 +977,21 @@ export default function App() {
         {!isCompact && (
           <aside
             style={{
-              width: 220,
+              width: shell.rail.library,
+              flexShrink: 0,
               display: "flex",
               flexDirection: "column",
               borderRight: `1px solid ${surface.border}`,
               background: surface.panel,
               overflowY: "auto",
+              minHeight: 0,
             }}
           >
             <ErrorBoundary regionLabel="Graph library">{libraryPanel}</ErrorBoundary>
           </aside>
         )}
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+        <main style={{ flex: "1 1 0", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
           {isCompact && (
             <div
               style={{
@@ -1172,24 +1174,44 @@ export default function App() {
               />
             </ErrorBoundary>
           </div>
-        </div>
+        </main>
 
-        {!isCompact && selectedNode && (
-          <ErrorBoundary regionLabel="Node inspector" fallbackHeight="100%">
-            {inspectorPanel}
-          </ErrorBoundary>
-        )}
-
-        {!isCompact && !selectedNode && selectedEdge && (
-          <ErrorBoundary regionLabel="Edge inspector" fallbackHeight="100%">
-            {inspectorPanel}
-          </ErrorBoundary>
+        {!isCompact && (selectedNode || selectedEdge) && (
+          <aside
+            style={{
+              width: shell.rail.inspector,
+              flexShrink: 0,
+              minHeight: 0,
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              borderLeft: `1px solid ${surface.border}`,
+              background: surface.panel,
+              overflow: "hidden",
+            }}
+          >
+            <ErrorBoundary regionLabel={selectedNode ? "Node inspector" : "Edge inspector"} fallbackHeight="100%">
+              {inspectorPanel}
+            </ErrorBoundary>
+          </aside>
         )}
 
         {!isCompact && (
-          <ErrorBoundary regionLabel="Run panel" onReset={closeStream} fallbackHeight="100%">
-            {runPanel}
-          </ErrorBoundary>
+          <aside
+            style={{
+              width: shell.rail.run,
+              flexShrink: 0,
+              minHeight: 0,
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <ErrorBoundary regionLabel="Run panel" onReset={closeStream} fallbackHeight="100%">
+              {runPanel}
+            </ErrorBoundary>
+          </aside>
         )}
 
         {isCompact && (
