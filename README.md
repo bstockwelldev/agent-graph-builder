@@ -311,6 +311,14 @@ git remote add origin https://github.com/<org>/agent-graph-builder-poc.git
 git push -u origin master
 ```
 
+### Vercel (production)
+
+**URL:** https://agent-graph-builder-poc.vercel.app
+
+```bash
+vercel deploy --prod
+```
+
 ## Deliberate simplifications vs. the full EDD
 
 Everything here is a scoped-down stand-in for a real platform concept, kept

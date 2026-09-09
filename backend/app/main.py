@@ -41,12 +41,11 @@ app.add_middleware(
 )
 
 
-@app.get("/", include_in_schema=False)
-def root() -> RedirectResponse:
-    """This is the API only -- the UI is the separate Vite frontend. Point
-    anyone hitting the bare API port at the interactive docs instead of a
-    bare 404."""
-    return RedirectResponse(url="/docs")
+if not os.environ.get("VERCEL"):
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        """API-only local dev: redirect to OpenAPI docs."""
+        return RedirectResponse(url="/docs")
 
 
 @app.on_event("startup")
@@ -189,3 +188,11 @@ async def stream_run_events(run_id: str) -> StreamingResponse:
             yield f"data: {json.dumps(event.model_dump())}\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
+
+
+if os.environ.get("VERCEL"):
+    from pathlib import Path
+
+    _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    if _frontend_dist.is_dir():
+        app.frontend("/", directory=str(_frontend_dist))

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd frontend && npm ci && npm run build",
+  "installCommand": "pip install -r requirements.txt && cd frontend && npm ci",
+  "functions": {
+    "backend/**/*.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{backend/tests/**,backend/.venv/**,backend/.pytest_cache/**,frontend/src/**,frontend/node_modules/**,**/__pycache__/**,**/*.pyc,.git/**,docs/**,scripts/**}"
+    }
+  },
+  "env": {
+    "GRAPH_DB_PATH": "/tmp/graphs.db",
+    "CHAT_PROVIDER": "stub"
+  }
+}
