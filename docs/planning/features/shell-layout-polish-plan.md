@@ -409,3 +409,4 @@ flowchart TB
 | 2026-09-09 | Locked with S6 defaults accepted; progress diagram → Phase E active |
 | 2026-09-09 | Phase E implemented (P0–P2); `npm run build` + `uv run pytest` green |
 | 2026-09-09 | Phase F closeout; branch `feat/shell-layout-polish` ready for merge |
+| 2026-09-09 | Hotfix: flex-shrink-0 rail asides — ErrorBoundary width 100% was collapsing canvas at wide viewports |
