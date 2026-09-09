@@ -7,6 +7,7 @@ import { PROVIDER_TAXONOMY } from "../content/taxonomy";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
+import { SectionHeader } from "./ui/SectionHeader";
 import { PasswordInput, Select, TextArea } from "./ui/fields";
 
 const CATALOG_PROVIDERS: ChatProvider[] = ["ollama", "groq", "azure"];
@@ -153,7 +154,7 @@ export function RunPanel({
     <div style={containerStyle(layout)}>
       {inspecting && runSummary && (
         <div style={{ ...sectionStyle, background: color.neutral[900] }}>
-          <div style={headingStyle}>Run inspection</div>
+          <SectionHeader>Run inspection</SectionHeader>
           <div style={{ ...typeScale.caption, lineHeight: "16px", marginBottom: spacing[2] }}>
             Inspecting run · <b>{runSummary.status}</b>
             {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
@@ -177,15 +178,17 @@ export function RunPanel({
       )}
 
         <div style={sectionStyle}>
-        <div style={headingStyle}>Run</div>
+        <SectionHeader>Run</SectionHeader>
         <TextArea
-          style={{ height: 60 }}
+          rows={4}
+          style={{ minHeight: 96, resize: "vertical" }}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="User question (fed into the Input node)"
         />
         <div style={{ marginTop: spacing[2] }}>
           <TaxonomyTooltip
+            layout="inline"
             title={PROVIDER_TAXONOMY[provider]?.title ?? "Model provider"}
             summary={PROVIDER_TAXONOMY[provider]?.summary ?? "Chat provider for LLM nodes"}
             details={PROVIDER_TAXONOMY[provider]?.details ?? "Select which backend executes LLM nodes at run time."}
@@ -272,7 +275,7 @@ export function RunPanel({
         aria-live="polite"
         aria-label={`Graph validation: ${summary.label}`}
       >
-        <div style={headingStyle}>Diagnostics</div>
+        <SectionHeader>Diagnostics</SectionHeader>
         {diagnostics.length === 0 ? (
           <div style={{ ...typeScale.caption, color: color.success[500] }}>No issues — graph is ready to compile.</div>
         ) : (
@@ -316,7 +319,7 @@ export function RunPanel({
 
       {runHistory.length > 0 && (
         <div style={sectionStyle}>
-          <div style={headingStyle}>Run history</div>
+          <SectionHeader>Run history</SectionHeader>
           <div style={historyListStyle}>
             {runHistory.map((run) => {
               const active = inspectionRunId ? run.run_id === inspectionRunId : runSummary?.run_id === run.run_id;
@@ -346,7 +349,7 @@ export function RunPanel({
 
       {runSummary && (
         <div style={sectionStyle}>
-          <div style={headingStyle}>Run status</div>
+          <SectionHeader>Run status</SectionHeader>
           <div style={typeScale.caption}>
             {runSummary.run_id} — <b>{runSummary.status}</b>
           </div>
@@ -360,10 +363,10 @@ export function RunPanel({
 
       {selectedTrace && (
         <div style={sectionStyle}>
-          <div style={headingStyle}>
+          <SectionHeader>
             Node trace: {selectedTrace.node_id} ({selectedTrace.status}
             {formatDuration(selectedTrace) ? ` · ${formatDuration(selectedTrace)}` : ""})
-          </div>
+          </SectionHeader>
           <div style={scrollableBlockStyle}>
             <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
             <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
@@ -376,14 +379,20 @@ export function RunPanel({
         </div>
       )}
 
-      <div style={eventLogSectionStyle}>
-        <div style={headingStyle}>Event log</div>
-        {events.map((e) => (
-          <div key={e.sequence} style={{ ...typeScale.caption, marginBottom: spacing[1] - 1, fontFamily: fontFamily.mono }}>
-            <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
-            {e.node_id ? ` · ${e.node_id}` : ""}
+      <div style={eventLogSectionStyle} aria-live="polite" aria-relevant="additions">
+        <SectionHeader>Event log</SectionHeader>
+        {events.length === 0 ? (
+          <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+            No events yet. Run the graph to stream node lifecycle events here.
           </div>
-        ))}
+        ) : (
+          events.map((e) => (
+            <div key={e.sequence} style={{ ...typeScale.caption, marginBottom: spacing[1] - 1, fontFamily: fontFamily.mono }}>
+              <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
+              {e.node_id ? ` · ${e.node_id}` : ""}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -407,7 +416,7 @@ function diagnosticButtonStyle(severity: Diagnostic["severity"]): CSSProperties 
 }
 
 const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
-  width: layout === "drawer" ? "100%" : 340,
+  width: "100%",
   height: "100%",
   minHeight: 0,
   borderLeft: layout === "drawer" ? undefined : `1px solid ${surface.border}`,
@@ -419,7 +428,7 @@ const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
 });
 
 const sectionStyle: CSSProperties = {
-  padding: spacing[3],
+  padding: shell.panelPadding,
   borderBottom: `1px solid ${surface.border}`,
   flexShrink: 0,
 };
@@ -440,12 +449,6 @@ const eventLogSectionStyle: CSSProperties = {
   minHeight: 0,
   overflowY: "auto",
   borderBottom: "none",
-};
-
-const headingStyle: CSSProperties = {
-  ...localType.label,
-  opacity: 0.6,
-  marginBottom: spacing[2],
 };
 
 const preStyle: CSSProperties = {

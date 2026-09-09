@@ -1,8 +1,9 @@
 import type { ChangeEvent, CSSProperties } from "react";
 import { useRef, useState } from "react";
 import type { GraphDefinition } from "../types";
-import { color, localType, spacing, surface, text, typeScale } from "../theme";
+import { color, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
+import { SectionHeader } from "./ui/SectionHeader";
 import { Select, TextInput } from "./ui/fields";
 
 export function GraphLibrary({
@@ -51,7 +52,7 @@ export function GraphLibrary({
 
   return (
     <div style={panelStyle}>
-      <div style={headingStyle}>Graph Library</div>
+      <SectionHeader>Graph Library</SectionHeader>
 
       <div style={{ display: "flex", flexDirection: "column", gap: spacing[2], marginBottom: spacing[3] }}>
         {graphs.length === 0 && (
@@ -106,7 +107,7 @@ export function GraphLibrary({
         </div>
       )}
 
-      <div style={headingStyle}>New graph</div>
+      <SectionHeader>New graph</SectionHeader>
       <TextInput
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -130,23 +131,17 @@ export function GraphLibrary({
 }
 
 const panelStyle: CSSProperties = {
-  padding: spacing[3],
+  padding: shell.panelPadding,
   borderBottom: `1px solid ${surface.border}`,
   background: surface.panel,
   color: text.primary,
-};
-
-const headingStyle: CSSProperties = {
-  ...localType.label,
-  opacity: 0.6,
-  marginBottom: spacing[2],
 };
 
 const graphButtonStyle: CSSProperties = {
   display: "block",
   width: "100%",
   padding: spacing[2],
-  borderRadius: 8,
+  borderRadius: radius.lg,
   border: `1px solid ${surface.borderStrong}`,
   color: text.primary,
   cursor: "pointer",

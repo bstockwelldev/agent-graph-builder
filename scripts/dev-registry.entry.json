@@ -1,0 +1,21 @@
+{
+  "graph": {
+    "title": "Agent Graph Builder POC",
+    "aliases": ["graph-builder"],
+    "repo": "agent-graph-builder-poc",
+    "runtime": {
+      "up": {
+        "ps1": "scripts/dev.ps1",
+        "sh": "scripts/dev.sh"
+      },
+      "urls": {
+        "app": "http://localhost:5173",
+        "api": "http://localhost:8000"
+      }
+    },
+    "checks": {
+      "fast": "cd backend && uv run pytest -q",
+      "full": "cd backend && uv run pytest"
+    }
+  }
+}

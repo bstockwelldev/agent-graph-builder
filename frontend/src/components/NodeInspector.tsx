@@ -1,9 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
 import { EDGE_KIND_TAXONOMY, ROUTER_RULES_TAXONOMY } from "../content/taxonomy";
 import type { EdgeKind, GraphEdge, GraphNode, Diagnostic } from "../types";
-import { accentSurface, color, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
+import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
+import { SectionHeader } from "./ui/SectionHeader";
 import { Select, TextArea, TextInput } from "./ui/fields";
 
 function IssueList({ issues }: { issues: Diagnostic[] }) {
@@ -54,7 +55,7 @@ export function NodeInspector({
 
   return (
     <div style={panelStyle(fullWidth)}>
-      <div style={headingStyle}>Configure: {node.type}</div>
+      <SectionHeader>Configure: {node.type}</SectionHeader>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
       <IssueList issues={issues} />
 
@@ -173,7 +174,7 @@ export function EdgeInspector({
 
   return (
     <div style={panelStyle(fullWidth)}>
-      <div style={headingStyle}>Configure edge</div>
+      <SectionHeader>Configure edge</SectionHeader>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>
         {edge.source} → {edge.target}
       </div>
@@ -264,18 +265,11 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
 
 function panelStyle(fullWidth: boolean): CSSProperties {
   return {
-    width: fullWidth ? "100%" : 300,
-    padding: spacing[3],
-    borderLeft: fullWidth ? undefined : `1px solid ${surface.border}`,
+    width: "100%",
+    height: "100%",
+    padding: shell.panelPadding,
     background: surface.panel,
     color: text.primary,
     overflowY: "auto",
-    height: fullWidth ? "100%" : undefined,
   };
 }
-
-const headingStyle: CSSProperties = {
-  ...localType.label,
-  opacity: 0.6,
-  marginBottom: spacing[1],
-};

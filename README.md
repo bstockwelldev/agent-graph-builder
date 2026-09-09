@@ -59,6 +59,57 @@ reaches it at `http://host.docker.internal:11434`.
 docker compose up --build
 ```
 
+**One-command dev stack (repo):**
+
+```powershell
+# Foreground (logs in terminal)
+.\scripts\dev.ps1 up
+
+# Background
+.\scripts\dev.ps1 up -d
+
+# Stop
+.\scripts\dev.ps1 down
+
+# Stop and remove saved-graph volume
+.\scripts\dev.ps1 down -v
+```
+
+Git Bash / WSL / macOS / Linux: `./scripts/dev.sh up`, `./scripts/dev.sh up -d`, `./scripts/dev.sh down`.
+
+**Global CLI (optional, from any terminal after one-time install):**
+
+Install from **agent-context-factory** (canonical; POC installer forwards there):
+
+```powershell
+# From <dev-root>/agent-context-factory
+powershell -File scripts/install-dev-cli.ps1 -RepoRoot <dev-root>/agent-graph-builder-poc
+
+# Or deprecated forwarder from this repo:
+.\scripts\install-dev-cli.ps1
+```
+
+```powershell
+dev ls                          # list registered stacks
+dev up graph -d                 # start this POC (detached)
+dev down graph                  # stop
+dev ps graph                    # docker compose status
+dev open graph                  # open http://localhost:5173
+dev check graph --tier fast     # backend pytest (dry-run: --dry-run)
+
+graph                           # shortcut: dev up graph -d
+graph down                      # shortcut: dev down graph
+```
+
+Docs: `agent-context-factory/docs/onboarding/workflows.md` (§12 Local dev CLI).
+
+After `git pull`: factory CLI updates on the next `dev` command (or run `dev sync` / `dev install`). `dev up graph` re-merges `scripts/dev-registry.entry.json` into your local registry.
+
+Registry: `~/.ai/dev-registry.json` (v2 schema; migrates from legacy `spin-registry.json` on install).
+Set `$env:BSTOCKWELL_DEV_ROOT` to your polyrepo root if repo auto-detect fails.
+
+Legacy names (`spin-this-up`, `spin-graph-builder`, `spin-up.ps1`) still work but are deprecated.
+
 - Backend: http://localhost:8000 (FastAPI + LangGraph, live-reloads on edits
   to `backend/app/`)
 - Frontend: http://localhost:5173 (Vite dev server, live-reloads on edits to
