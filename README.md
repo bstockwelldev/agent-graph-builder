@@ -251,7 +251,7 @@ Stub provider.
 
 **Planning specs:** Locked next-set feature plans live in
 [`docs/planning/`](docs/planning/) (shell resilience → canvas orientation →
-from-scratch authoring).
+from-scratch authoring). **Product roadmap:** [`docs/planning/roadmap.md`](docs/planning/roadmap.md).
 
 To push this repo to GitHub, add a remote and push:
 

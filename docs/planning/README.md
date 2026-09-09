@@ -23,6 +23,18 @@ Implement in this sequence — later specs assume earlier seams exist:
 3. **Authoring** — [`from-scratch-authoring-plan.md`](features/from-scratch-authoring-plan.md)  
    Can overlap once shell chrome exists. Improves connect-time edge kinds, router inspector, explicit Save, and blank-graph coaching.
 
+## Roadmap
+
+Prioritized backlog (P0–P3) with **priority, impact, and utility** scoring:
+
+→ **[roadmap.md](roadmap.md)**
+
+Highlights after the next-set:
+
+- **P1** — Canvas visual language (node color + shape taxonomy, blueprint background)
+- **P1** — Empty states, loading shimmers, collapsible panels
+- **P2** — Dev CLI Phase 2 (factory)
+
 ## Conventions
 
 - SPECs are **planning-only** in this slice — no product implementation is implied by the lock date.
