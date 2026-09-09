@@ -35,6 +35,8 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Repo dev scripts + global `dev` CLI docs | Shipped | `scripts/`, `README.md` |
 | Canvas visual language (node color/shape, blueprint background) | Shipped | `feat/p1-canvas-and-shell-ux` — `theme.ts` `nodeType`/`canvas`, `GraphNodeView.tsx`, `FlowCanvas.tsx` |
 | Empty states, loading shimmers, collapsible panels | Shipped | `feat/p1-canvas-and-shell-ux` — `ui/Skeleton.tsx`, `ui/CollapsibleSection.tsx`, `RunPanel.tsx`, `GraphLibrary.tsx` |
+| Vercel full-stack deploy | Shipped | `master` @ `33d0970` — https://agent-graph-builder-poc.vercel.app |
+| Ultra-wide layout tokens | Shipped | `feat/p2-ultra-wide-layout-tokens` — `shell.breakpoint.wide` (1280), `shell.canvasMinWidth`, inspector drawer below wide |
 
 ---
 
@@ -47,7 +49,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | ~~**P1**~~ | ~~**Canvas visual language — node color, shape, blueprint background**~~ | High | High | **Shipped 2026-09-09** on `feat/p1-canvas-and-shell-ux`. Semantic `nodeType` tokens, per-type shapes, dual-line blueprint `Background`. |
 | ~~**P1**~~ | ~~**Empty states, loading shimmers, collapsible panels**~~ | High | High | **Shipped 2026-09-09** on `feat/p1-canvas-and-shell-ux`. `Skeleton`, `CollapsibleSection`, empty states + `localStorage` panel persistence. |
 | **P2** | **Dev CLI Phase 2** (factory) | Medium | High for polyrepo daily use | `dev doctor`, `dev gate`, shell completion, register tabletop / ai-lab stacks. Canonical home: `agent-context-factory/packages/local-dev-cli`. |
-| **P2** | **Ultra-wide layout tokens** | Medium | Medium | Optional `shell.canvasMinWidth`, inspector+run open at 1280px; only if QA still feels cramped after flex fix. |
+| ~~**P2**~~ | ~~**Ultra-wide layout tokens**~~ | Medium | Medium | **Shipped 2026-09-09** on `feat/p2-ultra-wide-layout-tokens`. `shell.canvasMinWidth` (420), `shell.breakpoint.wide` (1280); inspector rail only at wide+, drawer below. |
 | **P3** | **Frontend tests (Vitest + RTL)** | Medium | Medium | `FlowCanvas` fitView gating, `TaxonomyTooltip` layouts, shell flex regression. Spec follow-up in shell-layout-polish. |
 | **P3** | **Repo `AGENTS.md`** | Low | Medium | Router doc for agents (commands, planning paths, dev CLI). |
 | **P3** | **Canvas orientation Phase E** | Low | Low | elk fallback, dual layout positions — [canvas-orientation-plan.md](features/canvas-orientation-plan.md) follow-ons. |
@@ -76,7 +78,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 
 ### Phase 8 — Operator + depth (P2–P3)
 
-Dev CLI Phase 2, optional layout tokens, Vitest harness, AGENTS.md.
+Dev CLI Phase 2, Vitest harness, AGENTS.md. Ultra-wide layout tokens shipped 2026-09-09.
 
 ---
 

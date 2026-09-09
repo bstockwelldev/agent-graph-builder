@@ -231,6 +231,8 @@ export default function App() {
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
   const {
     isCompact,
+    isWide,
+    inspectorInDrawer,
     authoringEnabled,
     openDrawer,
     setOpenDrawer,
@@ -240,10 +242,16 @@ export default function App() {
   } = useShellLayout();
 
   useEffect(() => {
-    if (isCompact && (selectedNodeId || selectedEdgeId)) {
+    if (inspectorInDrawer && (selectedNodeId || selectedEdgeId)) {
       setOpenDrawer("inspector");
     }
-  }, [isCompact, selectedNodeId, selectedEdgeId, setOpenDrawer]);
+  }, [inspectorInDrawer, selectedNodeId, selectedEdgeId, setOpenDrawer]);
+
+  useEffect(() => {
+    if (isWide && openDrawer === "inspector") {
+      setOpenDrawer(null);
+    }
+  }, [isWide, openDrawer, setOpenDrawer]);
 
   useEffect(() => {
     setCoachDismissed(graphId ? isCoachDismissed(graphId) : false);
@@ -928,7 +936,7 @@ export default function App() {
 
   const inspectorPanel = selectedNode ? (
     <NodeInspector
-      fullWidth={isCompact}
+      fullWidth={inspectorInDrawer}
       reducedMotion={reducedMotion}
       node={{
         id: selectedNode.id,
@@ -955,7 +963,7 @@ export default function App() {
     />
   ) : selectedEdge ? (
     <EdgeInspector
-      fullWidth={isCompact}
+      fullWidth={inspectorInDrawer}
       reducedMotion={reducedMotion}
       edge={{
         id: selectedEdge.id,
@@ -1027,7 +1035,15 @@ export default function App() {
           </aside>
         )}
 
-        <main style={{ flex: "1 1 0", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+        <main
+          style={{
+            flex: "1 1 0",
+            display: "flex",
+            flexDirection: "column",
+            minWidth: isCompact ? 0 : shell.canvasMinWidth,
+            minHeight: 0,
+          }}
+        >
           {isCompact && (
             <div
               style={{
@@ -1196,16 +1212,16 @@ export default function App() {
                 onNodeClick={(nodeId) => {
                   setSelectedNodeId(nodeId);
                   setSelectedEdgeId(null);
-                  if (isCompact) setOpenDrawer("inspector");
+                  if (inspectorInDrawer) setOpenDrawer("inspector");
                 }}
                 onEdgeClick={(edgeId) => {
                   setSelectedEdgeId(edgeId);
                   setSelectedNodeId(null);
-                  if (isCompact) setOpenDrawer("inspector");
+                  if (inspectorInDrawer) setOpenDrawer("inspector");
                 }}
                 onPaneClick={() => {
                   setPendingConnection(null);
-                  if (isCompact) closeDrawer();
+                  if (inspectorInDrawer) closeDrawer();
                   setSelectedNodeId(null);
                   setSelectedEdgeId(null);
                 }}
@@ -1214,7 +1230,7 @@ export default function App() {
           </div>
         </main>
 
-        {!isCompact && (selectedNode || selectedEdge) && (
+        {!isCompact && isWide && (selectedNode || selectedEdge) && (
           <aside
             style={{
               width: shell.rail.inspector,
@@ -1265,16 +1281,6 @@ export default function App() {
               <ErrorBoundary regionLabel="Graph library">{libraryPanel}</ErrorBoundary>
             </ShellDrawer>
             <ShellDrawer
-              open={openDrawer === "inspector"}
-              onClose={closeDrawer}
-              side="right"
-              title="Inspector"
-              drawerId="shell-drawer-inspector"
-              reducedMotion={reducedMotion}
-            >
-              <ErrorBoundary regionLabel="Inspector">{inspectorPanel}</ErrorBoundary>
-            </ShellDrawer>
-            <ShellDrawer
               open={openDrawer === "run"}
               onClose={closeDrawer}
               side="right"
@@ -1287,6 +1293,19 @@ export default function App() {
               </ErrorBoundary>
             </ShellDrawer>
           </>
+        )}
+
+        {inspectorInDrawer && (
+          <ShellDrawer
+            open={openDrawer === "inspector"}
+            onClose={closeDrawer}
+            side="right"
+            title="Inspector"
+            drawerId="shell-drawer-inspector"
+            reducedMotion={reducedMotion}
+          >
+            <ErrorBoundary regionLabel="Inspector">{inspectorPanel}</ErrorBoundary>
+          </ShellDrawer>
         )}
       </div>
       {pendingConnection && (

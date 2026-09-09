@@ -162,9 +162,13 @@ export const shell = {
   breakpoint: {
     /** Collapse fixed rails into drawers */
     compact: 1100,
+    /** Fixed inspector rail alongside library + run (1280 − rails ≈ canvasMinWidth) */
+    wide: 1280,
     /** Inspect + run only; disable touch-draw authoring */
     phone: 640,
   },
+  /** Minimum center-column width when library + run rails are fixed */
+  canvasMinWidth: 420,
   touchTarget: {
     min: 44,
   },

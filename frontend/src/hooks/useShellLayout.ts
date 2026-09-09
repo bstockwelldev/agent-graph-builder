@@ -6,12 +6,14 @@ export type ShellDrawer = "library" | "inspector" | "run";
 
 export function useShellLayout() {
   const [breakpoint, setBreakpoint] = useState<ShellBreakpoint>("desktop");
+  const [isWide, setIsWide] = useState(true);
   const [openDrawer, setOpenDrawer] = useState<ShellDrawer | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
     const updateBreakpoint = () => {
       const width = window.innerWidth;
+      setIsWide(width >= shell.breakpoint.wide);
       if (width < shell.breakpoint.phone) {
         setBreakpoint("phone");
       } else if (width < shell.breakpoint.compact) {
@@ -59,10 +61,14 @@ export function useShellLayout() {
 
   const isCompact = breakpoint !== "desktop";
   const authoringEnabled = breakpoint !== "phone";
+  /** Inspector uses a drawer below the wide breakpoint (desktop library + run stay fixed). */
+  const inspectorInDrawer = isCompact || !isWide;
 
   return {
     breakpoint,
     isCompact,
+    isWide,
+    inspectorInDrawer,
     authoringEnabled,
     openDrawer,
     setOpenDrawer,
