@@ -135,3 +135,28 @@ export const localType = {
   /** Uppercase section labels/eyebrows (reuses caption's size). */
   label: { ...typeScale.caption, textTransform: "uppercase" as const, letterSpacing: 0.5 },
 } as const;
+
+// ---- App shell (responsive drawers, a11y) -------------------------------
+
+export const shell = {
+  breakpoint: {
+    /** Collapse fixed rails into drawers */
+    compact: 1100,
+    /** Inspect + run only; disable touch-draw authoring */
+    phone: 640,
+  },
+  touchTarget: {
+    min: 44,
+  },
+  zIndex: {
+    backdrop: 40,
+    drawer: 50,
+    tooltip: 60,
+  },
+  motion: {
+    drawerMs: 200,
+  },
+  shadow: {
+    drawer: "0 8px 24px rgba(0, 0, 0, 0.45)",
+  },
+} as const;

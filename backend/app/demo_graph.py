@@ -94,4 +94,5 @@ def build_demo_graph() -> GraphDefinition:
         entry_node_id="input_1",
         nodes=nodes,
         edges=edges,
+        orientation="auto",
     )

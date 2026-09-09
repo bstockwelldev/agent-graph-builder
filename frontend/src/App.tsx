@@ -1,8 +1,4 @@
 import {
-  Background,
-  Controls,
-  MiniMap,
-  ReactFlow,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -27,10 +23,26 @@ import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { GraphLibrary } from "./components/GraphLibrary";
 import { NodePalette } from "./components/NodePalette";
 import { RunPanel } from "./components/RunPanel";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FlowCanvas } from "./components/FlowCanvas";
+import { ConnectKindMenu } from "./components/ConnectKindMenu";
+import { EmptyGraphCoach } from "./components/EmptyGraphCoach";
+import { OrientationControl } from "./components/OrientationControl";
+import { ShellDrawer, ShellDrawerToggle } from "./components/ShellDrawer";
 import { GraphNodeView, type GraphNodeData } from "./components/nodes/GraphNodeView";
-import { color, spacing, surface, text, typeScale } from "./theme";
+import { useShellLayout } from "./hooks/useShellLayout";
+import { useUndoStack } from "./hooks/useUndoStack";
+import {
+  cloneCanvasSnapshot,
+  dismissCoach,
+  isBlankGraphPattern,
+  isCoachDismissed,
+  isEditableKeyboardTarget,
+} from "./lib/graphAuthoring";
+import { color, shell, spacing, surface, text, typeScale } from "./theme";
+import { Button } from "./components/ui/Button";
 import { TextInput } from "./components/ui/fields";
-import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeTrace, NodeType, PlatformEvent, RouteDecision, RunSummary, ChatProvider } from "./types";
+import type { Diagnostic, EdgeKind, GraphDefinition, GraphEdge, GraphNode, GraphOrientation, NodeTrace, NodeType, PlatformEvent, RouteDecision, RunSummary, ChatProvider } from "./types";
 
 const DEMO_GRAPH_ID = "demo_classify_and_route";
 
@@ -101,11 +113,25 @@ function toFlowEdge(e: GraphEdge, issue?: { severity: "error" | "warning"; capti
   };
 }
 
+function createFlowEdge(connection: Connection, kind: EdgeKind, condition: string | null): Edge {
+  const { stroke, strokeWidth } = edgeStrokeForKind(kind);
+  return {
+    id: nextId("e"),
+    source: connection.source!,
+    target: connection.target!,
+    label: kind === "conditional" ? `if: ${condition ?? ""}` : kind,
+    animated: kind === "conditional",
+    style: { stroke, strokeWidth },
+    data: { kind, condition },
+  };
+}
+
 function fingerprintGraph(graph: GraphDefinition): string {
   return JSON.stringify({
     id: graph.id,
     name: graph.name,
     entry_node_id: graph.entry_node_id,
+    orientation: graph.orientation ?? "auto",
     nodes: graph.nodes,
     edges: graph.edges,
   });
@@ -125,6 +151,7 @@ function applyGraphToCanvas(
   setters: {
     setGraphId: (id: string) => void;
     setGraphName: (name: string) => void;
+    setGraphOrientation: (orientation: GraphOrientation) => void;
     setNodes: ReturnType<typeof useNodesState<Node<GraphNodeData>>>[1];
     setEdges: ReturnType<typeof useEdgesState<Edge>>[1];
     setSelectedNodeId: (id: string | null) => void;
@@ -139,6 +166,7 @@ function applyGraphToCanvas(
   syncIdCounter(graph);
   setters.setGraphId(graph.id);
   setters.setGraphName(graph.name);
+  setters.setGraphOrientation(graph.orientation ?? "auto");
   setters.setNodes(graph.nodes.map(toFlowNode));
   setters.setEdges(graph.edges.map((edge) => toFlowEdge(edge)));
   setters.setSelectedNodeId(null);
@@ -179,10 +207,57 @@ export default function App() {
   const [inspectionRunId, setInspectionRunId] = useState<string | null>(null);
   const [inspectionRouteDecisions, setInspectionRouteDecisions] = useState<RouteDecision[]>([]);
   const [savedGraphFingerprint, setSavedGraphFingerprint] = useState<string>("");
+  const [graphOrientation, setGraphOrientation] = useState<GraphOrientation>("auto");
+  const [layoutLiveAnnouncement, setLayoutLiveAnnouncement] = useState("");
+  const [dirtyLiveAnnouncement, setDirtyLiveAnnouncement] = useState("");
+  const [coachDismissed, setCoachDismissed] = useState(false);
+  const [pendingConnection, setPendingConnection] = useState<{
+    connection: Connection;
+    x: number;
+    y: number;
+    targetLabel: string;
+  } | null>(null);
   const [providerBlockMessage, setProviderBlockMessage] = useState<string | null>(null);
+  const shiftConnectRef = useRef(false);
+  const connectPointerRef = useRef({ x: 0, y: 0 });
   const closeStreamRef = useRef<(() => void) | null>(null);
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
+  const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
+  const {
+    isCompact,
+    authoringEnabled,
+    openDrawer,
+    setOpenDrawer,
+    toggleDrawer,
+    closeDrawer,
+    reducedMotion,
+  } = useShellLayout();
+
+  useEffect(() => {
+    if (isCompact && (selectedNodeId || selectedEdgeId)) {
+      setOpenDrawer("inspector");
+    }
+  }, [isCompact, selectedNodeId, selectedEdgeId, setOpenDrawer]);
+
+  useEffect(() => {
+    setCoachDismissed(graphId ? isCoachDismissed(graphId) : false);
+  }, [graphId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Shift") shiftConnectRef.current = true;
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Shift") shiftConnectRef.current = false;
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   const focusDiagnostics = useCallback(() => {
     diagnosticsSectionRef.current?.focus();
@@ -285,6 +360,7 @@ export default function App() {
     () => ({
       setGraphId,
       setGraphName,
+      setGraphOrientation,
       setNodes,
       setEdges,
       setSelectedNodeId,
@@ -347,11 +423,12 @@ export default function App() {
     async (targetId: string) => {
       const graph = await api.getGraph(targetId);
       applyGraphToCanvas(graph, canvasSetters());
+      clearHistory();
       setInspectionRunId(null);
       setInspectionRouteDecisions([]);
       setSavedGraphFingerprint(fingerprintGraph(graph));
     },
-    [canvasSetters],
+    [canvasSetters, clearHistory],
   );
 
   useEffect(() => {
@@ -362,6 +439,7 @@ export default function App() {
           applyGraphToCanvas(preferred, {
             setGraphId,
             setGraphName,
+            setGraphOrientation,
             setNodes,
             setEdges,
             setSelectedNodeId,
@@ -373,6 +451,7 @@ export default function App() {
             closeStream: () => closeStreamRef.current?.(),
           });
           setSavedGraphFingerprint(fingerprintGraph(preferred));
+          clearHistory();
         }
       })
       .catch((err: unknown) => {
@@ -385,32 +464,106 @@ export default function App() {
       const graph = await api.createGraph(name, template);
       await refreshGraphList();
       applyGraphToCanvas(graph, canvasSetters());
+      clearHistory();
       setInspectionRunId(null);
       setInspectionRouteDecisions([]);
       setSavedGraphFingerprint(fingerprintGraph(graph));
     },
-    [refreshGraphList, canvasSetters],
+    [refreshGraphList, canvasSetters, clearHistory],
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      const kind: EdgeKind = "sequence";
-      const { stroke, strokeWidth } = edgeStrokeForKind(kind);
-      const edge: Edge = {
-        id: nextId("e"),
-        source: connection.source!,
-        target: connection.target!,
-        label: "sequence",
-        style: { stroke, strokeWidth },
-        data: { kind, condition: null },
-      };
-      setEdges((eds) => addEdge(edge, eds));
+      const sourceNode = nodes.find((node) => node.id === connection.source);
+      const targetNode = nodes.find((node) => node.id === connection.target);
+      const needsKindMenu = sourceNode?.data.nodeType === "router" || shiftConnectRef.current;
+
+      if (needsKindMenu) {
+        setPendingConnection({
+          connection,
+          x: connectPointerRef.current.x,
+          y: connectPointerRef.current.y,
+          targetLabel: targetNode?.data.label ?? connection.target ?? "target",
+        });
+        return;
+      }
+
+      pushSnapshot(cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation));
+      setEdges((current) => addEdge(createFlowEdge(connection, "sequence", null), current));
     },
-    [setEdges],
+    [nodes, edges, graphName, graphOrientation, pushSnapshot, setEdges],
   );
+
+  const confirmPendingConnection = useCallback(
+    (kind: EdgeKind, condition: string | null) => {
+      if (!pendingConnection) return;
+      pushSnapshot(cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation));
+      setEdges((current) => addEdge(createFlowEdge(pendingConnection.connection, kind, condition), current));
+      setPendingConnection(null);
+    },
+    [pendingConnection, nodes, edges, graphName, graphOrientation, pushSnapshot, setEdges],
+  );
+
+  const getCanvasSnapshot = useCallback(
+    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation),
+    [nodes, edges, graphName, graphOrientation],
+  );
+
+  const applyCanvasSnapshot = useCallback(
+    (snapshot: ReturnType<typeof getCanvasSnapshot>) => {
+      setNodes(snapshot.nodes);
+      setEdges(snapshot.edges);
+      setGraphName(snapshot.graphName);
+      setGraphOrientation(snapshot.graphOrientation);
+    },
+    [setNodes, setEdges],
+  );
+
+  const recordMutation = useCallback(() => {
+    pushSnapshot(getCanvasSnapshot());
+  }, [getCanvasSnapshot, pushSnapshot]);
+
+  const patchEdgeById = useCallback(
+    (edgeId: string, patch: Partial<GraphEdge>) => {
+      recordMutation();
+      setEdges((current) =>
+        current.map((edge) => {
+          if (edge.id !== edgeId) return edge;
+          const kind = (patch.kind ?? (edge.data?.kind as EdgeKind)) ?? "sequence";
+          const condition = patch.condition !== undefined ? patch.condition : (edge.data?.condition as string | null);
+          const issue = buildIssueMaps(diagnostics).edgeIssues.get(edge.id);
+          const { stroke, strokeWidth } = edgeStrokeForKind(kind, issue);
+          return {
+            ...edge,
+            data: { ...edge.data, kind, condition },
+            label: kind === "conditional" ? `if: ${condition ?? ""}` : kind,
+            style: { stroke, strokeWidth },
+            animated: kind === "conditional",
+          };
+        }),
+      );
+    },
+    [diagnostics, recordMutation, setEdges],
+  );
+
+  const deleteSelection = useCallback(() => {
+    if (selectedNodeId) {
+      recordMutation();
+      setNodes((current) => current.filter((node) => node.id !== selectedNodeId));
+      setEdges((current) => current.filter((edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId));
+      setSelectedNodeId(null);
+      return;
+    }
+    if (selectedEdgeId) {
+      recordMutation();
+      setEdges((current) => current.filter((edge) => edge.id !== selectedEdgeId));
+      setSelectedEdgeId(null);
+    }
+  }, [recordMutation, selectedEdgeId, selectedNodeId, setEdges, setNodes]);
 
   const addNode = useCallback(
     (type: NodeType) => {
+      recordMutation();
       const config = defaultConfig(type);
       const id = nextId(type);
       const node: Node<GraphNodeData> = {
@@ -419,9 +572,9 @@ export default function App() {
         position: { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
         data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
-      setNodes((nds) => [...nds, node]);
+      setNodes((current) => [...current, node]);
     },
-    [setNodes],
+    [recordMutation, setNodes],
   );
 
   const buildGraphDefinition = useCallback((): GraphDefinition => {
@@ -433,6 +586,7 @@ export default function App() {
       id: graphId,
       name: graphName,
       entry_node_id: entryNode?.id ?? nodes[0]?.id ?? "",
+      orientation: graphOrientation,
       nodes: nodes.map((n) => ({
         id: n.id,
         type: n.data.nodeType,
@@ -447,9 +601,9 @@ export default function App() {
         condition: (e.data?.condition as string | null) ?? null,
       })),
     };
-  }, [nodes, edges, graphId, graphName]);
+  }, [nodes, edges, graphId, graphName, graphOrientation]);
 
-  const isCanvasDirty = useCallback(() => {
+  const canvasDirty = useMemo(() => {
     if (!graphId) return false;
     try {
       return fingerprintGraph(buildGraphDefinition()) !== savedGraphFingerprint;
@@ -457,6 +611,57 @@ export default function App() {
       return false;
     }
   }, [buildGraphDefinition, graphId, savedGraphFingerprint]);
+
+  const isCanvasDirty = useCallback(() => canvasDirty, [canvasDirty]);
+
+  const handleSave = useCallback(async () => {
+    if (!graphId || !canvasDirty) return;
+    const graph = buildGraphDefinition();
+    await api.saveGraph(graph);
+    setSavedGraphFingerprint(fingerprintGraph(graph));
+    await refreshGraphList();
+  }, [buildGraphDefinition, canvasDirty, graphId, refreshGraphList]);
+
+  useEffect(() => {
+    setDirtyLiveAnnouncement(canvasDirty ? "Unsaved graph changes" : "");
+  }, [canvasDirty]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(event.target)) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        const current = getCanvasSnapshot();
+        const snapshot = event.shiftKey ? redo(current) : undo(current);
+        if (snapshot) applyCanvasSnapshot(snapshot);
+        return;
+      }
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (selectedNodeId || selectedEdgeId) {
+          event.preventDefault();
+          deleteSelection();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    applyCanvasSnapshot,
+    deleteSelection,
+    getCanvasSnapshot,
+    redo,
+    selectedEdgeId,
+    selectedNodeId,
+    undo,
+  ]);
+
+  const handleRootReload = useCallback(() => {
+    if (isCanvasDirty()) {
+      const confirmed = window.confirm("You have unsaved canvas changes. Reload the app anyway?");
+      if (!confirmed) return;
+    }
+    window.location.reload();
+  }, [isCanvasDirty]);
 
   const handleSelectGraph = useCallback(
     async (targetId: string) => {
@@ -634,183 +839,367 @@ export default function App() {
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
   const selectedTrace = selectedNodeId ? nodeTraces[selectedNodeId] ?? null : null;
+  const routerOutgoingEdges: GraphEdge[] =
+    selectedNode?.data.nodeType === "router"
+      ? edges
+          .filter((edge) => edge.source === selectedNode.id)
+          .map((edge) => ({
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            kind: (edge.data?.kind as EdgeKind) ?? "sequence",
+            condition: (edge.data?.condition as string | null) ?? null,
+          }))
+      : [];
+  const showEmptyCoach =
+    authoringEnabled && !coachDismissed && graphId !== null && isBlankGraphPattern(nodes, edges);
+  const headerLiveAnnouncement = [dirtyLiveAnnouncement, layoutLiveAnnouncement].filter(Boolean).join(". ");
+
+  const libraryPanel = (
+    <>
+      <GraphLibrary
+        graphs={graphs}
+        activeGraphId={graphId}
+        onSelect={(id) => void handleSelectGraph(id)}
+        onCreate={handleCreateGraph}
+        onExport={handleExportGraph}
+        onImport={(file) => handleImportGraph(file)}
+      />
+      <NodePalette onAdd={addNode} authoringEnabled={authoringEnabled} />
+    </>
+  );
+
+  const inspectorPanel = selectedNode ? (
+    <NodeInspector
+      fullWidth={isCompact}
+      node={{
+        id: selectedNode.id,
+        type: selectedNode.data.nodeType,
+        position: selectedNode.position,
+        config: selectedNode.data.config,
+      }}
+      issues={diagnosticsForNode(diagnostics, selectedNode.id)}
+      outgoingEdges={routerOutgoingEdges}
+      onConfigChange={(config) => {
+        recordMutation();
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === selectedNode.id
+              ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
+              : n,
+          ),
+        );
+      }}
+      onEdgeChange={patchEdgeById}
+      onDelete={() => {
+        deleteSelection();
+      }}
+    />
+  ) : selectedEdge ? (
+    <EdgeInspector
+      fullWidth={isCompact}
+      edge={{
+        id: selectedEdge.id,
+        source: selectedEdge.source,
+        target: selectedEdge.target,
+        kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
+        condition: (selectedEdge.data?.condition as string | null) ?? null,
+      }}
+      issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
+      onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}
+      onDelete={() => {
+        deleteSelection();
+      }}
+    />
+  ) : (
+    <div style={{ padding: spacing[3], ...typeScale.caption, opacity: 0.75 }}>
+      Select a node or edge on the canvas to inspect it.
+    </div>
+  );
+
+  const runPanel = (
+    <RunPanel
+      layout={isCompact ? "drawer" : "rail"}
+      graphId={graphId}
+      diagnostics={diagnostics}
+      diagnosticsSectionRef={diagnosticsSectionRef}
+      providerBlockMessage={providerBlockMessage}
+      inspectionRunId={inspectionRunId}
+      onExitInspection={exitInspection}
+      onCompile={handleCompile}
+      onRun={handleRun}
+      onDiagnosticClick={handleDiagnosticClick}
+      runSummary={runSummary}
+      runHistory={runHistory}
+      onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
+      events={events}
+      selectedTrace={selectedTrace}
+    />
+  );
 
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
-      <aside
+    <ErrorBoundary regionLabel="Application" onReload={handleRootReload} fallbackHeight="100vh">
+      <div
         style={{
-          width: 220,
           display: "flex",
-          flexDirection: "column",
-          borderRight: `1px solid ${surface.border}`,
-          background: surface.panel,
-          overflowY: "auto",
+          flexDirection: isCompact ? "column" : "row",
+          height: "100vh",
+          width: "100vw",
+          overflow: "hidden",
         }}
       >
-        <GraphLibrary
-          graphs={graphs}
-          activeGraphId={graphId}
-          onSelect={(id) => void handleSelectGraph(id)}
-          onCreate={handleCreateGraph}
-          onExport={handleExportGraph}
-          onImport={(file) => handleImportGraph(file)}
-        />
-        <NodePalette onAdd={addNode} />
-      </aside>
+        {!isCompact && (
+          <aside
+            style={{
+              width: 220,
+              display: "flex",
+              flexDirection: "column",
+              borderRight: `1px solid ${surface.border}`,
+              background: surface.panel,
+              overflowY: "auto",
+            }}
+          >
+            <ErrorBoundary regionLabel="Graph library">{libraryPanel}</ErrorBoundary>
+          </aside>
+        )}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
-        <div style={headerBarStyle}>
-          <TextInput
-            value={graphName}
-            onChange={(e) => setGraphName(e.target.value)}
-            aria-label="Graph name"
-            style={{ ...typeScale.subheading, fontWeight: 600, marginBottom: spacing[1] }}
-          />
-          <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId ?? "No graph selected"}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: spacing[2], marginTop: spacing[1] }}>
-            {inspectionRunId && runSummary && (
-              <div
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+          {isCompact && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: spacing[2],
+                padding: `${spacing[2]}px ${spacing[3]}px`,
+                borderBottom: `1px solid ${surface.border}`,
+                background: surface.panel,
+              }}
+            >
+              <ShellDrawerToggle
+                label="Library"
+                active={openDrawer === "library"}
+                controlsId="shell-drawer-library"
+                onClick={() => toggleDrawer("library")}
+              />
+              <ShellDrawerToggle
+                label="Inspector"
+                active={openDrawer === "inspector"}
+                controlsId="shell-drawer-inspector"
+                onClick={() => toggleDrawer("inspector")}
+              />
+              <ShellDrawerToggle
+                label="Run"
+                active={openDrawer === "run"}
+                controlsId="shell-drawer-run"
+                onClick={() => toggleDrawer("run")}
+              />
+            </div>
+          )}
+
+          <div style={headerBarStyle}>
+            <TextInput
+              value={graphName}
+              onChange={(e) => setGraphName(e.target.value)}
+              aria-label="Graph name"
+              style={{ ...typeScale.subheading, fontWeight: 600, marginBottom: spacing[1] }}
+            />
+            <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId ?? "No graph selected"}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: spacing[2], marginTop: spacing[1], alignItems: "center" }}>
+              <Button
+                variant="primary"
+                disabled={!graphId || !canvasDirty}
+                onClick={() => void handleSave()}
+                title="Save graph without compiling"
+                style={{ minHeight: shell.touchTarget.min }}
+              >
+                Save
+              </Button>
+              {canvasDirty && (
+                <span
+                  aria-live="polite"
+                  style={{
+                    ...typeScale.caption,
+                    padding: `${spacing[1]}px ${spacing[2]}px`,
+                    borderRadius: 999,
+                    border: `1px solid ${color.warning[700]}`,
+                    background: surface.raised,
+                    color: color.warning[500],
+                    fontWeight: 600,
+                  }}
+                >
+                  Unsaved
+                </span>
+              )}
+              <OrientationControl
+                value={graphOrientation}
+                onChange={(value) => {
+                  recordMutation();
+                  setGraphOrientation(value);
+                }}
+              />
+              {inspectionRunId && runSummary && (
+                <div
+                  style={{
+                    ...typeScale.caption,
+                    padding: `${spacing[1]}px ${spacing[2]}px`,
+                    borderRadius: 999,
+                    border: `1px solid ${color.primary[700]}`,
+                    background: color.neutral[900],
+                    color: color.primary[500],
+                  }}
+                >
+                  Inspecting run · <b>{runSummary.status}</b>
+                  {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={focusDiagnostics}
+                title="Open graph validation diagnostics"
+                aria-live="polite"
                 style={{
                   ...typeScale.caption,
+                  minHeight: shell.touchTarget.min,
                   padding: `${spacing[1]}px ${spacing[2]}px`,
                   borderRadius: 999,
-                  border: `1px solid ${color.primary[700]}`,
-                  background: color.neutral[900],
-                  color: color.primary[500],
+                  border: `1px solid ${surface.borderStrong}`,
+                  background: surface.raised,
+                  color: validationLabel === "Ready" ? color.success[500] : color.warning[500],
+                  cursor: "pointer",
                 }}
               >
-                Inspecting run · <b>{runSummary.status}</b>
-                {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={focusDiagnostics}
-              aria-live="polite"
-              style={{
-                ...typeScale.caption,
-                padding: `${spacing[1]}px ${spacing[2]}px`,
-                borderRadius: 999,
-                border: `1px solid ${surface.borderStrong}`,
-                background: surface.raised,
-                color: validationLabel === "Ready" ? color.success[500] : color.warning[500],
-                cursor: "pointer",
-              }}
-            >
-              Validation: {validationLabel}
-            </button>
+                Validation: {validationLabel}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, position: "relative", minHeight: 0, minWidth: 0 }}>
+            <ErrorBoundary regionLabel="Canvas" fallbackHeight="100%">
+              <FlowCanvas
+                graphId={graphId}
+                nodes={nodes}
+                edges={edges}
+                setNodes={setNodes}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={authoringEnabled ? onConnect : undefined}
+                onConnectStart={(event) => {
+                  if (event instanceof MouseEvent) {
+                    connectPointerRef.current = { x: event.clientX, y: event.clientY };
+                  } else if (event instanceof TouchEvent && event.touches[0]) {
+                    connectPointerRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+                  }
+                }}
+                authoringEnabled={authoringEnabled}
+                nodeTypes={nodeTypes}
+                reducedMotion={reducedMotion}
+                graphOrientation={graphOrientation}
+                liveAnnouncement={headerLiveAnnouncement}
+                onLiveAnnouncement={(message) => {
+                  if (message.startsWith("Graph layout:")) {
+                    setLayoutLiveAnnouncement(message);
+                  } else {
+                    setDirtyLiveAnnouncement(message);
+                  }
+                }}
+                onClearLiveAnnouncement={() => {
+                  setLayoutLiveAnnouncement("");
+                  setDirtyLiveAnnouncement("");
+                }}
+                overlay={
+                  <EmptyGraphCoach
+                    visible={showEmptyCoach}
+                    onDismiss={() => {
+                      if (graphId) dismissCoach(graphId);
+                      setCoachDismissed(true);
+                    }}
+                  />
+                }
+                onNodeClick={(nodeId) => {
+                  setSelectedNodeId(nodeId);
+                  setSelectedEdgeId(null);
+                  if (isCompact) setOpenDrawer("inspector");
+                }}
+                onEdgeClick={(edgeId) => {
+                  setSelectedEdgeId(edgeId);
+                  setSelectedNodeId(null);
+                  if (isCompact) setOpenDrawer("inspector");
+                }}
+                onPaneClick={() => {
+                  setPendingConnection(null);
+                  if (isCompact) closeDrawer();
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                }}
+              />
+            </ErrorBoundary>
           </div>
         </div>
-        <div style={{ flex: 1, position: "relative", minHeight: 0, minWidth: 0 }}>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <ReactFlow
-              style={{ width: "100%", height: "100%" }}
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              nodeTypes={nodeTypes}
-              onNodeClick={(_, node) => {
-                setSelectedNodeId(node.id);
-                setSelectedEdgeId(null);
-              }}
-              onEdgeClick={(_, edge) => {
-                setSelectedEdgeId(edge.id);
-                setSelectedNodeId(null);
-              }}
-              onPaneClick={() => {
-                setSelectedNodeId(null);
-                setSelectedEdgeId(null);
-              }}
-              colorMode="dark"
-              fitView
+
+        {!isCompact && selectedNode && (
+          <ErrorBoundary regionLabel="Node inspector" fallbackHeight="100%">
+            {inspectorPanel}
+          </ErrorBoundary>
+        )}
+
+        {!isCompact && !selectedNode && selectedEdge && (
+          <ErrorBoundary regionLabel="Edge inspector" fallbackHeight="100%">
+            {inspectorPanel}
+          </ErrorBoundary>
+        )}
+
+        {!isCompact && (
+          <ErrorBoundary regionLabel="Run panel" onReset={closeStream} fallbackHeight="100%">
+            {runPanel}
+          </ErrorBoundary>
+        )}
+
+        {isCompact && (
+          <>
+            <ShellDrawer
+              open={openDrawer === "library"}
+              onClose={closeDrawer}
+              side="left"
+              title="Graph library"
+              drawerId="shell-drawer-library"
+              reducedMotion={reducedMotion}
             >
-              <Background />
-              <Controls />
-              <MiniMap />
-            </ReactFlow>
-          </div>
-        </div>
+              <ErrorBoundary regionLabel="Graph library">{libraryPanel}</ErrorBoundary>
+            </ShellDrawer>
+            <ShellDrawer
+              open={openDrawer === "inspector"}
+              onClose={closeDrawer}
+              side="right"
+              title="Inspector"
+              drawerId="shell-drawer-inspector"
+              reducedMotion={reducedMotion}
+            >
+              <ErrorBoundary regionLabel="Inspector">{inspectorPanel}</ErrorBoundary>
+            </ShellDrawer>
+            <ShellDrawer
+              open={openDrawer === "run"}
+              onClose={closeDrawer}
+              side="right"
+              title="Run"
+              drawerId="shell-drawer-run"
+              reducedMotion={reducedMotion}
+            >
+              <ErrorBoundary regionLabel="Run panel" onReset={closeStream}>
+                {runPanel}
+              </ErrorBoundary>
+            </ShellDrawer>
+          </>
+        )}
       </div>
-
-      {selectedNode && (
-        <NodeInspector
-          node={{
-            id: selectedNode.id,
-            type: selectedNode.data.nodeType,
-            position: selectedNode.position,
-            config: selectedNode.data.config,
-          }}
-          issues={diagnosticsForNode(diagnostics, selectedNode.id)}
-          onConfigChange={(config) =>
-            setNodes((nds) =>
-              nds.map((n) =>
-                n.id === selectedNode.id
-                  ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
-                  : n,
-              ),
-            )
-          }
-          onDelete={() => {
-            setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-            setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
-            setSelectedNodeId(null);
-          }}
+      {pendingConnection && (
+        <ConnectKindMenu
+          x={pendingConnection.x}
+          y={pendingConnection.y}
+          targetLabel={pendingConnection.targetLabel}
+          onConfirm={confirmPendingConnection}
+          onCancel={() => setPendingConnection(null)}
         />
       )}
-
-      {selectedEdge && (
-        <EdgeInspector
-          edge={{
-            id: selectedEdge.id,
-            source: selectedEdge.source,
-            target: selectedEdge.target,
-            kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
-            condition: (selectedEdge.data?.condition as string | null) ?? null,
-          }}
-          issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
-          onChange={(patch) =>
-            setEdges((eds) =>
-              eds.map((e) => {
-                if (e.id !== selectedEdge.id) return e;
-                const kind = (patch.kind ?? (e.data?.kind as EdgeKind)) ?? "sequence";
-                const condition = patch.condition !== undefined ? patch.condition : (e.data?.condition as string | null);
-                const issue = buildIssueMaps(diagnostics).edgeIssues.get(e.id);
-                const { stroke, strokeWidth } = edgeStrokeForKind(kind, issue);
-                return {
-                  ...e,
-                  data: { ...e.data, kind, condition },
-                  label: kind === "conditional" ? `if: ${condition ?? ""}` : kind,
-                  style: { stroke, strokeWidth },
-                  animated: kind === "conditional",
-                };
-              }),
-            )
-          }
-          onDelete={() => {
-            setEdges((eds) => eds.filter((e) => e.id !== selectedEdge.id));
-            setSelectedEdgeId(null);
-          }}
-        />
-      )}
-
-      <RunPanel
-        graphId={graphId}
-        diagnostics={diagnostics}
-        diagnosticsSectionRef={diagnosticsSectionRef}
-        providerBlockMessage={providerBlockMessage}
-        inspectionRunId={inspectionRunId}
-        onExitInspection={exitInspection}
-        onCompile={handleCompile}
-        onRun={handleRun}
-        onDiagnosticClick={handleDiagnosticClick}
-        runSummary={runSummary}
-        runHistory={runHistory}
-        onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
-        events={events}
-        selectedTrace={selectedTrace}
-      />
-    </div>
+    </ErrorBoundary>
   );
 }

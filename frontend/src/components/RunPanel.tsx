@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { validationSummary } from "../diagnostics";
 import type { ChatProvider, Diagnostic, NodeTrace, PlatformEvent, RunSummary } from "../types";
-import { accentSurface, color, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
+import { PROVIDER_TAXONOMY } from "../content/taxonomy";
+import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
+import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { PasswordInput, Select, TextArea } from "./ui/fields";
 
@@ -43,6 +45,7 @@ export function RunPanel({
   onSelectRun,
   events,
   selectedTrace,
+  layout = "rail",
 }: {
   graphId: string | null;
   diagnostics: Diagnostic[];
@@ -58,6 +61,7 @@ export function RunPanel({
   onSelectRun: (runId: string) => void;
   events: PlatformEvent[];
   selectedTrace: NodeTrace | null;
+  layout?: "rail" | "drawer";
 }) {
   const [question, setQuestion] = useState("How does a database index work?");
   const [provider, setProvider] = useState<ChatProvider>("stub");
@@ -146,7 +150,7 @@ export function RunPanel({
   }, [graphId, provider, showModelSelect]);
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle(layout)}>
       {inspecting && runSummary && (
         <div style={{ ...sectionStyle, background: color.neutral[900] }}>
           <div style={headingStyle}>Run inspection</div>
@@ -181,7 +185,13 @@ export function RunPanel({
           placeholder="User question (fed into the Input node)"
         />
         <div style={{ marginTop: spacing[2] }}>
-          <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Model provider</div>
+          <TaxonomyTooltip
+            title={PROVIDER_TAXONOMY[provider]?.title ?? "Model provider"}
+            summary={PROVIDER_TAXONOMY[provider]?.summary ?? "Chat provider for LLM nodes"}
+            details={PROVIDER_TAXONOMY[provider]?.details ?? "Select which backend executes LLM nodes at run time."}
+          >
+            <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Model provider</div>
+          </TaxonomyTooltip>
           <Select value={provider} onChange={(e) => setProvider(e.target.value as ChatProvider)}>
             <option value="stub">Stub (offline)</option>
             <option value="groq">Groq</option>
@@ -234,12 +244,13 @@ export function RunPanel({
           </div>
         )}
         <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[2] }}>
-          <Button variant="secondary" onClick={onCompile}>
+          <Button variant="secondary" onClick={onCompile} style={{ minHeight: shell.touchTarget.min }}>
             Compile
           </Button>
           <Button
             variant="primary"
             disabled={running}
+            style={{ minHeight: shell.touchTarget.min }}
             onClick={() =>
               onRun(
                 question,
@@ -395,17 +406,17 @@ function diagnosticButtonStyle(severity: Diagnostic["severity"]): CSSProperties 
   };
 }
 
-const containerStyle: CSSProperties = {
-  width: 340,
+const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
+  width: layout === "drawer" ? "100%" : 340,
   height: "100%",
   minHeight: 0,
-  borderLeft: `1px solid ${surface.border}`,
+  borderLeft: layout === "drawer" ? undefined : `1px solid ${surface.border}`,
   background: surface.panel,
   color: text.primary,
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-};
+});
 
 const sectionStyle: CSSProperties = {
   padding: spacing[3],

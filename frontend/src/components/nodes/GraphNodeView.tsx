@@ -32,7 +32,7 @@ function truncateCaption(caption: string, max = 42): string {
   return caption.length > max ? `${caption.slice(0, max - 1)}…` : caption;
 }
 
-export function GraphNodeView({ data, selected }: NodeProps) {
+export function GraphNodeView({ data, selected, sourcePosition = Position.Right, targetPosition = Position.Left }: NodeProps) {
   const nodeData = data as GraphNodeData;
   const nodeStatus = nodeData.status ?? "idle";
   const compileIssue = nodeData.compileIssue ?? null;
@@ -63,7 +63,7 @@ export function GraphNodeView({ data, selected }: NodeProps) {
         transition: "border-color 150ms, box-shadow 150ms",
       }}
     >
-      {showTargetHandle && <Handle type="target" position={Position.Left} />}
+      {showTargetHandle && <Handle type="target" position={targetPosition} />}
       <div style={{ ...localType.label, opacity: 0.6, display: "flex", alignItems: "center", gap: spacing[1] }}>
         <Icon size={12} strokeWidth={2} />
         <span>{nodeData.nodeType}</span>
@@ -85,7 +85,7 @@ export function GraphNodeView({ data, selected }: NodeProps) {
           {compileIssue.severity === "error" ? "Error" : "Warning"}: {truncateCaption(compileIssue.caption)}
         </div>
       )}
-      {showSourceHandle && <Handle type="source" position={Position.Right} />}
+      {showSourceHandle && <Handle type="source" position={sourcePosition} />}
     </div>
   );
 }

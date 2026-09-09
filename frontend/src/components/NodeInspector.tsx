@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { GraphEdge, GraphNode, Diagnostic } from "../types";
-import { accentSurface, color, fontFamily, localType, spacing, surface, text, typeScale } from "../theme";
+import { EDGE_KIND_TAXONOMY, ROUTER_RULES_TAXONOMY } from "../content/taxonomy";
+import type { EdgeKind, GraphEdge, GraphNode, Diagnostic } from "../types";
+import { accentSurface, color, fontFamily, localType, radius, spacing, surface, text, typeScale } from "../theme";
+import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { Select, TextArea, TextInput } from "./ui/fields";
 
@@ -25,21 +27,33 @@ function IssueList({ issues }: { issues: Diagnostic[] }) {
   );
 }
 
+export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): GraphEdge {
+  const kind = (patch.kind ?? edge.kind) as EdgeKind;
+  const condition = patch.condition !== undefined ? patch.condition : edge.condition ?? null;
+  return { ...edge, kind, condition };
+}
+
 export function NodeInspector({
   node,
   issues = [],
+  outgoingEdges = [],
   onConfigChange,
+  onEdgeChange,
   onDelete,
+  fullWidth = false,
 }: {
   node: GraphNode;
   issues?: Diagnostic[];
+  outgoingEdges?: GraphEdge[];
   onConfigChange: (config: Record<string, unknown>) => void;
+  onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
+  fullWidth?: boolean;
 }) {
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
 
   return (
-    <div style={panelStyle}>
+    <div style={panelStyle(fullWidth)}>
       <div style={headingStyle}>Configure: {node.type}</div>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
       <IssueList issues={issues} />
@@ -101,11 +115,31 @@ export function NodeInspector({
       )}
 
       {node.type === "router" && (
-        <div style={{ ...typeScale.caption, opacity: 0.75, lineHeight: "18px" }}>
-          Routing is driven entirely by this node's outgoing edges: mark an
-          edge <b>conditional</b> with a condition string matched against the
-          upstream LLM's output, and exactly one edge <b>default</b> as the
-          fallback. Select an edge on the canvas to configure it.
+        <div style={{ marginBottom: spacing[3] }}>
+          <TaxonomyTooltip
+            title={ROUTER_RULES_TAXONOMY.title}
+            summary={ROUTER_RULES_TAXONOMY.summary}
+            details={ROUTER_RULES_TAXONOMY.details}
+          >
+            <div style={{ ...localType.label, opacity: 0.6, marginBottom: spacing[2] }}>Outgoing edges</div>
+          </TaxonomyTooltip>
+          {outgoingEdges.length === 0 ? (
+            <div style={{ ...typeScale.caption, opacity: 0.75, lineHeight: "18px" }}>
+              Connect edges from this router on the canvas to define branches.
+            </div>
+          ) : (
+            outgoingEdges.map((edge) => {
+              const edgeIssues = issues.filter((issue) => issue.edge_id === edge.id);
+              return (
+                <RouterEdgeRow
+                  key={edge.id}
+                  edge={edge}
+                  issues={edgeIssues}
+                  onChange={(patch) => onEdgeChange?.(edge.id, patch)}
+                />
+              );
+            })
+          )}
         </div>
       )}
 
@@ -115,7 +149,7 @@ export function NodeInspector({
         </div>
       )}
 
-      <Button variant="destructive" style={{ marginTop: spacing[2] }} onClick={onDelete}>
+      <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
         Delete node
       </Button>
     </div>
@@ -127,21 +161,31 @@ export function EdgeInspector({
   issues = [],
   onChange,
   onDelete,
+  fullWidth = false,
 }: {
   edge: GraphEdge;
   issues?: Diagnostic[];
   onChange: (patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
+  fullWidth?: boolean;
 }) {
+  const kindTaxonomy = EDGE_KIND_TAXONOMY[edge.kind];
+
   return (
-    <div style={panelStyle}>
+    <div style={panelStyle(fullWidth)}>
       <div style={headingStyle}>Configure edge</div>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>
         {edge.source} → {edge.target}
       </div>
       <IssueList issues={issues} />
 
-      <Field label="Kind">
+      <Field
+        label={
+          <TaxonomyTooltip title={kindTaxonomy.title} summary={kindTaxonomy.summary} details={kindTaxonomy.details}>
+            <span>Kind</span>
+          </TaxonomyTooltip>
+        }
+      >
         <Select value={edge.kind} onChange={(e) => onChange({ kind: e.target.value as GraphEdge["kind"] })}>
           <option value="sequence">sequence</option>
           <option value="conditional">conditional</option>
@@ -155,14 +199,61 @@ export function EdgeInspector({
         </Field>
       )}
 
-      <Button variant="destructive" style={{ marginTop: spacing[2] }} onClick={onDelete}>
+      <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
         Delete edge
       </Button>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function RouterEdgeRow({
+  edge,
+  issues,
+  onChange,
+}: {
+  edge: GraphEdge;
+  issues: Diagnostic[];
+  onChange: (patch: Partial<GraphEdge>) => void;
+}) {
+  const kindTaxonomy = EDGE_KIND_TAXONOMY[edge.kind];
+
+  return (
+    <div
+      style={{
+        marginBottom: spacing[2],
+        padding: spacing[2],
+        borderRadius: radius.lg,
+        border: `1px solid ${surface.borderStrong}`,
+        background: surface.raised,
+      }}
+    >
+      <div style={{ ...typeScale.caption, opacity: 0.75, marginBottom: spacing[1] }}>
+        → {edge.target}
+      </div>
+      <IssueList issues={issues} />
+      <Field
+        label={
+          <TaxonomyTooltip title={kindTaxonomy.title} summary={kindTaxonomy.summary} details={kindTaxonomy.details}>
+            <span>Kind</span>
+          </TaxonomyTooltip>
+        }
+      >
+        <Select value={edge.kind} onChange={(event) => onChange({ kind: event.target.value as GraphEdge["kind"] })}>
+          <option value="sequence">sequence</option>
+          <option value="conditional">conditional</option>
+          <option value="default">default</option>
+        </Select>
+      </Field>
+      {edge.kind === "conditional" && (
+        <Field label="Condition">
+          <TextInput value={edge.condition ?? ""} onChange={(event) => onChange({ condition: event.target.value })} />
+        </Field>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div style={{ marginBottom: spacing[3] }}>
       <label style={{ display: "block", ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>{label}</label>
@@ -171,14 +262,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const panelStyle: CSSProperties = {
-  width: 300,
-  padding: spacing[3],
-  borderLeft: `1px solid ${surface.border}`,
-  background: surface.panel,
-  color: text.primary,
-  overflowY: "auto",
-};
+function panelStyle(fullWidth: boolean): CSSProperties {
+  return {
+    width: fullWidth ? "100%" : 300,
+    padding: spacing[3],
+    borderLeft: fullWidth ? undefined : `1px solid ${surface.border}`,
+    background: surface.panel,
+    color: text.primary,
+    overflowY: "auto",
+    height: fullWidth ? "100%" : undefined,
+  };
+}
 
 const headingStyle: CSSProperties = {
   ...localType.label,

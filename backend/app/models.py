@@ -57,6 +57,7 @@ class GraphDefinition(BaseModel):
     entry_node_id: str
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+    orientation: Literal["auto", "horizontal", "vertical"] = "auto"
     updated_at: str | None = None
 
 

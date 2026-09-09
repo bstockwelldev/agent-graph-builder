@@ -41,6 +41,7 @@ def build_blank_graph(graph_id: str, name: str) -> GraphDefinition:
         entry_node_id="input_1",
         nodes=nodes,
         edges=edges,
+        orientation="auto",
     )
 
 

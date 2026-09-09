@@ -2,6 +2,7 @@ export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "googl
 
 export type NodeType = "input" | "prompt" | "llm" | "tool" | "router" | "output";
 export type EdgeKind = "sequence" | "conditional" | "default";
+export type GraphOrientation = "auto" | "horizontal" | "vertical";
 
 export interface NodePosition {
   x: number;
@@ -29,6 +30,7 @@ export interface GraphDefinition {
   entry_node_id: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  orientation?: GraphOrientation;
   updated_at?: string | null;
 }
 

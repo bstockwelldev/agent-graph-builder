@@ -249,6 +249,10 @@ GitHub Actions runs `uv run pytest` in `backend/` on push and pull requests
 (see `.github/workflows/ci.yml`). No secrets are required — tests use the
 Stub provider.
 
+**Planning specs:** Locked next-set feature plans live in
+[`docs/planning/`](docs/planning/) (shell resilience → canvas orientation →
+from-scratch authoring).
+
 To push this repo to GitHub, add a remote and push:
 
 ```bash
