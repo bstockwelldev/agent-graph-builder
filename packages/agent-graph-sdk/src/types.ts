@@ -114,8 +114,5 @@ export interface ProviderCredentials {
   requires_api_key: boolean;
   label: string;
   env_var: string;
-  // Whether the server already has a key configured for this provider (via
-  // env var). The value itself is never sent to the browser -- see
-  // backend/app/provider_credentials.py.
   configured: boolean;
 }

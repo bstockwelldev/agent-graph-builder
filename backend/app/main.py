@@ -193,6 +193,6 @@ async def stream_run_events(run_id: str) -> StreamingResponse:
 if os.environ.get("VERCEL"):
     from pathlib import Path
 
-    _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-    if _frontend_dist.is_dir():
-        app.frontend("/", directory=str(_frontend_dist))
+    _playground_dist = Path(__file__).resolve().parent.parent.parent / "apps" / "playground" / "dist"
+    if _playground_dist.is_dir():
+        app.frontend("/", directory=str(_playground_dist))

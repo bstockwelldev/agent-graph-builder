@@ -45,6 +45,12 @@ Highlights after the next-set:
 - Locked decisions tables are authoritative; do not reopen without a new SPEC revision.
 - Code paths in section 10 of each SPEC list verified repo-relative paths only.
 
+## Incidents
+
+| Doc | Summary |
+| --- | ------- |
+| [prod-run-queue-limbo-2026-09-09.md](incidents/prod-run-queue-limbo-2026-09-09.md) | Production Run stuck `queued` + validate storm on Vercel serverless — RCA + PTR (draft) |
+
 ## Related docs
 
 - [README.md](../../README.md) — POC overview, run instructions, CI

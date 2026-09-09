@@ -1,7 +1,7 @@
 [project]
-name = "agent-graph-builder-poc"
-version = "0.1.0"
-description = "POC: visual graph authoring + LangGraph execution + streamed node-level observability"
+name = "agent-graph-builder"
+version = "0.2.0"
+description = "Agent Graph Builder API — visual graph authoring + LangGraph execution + streamed node-level observability"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

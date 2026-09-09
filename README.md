@@ -1,6 +1,6 @@
-# Agent Graph Builder — POC
+# Agent Graph Builder
 
-A thin vertical slice proving the central thesis of the Provider-Neutral,
+Visual graph authoring platform with a **playground** web UI and **`@bstockwelldev/agent-graph-sdk`** TypeScript package. The playground is a thin vertical slice proving the central thesis of the Provider-Neutral,
 Graph-Native Agent Workstream Platform EDD (`agent_orchestration_edd.md`):
 
 > A user can visually assemble a small graph, execute it, and inspect the
@@ -35,7 +35,8 @@ answer.
 ## Stack
 
 - **Backend**: Python + FastAPI + LangGraph, `uv` for dependency management.
-- **Frontend**: Vite + React + TypeScript + `@xyflow/react` (React Flow).
+- **Playground** (`apps/playground`): Vite + React + TypeScript + `@xyflow/react` (React Flow).
+- **SDK** (`packages/agent-graph-sdk`): `@bstockwelldev/agent-graph-sdk` — shared types, API client, graph schema helpers.
 - **Model provider**: Stub, Groq, Google Gemini, Azure OpenAI, Ollama, or OpenAI-compatible
   HTTP; selected per run; factory in `backend/app/providers/base.py`.
 - **Persistence**: SQLite for saved graph definitions and run snapshots (node traces,
@@ -83,7 +84,7 @@ Install from **agent-context-factory** (canonical; POC installer forwards there)
 
 ```powershell
 # From <dev-root>/agent-context-factory
-powershell -File scripts/install-dev-cli.ps1 -RepoRoot <dev-root>/agent-graph-builder-poc
+powershell -File scripts/install-dev-cli.ps1 -RepoRoot <dev-root>/agent-graph-builder
 
 # Or deprecated forwarder from this repo:
 .\scripts\install-dev-cli.ps1
@@ -91,7 +92,7 @@ powershell -File scripts/install-dev-cli.ps1 -RepoRoot <dev-root>/agent-graph-bu
 
 ```powershell
 dev ls                          # list registered stacks
-dev up graph -d                 # start this POC (detached)
+dev up graph -d                 # start playground + API (detached)
 dev down graph                  # stop
 dev ps graph                    # docker compose status
 dev open graph                  # open http://localhost:5173
@@ -112,8 +113,8 @@ Legacy names (`spin-this-up`, `spin-graph-builder`, `spin-up.ps1`) still work bu
 
 - Backend: http://localhost:8000 (FastAPI + LangGraph, live-reloads on edits
   to `backend/app/`)
-- Frontend: http://localhost:5173 (Vite dev server, live-reloads on edits to
-  `frontend/src/`)
+- Playground: http://localhost:5173 (Vite dev server, live-reloads on edits to
+  `apps/playground/src/`)
 - Saved graphs persist in a named volume (`graph_db`) instead of a bare file,
   so `docker compose down` (without `-v`) keeps them across restarts.
 
@@ -139,10 +140,10 @@ cd backend
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 
-# Frontend (separate terminal)
-cd frontend
+# Playground (separate terminal, from repo root)
 npm install
-npm run dev
+npm run build:sdk
+npm run dev:playground
 ```
 
 ### Either way
@@ -224,7 +225,7 @@ On backend startup the POC loads AI keys from a sibling repo dotenv file when pr
 Set `$env:BSTOCKWELL_DEV_ROOT` to your polyrepo root (the parent of `tabletop-studio` and this repo). Keys already in the process environment are **not** overwritten. See [`backend/env.template`](backend/env.template) and tabletop-studio [`env.template`](../tabletop-studio/env.template) for variable names (`GROQ_API_KEY`, `GOOGLE_GENAI_API_KEY`, `GOOGLE_API_KEY`, `AZURE_OPENAI_*`, `AI_MODEL`, `AI_PROVIDER`).
 
 ```powershell
-# From agent-graph-builder-poc (uses tabletop-studio/.env.local automatically)
+# From agent-graph-builder (uses tabletop-studio/.env.local automatically)
 $env:BSTOCKWELL_DEV_ROOT = "<dev-root>"
 cd backend
 uv run uvicorn app.main:app --reload --port 8000
@@ -307,13 +308,13 @@ from-scratch authoring). **Product roadmap:** [`docs/planning/roadmap.md`](docs/
 To push this repo to GitHub, add a remote and push:
 
 ```bash
-git remote add origin https://github.com/<org>/agent-graph-builder-poc.git
+git remote add origin https://github.com/bstockwelldev/agent-graph-builder.git
 git push -u origin master
 ```
 
 ### Vercel (production)
 
-**URL:** https://agent-graph-builder-poc.vercel.app
+**URL:** https://agent-graph-builder.vercel.app
 
 ```bash
 vercel deploy --prod

@@ -35,7 +35,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Repo dev scripts + global `dev` CLI docs | Shipped | `scripts/`, `README.md` |
 | Canvas visual language (node color/shape, blueprint background) | Shipped | `feat/p1-canvas-and-shell-ux` — `theme.ts` `nodeType`/`canvas`, `GraphNodeView.tsx`, `FlowCanvas.tsx` |
 | Empty states, loading shimmers, collapsible panels | Shipped | `feat/p1-canvas-and-shell-ux` — `ui/Skeleton.tsx`, `ui/CollapsibleSection.tsx`, `RunPanel.tsx`, `GraphLibrary.tsx` |
-| Vercel full-stack deploy | Shipped | `master` @ `33d0970` — https://agent-graph-builder-poc.vercel.app |
+| Vercel full-stack deploy | Shipped | `master` — https://agent-graph-builder.vercel.app |
 | Ultra-wide layout tokens | Shipped | `feat/p2-ultra-wide-layout-tokens` — `shell.breakpoint.wide` (1280), `shell.canvasMinWidth`, inspector drawer below wide |
 
 ---

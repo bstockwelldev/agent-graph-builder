@@ -8,6 +8,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fingerprintGraph } from "@bstockwelldev/agent-graph-sdk";
 import { api, streamRunEvents } from "./api";
 import {
   applyCompileIssueToEdge,
@@ -124,17 +125,6 @@ function createFlowEdge(connection: Connection, kind: EdgeKind, condition: strin
     style: { stroke, strokeWidth },
     data: { kind, condition },
   };
-}
-
-function fingerprintGraph(graph: GraphDefinition): string {
-  return JSON.stringify({
-    id: graph.id,
-    name: graph.name,
-    entry_node_id: graph.entry_node_id,
-    orientation: graph.orientation ?? "auto",
-    nodes: graph.nodes,
-    edges: graph.edges,
-  });
 }
 
 function syncIdCounter(graph: GraphDefinition) {

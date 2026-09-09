@@ -1,8 +1,8 @@
 {
   "graph": {
-    "title": "Agent Graph Builder POC",
-    "aliases": ["graph-builder"],
-    "repo": "agent-graph-builder-poc",
+    "title": "Agent Graph Builder",
+    "aliases": ["graph-builder", "agent-graph"],
+    "repo": "agent-graph-builder",
     "runtime": {
       "up": {
         "ps1": "scripts/dev.ps1",

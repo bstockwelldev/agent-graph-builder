@@ -18,3 +18,14 @@ jobs:
         run: uv sync --dev
       - name: Run pytest
         run: uv run pytest
+
+  playground:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install and build
+        run: npm ci && npm run build

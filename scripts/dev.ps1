@@ -50,7 +50,7 @@ if (-not $NoBuild) { $upArgs += "--build" }
 if ($Detached) { $upArgs += "-d" }
 
 Write-Host ""
-Write-Host "Agent Graph Builder POC" -ForegroundColor Green
+Write-Host "Agent Graph Builder (playground)" -ForegroundColor Green
 Write-Host "  App:  http://localhost:5173"
 Write-Host "  API:  http://localhost:8000"
 Write-Host ""

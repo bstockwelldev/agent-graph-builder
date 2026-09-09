@@ -1,11 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd frontend && npm ci && npm run build",
-  "installCommand": "pip install -r requirements.txt && cd frontend && npm ci",
+  "buildCommand": "npm run build:sdk && npm run build:playground",
+  "installCommand": "pip install -r requirements.txt && npm ci",
   "functions": {
     "backend/**/*.py": {
       "maxDuration": 60,
-      "excludeFiles": "{backend/tests/**,backend/.venv/**,backend/.pytest_cache/**,frontend/src/**,frontend/node_modules/**,**/__pycache__/**,**/*.pyc,.git/**,docs/**,scripts/**}"
+      "excludeFiles": "{backend/tests/**,backend/.venv/**,backend/.pytest_cache/**,apps/playground/src/**,apps/playground/node_modules/**,packages/**,node_modules/**,**/__pycache__/**,**/*.pyc,.git/**,docs/**,scripts/**}"
     }
   },
   "env": {
