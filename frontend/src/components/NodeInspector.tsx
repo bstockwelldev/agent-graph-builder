@@ -4,7 +4,7 @@ import type { EdgeKind, GraphEdge, GraphNode, Diagnostic } from "../types";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
-import { SectionHeader } from "./ui/SectionHeader";
+import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Select, TextArea, TextInput } from "./ui/fields";
 
 function IssueList({ issues }: { issues: Diagnostic[] }) {
@@ -42,6 +42,7 @@ export function NodeInspector({
   onEdgeChange,
   onDelete,
   fullWidth = false,
+  reducedMotion = false,
 }: {
   node: GraphNode;
   issues?: Diagnostic[];
@@ -50,12 +51,13 @@ export function NodeInspector({
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
   fullWidth?: boolean;
+  reducedMotion?: boolean;
 }) {
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
 
   return (
     <div style={panelStyle(fullWidth)}>
-      <SectionHeader>Configure: {node.type}</SectionHeader>
+      <CollapsibleSection sectionId={`inspector-node-${node.type}`} title={`Configure: ${node.type}`} reducedMotion={reducedMotion}>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
       <IssueList issues={issues} />
 
@@ -153,6 +155,7 @@ export function NodeInspector({
       <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
         Delete node
       </Button>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -163,18 +166,20 @@ export function EdgeInspector({
   onChange,
   onDelete,
   fullWidth = false,
+  reducedMotion = false,
 }: {
   edge: GraphEdge;
   issues?: Diagnostic[];
   onChange: (patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
   fullWidth?: boolean;
+  reducedMotion?: boolean;
 }) {
   const kindTaxonomy = EDGE_KIND_TAXONOMY[edge.kind];
 
   return (
     <div style={panelStyle(fullWidth)}>
-      <SectionHeader>Configure edge</SectionHeader>
+      <CollapsibleSection sectionId="inspector-edge" title="Configure edge" reducedMotion={reducedMotion}>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>
         {edge.source} → {edge.target}
       </div>
@@ -203,6 +208,7 @@ export function EdgeInspector({
       <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
         Delete edge
       </Button>
+      </CollapsibleSection>
     </div>
   );
 }

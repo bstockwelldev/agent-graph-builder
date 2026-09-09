@@ -1,5 +1,6 @@
 import {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
@@ -17,7 +18,7 @@ import { useCanvasOrientation } from "../hooks/useCanvasOrientation";
 import { layoutNodesWithDagre } from "../layout/dagreLayout";
 import type { GraphNodeData } from "./nodes/GraphNodeView";
 import type { GraphOrientation } from "../types";
-import { color, radius, shell, spacing, surface, text, typeScale } from "../theme";
+import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
 
 const FIT_VIEW_PADDING = 0.18;
@@ -35,6 +36,8 @@ type FlowCanvasProps = {
   overlay?: ReactNode;
   loadFailureVisible?: boolean;
   onRetryLoad?: () => void;
+  graphLoading?: boolean;
+  noGraphSelected?: boolean;
   authoringEnabled: boolean;
   nodeTypes: NodeTypes;
   reducedMotion: boolean;
@@ -63,6 +66,8 @@ function FlowCanvasInner({
   overlay,
   loadFailureVisible = false,
   onRetryLoad,
+  graphLoading = false,
+  noGraphSelected = false,
   authoringEnabled,
   nodeTypes,
   reducedMotion,
@@ -180,7 +185,6 @@ function FlowCanvasInner({
         {liveAnnouncement}
       </div>
       <ReactFlow
-        style={{ width: "100%", height: "100%" }}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -199,11 +203,27 @@ function FlowCanvasInner({
         onEdgeClick={(_, edge) => onEdgeClick(edge.id)}
         onPaneClick={handlePaneClick}
         colorMode="dark"
+        style={{ width: "100%", height: "100%", background: canvas.pane }}
       >
-        <Background />
+        <Background variant={BackgroundVariant.Lines} gap={24} size={1} color={canvas.grid} />
+        <Background variant={BackgroundVariant.Lines} gap={120} size={1} color={canvas.gridMajor} />
         <Controls />
-        <MiniMap />
+        <MiniMap nodeStrokeWidth={2} maskColor="rgba(13, 21, 32, 0.75)" />
       </ReactFlow>
+      {noGraphSelected && !graphLoading && (
+        <div style={canvasEmptyStateStyle} role="status">
+          <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[1] }}>No graph selected</div>
+          <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "18px" }}>
+            Choose a graph from the library or create a new one to start editing.
+          </div>
+        </div>
+      )}
+      {graphLoading && (
+        <div style={canvasEmptyStateStyle} role="status" aria-busy="true" aria-label="Loading graph">
+          <div className="agb-skeleton" style={{ width: 180, height: 20, borderRadius: radius.lg, marginBottom: spacing[2] }} />
+          <div className="agb-skeleton" style={{ width: 240, height: 14, borderRadius: radius.lg }} />
+        </div>
+      )}
       {loadFailureVisible && onRetryLoad && (
         <div style={loadFailureBannerStyle} role="alert">
           <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[2] }}>Graph failed to load.</div>
@@ -216,6 +236,22 @@ function FlowCanvasInner({
     </div>
   );
 }
+
+const canvasEmptyStateStyle: CSSProperties = {
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  zIndex: shell.zIndex.drawer - 1,
+  padding: spacing[4],
+  borderRadius: radius.lg,
+  border: `1px solid ${surface.border}`,
+  background: surface.panel,
+  color: text.primary,
+  textAlign: "center",
+  maxWidth: 320,
+  boxShadow: shell.shadow.drawer,
+};
 
 const loadFailureBannerStyle: CSSProperties = {
   position: "absolute",

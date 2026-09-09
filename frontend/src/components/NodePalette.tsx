@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { NODE_TYPE_TAXONOMY } from "../content/taxonomy";
 import type { NodeType } from "../types";
-import { radius, shell, spacing, surface, text, typeScale } from "../theme";
+import { nodeType, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { SectionHeader } from "./ui/SectionHeader";
@@ -35,9 +35,14 @@ export function NodePalette({
                 onClick={() => onAdd(type)}
                 title={taxonomy.summary}
                 aria-describedby={undefined}
-                style={itemStyle}
+                style={{
+                  ...itemStyle,
+                  borderLeft: `3px solid ${nodeType[type].accent}`,
+                }}
               >
-                <div style={{ fontWeight: 600, paddingRight: shell.touchTarget.min }}>{taxonomy.title.replace(" node", "")}</div>
+                <div style={{ fontWeight: 600, paddingRight: shell.touchTarget.min, color: nodeType[type].label }}>
+                  {taxonomy.title.replace(" node", "")}
+                </div>
                 <div style={{ ...typeScale.caption, opacity: 0.6, paddingRight: shell.touchTarget.min }}>{taxonomy.summary}</div>
               </Button>
             </TaxonomyTooltip>

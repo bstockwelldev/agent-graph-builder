@@ -58,6 +58,26 @@ export const status = {
   failed: color.error[600],
 } as const;
 
+/**
+ * Semantic node-type palette — bg/accent/label tuned for WCAG AA (4.5:1) label
+ * contrast on dark surfaces. Accent drives idle border tint; label is type eyebrow.
+ */
+export const nodeType = {
+  input: { bg: "#152228", border: "#3d8b96", accent: "#6ec9d4", label: "#a8e0e8" },
+  prompt: { bg: "#221c30", border: "#7c5cbf", accent: "#a88de8", label: "#d4c4f5" },
+  llm: { bg: "#182238", border: "#4a7cd1", accent: "#8fbaff", label: "#b8d4ff" },
+  tool: { bg: "#262018", border: "#b98c1e", accent: "#e8bc4a", label: "#f0d88a" },
+  router: { bg: "#281c2a", border: "#b060a8", accent: "#d88cc8", label: "#e8b8dc" },
+  output: { bg: "#152420", border: "#2f9e5c", accent: "#3cb873", label: "#9eddb8" },
+} as const;
+
+/** Blueprint-style canvas pane — subtle paper tone over dark base. */
+export const canvas = {
+  pane: "#0d1520",
+  grid: "#1a2a42",
+  gridMajor: "#243a5c",
+} as const;
+
 /** Non-neutral surfaces used for callouts (destructive actions, success banners, error text). */
 export const accentSurface = {
   destructive: { bg: "#2b1c1c", border: "#5a2c2c", text: "#f0a0a0" },

@@ -9,7 +9,7 @@ body,
   height: 100%;
   /* Keep in sync with theme.ts's `surface.page` (color.neutral[950]) --
      plain CSS here since this file loads before any component mounts. */
-  background: #111318;
+  background: #0d1520;
   font-family: system-ui, -apple-system, sans-serif;
 }
 
@@ -20,4 +20,26 @@ button:hover {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@keyframes agb-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.agb-skeleton {
+  background: linear-gradient(90deg, #1a2230 25%, #243044 50%, #1a2230 75%);
+  background-size: 200% 100%;
+  animation: agb-shimmer 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agb-skeleton {
+    animation: none;
+    background: #1a2230;
+  }
 }

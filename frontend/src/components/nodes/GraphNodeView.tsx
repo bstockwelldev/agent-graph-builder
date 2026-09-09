@@ -1,8 +1,9 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Bot, GitBranch, LogIn, LogOut, PenLine, Wrench, type LucideIcon } from "lucide-react";
+import type { CSSProperties } from "react";
 import type { CompileIssue } from "../../diagnostics";
 import type { NodeType } from "../../types";
-import { color, fontFamily, localType, radius, shadow, spacing, status as statusColor, surface, text } from "../../theme";
+import { color, fontFamily, localType, nodeType as nodeTypeTokens, radius, shadow, spacing, status as statusColor, text } from "../../theme";
 
 const ICONS: Record<NodeType, LucideIcon> = {
   input: LogIn,
@@ -25,11 +26,34 @@ export interface GraphNodeData extends Record<string, unknown> {
 function issueBorderColor(issue: CompileIssue | null | undefined): string {
   if (issue?.severity === "error") return color.error[600];
   if (issue?.severity === "warning") return color.warning[600];
-  return statusColor.idle;
+  return nodeTypeTokens.input.border;
 }
 
 function truncateCaption(caption: string, max = 42): string {
   return caption.length > max ? `${caption.slice(0, max - 1)}…` : caption;
+}
+
+function shapeStyles(type: NodeType): CSSProperties {
+  switch (type) {
+    case "output":
+      return { borderRadius: 999, padding: `${spacing[3]}px ${spacing[6]}px` };
+    case "router":
+      return {
+        borderRadius: radius.sm,
+        clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+        padding: `${spacing[6]}px ${spacing[4]}px`,
+        minWidth: 130,
+        textAlign: "center",
+      };
+    case "tool":
+      return { borderRadius: radius.sm };
+    case "prompt":
+      return { borderRadius: radius.xl };
+    case "input":
+      return { borderRadius: radius.lg, borderTopLeftRadius: radius.xxl, borderBottomLeftRadius: radius.xxl };
+    default:
+      return { borderRadius: radius.lg };
+  }
 }
 
 export function GraphNodeView({ data, selected, sourcePosition = Position.Right, targetPosition = Position.Left }: NodeProps) {
@@ -40,51 +64,75 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
   const showTargetHandle = nodeData.nodeType !== "input";
   const showSourceHandle = nodeData.nodeType !== "output";
   const Icon = ICONS[nodeData.nodeType];
+  const tokens = nodeTypeTokens[nodeData.nodeType];
 
   const borderColor =
     nodeStatus !== "idle"
       ? statusColor[nodeStatus]
       : selected
         ? color.primary[600]
-        : issueBorderColor(compileIssue);
+        : compileIssue
+          ? issueBorderColor(compileIssue)
+          : tokens.border;
+
+  const cardStyle: CSSProperties = {
+    ...shapeStyles(nodeData.nodeType),
+    minWidth: nodeData.nodeType === "router" ? 130 : 150,
+    background: tokens.bg,
+    border: `2px solid ${borderColor}`,
+    color: text.primary,
+    opacity: inspectionDimmed ? 0.35 : 1,
+    boxShadow: nodeStatus === "running" ? shadow.runningGlow : shadow.none,
+    fontFamily: fontFamily.ui,
+    transition: "border-color 150ms, box-shadow 150ms",
+    boxSizing: "border-box",
+  };
 
   return (
-    <div
-      style={{
-        borderRadius: radius.lg,
-        padding: `${spacing[3]}px ${spacing[4]}px`,
-        minWidth: 150,
-        background: surface.raised,
-        border: `2px solid ${borderColor}`,
-        color: text.primary,
-        opacity: inspectionDimmed ? 0.35 : 1,
-        boxShadow: nodeStatus === "running" ? shadow.runningGlow : shadow.none,
-        fontFamily: fontFamily.ui,
-        transition: "border-color 150ms, box-shadow 150ms",
-      }}
-    >
+    <div style={{ position: "relative" }}>
       {showTargetHandle && <Handle type="target" position={targetPosition} />}
-      <div style={{ ...localType.label, opacity: 0.6, display: "flex", alignItems: "center", gap: spacing[1] }}>
-        <Icon size={12} strokeWidth={2} />
-        <span>{nodeData.nodeType}</span>
-      </div>
-      <div style={{ ...localType.ui, fontWeight: 600, marginTop: 2 }}>{nodeData.label}</div>
-      {nodeStatus !== "idle" && (
-        <div style={{ ...localType.micro, marginTop: spacing[1], color: statusColor[nodeStatus] }}>{nodeStatus}</div>
-      )}
-      {compileIssue && (
+      <div style={cardStyle}>
         <div
           style={{
-            ...localType.micro,
-            marginTop: spacing[1],
-            color: compileIssue.severity === "error" ? color.error[500] : color.warning[500],
-            lineHeight: "14px",
+            ...localType.label,
+            color: tokens.label,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: nodeData.nodeType === "router" ? "center" : undefined,
+            gap: spacing[1],
           }}
-          title={compileIssue.caption}
         >
-          {compileIssue.severity === "error" ? "Error" : "Warning"}: {truncateCaption(compileIssue.caption)}
+          <Icon size={12} strokeWidth={2} color={tokens.accent} aria-hidden="true" />
+          <span>{nodeData.nodeType}</span>
         </div>
-      )}
+        <div
+          style={{
+            ...localType.ui,
+            fontWeight: 600,
+            marginTop: 2,
+            textAlign: nodeData.nodeType === "router" ? "center" : undefined,
+          }}
+        >
+          {nodeData.label}
+        </div>
+        {nodeStatus !== "idle" && (
+          <div style={{ ...localType.micro, marginTop: spacing[1], color: statusColor[nodeStatus] }}>{nodeStatus}</div>
+        )}
+        {compileIssue && (
+          <div
+            style={{
+              ...localType.micro,
+              marginTop: spacing[1],
+              color: compileIssue.severity === "error" ? color.error[500] : color.warning[500],
+              lineHeight: "14px",
+              textAlign: nodeData.nodeType === "router" ? "center" : undefined,
+            }}
+            title={compileIssue.caption}
+          >
+            {compileIssue.severity === "error" ? "Error" : "Warning"}: {truncateCaption(compileIssue.caption)}
+          </div>
+        )}
+      </div>
       {showSourceHandle && <Handle type="source" position={sourcePosition} />}
     </div>
   );

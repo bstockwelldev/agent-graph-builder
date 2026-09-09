@@ -219,6 +219,10 @@ export default function App() {
   } | null>(null);
   const [providerBlockMessage, setProviderBlockMessage] = useState<string | null>(null);
   const [graphLoadFailed, setGraphLoadFailed] = useState(false);
+  const [graphsLoading, setGraphsLoading] = useState(true);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [runHistoryLoading, setRunHistoryLoading] = useState(false);
+  const [compiling, setCompiling] = useState(false);
   const shiftConnectRef = useRef(false);
   const connectPointerRef = useRef({ x: 0, y: 0 });
   const closeStreamRef = useRef<(() => void) | null>(null);
@@ -376,15 +380,25 @@ export default function App() {
   );
 
   const refreshGraphList = useCallback(async () => {
-    const list = await api.listGraphs();
-    setGraphs(list);
-    return list;
+    setGraphsLoading(true);
+    try {
+      const list = await api.listGraphs();
+      setGraphs(list);
+      return list;
+    } finally {
+      setGraphsLoading(false);
+    }
   }, []);
 
   const refreshRunHistory = useCallback(async (targetGraphId: string) => {
-    const runs = await api.listRuns(targetGraphId);
-    setRunHistory(runs);
-    return runs;
+    setRunHistoryLoading(true);
+    try {
+      const runs = await api.listRuns(targetGraphId);
+      setRunHistory(runs);
+      return runs;
+    } finally {
+      setRunHistoryLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -433,13 +447,18 @@ export default function App() {
 
   const loadGraphById = useCallback(
     async (targetId: string) => {
-      const graph = await api.getGraph(targetId);
-      applyGraphToCanvas(graph, canvasSetters());
-      markGraphLoadResult(graph);
-      clearHistory();
-      setInspectionRunId(null);
-      setInspectionRouteDecisions([]);
-      setSavedGraphFingerprint(fingerprintGraph(graph));
+      setGraphLoading(true);
+      try {
+        const graph = await api.getGraph(targetId);
+        applyGraphToCanvas(graph, canvasSetters());
+        markGraphLoadResult(graph);
+        clearHistory();
+        setInspectionRunId(null);
+        setInspectionRouteDecisions([]);
+        setSavedGraphFingerprint(fingerprintGraph(graph));
+      } finally {
+        setGraphLoading(false);
+      }
     },
     [canvasSetters, clearHistory, markGraphLoadResult],
   );
@@ -746,22 +765,29 @@ export default function App() {
 
   const handleCompile = useCallback(async () => {
     if (!graphId) return;
-    const graph = buildGraphDefinition();
-    await api.saveGraph(graph);
-    setSavedGraphFingerprint(fingerprintGraph(graph));
-    const result = await api.compileGraph(graph.id);
-    setDiagnostics(result.diagnostics);
-    if (!result.ok) {
-      focusDiagnostics();
+    setCompiling(true);
+    try {
+      const graph = buildGraphDefinition();
+      await api.saveGraph(graph);
+      setSavedGraphFingerprint(fingerprintGraph(graph));
+      const result = await api.compileGraph(graph.id);
+      setDiagnostics(result.diagnostics);
+      if (!result.ok) {
+        focusDiagnostics();
+      }
+      await refreshGraphList();
+    } finally {
+      setCompiling(false);
     }
-    await refreshGraphList();
   }, [buildGraphDefinition, graphId, focusDiagnostics, refreshGraphList]);
 
   const handleRun = useCallback(
     async (question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
       if (!graphId) return;
       setProviderBlockMessage(null);
+      setCompiling(true);
 
+      try {
       const needsServerKey = provider === "groq" || provider === "google" || provider === "azure";
       if (needsServerKey && !apiKey?.trim()) {
         const readiness = await api.providerReady(provider);
@@ -858,6 +884,9 @@ export default function App() {
           })();
         }
       });
+      } finally {
+        setCompiling(false);
+      }
     },
     [buildGraphDefinition, graphId, focusDiagnostics, nodes, refreshRunHistory],
   );
@@ -886,6 +915,8 @@ export default function App() {
       <GraphLibrary
         graphs={graphs}
         activeGraphId={graphId}
+        loading={graphsLoading}
+        reducedMotion={reducedMotion}
         onSelect={(id) => void handleSelectGraph(id)}
         onCreate={handleCreateGraph}
         onExport={handleExportGraph}
@@ -898,6 +929,7 @@ export default function App() {
   const inspectorPanel = selectedNode ? (
     <NodeInspector
       fullWidth={isCompact}
+      reducedMotion={reducedMotion}
       node={{
         id: selectedNode.id,
         type: selectedNode.data.nodeType,
@@ -924,6 +956,7 @@ export default function App() {
   ) : selectedEdge ? (
     <EdgeInspector
       fullWidth={isCompact}
+      reducedMotion={reducedMotion}
       edge={{
         id: selectedEdge.id,
         source: selectedEdge.source,
@@ -957,6 +990,9 @@ export default function App() {
       onDiagnosticClick={handleDiagnosticClick}
       runSummary={runSummary}
       runHistory={runHistory}
+      runHistoryLoading={runHistoryLoading}
+      compiling={compiling}
+      reducedMotion={reducedMotion}
       onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
       events={events}
       selectedTrace={selectedTrace}
@@ -1146,6 +1182,8 @@ export default function App() {
                 }}
                 loadFailureVisible={graphLoadFailed && graphId !== null && nodes.length === 0}
                 onRetryLoad={() => void handleRetryGraphLoad()}
+                graphLoading={graphLoading}
+                noGraphSelected={graphId === null && !graphsLoading}
                 overlay={
                   <EmptyGraphCoach
                     visible={showEmptyCoach}
