@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import { NODE_TYPE_TAXONOMY } from "../content/taxonomy";
 import type { NodeType } from "../types";
-import { localType, spacing, surface, text, typeScale } from "../theme";
+import { radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
+import { SectionHeader } from "./ui/SectionHeader";
 
 const NODE_TYPES: NodeType[] = ["input", "prompt", "llm", "tool", "router", "output"];
 
@@ -16,7 +17,7 @@ export function NodePalette({
 }) {
   return (
     <div style={panelStyle}>
-      <div style={headingStyle}>Node Palette</div>
+      <SectionHeader>Node Palette</SectionHeader>
       {!authoringEnabled && (
         <div style={{ ...typeScale.caption, opacity: 0.75, marginBottom: spacing[3], lineHeight: "18px" }}>
           Graph authoring is disabled on small screens. Use a wider viewport or desktop to add nodes and connections.
@@ -27,7 +28,7 @@ export function NodePalette({
         const taxonomy = NODE_TYPE_TAXONOMY[type];
         return (
           <div key={type} style={{ marginBottom: spacing[2] }}>
-            <TaxonomyTooltip title={taxonomy.title} summary={taxonomy.summary} details={taxonomy.details}>
+            <TaxonomyTooltip layout="corner" title={taxonomy.title} summary={taxonomy.summary} details={taxonomy.details}>
               <Button
                 variant="secondary"
                 disabled={!authoringEnabled}
@@ -36,8 +37,8 @@ export function NodePalette({
                 aria-describedby={undefined}
                 style={itemStyle}
               >
-                <div style={{ fontWeight: 600 }}>{taxonomy.title.replace(" node", "")}</div>
-                <div style={{ ...typeScale.caption, opacity: 0.6 }}>{taxonomy.summary}</div>
+                <div style={{ fontWeight: 600, paddingRight: shell.touchTarget.min }}>{taxonomy.title.replace(" node", "")}</div>
+                <div style={{ ...typeScale.caption, opacity: 0.6, paddingRight: shell.touchTarget.min }}>{taxonomy.summary}</div>
               </Button>
             </TaxonomyTooltip>
           </div>
@@ -49,15 +50,9 @@ export function NodePalette({
 
 const panelStyle: CSSProperties = {
   width: "100%",
-  padding: spacing[3],
+  padding: shell.panelPadding,
   background: surface.panel,
   color: text.primary,
-};
-
-const headingStyle: CSSProperties = {
-  ...localType.label,
-  opacity: 0.6,
-  marginBottom: spacing[3],
 };
 
 const itemStyle: CSSProperties = {
@@ -65,4 +60,6 @@ const itemStyle: CSSProperties = {
   width: "100%",
   textAlign: "left",
   minHeight: 44,
+  position: "relative",
+  borderRadius: radius.lg,
 };

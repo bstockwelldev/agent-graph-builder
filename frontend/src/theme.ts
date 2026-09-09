@@ -159,4 +159,6 @@ export const shell = {
   shadow: {
     drawer: "0 8px 24px rgba(0, 0, 0, 0.45)",
   },
+  panelPadding: spacing[3],
+  sectionGap: spacing[2],
 } as const;

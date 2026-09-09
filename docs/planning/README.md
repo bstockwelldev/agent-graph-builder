@@ -9,6 +9,7 @@ Locked feature-change plans for the Agent Graph Builder POC next-set. Each SPEC 
 | [app-shell-resilience-plan.md](features/app-shell-resilience-plan.md) | App shell resilience | Error boundaries, taxonomy tooltips, responsive drawers (~1100px), a11y polish |
 | [canvas-orientation-plan.md](features/canvas-orientation-plan.md) | Canvas orientation (rank-1) | Pane-aspect Auto + dagre + Auto/H/V pin; ResizeObserver-driven layout |
 | [from-scratch-authoring-plan.md](features/from-scratch-authoring-plan.md) | From-scratch authoring | Edge kind at connect, router inspector edge list, Save/dirty/undo/Delete, empty-state coaching |
+| [shell-layout-polish-plan.md](features/shell-layout-polish-plan.md) | Shell layout polish | Canvas fitView timing, header/run collision, Run panel polish, section hierarchy, empty states |
 
 ## Suggested implement order
 
@@ -22,6 +23,9 @@ Implement in this sequence — later specs assume earlier seams exist:
 
 3. **Authoring** — [`from-scratch-authoring-plan.md`](features/from-scratch-authoring-plan.md)  
    Can overlap once shell chrome exists. Improves connect-time edge kinds, router inspector, explicit Save, and blank-graph coaching.
+
+4. **Shell layout polish** — [`shell-layout-polish-plan.md`](features/shell-layout-polish-plan.md)  
+   Post–next-set UX fixes: canvas `fitView` timing, header/run-rail collision, Run panel polish, section hierarchy, empty states. **Locked 2026-09-09.**
 
 ## Conventions
 

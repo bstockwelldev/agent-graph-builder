@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { TaxonomyTooltip } from "./Tooltip";
 import type { GraphOrientation } from "../types";
-import { shell, spacing, surface, text, typeScale } from "../theme";
+import { radius, shell, spacing, surface, text, typeScale } from "../theme";
 
 const OPTIONS: { value: GraphOrientation; label: string; title: string; details: string }[] = [
   {
@@ -35,6 +35,7 @@ export function OrientationControl({
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: spacing[2] }}>
       <TaxonomyTooltip
+        layout="inline"
         title="Graph orientation"
         summary="Auto, horizontal, or vertical dagre layout"
         details="Auto follows the canvas pane aspect ratio. Horizontal (H) and vertical (V) pin layout direction until you select Auto again."
@@ -68,7 +69,7 @@ function segmentStyle(active: boolean): CSSProperties {
     minWidth: shell.touchTarget.min,
     minHeight: shell.touchTarget.min,
     padding: `0 ${spacing[2]}px`,
-    borderRadius: 8,
+    borderRadius: radius.lg,
     border: `1px solid ${active ? surface.borderStrong : surface.border}`,
     background: active ? surface.raised : "transparent",
     color: text.primary,

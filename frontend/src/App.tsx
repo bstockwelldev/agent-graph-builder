@@ -218,6 +218,7 @@ export default function App() {
     targetLabel: string;
   } | null>(null);
   const [providerBlockMessage, setProviderBlockMessage] = useState<string | null>(null);
+  const [graphLoadFailed, setGraphLoadFailed] = useState(false);
   const shiftConnectRef = useRef(false);
   const connectPointerRef = useRef({ x: 0, y: 0 });
   const closeStreamRef = useRef<(() => void) | null>(null);
@@ -419,17 +420,40 @@ export default function App() {
     [applyRunInspection],
   );
 
+  const markGraphLoadResult = useCallback((graph: GraphDefinition) => {
+    if (graph.nodes.length === 0) {
+      if (import.meta.env.DEV) {
+        console.warn("Graph loaded with no nodes:", graph.id);
+      }
+      setGraphLoadFailed(true);
+    } else {
+      setGraphLoadFailed(false);
+    }
+  }, []);
+
   const loadGraphById = useCallback(
     async (targetId: string) => {
       const graph = await api.getGraph(targetId);
       applyGraphToCanvas(graph, canvasSetters());
+      markGraphLoadResult(graph);
       clearHistory();
       setInspectionRunId(null);
       setInspectionRouteDecisions([]);
       setSavedGraphFingerprint(fingerprintGraph(graph));
     },
-    [canvasSetters, clearHistory],
+    [canvasSetters, clearHistory, markGraphLoadResult],
   );
+
+  const handleRetryGraphLoad = useCallback(async () => {
+    if (!graphId) return;
+    setGraphLoadFailed(false);
+    try {
+      await loadGraphById(graphId);
+    } catch (err: unknown) {
+      console.error("Failed to reload graph:", err);
+      setGraphLoadFailed(true);
+    }
+  }, [graphId, loadGraphById]);
 
   useEffect(() => {
     refreshGraphList()
@@ -450,6 +474,7 @@ export default function App() {
             setNodeTraces,
             closeStream: () => closeStreamRef.current?.(),
           });
+          markGraphLoadResult(preferred);
           setSavedGraphFingerprint(fingerprintGraph(preferred));
           clearHistory();
         }
@@ -457,19 +482,20 @@ export default function App() {
       .catch((err: unknown) => {
         console.error("Failed to load graphs:", err);
       });
-  }, [refreshGraphList, setNodes, setEdges, closeStream]);
+  }, [refreshGraphList, setNodes, setEdges, clearHistory, markGraphLoadResult]);
 
   const handleCreateGraph = useCallback(
     async (name: string, template: "blank" | "demo") => {
       const graph = await api.createGraph(name, template);
       await refreshGraphList();
       applyGraphToCanvas(graph, canvasSetters());
+      markGraphLoadResult(graph);
       clearHistory();
       setInspectionRunId(null);
       setInspectionRouteDecisions([]);
       setSavedGraphFingerprint(fingerprintGraph(graph));
     },
-    [refreshGraphList, canvasSetters, clearHistory],
+    [refreshGraphList, canvasSetters, clearHistory, markGraphLoadResult],
   );
 
   const onConnect = useCallback(
@@ -1030,13 +1056,6 @@ export default function App() {
                   Unsaved
                 </span>
               )}
-              <OrientationControl
-                value={graphOrientation}
-                onChange={(value) => {
-                  recordMutation();
-                  setGraphOrientation(value);
-                }}
-              />
               {inspectionRunId && runSummary && (
                 <div
                   style={{
@@ -1070,6 +1089,23 @@ export default function App() {
               >
                 Validation: {validationLabel}
               </button>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "nowrap",
+                gap: spacing[2],
+                marginTop: spacing[2],
+                alignItems: "center",
+              }}
+            >
+              <OrientationControl
+                value={graphOrientation}
+                onChange={(value) => {
+                  recordMutation();
+                  setGraphOrientation(value);
+                }}
+              />
             </div>
           </div>
 
@@ -1106,6 +1142,8 @@ export default function App() {
                   setLayoutLiveAnnouncement("");
                   setDirtyLiveAnnouncement("");
                 }}
+                loadFailureVisible={graphLoadFailed && graphId !== null && nodes.length === 0}
+                onRetryLoad={() => void handleRetryGraphLoad()}
                 overlay={
                   <EmptyGraphCoach
                     visible={showEmptyCoach}

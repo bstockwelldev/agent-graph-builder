@@ -10,6 +10,7 @@ export function useCanvasOrientation(
 ) {
   const [effectiveRankDir, setEffectiveRankDir] = useState<LayoutRankDir>("LR");
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
+  const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const paneSizeRef = useRef({ width: 0, height: 0 });
   const prevRankRef = useRef<LayoutRankDir | null>(null);
   const debounceRef = useRef<number | null>(null);
@@ -26,6 +27,7 @@ export function useCanvasOrientation(
 
   const applyRankDir = (width: number, height: number, pin: GraphOrientation) => {
     paneSizeRef.current = { width, height };
+    setPaneSize((current) => (current.width === width && current.height === height ? current : { width, height }));
     const next = computeEffectiveRankDir(width, height, pin);
     setEffectiveRankDir(next);
     announceIfChanged(next);
@@ -66,6 +68,7 @@ export function useCanvasOrientation(
 
   return {
     effectiveRankDir,
+    paneSize,
     liveAnnouncement,
     clearLiveAnnouncement: () => setLiveAnnouncement(""),
   };
