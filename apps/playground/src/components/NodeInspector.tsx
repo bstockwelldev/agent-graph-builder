@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import { EDGE_KIND_TAXONOMY, ROUTER_RULES_TAXONOMY } from "../content/taxonomy";
-import type { EdgeKind, GraphEdge, GraphNode, Diagnostic } from "../types";
+import type { ChatProvider, EdgeKind, GraphEdge, GraphNode, Diagnostic } from "../types";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
+import { ProviderModelPicker } from "./ProviderModelPicker";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
@@ -36,6 +37,7 @@ export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): G
 
 export function NodeInspector({
   node,
+  graphId = null,
   issues = [],
   outgoingEdges = [],
   onConfigChange,
@@ -45,6 +47,7 @@ export function NodeInspector({
   reducedMotion = false,
 }: {
   node: GraphNode;
+  graphId?: string | null;
   issues?: Diagnostic[];
   outgoingEdges?: GraphEdge[];
   onConfigChange: (config: Record<string, unknown>) => void;
@@ -82,12 +85,13 @@ export function NodeInspector({
 
       {node.type === "llm" && (
         <>
-          <Field label="Model">
-            <TextInput
-              value={(node.config.model as string) ?? "qwen2.5:3b"}
-              onChange={(e) => set("model", e.target.value)}
-            />
-          </Field>
+          <ProviderModelPicker
+            graphId={graphId}
+            provider={(node.config.provider as ChatProvider) ?? "ollama"}
+            model={(node.config.model as string) ?? "qwen2.5:3b"}
+            onProviderChange={(provider) => set("provider", provider)}
+            onModelChange={(model) => set("model", model)}
+          />
           <Field label="System prompt">
             <TextArea
               style={{ height: 80 }}

@@ -11,8 +11,14 @@ import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Skeleton, SkeletonBlock } from "./ui/Skeleton";
 import { PasswordInput, Select, TextArea } from "./ui/fields";
 
-const CATALOG_PROVIDERS: ChatProvider[] = ["ollama", "groq", "azure", "google"];
+import { applyRunSelectionToLlmNodes, showModelCatalog } from "../lib/modelCatalog";
+
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
+
+export type RunSelection = {
+  provider: ChatProvider;
+  model?: string;
+};
 
 function formatDuration(trace: NodeTrace): string | null {
   if (!trace.completed_at) return null;
@@ -58,7 +64,7 @@ export function RunPanel({
   providerBlockMessage?: string | null;
   inspectionRunId?: string | null;
   onExitInspection?: () => void;
-  onCompile: () => Promise<void> | void;
+  onCompile: (selection: RunSelection) => Promise<void> | void;
   onRun: (question: string, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
   onDiagnosticClick: (diagnostic: Diagnostic) => void;
   runSummary: RunSummary | null;
@@ -84,7 +90,7 @@ export function RunPanel({
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const summary = validationSummary(diagnostics);
   const inspecting = Boolean(inspectionRunId && runSummary);
-  const showModelSelect = CATALOG_PROVIDERS.includes(provider);
+  const showModelSelect = showModelCatalog(provider);
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
 
   useEffect(() => {
@@ -270,7 +276,7 @@ export function RunPanel({
             </div>
           )}
           <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[2] }}>
-            <Button variant="secondary" disabled={compiling || running} onClick={() => void onCompile()} style={{ minHeight: shell.touchTarget.min }}>
+            <Button variant="secondary" disabled={compiling || running} onClick={() => void onCompile({ provider, model: showModelSelect ? selectedModel || undefined : undefined })} style={{ minHeight: shell.touchTarget.min }}>
               {compiling ? "Compiling…" : "Compile"}
             </Button>
             <Button

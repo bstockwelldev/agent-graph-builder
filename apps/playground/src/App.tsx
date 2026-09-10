@@ -25,7 +25,8 @@ import { isTerminalRunStatus, watchRunCompletion } from "./watchRun";
 import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { GraphLibrary } from "./components/GraphLibrary";
 import { NodePalette } from "./components/NodePalette";
-import { RunPanel } from "./components/RunPanel";
+import { applyRunSelectionToLlmNodes } from "./lib/modelCatalog";
+import { RunPanel, type RunSelection } from "./components/RunPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FlowCanvas } from "./components/FlowCanvas";
 import { ConnectKindMenu } from "./components/ConnectKindMenu";
@@ -65,7 +66,7 @@ function defaultConfig(type: NodeType): Record<string, unknown> {
     case "prompt":
       return { template: "{question}" };
     case "llm":
-      return { model: "qwen2.5:3b", systemPrompt: "" };
+      return { provider: "ollama", model: "qwen2.5:3b", systemPrompt: "" };
     case "tool":
       return { toolName: "lookup_topic", inputVariable: "question" };
     case "router":
@@ -626,31 +627,35 @@ export default function App() {
     [recordMutation, setNodes],
   );
 
-  const buildGraphDefinition = useCallback((): GraphDefinition => {
-    if (!graphId) {
-      throw new Error("No graph loaded");
-    }
-    const entryNode = nodes.find((n) => n.data.nodeType === "input");
-    return {
-      id: graphId,
-      name: graphName,
-      entry_node_id: entryNode?.id ?? nodes[0]?.id ?? "",
-      orientation: graphOrientation,
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.data.nodeType,
-        position: { x: n.position.x, y: n.position.y },
-        config: n.data.config,
-      })),
-      edges: edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        kind: (e.data?.kind as EdgeKind) ?? "sequence",
-        condition: (e.data?.condition as string | null) ?? null,
-      })),
-    };
-  }, [nodes, edges, graphId, graphName, graphOrientation]);
+  const buildGraphDefinition = useCallback(
+    (nodeSource?: Node<GraphNodeData>[]): GraphDefinition => {
+      if (!graphId) {
+        throw new Error("No graph loaded");
+      }
+      const sourceNodes = nodeSource ?? nodes;
+      const entryNode = sourceNodes.find((n) => n.data.nodeType === "input");
+      return {
+        id: graphId,
+        name: graphName,
+        entry_node_id: entryNode?.id ?? sourceNodes[0]?.id ?? "",
+        orientation: graphOrientation,
+        nodes: sourceNodes.map((n) => ({
+          id: n.id,
+          type: n.data.nodeType,
+          position: { x: n.position.x, y: n.position.y },
+          config: n.data.config,
+        })),
+        edges: edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          kind: (e.data?.kind as EdgeKind) ?? "sequence",
+          condition: (e.data?.condition as string | null) ?? null,
+        })),
+      };
+    },
+    [nodes, edges, graphId, graphName, graphOrientation],
+  );
 
   const semanticFingerprint = useMemo(() => {
     if (!graphId || nodes.length === 0) return "";
@@ -785,23 +790,38 @@ export default function App() {
     };
   }, [semanticFingerprint, runBusy, buildGraphDefinition]);
 
-  const handleCompile = useCallback(async () => {
-    if (!graphId) return;
-    setCompiling(true);
-    try {
-      const graph = buildGraphDefinition();
-      await api.saveGraph(graph);
-      setSavedGraphFingerprint(fingerprintGraph(graph));
-      const result = await api.compileGraph(graph.id);
-      setDiagnostics(result.diagnostics);
-      if (!result.ok) {
-        focusDiagnostics();
+  const syncRunSelectionToCanvas = useCallback(
+    (selection: RunSelection): Node<GraphNodeData>[] => {
+      const synced = applyRunSelectionToLlmNodes(nodes, selection.provider, selection.model);
+      if (synced !== nodes) {
+        setNodes(synced);
       }
-      await refreshGraphList();
-    } finally {
-      setCompiling(false);
-    }
-  }, [buildGraphDefinition, graphId, focusDiagnostics, refreshGraphList]);
+      return synced;
+    },
+    [nodes, setNodes],
+  );
+
+  const handleCompile = useCallback(
+    async (selection: RunSelection) => {
+      if (!graphId) return;
+      setCompiling(true);
+      try {
+        const syncedNodes = syncRunSelectionToCanvas(selection);
+        const graph = buildGraphDefinition(syncedNodes);
+        await api.saveGraph(graph);
+        setSavedGraphFingerprint(fingerprintGraph(graph));
+        const result = await api.compileGraph(graph.id);
+        setDiagnostics(result.diagnostics);
+        if (!result.ok) {
+          focusDiagnostics();
+        }
+        await refreshGraphList();
+      } finally {
+        setCompiling(false);
+      }
+    },
+    [buildGraphDefinition, graphId, focusDiagnostics, refreshGraphList, syncRunSelectionToCanvas],
+  );
 
   const handleRun = useCallback(
     async (question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
@@ -819,7 +839,12 @@ export default function App() {
         }
       }
 
-      const graph = buildGraphDefinition();
+      const syncedNodes = applyRunSelectionToLlmNodes(nodes, provider, model);
+      if (syncedNodes !== nodes) {
+        setNodes(syncedNodes);
+      }
+
+      const graph = buildGraphDefinition(syncedNodes);
       await api.saveGraph(graph);
       setSavedGraphFingerprint(fingerprintGraph(graph));
       const compileResult = await api.compileGraph(graph.id);
@@ -939,7 +964,7 @@ export default function App() {
         setCompiling(false);
       }
     },
-    [buildGraphDefinition, graphId, focusDiagnostics, nodes, refreshRunHistory],
+    [buildGraphDefinition, graphId, focusDiagnostics, nodes, refreshRunHistory, setNodes],
   );
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -981,6 +1006,7 @@ export default function App() {
     <NodeInspector
       fullWidth={inspectorInDrawer}
       reducedMotion={reducedMotion}
+      graphId={graphId}
       node={{
         id: selectedNode.id,
         type: selectedNode.data.nodeType,
