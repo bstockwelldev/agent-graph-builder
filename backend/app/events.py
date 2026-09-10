@@ -39,6 +39,7 @@ class RunEventBus:
         self.run_id = run_id
         self._queue: asyncio.Queue[PlatformEvent | None] = asyncio.Queue()
         self._seq = 0
+        self._collected: list[PlatformEvent] = []
 
     def emit(self, event_type: EventType, payload: dict[str, Any], node_id: str | None = None) -> PlatformEvent:
         self._seq += 1
@@ -50,8 +51,12 @@ class RunEventBus:
             sequence=self._seq,
             payload=payload,
         )
+        self._collected.append(event)
         self._queue.put_nowait(event)
         return event
+
+    def collected_events(self) -> list[PlatformEvent]:
+        return list(self._collected)
 
     def close(self) -> None:
         self._queue.put_nowait(None)

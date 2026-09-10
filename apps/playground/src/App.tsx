@@ -853,6 +853,9 @@ export default function App() {
       };
 
       if (isTerminalRunStatus(summary.status)) {
+        if (summary.events && summary.events.length > 0) {
+          setEvents(summary.events);
+        }
         await applyTerminalSummary(summary);
         return;
       }

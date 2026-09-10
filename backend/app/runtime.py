@@ -181,6 +181,7 @@ async def _execute(run_id: str, graph: GraphDefinition, compiled_app, run_input:
         bus.emit("run.failed", {"error": str(exc)})
     finally:
         RUN_STORE[run_id].completed_at = now_iso()
+        RUN_STORE[run_id].events = bus.collected_events()
         _persist_run_snapshot(run_id)
         bus.close()
 

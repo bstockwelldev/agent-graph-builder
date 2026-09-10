@@ -32,6 +32,27 @@ def test_vercel_run_returns_terminal_status(monkeypatch) -> None:
     assert payload["status"] == "succeeded"
 
 
+def test_vercel_run_includes_events_in_response(monkeypatch) -> None:
+    monkeypatch.setenv("VERCEL", "1")
+    graph = build_demo_graph()
+    storage.save_graph(graph)
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "graph_id": graph.id,
+            "input": {"question": "How does a database index work?"},
+            "provider": "stub",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    event_types = [event["event_type"] for event in payload.get("events", [])]
+    assert "run.started" in event_types
+    assert "run.completed" in event_types
+
+
 def test_local_run_returns_queued() -> None:
     graph = build_demo_graph()
     storage.save_graph(graph)

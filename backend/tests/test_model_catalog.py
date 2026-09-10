@@ -108,6 +108,42 @@ async def test_catalog_caps_at_five_models(httpx_mock, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_groq_preferred_models_rank_before_unordered_live_dump(httpx_mock, monkeypatch) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "groq-test")
+    httpx_mock.add_response(
+        url="https://api.groq.com/openai/v1/models",
+        json={
+            "data": [
+                {"id": "zeta-last"},
+                {"id": "openai/gpt-oss-20b"},
+                {"id": "alpha-first"},
+                {"id": "qwen/qwen3.8-27b"},
+                {"id": "openai/gpt-oss-120b"},
+                {"id": "beta-second"},
+            ]
+        },
+    )
+
+    catalog = await list_provider_models("groq")
+    model_ids = [item["id"] for item in catalog["models"]]
+    assert model_ids[:3] == ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+
+
+@pytest.mark.asyncio
+async def test_google_catalog_returns_static_preferred_models() -> None:
+    catalog = await list_provider_models("google")
+    model_ids = [item["id"] for item in catalog["models"]]
+    assert model_ids == [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    ]
+    assert catalog["source"] == "fallback"
+
+
+@pytest.mark.asyncio
 async def test_catalog_ranks_graph_llm_models_first(httpx_mock, monkeypatch) -> None:
     monkeypatch.setenv("GROQ_API_KEY", "groq-test")
     httpx_mock.add_response(

@@ -67,6 +67,7 @@ export interface RunSummary {
   started_at?: string | null;
   completed_at?: string | null;
   route_decisions?: RouteDecision[];
+  events?: PlatformEvent[];
 }
 
 export interface NodeTrace {

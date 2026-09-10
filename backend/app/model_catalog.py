@@ -16,7 +16,11 @@ from .env_config import (
     resolve_groq_api_key,
 )
 from .models import NodeType
-from .provider_defaults import default_model_for_provider, resolve_model_for_provider
+from .provider_defaults import (
+    PROVIDER_PREFERRED_MODELS,
+    default_model_for_provider,
+    resolve_model_for_provider,
+)
 from .providers.groq import GROQ_BASE_URL
 from .providers.ollama import OLLAMA_BASE_URL
 
@@ -188,6 +192,11 @@ def _rank_models(provider: str, live_models: list[str], graph_id: str | None) ->
             ranked.append(model)
             seen.add(model)
 
+    for model in PROVIDER_PREFERRED_MODELS.get(provider, []):
+        if model in live_set and model not in seen:
+            ranked.append(model)
+            seen.add(model)
+
     default_model = default_model_for_provider(provider)
     if default_model in live_set and default_model not in seen:
         ranked.append(default_model)
@@ -202,6 +211,16 @@ def _rank_models(provider: str, live_models: list[str], graph_id: str | None) ->
 
 
 async def list_provider_models(provider: str, graph_id: str | None = None) -> dict[str, Any]:
+    if provider == "google":
+        static_models = PROVIDER_PREFERRED_MODELS.get("google") or [default_model_for_provider("google")]
+        ranked = _rank_models("google", static_models, graph_id)
+        return _catalog_entry(
+            provider,
+            ranked,
+            source="fallback",
+            message="Static Gemini chat model list.",
+        )
+
     if provider not in CATALOG_PROVIDERS:
         fallback = default_model_for_provider(provider)
         return _catalog_entry(provider, [fallback], source="fallback", message="Static fallback for this provider.")

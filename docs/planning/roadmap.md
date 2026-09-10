@@ -1,6 +1,6 @@
 ---
 title: Agent Graph Builder POC — product roadmap
-last_updated: 2026-09-09
+last_updated: 2026-09-10
 ---
 
 # Product roadmap
@@ -36,6 +36,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Canvas visual language (node color/shape, blueprint background) | Shipped | `feat/p1-canvas-and-shell-ux` — `theme.ts` `nodeType`/`canvas`, `GraphNodeView.tsx`, `FlowCanvas.tsx` |
 | Empty states, loading shimmers, collapsible panels | Shipped | `feat/p1-canvas-and-shell-ux` — `ui/Skeleton.tsx`, `ui/CollapsibleSection.tsx`, `RunPanel.tsx`, `GraphLibrary.tsx` |
 | Vercel full-stack deploy | Shipped | `master` — https://agent-graph-builder.vercel.app |
+| Git remote + CI | Shipped | `origin` → [bstockwelldev/agent-graph-builder](https://github.com/bstockwelldev/agent-graph-builder); `.github/workflows/ci.yml` on push/PR to `master` |
 | Ultra-wide layout tokens | Shipped | `feat/p2-ultra-wide-layout-tokens` — `shell.breakpoint.wide` (1280), `shell.canvasMinWidth`, inspector drawer below wide |
 
 ---
@@ -45,13 +46,13 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Pri | Item | Impact | Utility | Notes / touch points |
 | --- | ---- | ------ | ------- | -------------------- |
 | **P0** | ~~**QA + merge shell layout branch**~~ | High | Done 2026-09-09 | Merged `feat/shell-layout-polish` → `master`; run `npm run build` + `uv run pytest` before deploy. |
-| **P0** | **Configure git remote + CI on push** | Medium | Enables PR review and regression gates | **Blocked locally:** no `origin` remote configured. Add remote and `git push -u origin master` to activate `.github/workflows/ci.yml`. |
+| ~~**P0**~~ | ~~**Configure git remote + CI on push**~~ | Medium | Done 2026-09-10 | `origin` → GitHub; CI runs `uv run pytest` + `npm ci && npm run build` via `.github/workflows/ci.yml`. |
 | ~~**P1**~~ | ~~**Canvas visual language — node color, shape, blueprint background**~~ | High | High | **Shipped 2026-09-09** on `feat/p1-canvas-and-shell-ux`. Semantic `nodeType` tokens, per-type shapes, dual-line blueprint `Background`. |
 | ~~**P1**~~ | ~~**Empty states, loading shimmers, collapsible panels**~~ | High | High | **Shipped 2026-09-09** on `feat/p1-canvas-and-shell-ux`. `Skeleton`, `CollapsibleSection`, empty states + `localStorage` panel persistence. |
 | **P2** | **Dev CLI Phase 2** (factory) | Medium | High for polyrepo daily use | `dev doctor`, `dev gate`, shell completion, register tabletop / ai-lab stacks. Canonical home: `agent-context-factory/packages/local-dev-cli`. |
 | ~~**P2**~~ | ~~**Ultra-wide layout tokens**~~ | Medium | Medium | **Shipped 2026-09-09** on `feat/p2-ultra-wide-layout-tokens`. `shell.canvasMinWidth` (420), `shell.breakpoint.wide` (1280); inspector rail only at wide+, drawer below. |
 | **P3** | **Frontend tests (Vitest + RTL)** | Medium | Medium | `FlowCanvas` fitView gating, `TaxonomyTooltip` layouts, shell flex regression. Spec follow-up in shell-layout-polish. |
-| **P3** | **Repo `AGENTS.md`** | Low | Medium | Router doc for agents (commands, planning paths, dev CLI). |
+| ~~**P3**~~ | ~~**Repo `AGENTS.md`**~~ | Low | Medium | **Shipped 2026-09-10** — repo-root `AGENTS.md` router for agents. |
 | **P3** | **Canvas orientation Phase E** | Low | Low | elk fallback, dual layout positions — [canvas-orientation-plan.md](features/canvas-orientation-plan.md) follow-ons. |
 
 ---
@@ -62,7 +63,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 
 1. ~~QA shell layout branch at full resolution (Chrome + Comet).~~
 2. ~~Merge to `master`.~~
-3. Add `origin` remote and push to enable GitHub Actions CI.
+3. ~~Add `origin` remote and push to enable GitHub Actions CI.~~ Done — see `.github/workflows/ci.yml`.
 
 ### Phase 6 — Canvas identity (P1, high impact)
 

@@ -23,6 +23,33 @@ AZURE_OPENAI_API_KEY_NAMES = ("AZURE_OPENAI_API_KEY",)
 AZURE_OPENAI_DEFAULT_API_VERSION = "2024-02-15-preview"
 
 
+def resolve_local_env_file() -> Path | None:
+    """Repo-local ``.env.local`` (backend/ or repo root). Never commit this file."""
+    backend_dir = Path(__file__).resolve().parent.parent
+    for candidate in (backend_dir / ".env.local", backend_dir.parent / ".env.local"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def load_local_env(*, override: bool = False) -> Path | None:
+    """Merge repo-local dotenv into ``os.environ``. Returns the file path if loaded."""
+    path = resolve_local_env_file()
+    if path is None:
+        return None
+
+    for key, value in parse_env_file(path).items():
+        if override or key not in os.environ:
+            os.environ[key] = value
+    return path
+
+
+def load_app_env(*, override: bool = False) -> None:
+    """Load local repo secrets first, then optional shared sibling-repo dotenv."""
+    load_local_env(override=override)
+    load_shared_env(override=override)
+
+
 def resolve_shared_env_file() -> Path | None:
     explicit = os.environ.get("SHARED_ENV_FILE", "").strip()
     if explicit:

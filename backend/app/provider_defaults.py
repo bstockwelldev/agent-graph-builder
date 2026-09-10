@@ -17,6 +17,38 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "azure": "gpt-4o-mini",
 }
 
+# Curated top-5 chat models per provider (one-time catalog pass; intersected with live IDs in ranking).
+PROVIDER_PREFERRED_MODELS: dict[str, list[str]] = {
+    "groq": [
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+        "qwen/qwen3.6-27b",
+    ],
+    "ollama": [
+        "qwen2.5:3b",
+        "llama3.2:latest",
+        "llama3.1:8b",
+        "mistral:latest",
+        "gemma2:2b",
+    ],
+    "azure": [
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4",
+        "gpt-35-turbo",
+        "o1-mini",
+    ],
+    "google": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    ],
+}
+
 
 def default_model_for_provider(provider: str) -> str:
     if provider == "azure":

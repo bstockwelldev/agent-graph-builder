@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from . import runtime, storage
 from .demo_graph import build_demo_graph
 from .env_config import (
-    load_shared_env,
+    load_app_env,
     resolve_azure_api_key,
     resolve_azure_deployment_name,
     resolve_azure_endpoint,
@@ -50,7 +50,7 @@ if not os.environ.get("VERCEL"):
 
 @app.on_event("startup")
 def bootstrap() -> None:
-    load_shared_env()
+    load_app_env()
     if storage.get_graph(build_demo_graph().id) is None:
         storage.save_graph(build_demo_graph())
 

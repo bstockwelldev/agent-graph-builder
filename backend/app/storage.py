@@ -16,11 +16,32 @@ from pathlib import Path
 from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
-DB_PATH = Path(os.environ["GRAPH_DB_PATH"]) if os.environ.get("GRAPH_DB_PATH") else _DEFAULT_DB_PATH
+_VERCEL_EPHEMERAL_DB = Path("/tmp/graphs.db")
+
+
+def resolve_db_path() -> Path:
+    """Writable SQLite path for the current runtime.
+
+    Vercel serverless mounts the deployment bundle read-only; only ``/tmp`` is
+    writable. ``vercel.json`` sets ``GRAPH_DB_PATH=/tmp/graphs.db``, but if that
+    env var is missing (dashboard drift, new project) we still default to ``/tmp``
+    when ``VERCEL`` is set instead of ``backend/graphs.db`` in the bundle.
+    """
+    explicit = os.environ.get("GRAPH_DB_PATH", "").strip()
+    if explicit:
+        return Path(explicit)
+    if os.environ.get("VERCEL"):
+        return _VERCEL_EPHEMERAL_DB
+    return _DEFAULT_DB_PATH
+
+
+DB_PATH = resolve_db_path()
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    path = resolve_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
     conn.execute(
         """
         create table if not exists graph (

@@ -11,7 +11,7 @@ import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Skeleton, SkeletonBlock } from "./ui/Skeleton";
 import { PasswordInput, Select, TextArea } from "./ui/fields";
 
-const CATALOG_PROVIDERS: ChatProvider[] = ["ollama", "groq", "azure"];
+const CATALOG_PROVIDERS: ChatProvider[] = ["ollama", "groq", "azure", "google"];
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
 
 function formatDuration(trace: NodeTrace): string | null {

@@ -13,6 +13,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .events import PlatformEvent
+
 
 class NodeType(StrEnum):
     INPUT = "input"
@@ -109,6 +111,7 @@ class RunSummary(BaseModel):
     started_at: str | None = None
     completed_at: str | None = None
     route_decisions: list[RouteDecision] = Field(default_factory=list)
+    events: list[PlatformEvent] = Field(default_factory=list)
 
 
 class NodeTrace(BaseModel):
