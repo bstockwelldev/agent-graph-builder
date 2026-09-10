@@ -1,7 +1,21 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { color, radius, shadow, shell, spacing, surface, text, typeScale } from "../theme";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import { Info } from "lucide-react";
+import { radius, shadow, shell, spacing, surface, text, typeScale } from "../theme";
 
 type TaxonomyTooltipLayout = "block" | "inline" | "corner";
+
+const TOOLTIP_WIDTH = 260;
+const VIEWPORT_MARGIN = spacing[2];
 
 export function TaxonomyTooltip({
   title,
@@ -16,20 +30,89 @@ export function TaxonomyTooltip({
   children: ReactNode;
   layout?: TaxonomyTooltipLayout;
 }) {
-  const [open, setOpen] = useState(false);
-  const cardId = useId();
+  const [visible, setVisible] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const tooltipId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const tooltip = tooltipRef.current;
+    if (!trigger) return;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const tooltipHeight = tooltip?.offsetHeight ?? 120;
+    const gap = spacing[1];
+
+    let top = 0;
+    let left = 0;
+
+    if (layout === "corner") {
+      left = triggerRect.right + gap;
+      top = triggerRect.top;
+      if (left + TOOLTIP_WIDTH > window.innerWidth - VIEWPORT_MARGIN) {
+        left = triggerRect.left - TOOLTIP_WIDTH - gap;
+      }
+    } else {
+      left = triggerRect.left;
+      top = triggerRect.bottom + gap;
+      if (top + tooltipHeight > window.innerHeight - VIEWPORT_MARGIN) {
+        top = triggerRect.top - tooltipHeight - gap;
+      }
+      if (left + TOOLTIP_WIDTH > window.innerWidth - VIEWPORT_MARGIN) {
+        left = window.innerWidth - TOOLTIP_WIDTH - VIEWPORT_MARGIN;
+      }
+    }
+
+    top = Math.max(VIEWPORT_MARGIN, Math.min(top, window.innerHeight - tooltipHeight - VIEWPORT_MARGIN));
+    left = Math.max(VIEWPORT_MARGIN, left);
+
+    setPosition({ top, left });
+  }, [layout]);
+
+  const show = useCallback(() => {
+    setVisible(true);
+  }, []);
+
+  const hide = useCallback(() => {
+    setVisible(false);
+    setPosition(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!visible) return;
+    updatePosition();
+  }, [visible, updatePosition]);
 
   useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+    if (!visible) return;
+
+    const onReposition = () => updatePosition();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [visible, updatePosition]);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        hide();
+        triggerRef.current?.focus();
       }
     };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [visible, hide]);
 
   const rootStyle = layoutStyles[layout];
 
@@ -37,44 +120,41 @@ export function TaxonomyTooltip({
     <div ref={rootRef} style={rootStyle}>
       {layout === "block" ? <div style={{ flex: 1, minWidth: 0 }}>{children}</div> : children}
       <button
+        ref={triggerRef}
         type="button"
         aria-label={`Help: ${title}`}
-        aria-expanded={open}
-        aria-controls={open ? cardId : undefined}
+        aria-describedby={visible ? tooltipId : undefined}
         title={summary}
-        onClick={() => setOpen((value) => !value)}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={(event) => {
+          if (event.currentTarget.matches(":focus-visible")) {
+            show();
+          }
+        }}
+        onBlur={hide}
         style={layout === "corner" ? cornerHelpButtonStyle : helpButtonStyle}
       >
-        ?
+        <Info size={14} strokeWidth={2.25} aria-hidden="true" />
       </button>
-      {open && (
-        <div
-          id={cardId}
-          role="dialog"
-          aria-labelledby={`${cardId}-title`}
-          style={cardStyle}
-        >
-          <div id={`${cardId}-title`} style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[1] }}>
-            {title}
-          </div>
-          <div style={{ ...typeScale.caption, color: text.muted, lineHeight: "18px" }}>{details}</div>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
+      {visible &&
+        createPortal(
+          <div
+            ref={tooltipRef}
+            id={tooltipId}
+            role="tooltip"
             style={{
-              ...typeScale.caption,
-              marginTop: spacing[2],
-              color: color.primary[500],
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              minHeight: shell.touchTarget.min,
+              ...tooltipStyle,
+              top: position?.top ?? -9999,
+              left: position?.left ?? -9999,
+              visibility: position ? "visible" : "hidden",
             }}
           >
-            Close
-          </button>
-        </div>
-      )}
+            <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[1] }}>{title}</div>
+            <div style={{ ...typeScale.caption, color: text.muted, lineHeight: "18px" }}>{details}</div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -103,6 +183,9 @@ const layoutStyles: Record<TaxonomyTooltipLayout, CSSProperties> = {
 };
 
 const helpButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   minWidth: shell.touchTarget.min,
   minHeight: shell.touchTarget.min,
   width: shell.touchTarget.min,
@@ -110,10 +193,8 @@ const helpButtonStyle: CSSProperties = {
   borderRadius: radius.lg,
   border: `1px solid ${surface.borderStrong}`,
   background: surface.raised,
-  color: text.primary,
-  cursor: "pointer",
-  ...typeScale.caption,
-  fontWeight: 700,
+  color: text.muted,
+  cursor: "help",
   flexShrink: 0,
 };
 
@@ -125,17 +206,15 @@ const cornerHelpButtonStyle: CSSProperties = {
   zIndex: 1,
 };
 
-const cardStyle: CSSProperties = {
-  position: "absolute",
-  top: "100%",
-  left: 0,
-  marginTop: spacing[1],
+const tooltipStyle: CSSProperties = {
+  position: "fixed",
   zIndex: shell.zIndex.tooltip,
-  width: 260,
+  width: TOOLTIP_WIDTH,
   padding: spacing[3],
   borderRadius: radius.lg,
   border: `1px solid ${surface.borderStrong}`,
   background: surface.panel,
   color: text.primary,
   boxShadow: shadow[4],
+  pointerEvents: "none",
 };

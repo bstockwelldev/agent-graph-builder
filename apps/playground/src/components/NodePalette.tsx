@@ -34,7 +34,6 @@ export function NodePalette({
                 disabled={!authoringEnabled}
                 onClick={() => onAdd(type)}
                 title={taxonomy.summary}
-                aria-describedby={undefined}
                 style={{
                   ...itemStyle,
                   borderLeft: `3px solid ${nodeType[type].accent}`,
