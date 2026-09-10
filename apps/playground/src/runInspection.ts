@@ -1,6 +1,6 @@
 import type { Edge } from "@xyflow/react";
 import { color } from "./theme";
-import type { EdgeKind, GraphEdge, NodeTrace, RouteDecision } from "./types";
+import type { EdgeKind, GraphEdge, NodeTrace, NodeType, PlatformEvent, RouteDecision } from "./types";
 
 export type ExecutedPath = {
   executedNodeIds: Set<string>;
@@ -8,6 +8,71 @@ export type ExecutedPath = {
   dimNodeIds: Set<string>;
   dimEdgeIds: Set<string>;
 };
+
+function nodeTypeFromEvent(event: PlatformEvent, fallback?: NodeType): NodeType {
+  const raw = event.payload.nodeType;
+  if (
+    raw === "input" ||
+    raw === "prompt" ||
+    raw === "llm" ||
+    raw === "tool" ||
+    raw === "router" ||
+    raw === "output"
+  ) {
+    return raw;
+  }
+  return fallback ?? "input";
+}
+
+/** Rebuild node traces from a completed run's event log when GET /nodes 404s. */
+export function tracesFromEvents(events: PlatformEvent[]): NodeTrace[] {
+  const traces = new Map<string, NodeTrace>();
+  for (const event of events) {
+    const nodeId = event.node_id;
+    if (!nodeId) continue;
+    const existing = traces.get(nodeId);
+    const nodeType = nodeTypeFromEvent(event, existing?.node_type);
+
+    if (event.event_type === "node.started") {
+      traces.set(nodeId, {
+        node_id: nodeId,
+        node_type: nodeType,
+        status: "running",
+        input: null,
+        output: null,
+        started_at: event.occurred_at,
+      });
+      continue;
+    }
+
+    if (event.event_type === "node.completed") {
+      traces.set(nodeId, {
+        node_id: nodeId,
+        node_type: nodeType,
+        status: "succeeded",
+        input: event.payload.input ?? existing?.input ?? null,
+        output: event.payload.output ?? existing?.output ?? null,
+        started_at: existing?.started_at ?? event.occurred_at,
+        completed_at: event.occurred_at,
+      });
+      continue;
+    }
+
+    if (event.event_type === "node.failed") {
+      traces.set(nodeId, {
+        node_id: nodeId,
+        node_type: nodeType,
+        status: "failed",
+        input: existing?.input ?? null,
+        output: existing?.output ?? null,
+        started_at: existing?.started_at ?? event.occurred_at,
+        completed_at: event.occurred_at,
+        error: String(event.payload.error ?? "node failed"),
+      });
+    }
+  }
+  return [...traces.values()];
+}
 
 export function normalizeRouteDecisions(
   decisions: Array<RouteDecision | Record<string, string>>,

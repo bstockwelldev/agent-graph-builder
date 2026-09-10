@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunSummary } from "./types";
 import {
+  isRunNotFoundError,
+  RUN_NOT_FOUND_HINT,
   RUN_STREAM_UNAVAILABLE_MESSAGE,
   RUN_WATCH_POLL_MS,
   RUN_WATCH_TIMEOUT_MS,
@@ -94,5 +96,44 @@ describe("watchRunCompletion", () => {
 
     expect(onTerminal).not.toHaveBeenCalled();
     expect(getRun).not.toHaveBeenCalled();
+  });
+
+  it("detects jsonFetch 404 run-not-found errors", () => {
+    expect(
+      isRunNotFoundError(
+        new Error('GET /api/runs/run_abc failed (404): {"detail":"run not found"}'),
+      ),
+    ).toBe(true);
+    expect(isRunNotFoundError(new Error("GET /api/runs/run_abc failed (500): boom"))).toBe(false);
+  });
+
+  it("treats 404 poll failures as terminal and stops polling", async () => {
+    const onTerminal = vi.fn();
+    const getRun = vi.fn(async () => {
+      throw new Error('GET /api/runs/run-1 failed (404): {"detail":"run not found"}');
+    });
+
+    watchRunCompletion({
+      initial: runningSummary,
+      streamRunEvents: () => () => undefined,
+      getRun,
+      onEvent: vi.fn(),
+      onTerminal,
+      timeoutMs: RUN_WATCH_TIMEOUT_MS,
+      pollMs: RUN_WATCH_POLL_MS,
+    });
+
+    await vi.advanceTimersByTimeAsync(RUN_WATCH_POLL_MS);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(onTerminal).toHaveBeenCalledTimes(1);
+    expect(onTerminal.mock.calls[0][0]).toMatchObject({
+      status: "failed",
+      error: RUN_NOT_FOUND_HINT,
+    });
+
+    const callsAfterFirst = getRun.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(RUN_WATCH_POLL_MS * 3);
+    expect(getRun.mock.calls.length).toBe(callsAfterFirst);
   });
 });

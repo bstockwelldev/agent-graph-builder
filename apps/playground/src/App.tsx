@@ -20,8 +20,14 @@ import {
   fingerprintIssueMaps,
   validationSummary,
 } from "./diagnostics";
-import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions } from "./runInspection";
-import { isTerminalRunStatus, watchRunCompletion } from "./watchRun";
+import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "./runInspection";
+import {
+  failedUnavailableRunSummary,
+  isRunNotFoundError,
+  isTerminalRunStatus,
+  RUN_NOT_FOUND_HINT,
+  watchRunCompletion,
+} from "./watchRun";
 import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { GraphLibrary } from "./components/GraphLibrary";
 import { NodePalette } from "./components/NodePalette";
@@ -433,10 +439,31 @@ export default function App() {
 
   const handleSelectHistoricalRun = useCallback(
     async (runId: string) => {
-      const [summary, traces] = await Promise.all([api.getRun(runId), api.getRunNodeTraces(runId)]);
-      applyRunInspection(summary, traces);
+      try {
+        const [summary, traces] = await Promise.all([api.getRun(runId), api.getRunNodeTraces(runId)]);
+        applyRunInspection(summary, traces);
+      } catch (err: unknown) {
+        if (isRunNotFoundError(err)) {
+          setRunSummary((current) => {
+            if (current?.run_id === runId) {
+              return current;
+            }
+            return failedUnavailableRunSummary(
+              current ?? {
+                run_id: runId,
+                graph_id: graphId ?? "",
+                status: "queued",
+                result: null,
+              },
+              RUN_NOT_FOUND_HINT,
+            );
+          });
+          return;
+        }
+        console.error("Failed to load run inspection:", err);
+      }
     },
-    [applyRunInspection],
+    [applyRunInspection, graphId],
   );
 
   const markGraphLoadResult = useCallback((graph: GraphDefinition) => {
@@ -870,7 +897,12 @@ export default function App() {
           const traces = await api.getRunNodeTraces(latest.run_id);
           setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
         } catch (err: unknown) {
-          console.error("Failed to load run traces:", err);
+          const fallback = tracesFromEvents(latest.events ?? []);
+          if (fallback.length > 0) {
+            setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
+          } else {
+            console.error("Failed to load run traces:", err);
+          }
         }
         if (graphId) {
           await refreshRunHistory(graphId);

@@ -49,7 +49,9 @@ Highlights after the next-set:
 
 | Doc | Summary |
 | --- | ------- |
-| [prod-run-queue-limbo-2026-09-09.md](incidents/prod-run-queue-limbo-2026-09-09.md) | Production Run stuck `queued` + validate storm on Vercel serverless — RCA + PTR (draft) |
+| [prod-run-queue-limbo-2026-09-09.md](incidents/prod-run-queue-limbo-2026-09-09.md) | Production Run stuck `queued` + validate storm on Vercel serverless — RCA + PTR |
+| [prod-sqlite-startup-2026-09-10.md](incidents/prod-sqlite-startup-2026-09-10.md) | Production startup `unable to open database file` — RCA + PTR |
+| [prod-run-isolate-404-2026-09-10.md](incidents/prod-run-isolate-404-2026-09-10.md) | Groq POST succeeded; follow-up GET run 404 across isolates — RCA + PTR |
 
 ## Related docs
 

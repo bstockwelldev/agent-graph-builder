@@ -6,6 +6,14 @@ export const RUN_WATCH_POLL_MS = 1_000;
 export const RUN_STREAM_UNAVAILABLE_MESSAGE =
   "Live event stream unavailable on this host. Poll for the run result timed out.";
 
+export const RUN_NOT_FOUND_HINT =
+  "Run not found on this server instance. Production storage is per-isolate until TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set.";
+
+export function isRunNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("(404)") && message.toLowerCase().includes("run not found");
+}
+
 export function isTerminalRunStatus(status: RunSummary["status"]): boolean {
   return status === "succeeded" || status === "failed";
 }
@@ -54,6 +62,7 @@ export function watchRunCompletion(options: WatchRunOptions): () => void {
   } = options;
   const runId = initial.run_id;
   let stopped = false;
+  let inflight = false;
   let stopStream: () => void = () => undefined;
   let pollTimer: number | undefined;
   let timeoutTimer: number | undefined;
@@ -68,19 +77,24 @@ export function watchRunCompletion(options: WatchRunOptions): () => void {
   };
 
   const pollOnce = async () => {
-    if (stopped) return;
+    if (stopped || inflight) return;
+    inflight = true;
     try {
       const latest = await getRun(runId);
       if (isTerminalRunStatus(latest.status)) {
         finish(latest);
       }
-    } catch {
+    } catch (err: unknown) {
       finish(
         failedUnavailableRunSummary(
           initial,
-          "Live stream unavailable (serverless); poll failed.",
+          isRunNotFoundError(err)
+            ? RUN_NOT_FOUND_HINT
+            : "Live stream unavailable (serverless); poll failed.",
         ),
       );
+    } finally {
+      inflight = false;
     }
   };
 
