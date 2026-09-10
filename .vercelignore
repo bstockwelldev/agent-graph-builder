@@ -6,4 +6,6 @@ frontend/node_modules
 **/*.pyc
 graphs.db
 .env
+.env.local
+.env*
 *.log

@@ -7,7 +7,7 @@ export const RUN_STREAM_UNAVAILABLE_MESSAGE =
   "Live event stream unavailable on this host. Poll for the run result timed out.";
 
 export const RUN_NOT_FOUND_HINT =
-  "Run not found on this server instance. Production storage is per-isolate until OBJECT_STORE_* (recommended) or TURSO_* env is set.";
+  "Run not found on this server instance. Production storage is per-isolate until BLOB_READ_WRITE_TOKEN (Vercel Blob), OBJECT_STORE_*, or TURSO_* env is set.";
 
 export function isRunNotFoundError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
