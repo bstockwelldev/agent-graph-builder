@@ -20,7 +20,9 @@ def demo_graph():
 
 @pytest.mark.asyncio
 async def test_completed_run_persists_summary_and_traces(demo_graph, tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "runs.db")
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "runs.db"))
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
 
     compile_result = runtime.compile_workflow(demo_graph)
     run_id = await run_graph_and_wait(
@@ -46,7 +48,9 @@ async def test_completed_run_persists_summary_and_traces(demo_graph, tmp_path, m
 
 @pytest.mark.asyncio
 async def test_route_decisions_persisted_for_technical_question(demo_graph, tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "runs.db")
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "runs.db"))
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
 
     compile_result = runtime.compile_workflow(demo_graph)
     run_id = await run_graph_and_wait(
@@ -67,7 +71,9 @@ async def test_route_decisions_persisted_for_technical_question(demo_graph, tmp_
 
 @pytest.mark.asyncio
 async def test_list_runs_for_graph_returns_newest_first(demo_graph, tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "runs.db")
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "runs.db"))
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
 
     compile_result = runtime.compile_workflow(demo_graph)
     first = await run_graph_and_wait(compile_result.compiled_workflow_id, "Question one")
@@ -80,7 +86,9 @@ async def test_list_runs_for_graph_returns_newest_first(demo_graph, tmp_path, mo
 
 
 def test_get_run_summary_falls_back_to_storage(demo_graph, tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "runs.db")
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "runs.db"))
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
 
     summary = RunSummary(
         run_id="run_test123",

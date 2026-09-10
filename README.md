@@ -320,6 +320,16 @@ git push -u origin master
 vercel deploy --prod
 ```
 
+**Environment variables (Vercel dashboard — do not commit secrets):**
+
+| Variable | Required | Purpose |
+| -------- | -------- | ------- |
+| `GROQ_API_KEY` | Optional | Live LLM runs (default `CHAT_PROVIDER=stub` in `vercel.json`) |
+| `TURSO_DATABASE_URL` | For durable storage | Turso libsql URL (`libsql://…`) |
+| `TURSO_AUTH_TOKEN` | With Turso URL | Turso database token |
+
+`vercel.json` sets `GRAPH_DB_PATH=/tmp/graphs.db` for ephemeral per-isolate SQLite when Turso is not configured. After adding `TURSO_*`, graph and run history survive cold starts.
+
 ## Deliberate simplifications vs. the full EDD
 
 Everything here is a scoped-down stand-in for a real platform concept, kept

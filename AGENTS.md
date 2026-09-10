@@ -33,7 +33,15 @@ uv run uvicorn app.main:app --reload --port 8000
 
 Docker (full stack): `docker compose up` or `scripts/spin-up.ps1`.
 
-Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set `GROQ_API_KEY` in the Vercel dashboard (Project → Environment Variables); do not commit secrets.
+Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set secrets in the Vercel dashboard (Project → Environment Variables); do not commit them:
+
+| Variable | Purpose |
+| -------- | ------- |
+| `GROQ_API_KEY` | Live LLM provider (optional; `CHAT_PROVIDER=stub` until set) |
+| `TURSO_DATABASE_URL` | Turso libsql URL for durable graph/run history |
+| `TURSO_AUTH_TOKEN` | Turso auth token (required with `TURSO_DATABASE_URL`) |
+
+Without `TURSO_*`, production uses ephemeral `/tmp/graphs.db` per serverless isolate (`GRAPH_DB_PATH` in `vercel.json`). Local/Docker use file SQLite at `GRAPH_DB_PATH` or `backend/graphs.db`.
 
 ## Layout
 

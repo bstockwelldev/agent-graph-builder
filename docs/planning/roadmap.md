@@ -54,6 +54,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | **P3** | **Frontend tests (Vitest + RTL)** | Medium | Medium | `FlowCanvas` fitView gating, `TaxonomyTooltip` layouts, shell flex regression. Spec follow-up in shell-layout-polish. |
 | ~~**P3**~~ | ~~**Repo `AGENTS.md`**~~ | Low | Medium | **Shipped 2026-09-10** — repo-root `AGENTS.md` router for agents. |
 | **P3** | **Canvas orientation Phase E** | Low | Low | elk fallback, dual layout positions — [canvas-orientation-plan.md](features/canvas-orientation-plan.md) follow-ons. |
+| ~~**P2**~~ | ~~**Turso durable store**~~ | Medium | High | **Shipped 2026-09-10** — `storage.py` libsql dual backend; operator sets `TURSO_*` on Vercel. |
 
 ---
 

@@ -13,7 +13,7 @@ from app.main import app
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     db_path = tmp_path / "graphs.db"
-    monkeypatch.setattr(storage, "DB_PATH", db_path)
+    monkeypatch.setenv("GRAPH_DB_PATH", str(db_path))
     return TestClient(app)
 
 

@@ -25,6 +25,8 @@ def test_connect_creates_parent_directory(monkeypatch, tmp_path) -> None:
     db_path = tmp_path / "nested" / "graphs.db"
     monkeypatch.setenv("GRAPH_DB_PATH", str(db_path))
     monkeypatch.delenv("VERCEL", raising=False)
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
 
     with storage._connect() as conn:
         conn.execute("select 1")

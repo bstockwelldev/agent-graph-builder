@@ -118,13 +118,19 @@ Production always reaches a writable SQLite path on cold start, even when `GRAPH
 2. Redeploy after merging P0.
 3. Smoke: `GET /api/graphs` → 200 with demo graph id.
 
-### P2 — Turso / durable store (roadmap slice 4)
+### P2 — Turso / durable store (roadmap slice 4) — implemented
 
-Ephemeral `/tmp` SQLite remains **per-instance** (see [prod-run-queue-limbo-2026-09-09.md](prod-run-queue-limbo-2026-09-09.md) RC4). For cross-instance graph/run history:
+Ephemeral `/tmp` SQLite remains **per-instance** until the operator sets Turso env vars (see [prod-run-queue-limbo-2026-09-09.md](prod-run-queue-limbo-2026-09-09.md) RC4).
 
-- Replace SQLite with Turso (libSQL) or hosted Postgres
-- Remove bootstrap re-seed dependency on cold start
-- **Ask first** before adding vendor credentials
+**Code:** `backend/app/storage.py` dual backend — file SQLite when `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` are unset; libsql HTTP when both are set.
+
+**Operator checklist (no secrets in git):**
+
+1. [Turso dashboard](https://app.turso.tech) → create database → copy `libsql://…` URL.
+2. Create database token (read/write).
+3. Vercel → Project → Environment Variables → Production + Preview: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`.
+4. Redeploy (`vercel deploy --prod`).
+5. Smoke: save a graph, cold-start, confirm `GET /api/graphs` still lists it.
 
 ### Non-goals
 

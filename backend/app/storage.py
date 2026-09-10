@@ -4,6 +4,13 @@ SQLite stands in for Supabase PostgreSQL in the POC (EDD section 29): the
 platform still owns the canonical graph as its system of record, just via a
 lighter-weight local store. Completed run snapshots (summary + node traces)
 persist here; live SSE buses stay in memory until a run finishes.
+
+Dual backend:
+- **Local / Docker / Vercel without Turso:** file SQLite at ``GRAPH_DB_PATH``
+  (or Vercel ``/tmp`` fallback).
+- **Turso (production durable):** when ``TURSO_DATABASE_URL`` and
+  ``TURSO_AUTH_TOKEN`` are both set, use the libsql HTTP client with the same
+  schema and queries.
 """
 
 from __future__ import annotations
@@ -11,12 +18,67 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, Protocol
 
 from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
 _VERCEL_EPHEMERAL_DB = Path("/tmp/graphs.db")
+
+_SCHEMA_STATEMENTS = (
+    """
+    create table if not exists graph (
+        id text primary key,
+        name text not null,
+        definition text not null,
+        updated_at text not null
+    )
+    """,
+    """
+    create table if not exists run (
+        run_id text primary key,
+        graph_id text not null,
+        status text not null,
+        input_json text not null,
+        provider text,
+        result_json text,
+        error text,
+        started_at text not null,
+        completed_at text not null
+    )
+    """,
+    """
+    create index if not exists idx_run_graph_started
+    on run (graph_id, started_at desc)
+    """,
+    """
+    create table if not exists run_node_trace (
+        run_id text not null,
+        node_id text not null,
+        trace_json text not null,
+        primary key (run_id, node_id)
+    )
+    """,
+)
+
+
+class _DbCursor(Protocol):
+    def fetchone(self) -> tuple[Any, ...] | None: ...
+
+    def fetchall(self) -> list[tuple[Any, ...]]: ...
+
+
+class _DbConnection(Protocol):
+    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> _DbCursor: ...
+
+    def executemany(self, sql: str, params: list[tuple[Any, ...]]) -> None: ...
+
+    def commit(self) -> None: ...
+
+    def close(self) -> None: ...
 
 
 def resolve_db_path() -> Path:
@@ -35,64 +97,66 @@ def resolve_db_path() -> Path:
     return _DEFAULT_DB_PATH
 
 
+def use_turso() -> bool:
+    """True when both Turso env vars are set for remote libsql."""
+    url = os.environ.get("TURSO_DATABASE_URL", "").strip()
+    token = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
+    return bool(url and token)
+
+
+def storage_backend() -> str:
+    """Active persistence backend label (for diagnostics)."""
+    return "turso" if use_turso() else "sqlite"
+
+
 DB_PATH = resolve_db_path()
 
 
-def _connect() -> sqlite3.Connection:
-    path = resolve_db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.execute(
-        """
-        create table if not exists graph (
-            id text primary key,
-            name text not null,
-            definition text not null,
-            updated_at text not null
-        )
-        """
-    )
-    conn.execute(
-        """
-        create table if not exists run (
-            run_id text primary key,
-            graph_id text not null,
-            status text not null,
-            input_json text not null,
-            provider text,
-            result_json text,
-            error text,
-            started_at text not null,
-            completed_at text not null
-        )
-        """
-    )
-    conn.execute(
-        """
-        create index if not exists idx_run_graph_started
-        on run (graph_id, started_at desc)
-        """
-    )
-    conn.execute(
-        """
-        create table if not exists run_node_trace (
-            run_id text not null,
-            node_id text not null,
-            trace_json text not null,
-            primary key (run_id, node_id)
-        )
-        """
-    )
+def _bootstrap_schema(conn: _DbConnection) -> None:
+    for statement in _SCHEMA_STATEMENTS:
+        conn.execute(statement)
     _ensure_run_schema(conn)
-    return conn
 
 
-def _ensure_run_schema(conn: sqlite3.Connection) -> None:
+def _ensure_run_schema(conn: _DbConnection) -> None:
     columns = {row[1] for row in conn.execute("pragma table_info(run)").fetchall()}
     if "route_decisions_json" not in columns:
         conn.execute(
             "alter table run add column route_decisions_json text not null default '[]'"
         )
+
+
+def _open_sqlite(path: Path) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return sqlite3.connect(path)
+
+
+def _open_turso() -> Any:
+    import libsql
+
+    url = os.environ["TURSO_DATABASE_URL"].strip()
+    token = os.environ["TURSO_AUTH_TOKEN"].strip()
+    return libsql.connect(database=url, auth_token=token)
+
+
+@contextmanager
+def _connect() -> Iterator[_DbConnection]:
+    if use_turso():
+        conn = _open_turso()
+        try:
+            _bootstrap_schema(conn)
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+    else:
+        conn = _open_sqlite(resolve_db_path())
+        try:
+            _bootstrap_schema(conn)
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def save_graph(graph: GraphDefinition) -> None:
