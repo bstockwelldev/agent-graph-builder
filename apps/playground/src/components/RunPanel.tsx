@@ -1,17 +1,26 @@
 import type { CSSProperties, RefObject } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { validationSummary } from "../diagnostics";
+import { applyRunSelectionToLlmNodes, showModelCatalog } from "../lib/modelCatalog";
+import {
+  INSPECT_LOAD_FAIL,
+  OBSERVE_OPEN_STORAGE_KEY,
+  TRACE_MISSING,
+  TRACE_SELECT_NODE,
+  eventLogEmptyMessage,
+  resolveEventLogEvents,
+} from "../observePanel";
 import type { ChatProvider, Diagnostic, NodeTrace, PlatformEvent, RunSummary } from "../types";
 import { PROVIDER_TAXONOMY } from "../content/taxonomy";
+import { useExclusiveCollapse } from "../hooks/usePersistedCollapse";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
+import { SectionHeader } from "./ui/SectionHeader";
 import { Skeleton, SkeletonBlock } from "./ui/Skeleton";
 import { PasswordInput, Select, TextArea } from "./ui/fields";
-
-import { applyRunSelectionToLlmNodes, showModelCatalog } from "../lib/modelCatalog";
 
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
 
@@ -38,6 +47,12 @@ function diagnosticKey(diagnostic: Diagnostic, index: number): string {
   return `${diagnostic.code}-${diagnostic.node_id ?? ""}-${diagnostic.edge_id ?? ""}-${index}`;
 }
 
+function traceTitle(selectedTrace: NodeTrace | null): string {
+  if (!selectedTrace) return "Node trace";
+  const duration = formatDuration(selectedTrace);
+  return `Node trace: ${selectedTrace.node_id} (${selectedTrace.status}${duration ? ` · ${duration}` : ""})`;
+}
+
 export function RunPanel({
   graphId,
   diagnostics,
@@ -54,6 +69,9 @@ export function RunPanel({
   onSelectRun,
   events,
   selectedTrace,
+  selectedNodeId = null,
+  inspectLoadError = false,
+  onRetryInspect,
   compiling = false,
   layout = "rail",
   reducedMotion = false,
@@ -73,6 +91,9 @@ export function RunPanel({
   onSelectRun: (runId: string) => void;
   events: PlatformEvent[];
   selectedTrace: NodeTrace | null;
+  selectedNodeId?: string | null;
+  inspectLoadError?: boolean;
+  onRetryInspect?: () => void;
   compiling?: boolean;
   layout?: "rail" | "drawer";
   reducedMotion?: boolean;
@@ -87,11 +108,40 @@ export function RunPanel({
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const summary = validationSummary(diagnostics);
   const inspecting = Boolean(inspectionRunId && runSummary);
   const showModelSelect = showModelCatalog(provider);
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
+  const displayedEvents = resolveEventLogEvents(events, runSummary?.events);
+  const isRail = layout === "rail";
+  const lastFocusedRunIdRef = useRef<string | undefined>(undefined);
+  const lastFocusedTraceIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const runId = runSummary?.run_id;
+    if (lastFocusedRunIdRef.current === undefined) {
+      lastFocusedRunIdRef.current = runId;
+      return;
+    }
+    if (runId && runId !== lastFocusedRunIdRef.current) {
+      openSection("observe-status");
+    }
+    lastFocusedRunIdRef.current = runId;
+  }, [openSection, runSummary?.run_id]);
+
+  useEffect(() => {
+    const nodeId = selectedTrace?.node_id;
+    if (lastFocusedTraceIdRef.current === undefined) {
+      lastFocusedTraceIdRef.current = nodeId;
+      return;
+    }
+    if (nodeId && nodeId !== lastFocusedTraceIdRef.current) {
+      openSection("observe-trace");
+    }
+    lastFocusedTraceIdRef.current = nodeId;
+  }, [openSection, selectedTrace?.node_id]);
 
   useEffect(() => {
     setApiKey("");
@@ -165,34 +215,8 @@ export function RunPanel({
 
   return (
     <div style={containerStyle(layout)}>
-      {inspecting && runSummary && (
-        <div style={{ ...sectionStyle, background: color.neutral[900] }}>
-          <CollapsibleSection sectionId="run-inspection" title="Run inspection" defaultOpen reducedMotion={reducedMotion}>
-            <div style={{ ...typeScale.caption, lineHeight: "16px", marginBottom: spacing[2] }}>
-              Inspecting run · <b>{runSummary.status}</b>
-              {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
-            </div>
-            {runSummary.input?.question != null && (
-              <div style={{ ...typeScale.caption, opacity: 0.75, marginBottom: spacing[1] }}>
-                Question: {String(runSummary.input.question)}
-              </div>
-            )}
-            {runSummary.provider && (
-              <div style={{ ...typeScale.caption, opacity: 0.75, marginBottom: spacing[2] }}>
-                Provider: {runSummary.provider}
-              </div>
-            )}
-            {onExitInspection && (
-              <Button variant="secondary" onClick={onExitInspection} style={{ width: "100%" }}>
-                Exit inspection
-              </Button>
-            )}
-          </CollapsibleSection>
-        </div>
-      )}
-
-      <div style={sectionStyle}>
-        <CollapsibleSection sectionId="run-controls" title="Run" reducedMotion={reducedMotion}>
+      <div data-testid="execute-group" style={executeGroupStyle}>
+        <CollapsibleSection sectionId="run-controls" title="Execute" reducedMotion={reducedMotion}>
           <TextArea
             rows={4}
             style={{ minHeight: 96, resize: "vertical" }}
@@ -296,65 +320,193 @@ export function RunPanel({
             </Button>
           </div>
         </CollapsibleSection>
-      </div>
 
-      <div ref={diagnosticsSectionRef} style={sectionStyle} tabIndex={-1} aria-live="polite" aria-label={`Graph validation: ${summary.label}`}>
-        <CollapsibleSection sectionId="run-diagnostics" title="Diagnostics" reducedMotion={reducedMotion}>
-          {diagnostics.length === 0 ? (
-            <div role="status" style={{ ...typeScale.caption, color: color.success[500], lineHeight: "18px" }}>
-              No issues — graph is ready to compile.
-            </div>
-          ) : (
-            diagnostics.map((diagnostic, index) => {
-              const clickable = Boolean(diagnostic.node_id || diagnostic.edge_id);
-              const content = (
-                <>
-                  <span style={{ fontWeight: 600 }}>{diagnostic.severity === "error" ? "Error" : "Warning"}</span>
-                  {": "}
-                  {diagnostic.message}
-                </>
-              );
-              if (!clickable) {
+        <div ref={diagnosticsSectionRef} style={{ marginTop: spacing[2] }} tabIndex={-1} aria-live="polite" aria-label={`Graph validation: ${summary.label}`}>
+          <CollapsibleSection
+            sectionId="run-diagnostics"
+            title="Diagnostics"
+            defaultOpen={diagnostics.length > 0}
+            reducedMotion={reducedMotion}
+          >
+            {diagnostics.length === 0 ? (
+              <div role="status" style={{ ...typeScale.caption, color: color.success[500], lineHeight: "18px" }}>
+                No issues — graph is ready to compile.
+              </div>
+            ) : (
+              diagnostics.map((diagnostic, index) => {
+                const clickable = Boolean(diagnostic.node_id || diagnostic.edge_id);
+                const content = (
+                  <>
+                    <span style={{ fontWeight: 600 }}>{diagnostic.severity === "error" ? "Error" : "Warning"}</span>
+                    {": "}
+                    {diagnostic.message}
+                  </>
+                );
+                if (!clickable) {
+                  return (
+                    <div
+                      key={diagnosticKey(diagnostic, index)}
+                      style={{
+                        ...typeScale.caption,
+                        color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
+                        marginBottom: spacing[1],
+                        lineHeight: "16px",
+                      }}
+                    >
+                      {content}
+                    </div>
+                  );
+                }
                 return (
-                  <div
+                  <button
                     key={diagnosticKey(diagnostic, index)}
-                    style={{
-                      ...typeScale.caption,
-                      color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
-                      marginBottom: spacing[1],
-                      lineHeight: "16px",
-                    }}
+                    type="button"
+                    onClick={() => onDiagnosticClick(diagnostic)}
+                    style={diagnosticButtonStyle(diagnostic.severity)}
                   >
                     {content}
-                  </div>
+                  </button>
                 );
-              }
-              return (
-                <button
-                  key={diagnosticKey(diagnostic, index)}
-                  type="button"
-                  onClick={() => onDiagnosticClick(diagnostic)}
-                  style={diagnosticButtonStyle(diagnostic.severity)}
-                >
-                  {content}
-                </button>
-              );
-            })
-          )}
-        </CollapsibleSection>
+              })
+            )}
+          </CollapsibleSection>
+        </div>
       </div>
 
-      <div style={sectionStyle}>
-        <CollapsibleSection sectionId="run-history" title="Run history" defaultOpen={runHistory.length > 0} reducedMotion={reducedMotion}>
-          {runHistoryLoading ? (
-            <SkeletonBlock lines={2} gap={spacing[2]} />
-          ) : runHistory.length === 0 ? (
-            <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-              No runs yet for this graph. Compile and run to see history here.
-            </div>
-          ) : (
-            <div style={historyListStyle}>
-              {runHistory.map((run) => {
+      <div data-testid="observe-group" style={observeGroupStyle(isRail)}>
+        <SectionHeader>Observe</SectionHeader>
+        {inspectLoadError && (
+          <div role="alert" style={inspectFailStyle}>
+            <div>{INSPECT_LOAD_FAIL}</div>
+            {onRetryInspect && (
+              <Button variant="secondary" onClick={onRetryInspect} style={{ marginTop: spacing[2], minHeight: shell.touchTarget.min }}>
+                Retry
+              </Button>
+            )}
+          </div>
+        )}
+        <div data-testid="observe-scroller" style={observeScrollerStyle(isRail)}>
+          <CollapsibleSection
+            sectionId="observe-status"
+            title="Run status"
+            open={openId === "observe-status"}
+            onOpenChange={() => toggleSection("observe-status")}
+            reducedMotion={reducedMotion}
+          >
+            {!runSummary ? (
+              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+                No run to inspect yet. Compile and run to see status here.
+              </div>
+            ) : (
+              <>
+                {inspecting && (
+                  <div style={{ ...typeScale.caption, lineHeight: "16px", marginBottom: spacing[2] }}>
+                    Inspecting run · <b>{runSummary.status}</b>
+                    {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
+                    {runSummary.input?.question != null && (
+                      <div style={{ opacity: 0.75, marginTop: spacing[1] }}>Question: {String(runSummary.input.question)}</div>
+                    )}
+                    {runSummary.provider && (
+                      <div style={{ opacity: 0.75, marginTop: spacing[1] }}>Provider: {runSummary.provider}</div>
+                    )}
+                    {onExitInspection && (
+                      <Button variant="secondary" onClick={onExitInspection} style={{ width: "100%", marginTop: spacing[2] }}>
+                        Exit inspection
+                      </Button>
+                    )}
+                  </div>
+                )}
+                <div style={typeScale.caption}>
+                  {runSummary.run_id} — <b>{runSummary.status}</b>
+                </div>
+                {runSummary.status === "succeeded" && (
+                  <div style={{ ...resultBlockStyle, ...localType.ui, marginTop: spacing[2] - 2, whiteSpace: "pre-wrap" }}>
+                    {String(runSummary.result)}
+                  </div>
+                )}
+                {runSummary.status === "failed" && runSummary.error && (
+                  <div
+                    role="alert"
+                    style={{
+                      ...typeScale.caption,
+                      color: accentSurface.destructive.text,
+                      marginTop: spacing[2] - 2,
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {runSummary.error}
+                  </div>
+                )}
+              </>
+            )}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            sectionId="observe-trace"
+            title={traceTitle(selectedTrace)}
+            open={openId === "observe-trace"}
+            onOpenChange={() => toggleSection("observe-trace")}
+            reducedMotion={reducedMotion}
+          >
+            {!selectedNodeId ? (
+              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+                {TRACE_SELECT_NODE}
+              </div>
+            ) : !selectedTrace ? (
+              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+                {TRACE_MISSING}
+              </div>
+            ) : (
+              <div>
+                <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
+                <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
+                <div style={{ ...typeScale.caption, opacity: 0.6 }}>Output</div>
+                <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
+                {selectedTrace.error && (
+                  <div style={{ ...typeScale.caption, color: accentSurface.destructive.text }}>{selectedTrace.error}</div>
+                )}
+              </div>
+            )}
+          </CollapsibleSection>
+
+          <div aria-live="polite" aria-relevant="additions">
+            <CollapsibleSection
+              sectionId="observe-events"
+              title="Event log"
+              open={openId === "observe-events"}
+              onOpenChange={() => toggleSection("observe-events")}
+              reducedMotion={reducedMotion}
+            >
+              {displayedEvents.length === 0 ? (
+                <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+                  {eventLogEmptyMessage(inspecting)}
+                </div>
+              ) : (
+                displayedEvents.map((e) => (
+                  <div key={e.sequence} style={{ ...typeScale.caption, marginBottom: spacing[1] - 1, fontFamily: fontFamily.mono }}>
+                    <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
+                    {e.node_id ? ` · ${e.node_id}` : ""}
+                  </div>
+                ))
+              )}
+            </CollapsibleSection>
+          </div>
+
+          <CollapsibleSection
+            sectionId="observe-history"
+            title="Run history"
+            open={openId === "observe-history"}
+            onOpenChange={() => toggleSection("observe-history")}
+            reducedMotion={reducedMotion}
+          >
+            {runHistoryLoading ? (
+              <SkeletonBlock lines={2} gap={spacing[2]} />
+            ) : runHistory.length === 0 ? (
+              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+                No runs yet for this graph. Compile and run to see history here.
+              </div>
+            ) : (
+              runHistory.map((run) => {
                 const active = inspectionRunId ? run.run_id === inspectionRunId : runSummary?.run_id === run.run_id;
                 return (
                   <button
@@ -375,76 +527,10 @@ export function RunPanel({
                     </div>
                   </button>
                 );
-              })}
-            </div>
-          )}
-        </CollapsibleSection>
-      </div>
-
-      {runSummary && (
-        <div style={sectionStyle}>
-          <CollapsibleSection sectionId="run-status" title="Run status" defaultOpen reducedMotion={reducedMotion}>
-            <div style={typeScale.caption}>
-              {runSummary.run_id} — <b>{runSummary.status}</b>
-            </div>
-            {runSummary.status === "succeeded" && (
-              <div style={{ ...scrollableBlockStyle, ...localType.ui, marginTop: spacing[2] - 2, whiteSpace: "pre-wrap" }}>
-                {String(runSummary.result)}
-              </div>
-            )}
-            {runSummary.status === "failed" && runSummary.error && (
-              <div
-                role="alert"
-                style={{
-                  ...typeScale.caption,
-                  color: accentSurface.destructive.text,
-                  marginTop: spacing[2] - 2,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {runSummary.error}
-              </div>
+              })
             )}
           </CollapsibleSection>
         </div>
-      )}
-
-      {selectedTrace && (
-        <div style={sectionStyle}>
-          <CollapsibleSection
-            sectionId="run-node-trace"
-            title={`Node trace: ${selectedTrace.node_id} (${selectedTrace.status}${formatDuration(selectedTrace) ? ` · ${formatDuration(selectedTrace)}` : ""})`}
-            defaultOpen
-            reducedMotion={reducedMotion}
-          >
-            <div style={scrollableBlockStyle}>
-              <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
-              <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
-              <div style={{ ...typeScale.caption, opacity: 0.6 }}>Output</div>
-              <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
-              {selectedTrace.error && (
-                <div style={{ ...typeScale.caption, color: accentSurface.destructive.text }}>{selectedTrace.error}</div>
-              )}
-            </div>
-          </CollapsibleSection>
-        </div>
-      )}
-
-      <div style={eventLogSectionStyle} aria-live="polite" aria-relevant="additions">
-        <CollapsibleSection sectionId="run-event-log" title="Event log" defaultOpen reducedMotion={reducedMotion}>
-          {events.length === 0 ? (
-            <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-              No events yet. Run the graph to stream node lifecycle events here.
-            </div>
-          ) : (
-            events.map((e) => (
-              <div key={e.sequence} style={{ ...typeScale.caption, marginBottom: spacing[1] - 1, fontFamily: fontFamily.mono }}>
-                <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
-                {e.node_id ? ` · ${e.node_id}` : ""}
-              </div>
-            ))
-          )}
-        </CollapsibleSection>
       </div>
     </div>
   );
@@ -469,38 +555,46 @@ function diagnosticButtonStyle(severity: Diagnostic["severity"]): CSSProperties 
 
 const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
   width: "100%",
-  height: "100%",
+  height: layout === "rail" ? "100%" : "auto",
   minHeight: 0,
   borderLeft: layout === "drawer" ? undefined : `1px solid ${surface.border}`,
   background: surface.panel,
   color: text.primary,
   display: "flex",
   flexDirection: "column",
-  overflow: "hidden",
+  overflow: layout === "rail" ? "hidden" : "visible",
 });
 
-const sectionStyle: CSSProperties = {
+const executeGroupStyle: CSSProperties = {
   padding: shell.panelPadding,
   borderBottom: `1px solid ${surface.border}`,
   flexShrink: 0,
 };
 
-const historyListStyle: CSSProperties = {
-  maxHeight: 200,
-  overflowY: "auto",
-};
-
-const scrollableBlockStyle: CSSProperties = {
-  maxHeight: 160,
-  overflowY: "auto",
-};
-
-const eventLogSectionStyle: CSSProperties = {
-  ...sectionStyle,
-  flex: 1,
-  minHeight: 0,
-  overflowY: "auto",
+const observeGroupStyle = (isRail: boolean): CSSProperties => ({
+  padding: shell.panelPadding,
+  flex: isRail ? 1 : undefined,
+  minHeight: isRail ? 0 : undefined,
+  display: "flex",
+  flexDirection: "column",
   borderBottom: "none",
+});
+
+const observeScrollerStyle = (isRail: boolean): CSSProperties => ({
+  flex: isRail ? 1 : undefined,
+  minHeight: isRail ? 0 : undefined,
+  overflowY: isRail ? "auto" : "visible",
+});
+
+const resultBlockStyle: CSSProperties = {
+  overflowX: "auto",
+};
+
+const inspectFailStyle: CSSProperties = {
+  ...typeScale.caption,
+  color: accentSurface.destructive.text,
+  marginBottom: spacing[2],
+  lineHeight: "18px",
 };
 
 const preStyle: CSSProperties = {

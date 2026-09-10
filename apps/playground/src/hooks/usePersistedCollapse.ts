@@ -1,40 +1,92 @@
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "agb-panel-sections";
+import { nextExclusiveOpenId } from "../observePanel";
 
-function readSectionState(sectionId: string, defaultOpen: boolean): boolean {
+export const PANEL_SECTIONS_STORAGE_KEY = "agb-panel-sections";
+
+function readStore(): Record<string, unknown> {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultOpen;
-    const parsed = JSON.parse(raw) as Record<string, boolean>;
-    if (typeof parsed[sectionId] === "boolean") return parsed[sectionId];
+    const raw = window.localStorage.getItem(PANEL_SECTIONS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
   } catch {
     // Ignore corrupt storage.
   }
-  return defaultOpen;
+  return {};
 }
 
-function writeSectionState(sectionId: string, open: boolean) {
+function writeStore(parsed: Record<string, unknown>) {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-    parsed[sectionId] = open;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    window.localStorage.setItem(PANEL_SECTIONS_STORAGE_KEY, JSON.stringify(parsed));
   } catch {
     // Storage unavailable — skip persistence.
   }
 }
 
-export function usePersistedCollapse(sectionId: string, defaultOpen = true) {
-  const [open, setOpen] = useState(() => readSectionState(sectionId, defaultOpen));
+function readSectionState(sectionId: string, defaultOpen: boolean): boolean {
+  const parsed = readStore();
+  if (typeof parsed[sectionId] === "boolean") {
+    return parsed[sectionId];
+  }
+  return defaultOpen;
+}
+
+function writeSectionState(sectionId: string, open: boolean) {
+  const parsed = readStore();
+  parsed[sectionId] = open;
+  writeStore(parsed);
+}
+
+export function readExclusiveOpenId(groupKey: string, defaultOpenId: string | null): string | null {
+  const parsed = readStore();
+  const stored = parsed[groupKey];
+  if (stored === null) {
+    return null;
+  }
+  if (typeof stored === "string") {
+    return stored;
+  }
+  return defaultOpenId;
+}
+
+export function writeExclusiveOpenId(groupKey: string, openId: string | null) {
+  const parsed = readStore();
+  parsed[groupKey] = openId;
+  writeStore(parsed);
+}
+
+export function usePersistedCollapse(sectionId: string, defaultOpen = true, enabled = true) {
+  const [open, setOpen] = useState(() => (enabled ? readSectionState(sectionId, defaultOpen) : defaultOpen));
 
   useEffect(() => {
+    if (!enabled) return;
     writeSectionState(sectionId, open);
-  }, [sectionId, open]);
+  }, [enabled, sectionId, open]);
 
   const toggle = useCallback(() => {
     setOpen((current) => !current);
   }, []);
 
   return { open, setOpen, toggle };
+}
+
+export function useExclusiveCollapse(groupKey: string, defaultOpenId: string | null = null) {
+  const [openId, setOpenId] = useState(() => readExclusiveOpenId(groupKey, defaultOpenId));
+
+  useEffect(() => {
+    writeExclusiveOpenId(groupKey, openId);
+  }, [groupKey, openId]);
+
+  const openSection = useCallback((id: string | null) => {
+    setOpenId(id);
+  }, []);
+
+  const toggleSection = useCallback((id: string) => {
+    setOpenId((current) => nextExclusiveOpenId(current, id));
+  }, []);
+
+  return { openId, openSection, toggleSection };
 }

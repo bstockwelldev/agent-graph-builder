@@ -205,6 +205,7 @@ export default function App() {
   const [nodeTraces, setNodeTraces] = useState<Record<string, NodeTrace>>({});
   const [inspectionRunId, setInspectionRunId] = useState<string | null>(null);
   const [inspectionRouteDecisions, setInspectionRouteDecisions] = useState<RouteDecision[]>([]);
+  const [inspectLoadError, setInspectLoadError] = useState(false);
   const [savedGraphFingerprint, setSavedGraphFingerprint] = useState<string>("");
   const [graphOrientation, setGraphOrientation] = useState<GraphOrientation>("auto");
   const [layoutLiveAnnouncement, setLayoutLiveAnnouncement] = useState("");
@@ -225,13 +226,13 @@ export default function App() {
   const shiftConnectRef = useRef(false);
   const connectPointerRef = useRef({ x: 0, y: 0 });
   const closeStreamRef = useRef<(() => void) | null>(null);
+  const lastInspectAttemptRef = useRef<string | null>(null);
   const lastAppliedIssueFingerprintRef = useRef<string>("");
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
   const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
   const {
     isCompact,
-    isWide,
     inspectorInDrawer,
     authoringEnabled,
     openDrawer,
@@ -248,10 +249,10 @@ export default function App() {
   }, [inspectorInDrawer, selectedNodeId, selectedEdgeId, setOpenDrawer]);
 
   useEffect(() => {
-    if (isWide && openDrawer === "inspector") {
+    if (!inspectorInDrawer && openDrawer === "inspector") {
       setOpenDrawer(null);
     }
-  }, [isWide, openDrawer, setOpenDrawer]);
+  }, [inspectorInDrawer, openDrawer, setOpenDrawer]);
 
   useEffect(() => {
     setCoachDismissed(graphId ? isCoachDismissed(graphId) : false);
@@ -426,7 +427,7 @@ export default function App() {
     (summary: RunSummary, traces: NodeTrace[]) => {
       closeStreamRef.current?.();
       closeStreamRef.current = null;
-      setEvents([]);
+      setEvents(summary.events && summary.events.length > 0 ? summary.events : []);
       setRunSummary(summary);
       setInspectionRunId(summary.run_id);
       const routeDecisions = normalizeRouteDecisions(summary.route_decisions ?? []);
@@ -439,10 +440,13 @@ export default function App() {
 
   const handleSelectHistoricalRun = useCallback(
     async (runId: string) => {
+      lastInspectAttemptRef.current = runId;
       try {
         const [summary, traces] = await Promise.all([api.getRun(runId), api.getRunNodeTraces(runId)]);
         applyRunInspection(summary, traces);
+        setInspectLoadError(false);
       } catch (err: unknown) {
+        setInspectLoadError(true);
         if (isRunNotFoundError(err)) {
           setRunSummary((current) => {
             if (current?.run_id === runId) {
@@ -1105,6 +1109,12 @@ export default function App() {
       onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
       events={events}
       selectedTrace={selectedTrace}
+      selectedNodeId={selectedNodeId}
+      inspectLoadError={inspectLoadError}
+      onRetryInspect={() => {
+        const runId = lastInspectAttemptRef.current ?? inspectionRunId;
+        if (runId) void handleSelectHistoricalRun(runId);
+      }}
     />
   );
 
@@ -1331,7 +1341,7 @@ export default function App() {
           </div>
         </main>
 
-        {!isCompact && isWide && (selectedNode || selectedEdge) && (
+        {!isCompact && !inspectorInDrawer && (selectedNode || selectedEdge) && (
           <aside
             style={{
               width: shell.rail.inspector,
