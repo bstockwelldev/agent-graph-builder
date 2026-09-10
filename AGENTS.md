@@ -38,10 +38,15 @@ Production deploy (operator): `vercel deploy --prod` from repo root after merge.
 | Variable | Purpose |
 | -------- | ------- |
 | `GROQ_API_KEY` | Live LLM provider (optional; `CHAT_PROVIDER=stub` until set) |
-| `TURSO_DATABASE_URL` | Turso libsql URL for durable graph/run history |
-| `TURSO_AUTH_TOKEN` | Turso auth token (required with `TURSO_DATABASE_URL`) |
+| `OBJECT_STORE_BUCKET` | **Recommended** durable store (S3 / R2 / MinIO / Azure S3 API) |
+| `OBJECT_STORE_ENDPOINT` | Optional custom endpoint (R2/MinIO/Azure). Empty = AWS default |
+| `OBJECT_STORE_ACCESS_KEY_ID` | Object-store access key |
+| `OBJECT_STORE_SECRET_ACCESS_KEY` | Object-store secret |
+| `OBJECT_STORE_REGION` | Optional. Default `us-east-1` (AWS) or `auto` when endpoint is set |
+| `TURSO_DATABASE_URL` | Optional libsql URL (unused if `OBJECT_STORE_*` is set) |
+| `TURSO_AUTH_TOKEN` | Turso token (required with `TURSO_DATABASE_URL`) |
 
-Without `TURSO_*`, production uses ephemeral `/tmp/graphs.db` per serverless isolate (`GRAPH_DB_PATH` in `vercel.json`). Local/Docker use file SQLite at `GRAPH_DB_PATH` or `backend/graphs.db`.
+Backend selection: `OBJECT_STORE_*` (when bucket + both keys are set) → else `TURSO_*` → else file SQLite. Without a shared store, production uses ephemeral `/tmp/graphs.db` per serverless isolate (`GRAPH_DB_PATH` in `vercel.json`). Local/Docker use file SQLite at `GRAPH_DB_PATH` or `backend/graphs.db`.
 
 ## Layout
 

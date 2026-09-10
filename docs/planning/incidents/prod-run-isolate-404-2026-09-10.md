@@ -20,7 +20,7 @@ Uncaught Error: GET ... failed (404)
 Node cannot be found in the current page.
 ```
 
-**Outcome of this doc:** Root cause, evidence, and PTR. Small P0 UI hardening implemented (stop uncaught 404s; rebuild traces from POST events). Durable store remains an **operator** action (`TURSO_*`).
+**Outcome of this doc:** Root cause, evidence, and PTR. Small P0 UI hardening implemented (stop uncaught 404s; rebuild traces from POST events). Durable store remains an **operator** action: set `OBJECT_STORE_*` (recommended S3/R2/MinIO) or optional `TURSO_*`.
 
 ---
 
@@ -61,7 +61,7 @@ The playground then:
 `GET /api/runs/{id}` and `/nodes` call `runtime.get_run_summary` / `get_run_node_traces`:
 
 1. In-memory `RUN_STORE` / `RUN_TRACES` (process-local).
-2. Else `storage.get_run` / `get_run_traces` (SQLite or Turso).
+2. Else `storage.get_run` / `get_run_traces` (SQLite, object store, or Turso).
 
 `_persist_run_snapshot` **is** called in `_execute` `finally` after success or failure. GET is **not** RAM-only. The snapshot is durable **only** if the storage backend is shared.
 
@@ -71,7 +71,7 @@ The playground then:
 | ----- | ----------------------- |
 | `RUN_STORE` | No |
 | File SQLite `/tmp/graphs.db` | No (`GRAPH_DB_PATH` in `vercel.json`) |
-| Turso libsql (`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`) | Yes — **not set** (mixed 200/404 would be impossible if both isolates read the same remote DB) |
+| Shared object store (`OBJECT_STORE_*`) or Turso (`TURSO_*`) | Yes — **not set** at incident time (mixed 200/404 would be impossible if both isolates read the same remote store) |
 
 This is the known P2 from [prod-run-queue-limbo-2026-09-09.md](prod-run-queue-limbo-2026-09-09.md) RC4 and [prod-sqlite-startup-2026-09-10.md](prod-sqlite-startup-2026-09-10.md) §5 P2. Dual backend **code** shipped in `35c1e71`; production still uses isolate-local `/tmp` until the operator sets Turso env vars.
 
@@ -89,7 +89,7 @@ The **false positive** is UX, not a stub swap: POST completed with a real Groq c
 
 **RC2 (UX amplifier):** Playground treats 404 as a thrown `jsonFetch` error. History `Promise.all(getRun, getRunNodeTraces)` is uncaught. Parallel requests can split across isolates. Empty traces make a successful Groq run look like a no-op.
 
-**RC3 (operator):** `TURSO_*` unset, so slice-4 dual backend never engages. `CHAT_PROVIDER=stub` is a red herring **when the UI sends `provider=groq`**.
+**RC3 (operator):** No shared store (`OBJECT_STORE_*` or `TURSO_*`) was set, so each isolate used `/tmp` SQLite. `CHAT_PROVIDER=stub` is a red herring **when the UI sends `provider=groq`**.
 
 ---
 
@@ -129,23 +129,28 @@ A completed run remains inspectable after POST, and 404s are **terminal, explain
 - After serverless POST with events, canvas inspection still highlights executed nodes when `/nodes` 404s.
 - `npm test` in `apps/playground` and `uv run pytest -q` in `backend/` pass.
 
-### P1 — Operator: Turso + confirm Groq
+### P1 — Operator: object store (recommended) or Turso + confirm Groq
 
-Vercel → Project → Environment Variables (Production + Preview), then redeploy:
+Vercel → Project → Environment Variables (Production + Preview), then redeploy. **Do not commit secrets.** Prefer a free-tier S3-compatible bucket (Cloudflare R2, AWS S3, MinIO, Azure Blob S3 API):
 
 | Variable | Purpose |
 | -------- | ------- |
-| `TURSO_DATABASE_URL` | libsql URL (`libsql://…`) |
-| `TURSO_AUTH_TOKEN` | Database token (read/write) |
+| `OBJECT_STORE_BUCKET` | Bucket name |
+| `OBJECT_STORE_ENDPOINT` | Optional. Empty = AWS. R2: `https://<accountid>.r2.cloudflarestorage.com` |
+| `OBJECT_STORE_ACCESS_KEY_ID` | Access key |
+| `OBJECT_STORE_SECRET_ACCESS_KEY` | Secret |
+| `OBJECT_STORE_REGION` | Optional. `us-east-1` default; `auto` for R2 |
 | `GROQ_API_KEY` | Already working for this incident; keep set |
 
-Smoke after Turso: Run → immediately open the same `run_id` on a **new** browser tab / after ~2 minutes → `GET /api/runs/{id}` **200** from any isolate.
+Optional alternative (ignored when object-store env is set): `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`.
+
+Smoke after a shared store is set: Run → immediately open the same `run_id` on a **new** browser tab / after ~2 minutes → `GET /api/runs/{id}` **200** from any isolate.
 
 Optional: `CHAT_PROVIDER=groq` in the dashboard if you want omitted-provider API clients to default to Groq. The playground always sends an explicit provider (default **stub** until changed).
 
 ### P2 — Diagnostics and API shape
 
-1. Expose `storage_backend()` (`sqlite` vs `turso`) on a cheap health/ready payload so operators can confirm Turso without guessing from mixed 404s.
+1. Expose `storage_backend()` (`sqlite` vs `object_store` vs `turso`) on a cheap health/ready payload so operators can confirm the shared store without guessing from mixed 404s.
 2. Include node traces on the serverless POST `RunSummary` (or a `traces` field) so the client never needs a second GET for the run it just created.
 3. Persist `events` in the run snapshot schema (today GET-from-storage reconstructs summary + traces, not the live event log).
 
@@ -163,7 +168,7 @@ Optional: `CHAT_PROVIDER=groq` in the dashboard if you want omitted-provider API
 | ---- | ---- |
 | `backend/app/main.py` | `POST /api/runs` inline on Vercel; `GET /api/runs/{id}` 404 if summary missing |
 | `backend/app/runtime.py` | `RUN_STORE` then `storage.get_run`; `_persist_run_snapshot` in `_execute` finally |
-| `backend/app/storage.py` | File SQLite vs Turso (`use_turso()`) |
+| `backend/app/storage.py` | File SQLite vs object store vs Turso (`storage_backend()`) |
 | `vercel.json` | `GRAPH_DB_PATH=/tmp/graphs.db`, `CHAT_PROVIDER=stub` |
 | `apps/playground/src/App.tsx` | `handleSelectHistoricalRun` Promise.all; `applyTerminalSummary` GET /nodes |
 | `apps/playground/src/watchRun.ts` | 1s poll of `getRun` when POST is not already terminal |
@@ -185,11 +190,11 @@ Optional: `CHAT_PROVIDER=groq` in the dashboard if you want omitted-provider API
 
 ## 8. Operator actions
 
-1. Set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` (Production + Preview). Do not commit secrets.
+1. Create a free R2 or S3 bucket and set `OBJECT_STORE_*` (Production + Preview). Do not commit secrets. Turso remains an optional alternative.
 2. Confirm `GROQ_API_KEY` remains set (it was used successfully in this incident).
-3. Redeploy production after merging P0 UI.
+3. Redeploy production after merging P0 UI / object-store persistence.
 4. Smoke: Groq Run → result visible → history click on another cold load still 200.
-5. Until Turso is set, treat Run history as **best-effort**; the POST response is the source of truth for that session.
+5. Until a shared store is set, treat Run history as **best-effort**; the POST response is the source of truth for that session.
 
 ---
 

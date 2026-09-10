@@ -39,9 +39,9 @@ answer.
 - **SDK** (`packages/agent-graph-sdk`): `@bstockwelldev/agent-graph-sdk` — shared types, API client, graph schema helpers.
 - **Model provider**: Stub, Groq, Google Gemini, Azure OpenAI, Ollama, or OpenAI-compatible
   HTTP; selected per run; factory in `backend/app/providers/base.py`.
-- **Persistence**: SQLite for saved graph definitions and run snapshots (node traces,
-  route decisions, and run metadata). Live SSE streams are in-memory only for
-  active runs.
+- **Persistence**: file SQLite locally; S3-compatible object store (recommended)
+  or optional Turso for production durability. Live SSE streams are in-memory
+  only for active runs.
 
 ## Running it
 
@@ -325,10 +325,15 @@ vercel deploy --prod
 | Variable | Required | Purpose |
 | -------- | -------- | ------- |
 | `GROQ_API_KEY` | Optional | Live LLM runs (default `CHAT_PROVIDER=stub` in `vercel.json`) |
-| `TURSO_DATABASE_URL` | For durable storage | Turso libsql URL (`libsql://…`) |
+| `OBJECT_STORE_BUCKET` | Recommended for durability | Bucket name (Cloudflare R2, AWS S3, MinIO, Azure Blob S3 API) |
+| `OBJECT_STORE_ENDPOINT` | Optional | Custom S3 endpoint. Empty = AWS. R2: `https://<accountid>.r2.cloudflarestorage.com` |
+| `OBJECT_STORE_ACCESS_KEY_ID` | With bucket | Object-store access key |
+| `OBJECT_STORE_SECRET_ACCESS_KEY` | With bucket | Object-store secret |
+| `OBJECT_STORE_REGION` | Optional | Default `us-east-1`; use `auto` for R2 |
+| `TURSO_DATABASE_URL` | Optional alternative | Turso libsql URL (`libsql://…`) — ignored when object store is set |
 | `TURSO_AUTH_TOKEN` | With Turso URL | Turso database token |
 
-`vercel.json` sets `GRAPH_DB_PATH=/tmp/graphs.db` for ephemeral per-isolate SQLite when Turso is not configured. After adding `TURSO_*`, graph and run history survive cold starts.
+`vercel.json` sets `GRAPH_DB_PATH=/tmp/graphs.db` for ephemeral per-isolate SQLite when neither object store nor Turso is configured. After adding `OBJECT_STORE_*` (recommended) or `TURSO_*`, graph and run history survive cold starts and cross-isolate GETs.
 
 ## Deliberate simplifications vs. the full EDD
 
@@ -337,7 +342,7 @@ swappable behind the same seams the EDD specifies:
 
 | POC choice | EDD target | Swap point |
 |---|---|---|
-| SQLite for graphs + completed run snapshots | Supabase PostgreSQL + immutable run store | `storage.py` |
+| SQLite locally; S3-compatible objects (or optional Turso) in production | Supabase PostgreSQL + immutable run store | `storage.py` |
 | In-memory live runs + SSE buses | Durable checkpoints + replay | `runtime.py` (`RUN_STORE`, `RUN_BUSES`) |
 | No auth, no multi-tenancy, no Next.js BFF | Supabase Auth + RLS + org/project hierarchy + BFF | frontend talks directly to FastAPI |
 | Stub, Groq, Google, Azure, Ollama, OpenAI-compatible adapters | Ollama (dev) + Azure OpenAI (prod), adapter-selected | `providers/` |

@@ -5,12 +5,16 @@ platform still owns the canonical graph as its system of record, just via a
 lighter-weight local store. Completed run snapshots (summary + node traces)
 persist here; live SSE buses stay in memory until a run finishes.
 
-Dual backend:
-- **Local / Docker / Vercel without Turso:** file SQLite at ``GRAPH_DB_PATH``
-  (or Vercel ``/tmp`` fallback).
-- **Turso (production durable):** when ``TURSO_DATABASE_URL`` and
-  ``TURSO_AUTH_TOKEN`` are both set, use the libsql HTTP client with the same
-  schema and queries.
+Backends (first match wins):
+- **S3-compatible object store (recommended production):** when
+  ``OBJECT_STORE_BUCKET``, ``OBJECT_STORE_ACCESS_KEY_ID``, and
+  ``OBJECT_STORE_SECRET_ACCESS_KEY`` are set. Works with AWS S3, Cloudflare
+  R2, MinIO, and Azure Blob S3 API.
+- **Turso (optional):** when ``TURSO_DATABASE_URL`` and ``TURSO_AUTH_TOKEN``
+  are both set and object-store env is not.
+- **File SQLite:** local / Docker / Vercel ``GRAPH_DB_PATH`` (or Vercel
+  ``/tmp`` fallback). Isolate-local on serverless — not durable across GET
+  after POST.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Protocol
 
+from . import object_store
 from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
@@ -97,6 +102,14 @@ def resolve_db_path() -> Path:
     return _DEFAULT_DB_PATH
 
 
+def use_object_store() -> bool:
+    """True when object-store bucket and credentials are set."""
+    bucket = os.environ.get("OBJECT_STORE_BUCKET", "").strip()
+    access_key = os.environ.get("OBJECT_STORE_ACCESS_KEY_ID", "").strip()
+    secret_key = os.environ.get("OBJECT_STORE_SECRET_ACCESS_KEY", "").strip()
+    return bool(bucket and access_key and secret_key)
+
+
 def use_turso() -> bool:
     """True when both Turso env vars are set for remote libsql."""
     url = os.environ.get("TURSO_DATABASE_URL", "").strip()
@@ -106,7 +119,11 @@ def use_turso() -> bool:
 
 def storage_backend() -> str:
     """Active persistence backend label (for diagnostics)."""
-    return "turso" if use_turso() else "sqlite"
+    if use_object_store():
+        return "object_store"
+    if use_turso():
+        return "turso"
+    return "sqlite"
 
 
 DB_PATH = resolve_db_path()
@@ -160,6 +177,9 @@ def _connect() -> Iterator[_DbConnection]:
 
 
 def save_graph(graph: GraphDefinition) -> None:
+    if use_object_store():
+        object_store.save_graph(graph)
+        return
     with _connect() as conn:
         conn.execute(
             "insert into graph (id, name, definition, updated_at) values (?, ?, ?, ?) "
@@ -170,6 +190,8 @@ def save_graph(graph: GraphDefinition) -> None:
 
 
 def get_graph(graph_id: str) -> GraphDefinition | None:
+    if use_object_store():
+        return object_store.get_graph(graph_id)
     with _connect() as conn:
         row = conn.execute(
             "select definition from graph where id = ?", (graph_id,)
@@ -180,6 +202,8 @@ def get_graph(graph_id: str) -> GraphDefinition | None:
 
 
 def list_graphs() -> list[GraphDefinition]:
+    if use_object_store():
+        return object_store.list_graphs()
     with _connect() as conn:
         rows = conn.execute(
             "select definition from graph order by updated_at desc"
@@ -232,6 +256,9 @@ def _row_to_run_summary(row: tuple) -> RunSummary:
 
 
 def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
+    if use_object_store():
+        object_store.save_run_snapshot(summary, traces)
+        return
     result_json = json.dumps(summary.result) if summary.result is not None else None
     route_decisions_json = json.dumps(
         [decision.model_dump(by_alias=True) for decision in summary.route_decisions]
@@ -271,6 +298,8 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
 
 
 def get_run(run_id: str) -> RunSummary | None:
+    if use_object_store():
+        return object_store.get_run(run_id)
     with _connect() as conn:
         row = conn.execute(
             """
@@ -286,6 +315,8 @@ def get_run(run_id: str) -> RunSummary | None:
 
 
 def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
+    if use_object_store():
+        return object_store.list_runs_for_graph(graph_id, limit=limit)
     with _connect() as conn:
         rows = conn.execute(
             """
@@ -302,6 +333,8 @@ def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
 
 
 def get_run_traces(run_id: str) -> list[NodeTrace]:
+    if use_object_store():
+        return object_store.get_run_traces(run_id)
     with _connect() as conn:
         rows = conn.execute(
             "select trace_json from run_node_trace where run_id = ? order by node_id",
