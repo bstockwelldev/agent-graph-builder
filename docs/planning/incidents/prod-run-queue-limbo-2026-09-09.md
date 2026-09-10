@@ -1,7 +1,7 @@
 ---
 title: Incident RCA + PTR — production Run stuck queued / app unresponsive
 date: 2026-09-09
-status: draft
+status: p0-implemented
 severity: P0 (playground production)
 url: https://agent-graph-builder-poc.vercel.app
 deployment: dpl_GWqVbGjD32tbMSrvZuRpkGEZwsfe (commit 195e917)
@@ -11,7 +11,7 @@ deployment: dpl_GWqVbGjD32tbMSrvZuRpkGEZwsfe (commit 195e917)
 
 **Symptom:** After tapping **Run** on the Vercel playground, the UI stays on **queued** / **running**, the event log stays empty, history stays empty or stale, and the shell feels frozen.
 
-**Outcome of this doc:** Root cause, evidence, and a phased resolution plan. **Do not implement until S6 is accepted** (or the operator says “implement P0”).
+**Outcome of this doc:** Root cause, evidence, and a phased resolution plan. P0 A–C implemented on `feat/p0-vercel-run-await` after operator **implement P0**.
 
 ---
 
@@ -184,16 +184,21 @@ Only if history must survive cold start: replace `/tmp` SQLite with a hosted sto
 
 ## 7. Key code paths
 
+Updated after workspace rename (`bda1eac`): playground lives in `apps/playground`; SSE client is in the SDK.
+
 | Path | Role |
 | ---- | ---- |
 | `backend/app/runtime.py` | `create_task(_execute)`; in-memory `RUN_*` |
 | `backend/app/events.py` | per-process `asyncio.Queue` bus |
-| `backend/app/main.py` | `POST /api/runs`, SSE, Vercel SPA |
+| `backend/app/main.py` | `POST /api/runs`, SSE, Vercel SPA (`apps/playground/dist`) |
 | `backend/app/storage.py` | SQLite snapshots |
 | `vercel.json` | `GRAPH_DB_PATH=/tmp/graphs.db`, `maxDuration: 60` |
-| `frontend/src/api.ts` | `streamRunEvents` onerror closes |
-| `frontend/src/App.tsx` | live validate effect; `handleRun` SSE-only completion |
-| `frontend/src/components/RunPanel.tsx` | `queued \| running` disables Run |
+| `packages/agent-graph-sdk/src/client.ts` | `streamRunEvents` EventSource `onerror` closes |
+| `apps/playground/src/api.ts` | thin wrapper over SDK client + stream |
+| `apps/playground/src/App.tsx` | live validate effect; `handleRun` SSE-only completion |
+| `apps/playground/src/components/RunPanel.tsx` | `queued \| running` disables Run |
+
+**Production URL after rename:** still [https://agent-graph-builder-poc.vercel.app](https://agent-graph-builder-poc.vercel.app) (project `agent-graph-builder`; shorter alias blocked).
 
 ---
 
@@ -201,7 +206,7 @@ Only if history must survive cold start: replace `/tmp` SQLite with a hosted sto
 
 | Check | Pass |
 | ----- | ---- |
-| `npm run build` | frontend still builds |
+| `npm run build` | SDK + playground (`build:sdk` / `build:playground`) |
 | `uv run pytest -q` from `backend/` | existing 53 + new test: Vercel-mode await returns terminal status (mock env) |
 | Manual: production stub Run | terminal status + Run enabled; no validate flood in Vercel logs |
 | Manual: local Docker Run | SSE event log still streams |

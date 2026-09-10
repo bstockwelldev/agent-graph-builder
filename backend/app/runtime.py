@@ -9,8 +9,10 @@ in the editor and this module drives a different path automatically.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import operator
+import os
 import uuid
 from typing import Annotated, Any, TypedDict
 
@@ -183,14 +185,13 @@ async def _execute(run_id: str, graph: GraphDefinition, compiled_app, run_input:
         bus.close()
 
 
-def start_run(
+def _prepare_run(
     compiled_workflow_id: str,
     run_input: dict[str, Any],
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
-) -> tuple[str, RunEventBus]:
-    """Creates run bookkeeping and returns immediately; caller schedules `_execute`."""
+) -> tuple[str, GraphDefinition, Any, dict[str, Any], RunEventBus]:
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     resolved_provider = resolve_chat_provider(provider)
@@ -214,8 +215,50 @@ def start_run(
 
     ctx = ExecContext(run_id=run_id, graph=graph, bus=bus, chat_model_factory=chat_model_factory)
     compiled_app = _build_langgraph(graph, ctx)
+    return run_id, graph, compiled_app, run_input, bus
 
-    import asyncio
 
+def start_run(
+    compiled_workflow_id: str,
+    run_input: dict[str, Any],
+    provider: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+) -> tuple[str, RunEventBus]:
+    """Creates run bookkeeping and returns immediately; caller schedules `_execute`.
+
+    Use this on long-lived processes (local Docker). Serverless must use
+    `start_run_inline` so execution finishes before the isolate freezes.
+    """
+    run_id, graph, compiled_app, run_input, bus = _prepare_run(
+        compiled_workflow_id,
+        run_input,
+        provider=provider,
+        model=model,
+        api_key=api_key,
+    )
     asyncio.create_task(_execute(run_id, graph, compiled_app, run_input))
     return run_id, bus
+
+
+async def start_run_inline(
+    compiled_workflow_id: str,
+    run_input: dict[str, Any],
+    provider: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+) -> tuple[str, RunEventBus]:
+    """Create the run and await execution in this request (Vercel / serverless)."""
+    run_id, graph, compiled_app, run_input, bus = _prepare_run(
+        compiled_workflow_id,
+        run_input,
+        provider=provider,
+        model=model,
+        api_key=api_key,
+    )
+    await _execute(run_id, graph, compiled_app, run_input)
+    return run_id, bus
+
+
+def is_serverless_runtime() -> bool:
+    return bool(os.environ.get("VERCEL"))

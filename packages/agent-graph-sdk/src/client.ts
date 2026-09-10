@@ -43,10 +43,11 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         method: "PUT",
         body: JSON.stringify(graph),
       }),
-    validateGraph: (graph: GraphDefinition) =>
+    validateGraph: (graph: GraphDefinition, init?: { signal?: AbortSignal }) =>
       jsonFetch<CompileResult>(baseUrl, "/api/graphs/validate", {
         method: "POST",
         body: JSON.stringify(graph),
+        signal: init?.signal,
       }),
     compileGraph: (id: string) => jsonFetch<CompileResult>(baseUrl, `/api/graphs/${id}/compile`, { method: "POST" }),
     startRun: (

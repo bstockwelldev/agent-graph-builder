@@ -8,7 +8,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fingerprintGraph } from "@bstockwelldev/agent-graph-sdk";
+import { fingerprintGraph, fingerprintGraphSemantics } from "@bstockwelldev/agent-graph-sdk";
 import { api, streamRunEvents } from "./api";
 import {
   applyCompileIssueToEdge,
@@ -17,9 +17,11 @@ import {
   diagnosticsForEdge,
   diagnosticsForNode,
   edgeStrokeForKind,
+  fingerprintIssueMaps,
   validationSummary,
 } from "./diagnostics";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions } from "./runInspection";
+import { isTerminalRunStatus, watchRunCompletion } from "./watchRun";
 import { EdgeInspector, NodeInspector } from "./components/NodeInspector";
 import { GraphLibrary } from "./components/GraphLibrary";
 import { NodePalette } from "./components/NodePalette";
@@ -216,6 +218,7 @@ export default function App() {
   const shiftConnectRef = useRef(false);
   const connectPointerRef = useRef({ x: 0, y: 0 });
   const closeStreamRef = useRef<(() => void) | null>(null);
+  const lastAppliedIssueFingerprintRef = useRef<string>("");
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
   const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
@@ -281,6 +284,9 @@ export default function App() {
 
   const applyDiagnosticsToCanvas = useCallback(
     (nextDiagnostics: Diagnostic[]) => {
+      const fingerprint = `${graphId ?? ""}:${fingerprintIssueMaps(nextDiagnostics)}`;
+      if (fingerprint === lastAppliedIssueFingerprintRef.current) return;
+      lastAppliedIssueFingerprintRef.current = fingerprint;
       const { nodeIssues, edgeIssues } = buildIssueMaps(nextDiagnostics);
       setNodes((nds) =>
         nds.map((node) => ({
@@ -290,7 +296,7 @@ export default function App() {
       );
       setEdges((eds) => eds.map((edge) => applyCompileIssueToEdge(edge, edgeIssues.get(edge.id))));
     },
-    [setNodes, setEdges],
+    [graphId, setNodes, setEdges],
   );
 
   const paintInspectionPath = useCallback(
@@ -646,6 +652,18 @@ export default function App() {
     };
   }, [nodes, edges, graphId, graphName, graphOrientation]);
 
+  const semanticFingerprint = useMemo(() => {
+    if (!graphId || nodes.length === 0) return "";
+    try {
+      return fingerprintGraphSemantics(buildGraphDefinition());
+    } catch {
+      return "";
+    }
+  }, [buildGraphDefinition, graphId, nodes.length]);
+
+  const runBusy =
+    compiling || runSummary?.status === "queued" || runSummary?.status === "running";
+
   const canvasDirty = useMemo(() => {
     if (!graphId) return false;
     try {
@@ -744,22 +762,28 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!graphId || nodes.length === 0) return;
+    if (!semanticFingerprint || runBusy) return;
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
       try {
         const graph = buildGraphDefinition();
         api
-          .validateGraph(graph)
+          .validateGraph(graph, { signal: controller.signal })
           .then((result) => setDiagnostics(result.diagnostics))
           .catch((err: unknown) => {
+            if (err instanceof DOMException && err.name === "AbortError") return;
+            if (err instanceof Error && err.name === "AbortError") return;
             console.error("Live validation failed:", err);
           });
       } catch {
         // Graph not ready yet.
       }
     }, 400);
-    return () => window.clearTimeout(timer);
-  }, [buildGraphDefinition, graphId, nodes, edges, graphName]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [semanticFingerprint, runBusy, buildGraphDefinition]);
 
   const handleCompile = useCallback(async () => {
     if (!graphId) return;
@@ -814,73 +838,99 @@ export default function App() {
       setRunSummary(summary);
       setInspectionRunId(summary.run_id);
 
+      const applyTerminalSummary = async (latest: RunSummary) => {
+        setRunSummary(latest);
+        setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
+        try {
+          const traces = await api.getRunNodeTraces(latest.run_id);
+          setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
+        } catch (err: unknown) {
+          console.error("Failed to load run traces:", err);
+        }
+        if (graphId) {
+          await refreshRunHistory(graphId);
+        }
+      };
+
+      if (isTerminalRunStatus(summary.status)) {
+        await applyTerminalSummary(summary);
+        return;
+      }
+
       const nodeTypeById = new Map(nodes.map((n) => [n.id, n.data.nodeType]));
 
-      closeStreamRef.current = streamRunEvents(summary.run_id, (event) => {
-        setEvents((evts) => [...evts, event]);
+      closeStreamRef.current = watchRunCompletion({
+        initial: summary,
+        streamRunEvents,
+        getRun: api.getRun,
+        onEvent: (event) => {
+          setEvents((evts) => [...evts, event]);
 
-        if (event.event_type === "edge.selected" && event.node_id) {
-          const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
-          const selectedTargetNodeId = String(event.payload.selectedTargetNodeId ?? "");
-          setInspectionRouteDecisions((decisions) => [
-            ...decisions.filter((decision) => decision.nodeId !== event.node_id),
-            { nodeId: event.node_id!, selectedEdgeId, selectedTargetNodeId },
-          ]);
-        }
-
-        if (event.node_id) {
-          if (event.event_type === "node.started") {
-            setNodeTraces((traces) => ({
-              ...traces,
-              [event.node_id!]: {
-                node_id: event.node_id!,
-                node_type: nodeTypeById.get(event.node_id!) ?? "input",
-                status: "running",
-                input: null,
-                output: null,
-                started_at: event.occurred_at,
-              },
-            }));
-          } else if (event.event_type === "node.completed") {
-            setNodeTraces((traces) => ({
-              ...traces,
-              [event.node_id!]: {
-                ...traces[event.node_id!],
-                node_id: event.node_id!,
-                node_type: nodeTypeById.get(event.node_id!) ?? "input",
-                status: "succeeded",
-                input: event.payload.input,
-                output: event.payload.output,
-                completed_at: event.occurred_at,
-              },
-            }));
-          } else if (event.event_type === "node.failed") {
-            setNodeTraces((traces) => ({
-              ...traces,
-              [event.node_id!]: {
-                ...traces[event.node_id!],
-                node_id: event.node_id!,
-                node_type: nodeTypeById.get(event.node_id!) ?? "input",
-                status: "failed",
-                completed_at: event.occurred_at,
-                error: String(event.payload.error),
-              },
-            }));
+          if (event.event_type === "edge.selected" && event.node_id) {
+            const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
+            const selectedTargetNodeId = String(event.payload.selectedTargetNodeId ?? "");
+            setInspectionRouteDecisions((decisions) => [
+              ...decisions.filter((decision) => decision.nodeId !== event.node_id),
+              { nodeId: event.node_id!, selectedEdgeId, selectedTargetNodeId },
+            ]);
           }
-        }
 
-        if (event.event_type === "run.completed" || event.event_type === "run.failed") {
-          void (async () => {
-            const traces = await api.getRunNodeTraces(summary.run_id);
-            setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
-            const latest = await api.getRun(summary.run_id);
-            setRunSummary(latest);
-            setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
-            if (graphId) {
-              await refreshRunHistory(graphId);
+          if (event.node_id) {
+            if (event.event_type === "node.started") {
+              setNodeTraces((traces) => ({
+                ...traces,
+                [event.node_id!]: {
+                  node_id: event.node_id!,
+                  node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                  status: "running",
+                  input: null,
+                  output: null,
+                  started_at: event.occurred_at,
+                },
+              }));
+            } else if (event.event_type === "node.completed") {
+              setNodeTraces((traces) => ({
+                ...traces,
+                [event.node_id!]: {
+                  ...traces[event.node_id!],
+                  node_id: event.node_id!,
+                  node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                  status: "succeeded",
+                  input: event.payload.input,
+                  output: event.payload.output,
+                  completed_at: event.occurred_at,
+                },
+              }));
+            } else if (event.event_type === "node.failed") {
+              setNodeTraces((traces) => ({
+                ...traces,
+                [event.node_id!]: {
+                  ...traces[event.node_id!],
+                  node_id: event.node_id!,
+                  node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                  status: "failed",
+                  completed_at: event.occurred_at,
+                  error: String(event.payload.error),
+                },
+              }));
             }
-          })();
-        }
+          }
+
+          if (event.event_type === "run.completed" || event.event_type === "run.failed") {
+            closeStreamRef.current?.();
+            closeStreamRef.current = null;
+            void applyTerminalSummary({
+              ...summary,
+              status: event.event_type === "run.completed" ? "succeeded" : "failed",
+              result: event.payload.result ?? summary.result,
+              error: event.payload.error != null ? String(event.payload.error) : summary.error,
+            });
+          }
+        },
+        onTerminal: (latest) => {
+          closeStreamRef.current = null;
+          void applyTerminalSummary(latest);
+        },
       });
       } finally {
         setCompiling(false);

@@ -72,6 +72,14 @@ export type NodeWithCompileIssue = {
   data: GraphNodeData;
 };
 
+export function fingerprintIssueMaps(diagnostics: Diagnostic[]): string {
+  const { nodeIssues, edgeIssues } = buildIssueMaps(diagnostics);
+  return JSON.stringify({
+    n: [...nodeIssues.entries()].sort(([a], [b]) => a.localeCompare(b)),
+    e: [...edgeIssues.entries()].sort(([a], [b]) => a.localeCompare(b)),
+  });
+}
+
 export function applyCompileIssueToNodeData(data: GraphNodeData, issue: CompileIssue | undefined): GraphNodeData {
   return { ...data, compileIssue: issue ?? null };
 }

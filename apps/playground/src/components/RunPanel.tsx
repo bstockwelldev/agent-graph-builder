@@ -386,6 +386,19 @@ export function RunPanel({
                 {String(runSummary.result)}
               </div>
             )}
+            {runSummary.status === "failed" && runSummary.error && (
+              <div
+                role="alert"
+                style={{
+                  ...typeScale.caption,
+                  color: accentSurface.destructive.text,
+                  marginTop: spacing[2] - 2,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {runSummary.error}
+              </div>
+            )}
           </CollapsibleSection>
         </div>
       )}

@@ -23,6 +23,28 @@ export function getIncomingEdges(graph: GraphDefinition, nodeId: string): GraphE
   return graph.edges.filter((edge) => edge.target === nodeId);
 }
 
+export function fingerprintGraphSemantics(graph: GraphDefinition): string {
+  const payload = {
+    id: graph.id,
+    name: graph.name,
+    entry_node_id: graph.entry_node_id,
+    orientation: graph.orientation ?? "auto",
+    nodes: graph.nodes.map((node) => ({
+      id: node.id,
+      type: node.type,
+      config: node.config,
+    })),
+    edges: graph.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      kind: edge.kind,
+      condition: edge.condition ?? null,
+    })),
+  };
+  return JSON.stringify(payload);
+}
+
 export function fingerprintGraph(graph: GraphDefinition): string {
   const payload = {
     id: graph.id,

@@ -152,14 +152,21 @@ async def start_run(request: RunRequest) -> RunSummary:
     if not compile_result.ok or compile_result.compiled_workflow_id is None:
         raise HTTPException(status_code=422, detail={"message": "graph failed compilation", "diagnostics": [d.model_dump() for d in compile_result.diagnostics]})
 
-    run_id, _bus = runtime.start_run(
-        compile_result.compiled_workflow_id,
-        request.input,
-        provider=request.provider,
-        model=request.model,
-        api_key=request.api_key,
-    )
-    return runtime.RUN_STORE[run_id]
+    start_kwargs = {
+        "compiled_workflow_id": compile_result.compiled_workflow_id,
+        "run_input": request.input,
+        "provider": request.provider,
+        "model": request.model,
+        "api_key": request.api_key,
+    }
+    if runtime.is_serverless_runtime():
+        run_id, _bus = await runtime.start_run_inline(**start_kwargs)
+    else:
+        run_id, _bus = runtime.start_run(**start_kwargs)
+    summary = runtime.get_run_summary(run_id)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="run vanished after start")
+    return summary
 
 
 @app.get("/api/runs/{run_id}")
@@ -180,10 +187,13 @@ def get_run_node_traces(run_id: str) -> list[NodeTrace]:
 @app.get("/api/runs/{run_id}/events")
 async def stream_run_events(run_id: str) -> StreamingResponse:
     bus = get_bus(run_id)
-    if bus is None:
-        raise HTTPException(status_code=404, detail="run not found (or its event stream already closed)")
 
     async def event_source():
+        if bus is None:
+            # Serverless: live bus lives only on the isolate that ran POST /api/runs.
+            # Close immediately so the client can poll GET /api/runs/{id} instead of 404 limbo.
+            yield ": no live bus\n\n"
+            return
         async for event in bus.stream():
             yield f"data: {json.dumps(event.model_dump())}\n\n"
 
