@@ -11,6 +11,7 @@
     "build": "npm run build --workspace=@bstockwelldev/agent-graph-sdk && npm run build --workspace=@bstockwelldev/agent-graph-playground",
     "build:sdk": "npm run build --workspace=@bstockwelldev/agent-graph-sdk",
     "build:playground": "npm run build --workspace=@bstockwelldev/agent-graph-playground",
-    "dev:playground": "npm run dev --workspace=@bstockwelldev/agent-graph-playground"
+    "dev:playground": "npm run dev --workspace=@bstockwelldev/agent-graph-playground",
+    "test": "npm run test --workspace=@bstockwelldev/agent-graph-sdk && npm run test --workspace=@bstockwelldev/agent-graph-playground"
   }
 }
