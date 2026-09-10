@@ -9,9 +9,11 @@ last_updated: 2026-09-10
 
 # Playground shell panels - change plan
 
-> **Status:** Locked (2026-09-10; S6 defaults accepted)  
+> **Status:** Locked (2026-09-10; S6 defaults accepted; Phase F closed)  
 > **Artifact:** `docs/planning/features/playground-shell-panels-plan.md`  
 > **Branch:** `master`  
+> **Ship:** `c6b5467` — `feat(ui): regroup run rail into Execute vs Observe panels`  
+> **Prod:** https://agent-graph-builder-poc.vercel.app  
 > **Linear:** none (repo-only)
 
 ## Locked decisions (S5 resolved via S6 acceptance 2026-09-10)
@@ -453,7 +455,8 @@ Accepted 2026-09-10. Implement per this table; do not reopen without a SPEC revi
 
 ### Phase C - Polish
 
-- [x] Compact/phone drawer QA (single scroller)
+- [x] Compact/phone drawer IA (drawer body is the scroller; RTL `layout="drawer"`)
+- [ ] Compact viewport browser QA (deferred; code+RTL only)
 - [ ] Tooltip portal still visible over Observe overflow
 - [x] Duplicate inspection chip: keep header chip; slim Run inspection block into Observe Status
 - [x] RTL tests for exclusive open + single scrollport
@@ -472,6 +475,9 @@ Accepted 2026-09-10. Implement per this table; do not reopen without a SPEC revi
 - Historical event replay API (only if 404 RCA is fixed and events persist)
 - Inspector Configure IA (router edge list) as a separate CAP
 - Vitest shell flex regression (roadmap P3 leftover from shell-layout-polish)
+- Observe first-run auto-switch (`lastFocusedRunIdRef` skips the first `run_id`)
+- Compact viewport browser QA; tooltip portal over Observe overflow
+- Operator: set `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` on Vercel (out of this CAP)
 
 ### Progress diagram
 
@@ -486,13 +492,13 @@ flowchart TB
   phase:B["Phase B: Review"]:::done
   phase:C["Phase C: Linear"]:::done
   phase:D["Phase D: Lock"]:::done
-  phase:E["Phase E: Implement"]:::active
-  phase:F["Phase F: Closeout"]:::backlog
+  phase:E["Phase E: Implement"]:::done
+  phase:F["Phase F: Closeout"]:::done
 
   issue:none["linear: none (repo-only)"]:::done
 
   step:core["RunPanel Execute/Observe + exclusive collapse"]:::done
-  step:pr["Push master + prod"]:::active
+  step:pr["Push master + prod"]:::done
 
   phase:A --> phase:B --> phase:C --> phase:D --> phase:E --> phase:F
   phase:C --> issue:none
@@ -561,7 +567,7 @@ Verified 2026-09-10; no placeholder paths.
 
 ## 11. Next step
 
-Spec locked 2026-09-10 after S6 acceptance. Phase E implements S7 core (Execute/Observe NA, canvas-width inspector guard, event-log copy, 44px headers). Linear skipped (repo-only). Keep the runs-404 RCA on the already-shipped isolate fix; do not reopen Turso or rail width. Phase F closeout after prod verify.
+Phase F closed 2026-09-10. MVP AC1–AC11 met on `master` @ `c6b5467`; prod QA at 1440×900 on https://agent-graph-builder-poc.vercel.app. Linear skipped (repo-only). Next owner action is deferred follow-ups only (Observe first-run auto-switch, compact browser QA, Phase F eyeball ~900px, operator Turso env). Do not unlock this SPEC.
 
 ## Revision log
 
@@ -570,3 +576,4 @@ Spec locked 2026-09-10 after S6 acceptance. Phase E implements S7 core (Execute/
 | 2026-09-10 | Initial draft (Phase A) from playground CTX + 2026-09-10 screenshot |
 | 2026-09-10 | Locked after S6 acceptance (NA accordion, AC5 inspector yield, diagnostics in Execute, no new event API, 340px rail, repo-only). S5 marked resolved. |
 | 2026-09-10 | Implemented S7 core: Execute/Observe grouping, exclusive Observe accordion, shared scroller, canvas-width inspector guard, historical vs live event copy. |
+| 2026-09-10 | Phase F closeout. Ship `c6b5467` on `master`; prod https://agent-graph-builder-poc.vercel.app. `npm test` + `npm run build` green. Progress diagram E–F `done`. Status remains locked. Deferred: Observe first-run auto-switch (`lastFocusedRunIdRef`), compact browser QA, tooltip-over-overflow eyeball, operator `TURSO_*` env. |

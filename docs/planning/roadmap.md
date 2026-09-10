@@ -38,6 +38,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Vercel full-stack deploy | Shipped | `master` — https://agent-graph-builder.vercel.app |
 | Git remote + CI | Shipped | `origin` → [bstockwelldev/agent-graph-builder](https://github.com/bstockwelldev/agent-graph-builder); `.github/workflows/ci.yml` on push/PR to `master` |
 | Ultra-wide layout tokens | Shipped | `feat/p2-ultra-wide-layout-tokens` — `shell.breakpoint.wide` (1280), `shell.canvasMinWidth`, inspector drawer below wide |
+| Playground shell panels (Execute vs Observe) | Shipped | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) — `c6b5467` on `master`; prod https://agent-graph-builder-poc.vercel.app |
 
 ---
 

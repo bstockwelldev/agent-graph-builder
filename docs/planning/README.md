@@ -10,7 +10,7 @@ Locked feature-change plans for the Agent Graph Builder POC next-set. Each SPEC 
 | [canvas-orientation-plan.md](features/canvas-orientation-plan.md) | Canvas orientation (rank-1) | Pane-aspect Auto + dagre + Auto/H/V pin; ResizeObserver-driven layout |
 | [from-scratch-authoring-plan.md](features/from-scratch-authoring-plan.md) | From-scratch authoring | Edge kind at connect, router inspector edge list, Save/dirty/undo/Delete, empty-state coaching |
 | [shell-layout-polish-plan.md](features/shell-layout-polish-plan.md) | Shell layout polish | Canvas fitView timing, header/run collision, Run panel polish, section hierarchy, empty states |
-| [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) | Playground shell panels | Execute vs Observe rail IA, accordion-one-open, shared Observe scroller, canvas-first inspector |
+| [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) | Playground shell panels | Execute vs Observe rail IA; **Phase F closed 2026-09-10** (`c6b5467`) |
 
 ## Suggested implement order
 
@@ -29,7 +29,7 @@ Implement in this sequence — later specs assume earlier seams exist:
    Post–next-set UX fixes: canvas `fitView` timing, header/run-rail collision, Run panel polish, section hierarchy, empty states. **Locked 2026-09-09.**
 
 5. **Playground shell panels** — [`playground-shell-panels-plan.md`](features/playground-shell-panels-plan.md)  
-   Execute vs Observe rail IA, accordion-one-open, shared Observe scroller, canvas-first inspector. **Locked 2026-09-10.**
+   Execute vs Observe rail IA, accordion-one-open, shared Observe scroller, canvas-first inspector. **Locked 2026-09-10; Phase F closed 2026-09-10** (`c6b5467`).
 
 ## Roadmap
 
