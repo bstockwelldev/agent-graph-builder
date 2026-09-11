@@ -23,6 +23,9 @@ describe("EmptyGraphCoach", () => {
     expect(screen.getByRole("region", { name: "Authoring guide" })).toBeTruthy();
     expect(screen.getByText("Step 1 of 4")).toBeTruthy();
     expect(screen.getByText(/Step 1 of 4\. Next: add a Prompt/i)).toBeTruthy();
+    const panel = screen.getByRole("region", { name: "Authoring guide" });
+    expect(panel.style.pointerEvents).toBe("none");
+    expect(screen.getByRole("button", { name: "Got it" }).style.pointerEvents).toBe("auto");
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(window, { key: "Escape" });

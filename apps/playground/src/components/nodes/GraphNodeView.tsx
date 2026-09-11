@@ -98,9 +98,20 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
     boxSizing: "border-box",
   };
 
+  const targetHandleLabel = `Connect to ${nodeData.nodeType} node`;
+  const sourceHandleLabel = `Connect from ${nodeData.nodeType} node`;
+
   return (
     <div style={{ position: "relative", display: "inline-block", background: "transparent", pointerEvents: "none" }}>
-      {showTargetHandle && <Handle type="target" position={targetPosition} style={{ ...handleStyle, pointerEvents: "auto" }} />}
+      {showTargetHandle && (
+        <Handle
+          type="target"
+          position={targetPosition}
+          title={targetHandleLabel}
+          aria-label={targetHandleLabel}
+          style={{ ...handleStyle, pointerEvents: "auto" }}
+        />
+      )}
       <div style={{ ...cardStyle, pointerEvents: "auto" }}>
         <div
           style={{
@@ -143,7 +154,15 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
           </div>
         )}
       </div>
-      {showSourceHandle && <Handle type="source" position={sourcePosition} style={{ ...handleStyle, pointerEvents: "auto" }} />}
+      {showSourceHandle && (
+        <Handle
+          type="source"
+          position={sourcePosition}
+          title={sourceHandleLabel}
+          aria-label={sourceHandleLabel}
+          style={{ ...handleStyle, pointerEvents: "auto" }}
+        />
+      )}
     </div>
   );
 }

@@ -52,7 +52,11 @@ export function EmptyGraphCoach({
           </li>
         ))}
       </ul>
-      <Button variant="secondary" onClick={onDismiss} style={{ marginTop: spacing[3], minHeight: shell.touchTarget.min }}>
+      <Button
+        variant="secondary"
+        onClick={onDismiss}
+        style={{ marginTop: spacing[3], minHeight: shell.touchTarget.min, pointerEvents: "auto" }}
+      >
         Got it
       </Button>
     </div>
@@ -72,5 +76,5 @@ const panelStyle: CSSProperties = {
   background: color.neutral[900],
   color: text.primary,
   boxShadow: shadow[2],
-  pointerEvents: "auto",
+  pointerEvents: "none",
 };

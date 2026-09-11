@@ -334,7 +334,7 @@ If no answer by lock, implement per section 6.
 - [x] Canvas edge-kind legend (compact)
 - [x] Execute one-line override caption
 - [x] Coach live-region on step change
-- [ ] Tooltip QA over coach + handles (deferred eyeball; non-blocking)
+- [x] Tooltip QA over coach + handles (coach pass-through clicks; handle labels; tooltip z-index)
 
 ### Phase D - Rollout
 
@@ -431,7 +431,7 @@ No project `.cursor/` skills in this repo.
 
 ## 11. Next step
 
-Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod https://agent-graph-builder-poc.vercel.app. Linear skipped (repo-only). Deferred follow-ups: tooltip QA eyeball, Observe result readability, compact/phone QA. Do not unlock this SPEC.
+Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod https://agent-graph-builder-poc.vercel.app. Linear skipped (repo-only). Deferred follow-ups: Observe result readability, compact/phone QA. Do not unlock this SPEC.
 
 ---
 
@@ -443,4 +443,5 @@ Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod http
 | 2026-09-11 | Locked: S6 accepted; Phase E active; Linear none |
 | 2026-09-11 | Phase B implemented (coach, glossary, handles, snap, Relayout); rollout step active |
 | 2026-09-11 | Phase C: legend, edge hover stroke, inspector tests, coach live region |
-| 2026-09-11 | Phase F closeout. Ship `212b0cb` on `master`; prod https://agent-graph-builder-poc.vercel.app. `npm test` + `npm run build` green. Progress diagram E–F `done`. Deferred: tooltip QA eyeball, Observe result dump, compact QA. |
+| 2026-09-11 | Phase F closeout. Ship `212b0cb` on `master`; prod https://agent-graph-builder-poc.vercel.app. `npm test` + `npm run build` green. Progress diagram E–F `done`. Deferred: Observe result dump, compact QA. |
+| 2026-09-11 | Phase C tooltip QA: coach `pointer-events: none` (Got it only captures); handle `title`/`aria-label`; tooltip z-index test |
