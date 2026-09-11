@@ -9,6 +9,7 @@ export function ShellDrawer({
   title,
   drawerId,
   reducedMotion,
+  panelWidth = "min(340px, 92vw)",
   children,
 }: {
   open: boolean;
@@ -17,6 +18,7 @@ export function ShellDrawer({
   title: string;
   drawerId: string;
   reducedMotion: boolean;
+  panelWidth?: string;
   children: ReactNode;
 }) {
   if (!open) return null;
@@ -26,7 +28,7 @@ export function ShellDrawer({
     top: 0,
     bottom: 0,
     [side]: 0,
-    width: "min(340px, 92vw)",
+    width: panelWidth,
     maxWidth: "100%",
     zIndex: shell.zIndex.drawer,
     display: "flex",

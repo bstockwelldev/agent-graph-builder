@@ -185,4 +185,19 @@ describe("RunPanel Execute/Observe", () => {
     renderPanel({ layout: "drawer", runSummary: succeededRun });
     expect(screen.getByTestId("observe-scroller").style.overflowY).toBe("visible");
   });
+
+  it("pretty-prints object run results", () => {
+    renderPanel({
+      runSummary: { ...succeededRun, result: { answer: "indexed" } },
+    });
+    const block = screen.getByTestId("run-result-json");
+    expect(block.textContent).toContain('"answer": "indexed"');
+  });
+
+  it("preserves multiline text run results", () => {
+    renderPanel({ runSummary: succeededRun });
+    const block = screen.getByTestId("run-result-text");
+    expect(block.textContent).toContain("Groq answer");
+    expect(block.style.whiteSpace).toBe("pre-wrap");
+  });
 });

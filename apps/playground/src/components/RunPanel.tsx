@@ -6,9 +6,11 @@ import { applyRunSelectionToLlmNodes, showModelCatalog } from "../lib/modelCatal
 import {
   INSPECT_LOAD_FAIL,
   OBSERVE_OPEN_STORAGE_KEY,
+  RUN_RESULT_EMPTY,
   TRACE_MISSING,
   TRACE_SELECT_NODE,
   eventLogEmptyMessage,
+  formatRunResult,
   resolveEventLogEvents,
 } from "../observePanel";
 import type { ChatProvider, Diagnostic, NodeTrace, PlatformEvent, RunSummary } from "../types";
@@ -51,6 +53,38 @@ function traceTitle(selectedTrace: NodeTrace | null): string {
   if (!selectedTrace) return "Node trace";
   const duration = formatDuration(selectedTrace);
   return `Node trace: ${selectedTrace.node_id} (${selectedTrace.status}${duration ? ` · ${duration}` : ""})`;
+}
+
+function RunResultDisplay({ result }: { result: unknown }) {
+  const formatted = formatRunResult(result);
+  if (formatted.kind === "empty") {
+    return (
+      <div role="status" style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[2] - 2, lineHeight: "18px" }}>
+        {RUN_RESULT_EMPTY}
+      </div>
+    );
+  }
+  if (formatted.kind === "json") {
+    return (
+      <pre data-testid="run-result-json" style={{ ...preStyle, ...localType.ui, marginTop: spacing[2] - 2 }}>
+        {formatted.text}
+      </pre>
+    );
+  }
+  return (
+    <div
+      data-testid="run-result-text"
+      style={{
+        ...resultBlockStyle,
+        ...localType.ui,
+        marginTop: spacing[2] - 2,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+      }}
+    >
+      {formatted.text}
+    </div>
+  );
 }
 
 export function RunPanel({
@@ -422,11 +456,7 @@ export function RunPanel({
                 <div style={typeScale.caption}>
                   {runSummary.run_id} — <b>{runSummary.status}</b>
                 </div>
-                {runSummary.status === "succeeded" && (
-                  <div style={{ ...resultBlockStyle, ...localType.ui, marginTop: spacing[2] - 2, whiteSpace: "pre-wrap" }}>
-                    {String(runSummary.result)}
-                  </div>
-                )}
+                {runSummary.status === "succeeded" && <RunResultDisplay result={runSummary.result} />}
                 {runSummary.status === "failed" && runSummary.error && (
                   <div
                     role="alert"
@@ -613,6 +643,7 @@ const preStyle: CSSProperties = {
 const historyButtonStyle: CSSProperties = {
   display: "block",
   width: "100%",
+  minHeight: shell.touchTarget.min,
   marginBottom: spacing[2],
   padding: spacing[2],
   borderRadius: radius.lg,

@@ -346,8 +346,8 @@ If no answer by lock, implement per section 6.
 
 ### Phase E - Follow-ups
 
-- Observe **result readability** (`String(runSummary.result)` dump) — not MVP here
-- Compact/phone QA
+- ~~Observe **result readability** (`String(runSummary.result)` dump)~~ — **done 2026-09-11** (`formatRunResult` + `RunResultDisplay`)
+- ~~Compact/phone QA~~ — **done 2026-09-11** (drawer width, header wrap, touch targets)
 - Observe first-run auto-switch (`lastFocusedRunIdRef`)
 - Header Execute if S5 later flips to NB
 - elk orientation Phase E
@@ -431,7 +431,7 @@ No project `.cursor/` skills in this repo.
 
 ## 11. Next step
 
-Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod https://agent-graph-builder-poc.vercel.app. Linear skipped (repo-only). Deferred follow-ups: Observe result readability, compact/phone QA. Do not unlock this SPEC.
+Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod https://agent-graph-builder-poc.vercel.app. Linear skipped (repo-only). Phase E deferred slices (Observe result readability, compact/phone QA) shipped 2026-09-11. Remaining deferred: first-run auto-switch, header Execute, elk. Do not unlock this SPEC.
 
 ---
 
@@ -445,3 +445,4 @@ Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod http
 | 2026-09-11 | Phase C: legend, edge hover stroke, inspector tests, coach live region |
 | 2026-09-11 | Phase F closeout. Ship `212b0cb` on `master`; prod https://agent-graph-builder-poc.vercel.app. `npm test` + `npm run build` green. Progress diagram E–F `done`. Deferred: Observe result dump, compact QA. |
 | 2026-09-11 | Phase C tooltip QA: coach `pointer-events: none` (Got it only captures); handle `title`/`aria-label`; tooltip z-index test |
+| 2026-09-11 | Phase E deferred: `formatRunResult` / `RunResultDisplay`; compact drawer width + header/orientation wrap + history touch targets |

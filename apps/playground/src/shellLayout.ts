@@ -12,3 +12,11 @@ export function shouldUseInspectorDrawer(viewportWidth: number): boolean {
   }
   return !inspectorColumnFits(viewportWidth);
 }
+
+/** Drawer panel width: full viewport on phone, capped rail width otherwise. */
+export function drawerPanelWidth(viewportWidth: number): string {
+  if (viewportWidth < shell.breakpoint.phone) {
+    return "100vw";
+  }
+  return "min(340px, 92vw)";
+}

@@ -9,6 +9,47 @@ export const INSPECTED_EVENT_LOG_EMPTY = "Events were not recorded for this insp
 export const INSPECT_LOAD_FAIL = "Could not load this run. Retry.";
 export const TRACE_SELECT_NODE = "Select a node to see its trace.";
 export const TRACE_MISSING = "No trace for this node.";
+export const RUN_RESULT_EMPTY = "Run finished with no result payload.";
+
+export type FormattedRunResult =
+  | { kind: "empty" }
+  | { kind: "text"; text: string }
+  | { kind: "json"; text: string };
+
+function looksLikeJson(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  );
+}
+
+/** Human-readable run result for the Observe panel (pretty JSON, multiline text, primitives). */
+export function formatRunResult(result: unknown): FormattedRunResult {
+  if (result === null || result === undefined) {
+    return { kind: "empty" };
+  }
+
+  if (typeof result === "string") {
+    if (result.trim() === "") {
+      return { kind: "empty" };
+    }
+    if (looksLikeJson(result)) {
+      try {
+        const parsed = JSON.parse(result) as unknown;
+        return { kind: "json", text: JSON.stringify(parsed, null, 2) };
+      } catch {
+        return { kind: "text", text: result };
+      }
+    }
+    return { kind: "text", text: result };
+  }
+
+  if (typeof result === "object") {
+    return { kind: "json", text: JSON.stringify(result, null, 2) };
+  }
+
+  return { kind: "text", text: String(result) };
+}
 
 export function nextExclusiveOpenId(current: string | null, clicked: string): string | null {
   return current === clicked ? null : clicked;

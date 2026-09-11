@@ -190,6 +190,8 @@ const headerBarStyle = {
   borderBottom: `1px solid ${surface.border}`,
   background: surface.panel,
   color: text.primary,
+  minWidth: 0,
+  flexShrink: 0,
 } as const;
 
 export default function App() {
@@ -238,6 +240,7 @@ export default function App() {
     isCompact,
     inspectorInDrawer,
     authoringEnabled,
+    drawerPanelWidth: shellDrawerWidth,
     openDrawer,
     setOpenDrawer,
     toggleDrawer,
@@ -1167,6 +1170,7 @@ export default function App() {
                 padding: `${spacing[2]}px ${spacing[3]}px`,
                 borderBottom: `1px solid ${surface.border}`,
                 background: surface.panel,
+                flexShrink: 0,
               }}
             >
               <ShellDrawerToggle
@@ -1195,7 +1199,7 @@ export default function App() {
               value={graphName}
               onChange={(e) => setGraphName(e.target.value)}
               aria-label="Graph name"
-              style={{ ...typeScale.subheading, fontWeight: 600, marginBottom: spacing[1] }}
+              style={{ ...typeScale.subheading, fontWeight: 600, marginBottom: spacing[1], width: "100%", minWidth: 0 }}
             />
             <div style={{ ...typeScale.caption, opacity: 0.6 }}>{graphId ?? "No graph selected"}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: spacing[2], marginTop: spacing[1], alignItems: "center" }}>
@@ -1261,10 +1265,11 @@ export default function App() {
             <div
               style={{
                 display: "flex",
-                flexWrap: "nowrap",
+                flexWrap: "wrap",
                 gap: spacing[2],
                 marginTop: spacing[2],
                 alignItems: "center",
+                minWidth: 0,
               }}
             >
               <OrientationControl
@@ -1398,6 +1403,7 @@ export default function App() {
               title="Graph library"
               drawerId="shell-drawer-library"
               reducedMotion={reducedMotion}
+              panelWidth={shellDrawerWidth}
             >
               <ErrorBoundary regionLabel="Graph library">{libraryPanel}</ErrorBoundary>
             </ShellDrawer>
@@ -1408,6 +1414,7 @@ export default function App() {
               title="Run"
               drawerId="shell-drawer-run"
               reducedMotion={reducedMotion}
+              panelWidth={shellDrawerWidth}
             >
               <ErrorBoundary regionLabel="Run panel" onReset={closeStream}>
                 {runPanel}
@@ -1424,6 +1431,7 @@ export default function App() {
             title="Inspector"
             drawerId="shell-drawer-inspector"
             reducedMotion={reducedMotion}
+            panelWidth={shellDrawerWidth}
           >
             <ErrorBoundary regionLabel="Inspector">{inspectorPanel}</ErrorBoundary>
           </ShellDrawer>

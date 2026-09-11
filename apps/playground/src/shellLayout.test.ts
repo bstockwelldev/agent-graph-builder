@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { inspectorColumnFits, shouldUseInspectorDrawer } from "./shellLayout";
+import { drawerPanelWidth, inspectorColumnFits, shouldUseInspectorDrawer } from "./shellLayout";
 import { shell } from "./theme";
 
 describe("inspectorColumnFits", () => {
@@ -12,6 +12,17 @@ describe("inspectorColumnFits", () => {
 
   it("rejects the inspector column when canvas would drop below canvasMinWidth", () => {
     expect(inspectorColumnFits(chrome + shell.canvasMinWidth - 1)).toBe(false);
+  });
+});
+
+describe("drawerPanelWidth", () => {
+  it("uses full viewport width on phone", () => {
+    expect(drawerPanelWidth(shell.breakpoint.phone - 1)).toBe("100vw");
+  });
+
+  it("caps drawer width on compact and desktop", () => {
+    expect(drawerPanelWidth(shell.breakpoint.phone)).toBe("min(340px, 92vw)");
+    expect(drawerPanelWidth(1200)).toBe("min(340px, 92vw)");
   });
 });
 
