@@ -23,6 +23,7 @@ from .graph_templates import create_graph_definition
 from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunSummary
 from .model_catalog import list_provider_models
 from .provider_credentials import get_provider_credentials
+from .spa_cache import SpaCacheControlMiddleware
 
 app = FastAPI(title="Agent Graph Builder POC")
 
@@ -39,6 +40,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SpaCacheControlMiddleware)
 
 
 if not os.environ.get("VERCEL"):
