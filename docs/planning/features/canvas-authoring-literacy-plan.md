@@ -11,7 +11,9 @@ last_updated: 2026-09-11
 
 > **Status:** Locked (2026-09-11; S6 defaults accepted; Phase F closed)  
 > **Artifact:** `docs/planning/features/canvas-authoring-literacy-plan.md`  
-> **Branch:** `master` (uncommitted local implementation)  
+> **Branch:** `master`  
+> **Ship:** `212b0cb` — `feat(ui): canvas authoring literacy coach, handles, and snap`  
+> **Prod:** https://agent-graph-builder-poc.vercel.app  
 > **Linear:** none (repo-only)
 
 ## Locked decisions (S5 resolved via S6 acceptance 2026-09-11)
@@ -371,7 +373,7 @@ flowchart TB
   issue:none["linear: none (repo-only)"]:::done
 
   step:core["Rollout: core coach + handles + snap"]:::done
-  step:pr["Commit master + prod poc"]:::backlog
+  step:pr["Commit master + prod poc"]:::done
 
   phase:A --> phase:B --> phase:C --> phase:D --> phase:E --> phase:F
   phase:C --> issue:none
@@ -429,7 +431,7 @@ No project `.cursor/` skills in this repo.
 
 ## 11. Next step
 
-Phase F closed 2026-09-11. MVP AC1–AC10 met in local dev; `npm test` (54 total) + `npm run build` green. Operator eyeball on http://127.0.0.1:5173 (coach steps, legend, edge labels, Relayout). Linear skipped (repo-only). **Owner:** commit implementation, merge to `master`, `vercel deploy --prod` to https://agent-graph-builder-poc.vercel.app. Deferred follow-ups: tooltip QA eyeball, Observe result readability, compact/phone QA. Do not unlock this SPEC.
+Phase F closed 2026-09-11. MVP AC1–AC10 met on `master` @ `212b0cb`; prod https://agent-graph-builder-poc.vercel.app. Linear skipped (repo-only). Deferred follow-ups: tooltip QA eyeball, Observe result readability, compact/phone QA. Do not unlock this SPEC.
 
 ---
 
@@ -441,4 +443,4 @@ Phase F closed 2026-09-11. MVP AC1–AC10 met in local dev; `npm test` (54 total
 | 2026-09-11 | Locked: S6 accepted; Phase E active; Linear none |
 | 2026-09-11 | Phase B implemented (coach, glossary, handles, snap, Relayout); rollout step active |
 | 2026-09-11 | Phase C: legend, edge hover stroke, inspector tests, coach live region |
-| 2026-09-11 | Phase F closeout. Local dev verified; `npm test` + `npm run build` green. Progress diagram E–F `done`. Ship pending commit + prod deploy. Deferred: tooltip QA eyeball, Observe result dump, compact QA. |
+| 2026-09-11 | Phase F closeout. Ship `212b0cb` on `master`; prod https://agent-graph-builder-poc.vercel.app. `npm test` + `npm run build` green. Progress diagram E–F `done`. Deferred: tooltip QA eyeball, Observe result dump, compact QA. |

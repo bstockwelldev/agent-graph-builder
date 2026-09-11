@@ -11,7 +11,7 @@ Locked feature-change plans for the Agent Graph Builder POC next-set. Each SPEC 
 | [from-scratch-authoring-plan.md](features/from-scratch-authoring-plan.md) | From-scratch authoring | Edge kind at connect, router inspector edge list, Save/dirty/undo/Delete, empty-state coaching |
 | [shell-layout-polish-plan.md](features/shell-layout-polish-plan.md) | Shell layout polish | Canvas fitView timing, header/run collision, Run panel polish, section hierarchy, empty states |
 | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) | Playground shell panels | Execute vs Observe rail IA; **Phase F closed 2026-09-10** (`c6b5467`) |
-| [canvas-authoring-literacy-plan.md](features/canvas-authoring-literacy-plan.md) | Canvas authoring literacy | In-flow coach, edge glossary, handles/snap, honest Tool/LLM copy; **Phase F closed 2026-09-11** (local; ship pending commit) |
+| [canvas-authoring-literacy-plan.md](features/canvas-authoring-literacy-plan.md) | Canvas authoring literacy | In-flow coach, edge glossary, handles/snap, honest Tool/LLM copy; **Phase F closed 2026-09-11** (`212b0cb`) |
 
 ## Suggested implement order
 
