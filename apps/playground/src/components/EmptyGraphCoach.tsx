@@ -1,19 +1,57 @@
-import type { CSSProperties } from "react";
-import { color, radius, shadow, shell, spacing, surface, text, typeScale } from "../theme";
+import { useEffect, type CSSProperties } from "react";
+import { color, radius, shadow, shell, spacing, text, typeScale } from "../theme";
+import type { CoachStep } from "../lib/graphAuthoring";
 import { Button } from "./ui/Button";
 
-export function EmptyGraphCoach({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+export function EmptyGraphCoach({
+  visible,
+  step,
+  onDismiss,
+}: {
+  visible: boolean;
+  step: CoachStep;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    if (!visible) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDismiss();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [visible, onDismiss]);
+
   if (!visible) return null;
 
   return (
-    <div style={panelStyle} role="region" aria-label="Getting started">
-      <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[2] }}>Start from the blank template</div>
-      <ol style={{ ...typeScale.caption, lineHeight: "20px", margin: 0, paddingLeft: spacing[4], opacity: 0.9 }}>
-        <li>Add a <b>Prompt</b> node between Input and Output.</li>
-        <li>Add an <b>LLM</b> node after the prompt to call a model.</li>
-        <li>Add a <b>Router</b> when you need branches — connect with conditional and default edge kinds.</li>
-        <li>Use <b>Save</b> in the header when you want to persist without compiling.</li>
-      </ol>
+    <div style={panelStyle} role="region" aria-label="Authoring guide">
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+        }}
+      >
+        {`${step.stepLabel}. ${step.lines[0] ?? ""}`}
+      </div>
+      <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[1] }}>{step.title}</div>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2] }}>{step.stepLabel}</div>
+      <ul
+        style={{ ...typeScale.caption, lineHeight: "20px", margin: 0, paddingLeft: spacing[4], opacity: 0.9 }}
+      >
+        {step.lines.map((line) => (
+          <li key={line.slice(0, 48)} style={{ marginBottom: spacing[1] }}>
+            {line}
+          </li>
+        ))}
+      </ul>
       <Button variant="secondary" onClick={onDismiss} style={{ marginTop: spacing[3], minHeight: shell.touchTarget.min }}>
         Got it
       </Button>

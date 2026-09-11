@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import { EDGE_KIND_TAXONOMY, ROUTER_RULES_TAXONOMY } from "../content/taxonomy";
-import type { ChatProvider, EdgeKind, GraphEdge, GraphNode, Diagnostic } from "../types";
+import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "../content/taxonomy";
+import type { ChatProvider, EdgeKind, GraphEdge, GraphNode, Diagnostic, NodeType } from "../types";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { TaxonomyTooltip } from "./Tooltip";
@@ -63,6 +63,7 @@ export function NodeInspector({
       <CollapsibleSection sectionId={`inspector-node-${node.type}`} title={`Configure: ${node.type}`} reducedMotion={reducedMotion}>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
       <IssueList issues={issues} />
+      <IntentBlurb nodeType={node.type} />
 
       {node.type === "input" && (
         <Field label="Variable name">
@@ -197,14 +198,14 @@ export function EdgeInspector({
         }
       >
         <Select value={edge.kind} onChange={(e) => onChange({ kind: e.target.value as GraphEdge["kind"] })}>
-          <option value="sequence">sequence</option>
-          <option value="conditional">conditional</option>
-          <option value="default">default</option>
+          <option value="sequence">{EDGE_KIND_TAXONOMY.sequence.title}</option>
+          <option value="conditional">{EDGE_KIND_TAXONOMY.conditional.title}</option>
+          <option value="default">{EDGE_KIND_TAXONOMY.default.title}</option>
         </Select>
       </Field>
 
       {edge.kind === "conditional" && (
-        <Field label="Condition (substring match against upstream router input)">
+        <Field label="Condition (substring of previous LLM output, not the Prompt template)">
           <TextInput value={edge.condition ?? ""} onChange={(e) => onChange({ condition: e.target.value })} />
         </Field>
       )}
@@ -250,9 +251,9 @@ function RouterEdgeRow({
         }
       >
         <Select value={edge.kind} onChange={(event) => onChange({ kind: event.target.value as GraphEdge["kind"] })}>
-          <option value="sequence">sequence</option>
-          <option value="conditional">conditional</option>
-          <option value="default">default</option>
+          <option value="sequence">{EDGE_KIND_TAXONOMY.sequence.title}</option>
+          <option value="conditional">{EDGE_KIND_TAXONOMY.conditional.title}</option>
+          <option value="default">{EDGE_KIND_TAXONOMY.default.title}</option>
         </Select>
       </Field>
       {edge.kind === "conditional" && (
@@ -261,6 +262,15 @@ function RouterEdgeRow({
         </Field>
       )}
     </div>
+  );
+}
+
+function IntentBlurb({ nodeType }: { nodeType: NodeType }) {
+  const taxonomy = NODE_TYPE_TAXONOMY[nodeType];
+  return (
+    <p style={{ ...typeScale.caption, opacity: 0.8, lineHeight: "18px", margin: `0 0 ${spacing[3]}px` }}>
+      {taxonomy.details}
+    </p>
   );
 }
 

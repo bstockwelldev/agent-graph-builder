@@ -3,7 +3,7 @@ import { Bot, GitBranch, LogIn, LogOut, PenLine, Wrench, type LucideIcon } from 
 import type { CSSProperties } from "react";
 import type { CompileIssue } from "../../diagnostics";
 import type { NodeType } from "../../types";
-import { color, fontFamily, localType, nodeType as nodeTypeTokens, radius, shadow, spacing, status as statusColor, text } from "../../theme";
+import { color, fontFamily, localType, nodeType as nodeTypeTokens, radius, shadow, shell, spacing, status as statusColor, text } from "../../theme";
 
 const ICONS: Record<NodeType, LucideIcon> = {
   input: LogIn,
@@ -65,6 +65,16 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
   const showSourceHandle = nodeData.nodeType !== "output";
   const Icon = ICONS[nodeData.nodeType];
   const tokens = nodeTypeTokens[nodeData.nodeType];
+  const handleHit = shell.touchTarget.min;
+  const handleStyle: CSSProperties = {
+    width: handleHit,
+    height: handleHit,
+    minWidth: handleHit,
+    minHeight: handleHit,
+    background: `radial-gradient(circle, ${tokens.accent} 0 6px, transparent 7px)`,
+    border: "none",
+    borderRadius: 999,
+  };
 
   const borderColor =
     nodeStatus !== "idle"
@@ -89,9 +99,9 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
   };
 
   return (
-    <div style={{ position: "relative" }}>
-      {showTargetHandle && <Handle type="target" position={targetPosition} />}
-      <div style={cardStyle}>
+    <div style={{ position: "relative", display: "inline-block", background: "transparent", pointerEvents: "none" }}>
+      {showTargetHandle && <Handle type="target" position={targetPosition} style={{ ...handleStyle, pointerEvents: "auto" }} />}
+      <div style={{ ...cardStyle, pointerEvents: "auto" }}>
         <div
           style={{
             ...localType.label,
@@ -133,7 +143,7 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
           </div>
         )}
       </div>
-      {showSourceHandle && <Handle type="source" position={sourcePosition} />}
+      {showSourceHandle && <Handle type="source" position={sourcePosition} style={{ ...handleStyle, pointerEvents: "auto" }} />}
     </div>
   );
 }

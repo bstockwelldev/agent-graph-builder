@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Edge } from "@xyflow/react";
 import type { GraphNodeData } from "./components/nodes/GraphNodeView";
 import { color } from "./theme";
@@ -42,6 +43,15 @@ export function edgeStrokeForKind(kind: EdgeKind, issue?: CompileIssue): { strok
     return { stroke: color.warning[600], strokeWidth: 3 };
   }
   return { stroke: kind === "conditional" ? color.primary[600] : kind === "default" ? color.warning[600] : color.neutral[400], strokeWidth: 1.5 };
+}
+
+export function applyEdgePointerAffordance(
+  style: CSSProperties | undefined,
+  emphasized: boolean,
+): CSSProperties {
+  const raw = style?.strokeWidth;
+  const base = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? "1.5")) || 1.5;
+  return { ...style, strokeWidth: emphasized ? base + 1.5 : base };
 }
 
 export function diagnosticsForNode(diagnostics: Diagnostic[], nodeId: string): Diagnostic[] {

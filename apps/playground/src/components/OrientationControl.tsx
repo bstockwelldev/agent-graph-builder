@@ -28,9 +28,11 @@ const OPTIONS: { value: GraphOrientation; label: string; title: string; details:
 export function OrientationControl({
   value,
   onChange,
+  onRelayout,
 }: {
   value: GraphOrientation;
   onChange: (orientation: GraphOrientation) => void;
+  onRelayout?: () => void;
 }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: spacing[2] }}>
@@ -38,7 +40,7 @@ export function OrientationControl({
         layout="inline"
         title="Graph orientation"
         summary="Auto, horizontal, or vertical dagre layout"
-        details="Auto follows the canvas pane aspect ratio. Horizontal (H) and vertical (V) pin layout direction until you select Auto again."
+        details="Auto follows the canvas pane aspect ratio. Horizontal (H) and vertical (V) pin layout direction until you select Auto again. Relayout runs dagre without changing orientation."
       >
         <span style={{ ...typeScale.caption, opacity: 0.6 }}>Orientation</span>
       </TaxonomyTooltip>
@@ -60,6 +62,11 @@ export function OrientationControl({
           );
         })}
       </div>
+      {onRelayout && (
+        <button type="button" onClick={onRelayout} title="Run dagre layout on current nodes" style={segmentStyle(false)}>
+          Relayout
+        </button>
+      )}
     </div>
   );
 }

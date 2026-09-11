@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fingerprintIssueMaps } from "./diagnostics";
+import { applyEdgePointerAffordance, fingerprintIssueMaps } from "./diagnostics";
 import type { Diagnostic } from "./types";
 
 describe("fingerprintIssueMaps", () => {
@@ -20,5 +20,12 @@ describe("fingerprintIssueMaps", () => {
     ];
 
     expect(fingerprintIssueMaps(unattached)).toBe('{"n":[],"e":[]}');
+  });
+});
+
+describe("applyEdgePointerAffordance", () => {
+  it("thickens the stroke when the edge is hovered or selected", () => {
+    expect(applyEdgePointerAffordance({ strokeWidth: 1.5 }, false).strokeWidth).toBe(1.5);
+    expect(applyEdgePointerAffordance({ strokeWidth: 1.5 }, true).strokeWidth).toBe(3);
   });
 });

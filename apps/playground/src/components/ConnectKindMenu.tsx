@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import type { EdgeKind } from "../types";
-import { color, radius, shadow, shell, spacing, surface, text, typeScale } from "../theme";
+import { EDGE_KIND_TAXONOMY } from "../content/taxonomy";
+import { radius, shadow, shell, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
 import { TextInput } from "./ui/fields";
 
@@ -65,7 +66,7 @@ export function ConnectKindMenu({
           Edge to {targetLabel}
         </div>
         <div style={{ ...typeScale.caption, opacity: 0.7, marginBottom: spacing[2] }}>
-          Choose how this connection behaves. Routers need one default edge and conditional branches.
+          Routers need one Fallback edge and one or more Match-text branches. Other nodes use Always.
         </div>
         <div role="radiogroup" aria-label="Edge kind" style={{ display: "flex", flexDirection: "column", gap: spacing[1] }}>
           {(["sequence", "conditional", "default"] as EdgeKind[]).map((option) => (
@@ -76,13 +77,18 @@ export function ConnectKindMenu({
                 checked={kind === option}
                 onChange={() => setKind(option)}
               />
-              <span style={{ textTransform: "capitalize" }}>{option}</span>
+              <span>
+                <strong>{EDGE_KIND_TAXONOMY[option].title}</strong>
+                <span style={{ display: "block", opacity: 0.7 }}>{EDGE_KIND_TAXONOMY[option].summary}</span>
+              </span>
             </label>
           ))}
         </div>
         {kind === "conditional" && (
           <div style={{ marginTop: spacing[2] }}>
-            <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Condition substring</div>
+            <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>
+              Match this text in the previous LLM output (not the Prompt template)
+            </div>
             <TextInput
               value={condition}
               onChange={(event) => setCondition(event.target.value)}

@@ -234,6 +234,9 @@ export function RunPanel({
             >
               <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Model provider</div>
             </TaxonomyTooltip>
+            <p style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", margin: `0 0 ${spacing[1]}px` }}>
+              This run overrides all LLM nodes when you Compile or Run. Each LLM still stores a node default.
+            </p>
             <Select
               value={provider}
               onChange={(e) => setProvider(e.target.value as ChatProvider)}

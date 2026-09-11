@@ -14,25 +14,25 @@ export const NODE_TYPE_TAXONOMY: Record<
     title: "Prompt node",
     summary: "Render a text template from graph state",
     details:
-      "Uses Handlebars-style placeholders such as {question} or upstream outputs. Output is passed to the next node along sequence edges.",
+      "Fills placeholders such as {question} and {upstream}. Output is passed to the next node along Always (sequence) edges.",
   },
   llm: {
     title: "LLM node",
     summary: "Call a chat model",
     details:
-      "Runs the configured model with an optional system prompt. Provider and model at run time can override defaults from the Run panel.",
+      "Node default provider/model. The Execute panel overrides all LLM nodes when you Compile or Run.",
   },
   tool: {
     title: "Tool node",
-    summary: "Deterministic lookup or transform",
+    summary: "Local keyword lookup",
     details:
-      "POC supports lookup_topic only — a keyword table keyed off the input variable. Tools do not call external APIs in v1.",
+      "Local keyword lookup (lookup_topic). Does not call the web. Matches the input variable against an in-process table (index, cache, api, …).",
   },
   router: {
     title: "Router node",
     summary: "Choose exactly one outgoing edge",
     details:
-      "Evaluates conditional edges (substring match on upstream LLM output) and falls back to a single default edge. Compiler requires one default and valid conditions.",
+      "One Fallback (default) edge plus one or more Match-text (conditional) edges on upstream LLM output. Cycles are not supported; this playground is acyclic only.",
   },
   output: {
     title: "Output node",
@@ -43,20 +43,20 @@ export const NODE_TYPE_TAXONOMY: Record<
 
 export const EDGE_KIND_TAXONOMY = {
   sequence: {
-    title: "Sequence edge",
+    title: "Always",
     summary: "Always follow this path",
-    details: "Unconditional flow between nodes. Used for linear prompt → LLM chains.",
+    details: "Unconditional flow (schema: sequence). Used for linear Prompt → LLM chains.",
   },
   conditional: {
-    title: "Conditional edge",
-    summary: "Match upstream text",
+    title: "Match text",
+    summary: "Match upstream LLM text",
     details:
-      "Router compares the condition string as a substring of the upstream LLM output. First match wins; animated on canvas when conditional.",
+      "Router compares the condition as a substring of the previous LLM output (not the Prompt template). First match wins.",
   },
   default: {
-    title: "Default edge",
+    title: "Fallback",
     summary: "Router fallback",
-    details: "Taken when no conditional edge matches. Each router must have exactly one default outgoing edge.",
+    details: "Taken when no Match-text edge matches. Each router must have exactly one Fallback outgoing edge.",
   },
 } as const;
 
@@ -64,7 +64,7 @@ export const ROUTER_RULES_TAXONOMY = {
   title: "Router rules",
   summary: "How routing chooses an edge",
   details:
-    "Mark outgoing edges as conditional (with a condition string) or default (fallback). The compiler validates that every router has exactly one default edge and that conditions are non-empty.",
+    "Mark outgoing edges as Fallback (default) or Match text (conditional, substring of upstream LLM output). The compiler requires exactly one Fallback. This playground does not support loops (acyclic graphs only).",
 };
 
 export const PROVIDER_TAXONOMY: Record<string, { title: string; summary: string; details: string }> = {

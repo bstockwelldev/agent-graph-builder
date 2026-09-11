@@ -13,13 +13,16 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from "@xyflow/react";
-import { useCallback, useEffect, useRef, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useCanvasOrientation } from "../hooks/useCanvasOrientation";
 import { layoutNodesWithDagre } from "../layout/dagreLayout";
+import { applyEdgePointerAffordance } from "../diagnostics";
+import { shouldRunDagre } from "../lib/graphAuthoring";
 import type { GraphNodeData } from "./nodes/GraphNodeView";
 import type { GraphOrientation } from "../types";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
+import { CanvasEdgeLegend } from "./CanvasEdgeLegend";
 
 const FIT_VIEW_PADDING = 0.18;
 const FIT_VIEW_DEBOUNCE_MS = 150;
@@ -42,6 +45,8 @@ type FlowCanvasProps = {
   nodeTypes: NodeTypes;
   reducedMotion: boolean;
   graphOrientation: GraphOrientation;
+  relayoutNonce?: number;
+  selectedEdgeId?: string | null;
   onNodeClick: (nodeId: string) => void;
   onEdgeClick: (edgeId: string) => void;
   onPaneClick: () => void;
@@ -72,6 +77,8 @@ function FlowCanvasInner({
   nodeTypes,
   reducedMotion,
   graphOrientation,
+  relayoutNonce = 0,
+  selectedEdgeId = null,
   onNodeClick,
   onEdgeClick,
   onPaneClick,
@@ -85,8 +92,17 @@ function FlowCanvasInner({
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const fitViewDebounceRef = useRef<number | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   nodesRef.current = nodes;
   edgesRef.current = edges;
+  const displayEdges = useMemo(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        style: applyEdgePointerAffordance(edge.style, edge.id === hoveredEdgeId || edge.id === selectedEdgeId),
+      })),
+    [edges, hoveredEdgeId, selectedEdgeId],
+  );
   const {
     effectiveRankDir,
     paneSize,
@@ -118,10 +134,33 @@ function FlowCanvasInner({
     }
   }, [orientationAnnouncement, clearLiveAnnouncement, onLiveAnnouncement]);
 
+  const prevRankDirRef = useRef(effectiveRankDir);
+  const prevGraphIdRef = useRef<string | null>(null);
+  const prevRelayoutNonceRef = useRef(relayoutNonce);
+  const hasNodes = nodes.length > 0;
+
   useEffect(() => {
     const currentNodes = nodesRef.current;
     const currentEdges = edgesRef.current;
-    if (!graphId || currentNodes.length === 0) return;
+    if (!graphId || !hasNodes || currentNodes.length === 0) return;
+
+    const rankDirChanged = prevRankDirRef.current !== effectiveRankDir;
+    const graphIdChanged = prevGraphIdRef.current !== graphId;
+    const relayoutRequested = prevRelayoutNonceRef.current !== relayoutNonce;
+    prevRankDirRef.current = effectiveRankDir;
+    prevGraphIdRef.current = graphId;
+    prevRelayoutNonceRef.current = relayoutNonce;
+
+    if (
+      !shouldRunDagre({
+        rankDirChanged,
+        graphIdChanged,
+        relayoutRequested,
+        topologyChanged: false,
+      })
+    ) {
+      return;
+    }
 
     const requestId = layoutRequestRef.current + 1;
     layoutRequestRef.current = requestId;
@@ -140,7 +179,7 @@ function FlowCanvasInner({
     );
 
     runFitView(requestId);
-  }, [effectiveRankDir, graphId, nodes.length, edges.length, reducedMotion, runFitView, setNodes]);
+  }, [effectiveRankDir, graphId, hasNodes, relayoutNonce, reducedMotion, runFitView, setNodes]);
 
   useEffect(() => {
     if (!graphId || nodes.length === 0) return;
@@ -186,7 +225,7 @@ function FlowCanvasInner({
       </div>
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={displayEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -197,10 +236,19 @@ function FlowCanvasInner({
             onConnectStart?.(event);
           }
         }}
+        snapToGrid={authoringEnabled}
+        snapGrid={[24, 24]}
+        defaultEdgeOptions={{ interactionWidth: 24 }}
         nodesConnectable={authoringEnabled}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onNodeClick(node.id)}
         onEdgeClick={(_, edge) => onEdgeClick(edge.id)}
+        onEdgeMouseEnter={(_, edge) => {
+          setHoveredEdgeId(edge.id);
+        }}
+        onEdgeMouseLeave={() => {
+          setHoveredEdgeId(null);
+        }}
         onPaneClick={handlePaneClick}
         colorMode="dark"
         style={{ width: "100%", height: "100%", background: canvas.pane }}
@@ -233,6 +281,7 @@ function FlowCanvasInner({
         </div>
       )}
       {overlay}
+      <CanvasEdgeLegend visible={Boolean(graphId) && !graphLoading && !noGraphSelected} />
     </div>
   );
 }

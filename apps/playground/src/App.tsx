@@ -44,9 +44,11 @@ import { useShellLayout } from "./hooks/useShellLayout";
 import { useUndoStack } from "./hooks/useUndoStack";
 import {
   cloneCanvasSnapshot,
+  coachStep,
   dismissCoach,
-  isBlankGraphPattern,
+  flowEdgeLabel,
   isCoachDismissed,
+  isCoachVisible,
   isEditableKeyboardTarget,
 } from "./lib/graphAuthoring";
 import { color, shell, spacing, surface, text, typeScale } from "./theme";
@@ -116,7 +118,7 @@ function toFlowEdge(e: GraphEdge, issue?: { severity: "error" | "warning"; capti
     id: e.id,
     source: e.source,
     target: e.target,
-    label: e.kind === "conditional" ? `if: ${e.condition ?? ""}` : e.kind,
+    label: flowEdgeLabel(e.kind, e.condition),
     animated: e.kind === "conditional",
     style: { stroke, strokeWidth },
     data: { kind: e.kind, condition: e.condition ?? null },
@@ -129,7 +131,7 @@ function createFlowEdge(connection: Connection, kind: EdgeKind, condition: strin
     id: nextId("e"),
     source: connection.source!,
     target: connection.target!,
-    label: kind === "conditional" ? `if: ${condition ?? ""}` : kind,
+    label: flowEdgeLabel(kind, condition),
     animated: kind === "conditional",
     style: { stroke, strokeWidth },
     data: { kind, condition },
@@ -211,6 +213,7 @@ export default function App() {
   const [layoutLiveAnnouncement, setLayoutLiveAnnouncement] = useState("");
   const [dirtyLiveAnnouncement, setDirtyLiveAnnouncement] = useState("");
   const [coachDismissed, setCoachDismissed] = useState(false);
+  const [relayoutNonce, setRelayoutNonce] = useState(0);
   const [pendingConnection, setPendingConnection] = useState<{
     connection: Connection;
     x: number;
@@ -617,7 +620,7 @@ export default function App() {
           return {
             ...edge,
             data: { ...edge.data, kind, condition },
-            label: kind === "conditional" ? `if: ${condition ?? ""}` : kind,
+            label: flowEdgeLabel(kind, condition),
             style: { stroke, strokeWidth },
             animated: kind === "conditional",
           };
@@ -1018,8 +1021,8 @@ export default function App() {
             condition: (edge.data?.condition as string | null) ?? null,
           }))
       : [];
-  const showEmptyCoach =
-    authoringEnabled && !coachDismissed && graphId !== null && isBlankGraphPattern(nodes, edges);
+  const showEmptyCoach = authoringEnabled && isCoachVisible(graphId, coachDismissed, nodes, edges);
+  const authoringCoachStep = coachStep(nodes, edges);
   const headerLiveAnnouncement = [dirtyLiveAnnouncement, layoutLiveAnnouncement].filter(Boolean).join(". ");
 
   const libraryPanel = (
@@ -1270,6 +1273,10 @@ export default function App() {
                   recordMutation();
                   setGraphOrientation(value);
                 }}
+                onRelayout={() => {
+                  recordMutation();
+                  setRelayoutNonce((value) => value + 1);
+                }}
               />
             </div>
           </div>
@@ -1295,6 +1302,7 @@ export default function App() {
                 nodeTypes={nodeTypes}
                 reducedMotion={reducedMotion}
                 graphOrientation={graphOrientation}
+                relayoutNonce={relayoutNonce}
                 liveAnnouncement={headerLiveAnnouncement}
                 onLiveAnnouncement={(message) => {
                   if (message.startsWith("Graph layout:")) {
@@ -1311,9 +1319,11 @@ export default function App() {
                 onRetryLoad={() => void handleRetryGraphLoad()}
                 graphLoading={graphLoading}
                 noGraphSelected={graphId === null && !graphsLoading}
+                selectedEdgeId={selectedEdgeId}
                 overlay={
                   <EmptyGraphCoach
                     visible={showEmptyCoach}
+                    step={authoringCoachStep}
                     onDismiss={() => {
                       if (graphId) dismissCoach(graphId);
                       setCoachDismissed(true);
