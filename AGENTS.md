@@ -20,7 +20,7 @@ Visual graph authoring playground + FastAPI/LangGraph execution API. Proves grap
 From repo root:
 
 ```bash
-npm ci && npm run build          # playground + SDK workspace build
+npm ci && npm test && npm run build   # SDK dist first (playground Vitest imports it), then tests, then full build
 ```
 
 From `backend/`:
