@@ -10,6 +10,8 @@ bundle: /assets/index-BmJ0fxtP.js
 
 # RCA + PTR — production run 404 after successful Groq POST
 
+> **Current production URL:** https://agent-graph-builder-app.vercel.app (this incident references legacy alias `agent-graph-builder-poc.vercel.app`).
+
 **Symptom:** User ran a graph with **Groq** selected. The run **looked successful but did nothing** (canvas/inspection empty). Console:
 
 ```text

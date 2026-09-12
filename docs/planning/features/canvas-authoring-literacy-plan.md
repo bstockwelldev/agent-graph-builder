@@ -13,7 +13,7 @@ last_updated: 2026-09-11
 > **Artifact:** `docs/planning/features/canvas-authoring-literacy-plan.md`  
 > **Branch:** `master`  
 > **Ship:** `212b0cb` — `feat(ui): canvas authoring literacy coach, handles, and snap`  
-> **Prod:** https://agent-graph-builder-poc.vercel.app  
+> **Prod:** https://agent-graph-builder-app.vercel.app (legacy alias: `agent-graph-builder-poc.vercel.app`)  
 > **Linear:** none (repo-only)
 
 ## Locked decisions (S5 resolved via S6 acceptance 2026-09-11)

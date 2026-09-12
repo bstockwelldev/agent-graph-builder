@@ -33,6 +33,8 @@ uv run uvicorn app.main:app --reload --port 8000
 
 Docker (full stack): `docker compose up` or `scripts/spin-up.ps1`.
 
+Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"vercel_blob"}`). Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
+
 Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set secrets in the Vercel dashboard (Project → Environment Variables); do not commit them:
 
 | Variable | Purpose |

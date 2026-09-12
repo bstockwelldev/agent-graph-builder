@@ -8,6 +8,8 @@ url: https://agent-graph-builder-poc.vercel.app
 
 # RCA + PTR — production SQLite startup failure
 
+> **Current production URL:** https://agent-graph-builder-app.vercel.app (this incident references legacy alias `agent-graph-builder-poc.vercel.app`).
+
 **Symptom:** Vercel production returns **500** on every request. Function logs show:
 
 ```text
@@ -167,7 +169,7 @@ Ephemeral `/tmp` SQLite remains **per-instance** until the operator sets Turso e
 1. Merge P0 fix to production branch.
 2. **Vercel → Project → Settings → Environment Variables:** ensure `GRAPH_DB_PATH` = `/tmp/graphs.db` for Production and Preview (redundant with `vercel.json` but prevents drift).
 3. **Redeploy** production (`vercel deploy --prod` or push to tracked branch).
-4. Verify `GET https://agent-graph-builder-poc.vercel.app/api/graphs` returns 200.
+4. Verify `GET https://agent-graph-builder-app.vercel.app/api/graphs` returns 200.
 
 ---
 

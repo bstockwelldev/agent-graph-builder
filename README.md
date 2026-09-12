@@ -314,7 +314,13 @@ git push -u origin master
 
 ### Vercel (production)
 
-**URL:** https://agent-graph-builder.vercel.app
+**URL:** https://agent-graph-builder-app.vercel.app
+
+Health check: `GET /api/health` → `{"ok":true,"storage_backend":"vercel_blob"}` (when Blob is configured).
+
+**Legacy aliases** (still work; bookmarks OK): [agent-graph-builder-poc.vercel.app](https://agent-graph-builder-poc.vercel.app), [theagenticengineer-graph-builder.vercel.app](https://theagenticengineer-graph-builder.vercel.app).
+
+> **Note:** `agent-graph-builder.vercel.app` is **not** this project — that bare alias is owned by another Vercel account and cannot be claimed.
 
 ```bash
 vercel deploy --prod

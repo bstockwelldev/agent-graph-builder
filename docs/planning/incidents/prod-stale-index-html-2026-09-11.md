@@ -10,6 +10,8 @@ bundle: /assets/index-CpT1AGXU.js (stale) vs /assets/index-C7PqBk-K.js (current)
 
 # RCA — production blank page after deploy (stale HTML shell)
 
+> **Current production URL:** https://agent-graph-builder-app.vercel.app (this incident references legacy alias `agent-graph-builder-poc.vercel.app`).
+
 **Symptom:** After a production deploy, https://agent-graph-builder-poc.vercel.app loads a blank page. Browser network tab shows `GET /assets/index-CpT1AGXU.js` → **404**. API routes (`/api/graphs`, `/api/graphs/validate`) return **200**.
 
 **Outcome:** `Cache-Control` policy added for the SPA shell vs hashed assets (`backend/app/spa_cache.py`, `vercel.json` headers).

@@ -13,7 +13,7 @@ last_updated: 2026-09-10
 > **Artifact:** `docs/planning/features/playground-shell-panels-plan.md`  
 > **Branch:** `master`  
 > **Ship:** `c6b5467` — `feat(ui): regroup run rail into Execute vs Observe panels`  
-> **Prod:** https://agent-graph-builder-poc.vercel.app  
+> **Prod:** https://agent-graph-builder-app.vercel.app (legacy alias: `agent-graph-builder-poc.vercel.app`)  
 > **Linear:** none (repo-only)
 
 ## Locked decisions (S5 resolved via S6 acceptance 2026-09-10)
