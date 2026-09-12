@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from . import runtime, storage
 from .demo_graph import build_demo_graph
@@ -27,12 +29,26 @@ from .spa_cache import SpaCacheControlMiddleware
 
 app = FastAPI(title="Agent Graph Builder POC")
 
+
+class DurableStorageMiddleware(BaseHTTPMiddleware):
+    """Block API routes on Vercel when only ephemeral SQLite would be used."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path == "/api/health":
+            return await call_next(request)
+        if request.url.path.startswith("/api/") and not storage.storage_is_healthy():
+            return JSONResponse(status_code=503, content=storage.storage_health())
+        return await call_next(request)
+
+
 _cors_origins = [
     origin.strip()
     for origin in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
     if origin.strip()
 ]
 
+app.add_middleware(DurableStorageMiddleware)
+app.add_middleware(SpaCacheControlMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -40,7 +56,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SpaCacheControlMiddleware)
 
 
 if not os.environ.get("VERCEL"):
@@ -53,8 +68,17 @@ if not os.environ.get("VERCEL"):
 @app.on_event("startup")
 def bootstrap() -> None:
     load_app_env()
+    if not storage.storage_is_healthy():
+        return
     if storage.get_graph(build_demo_graph().id) is None:
         storage.save_graph(build_demo_graph())
+
+
+@app.get("/api/health")
+def health_check() -> JSONResponse:
+    payload = storage.storage_health()
+    status_code = 200 if payload["ok"] else 503
+    return JSONResponse(status_code=status_code, content=payload)
 
 
 @app.get("/api/graphs")

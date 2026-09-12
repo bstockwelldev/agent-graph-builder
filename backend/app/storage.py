@@ -134,6 +134,49 @@ def storage_backend() -> str:
     return "sqlite"
 
 
+class StorageMisconfiguredError(RuntimeError):
+    """Raised when Vercel runs without a durable persistence backend."""
+
+
+STORAGE_MISCONFIGURED_DETAIL = (
+    "Vercel requires durable storage. Set BLOB_READ_WRITE_TOKEN, "
+    "OBJECT_STORE_BUCKET + OBJECT_STORE_ACCESS_KEY_ID + "
+    "OBJECT_STORE_SECRET_ACCESS_KEY, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN."
+)
+
+
+def is_vercel_runtime() -> bool:
+    """True when running on Vercel serverless (``VERCEL`` env is set)."""
+    return bool(os.environ.get("VERCEL"))
+
+
+def is_durable_storage_configured() -> bool:
+    """True when a shared store is configured (not isolate-local SQLite)."""
+    return use_vercel_blob() or use_object_store() or use_turso()
+
+
+def storage_is_healthy() -> bool:
+    """False on Vercel when only ephemeral SQLite would be used."""
+    if is_vercel_runtime() and not is_durable_storage_configured():
+        return False
+    return True
+
+
+def storage_health() -> dict[str, bool | str]:
+    """Cheap diagnostics payload for health/ready probes."""
+    backend = storage_backend()
+    ok = storage_is_healthy()
+    payload: dict[str, bool | str] = {"ok": ok, "storage_backend": backend}
+    if not ok:
+        payload["message"] = STORAGE_MISCONFIGURED_DETAIL
+    return payload
+
+
+def _assert_storage_ready_for_sqlite() -> None:
+    if not storage_is_healthy():
+        raise StorageMisconfiguredError(STORAGE_MISCONFIGURED_DETAIL)
+
+
 def _json_object_backend():
     if use_vercel_blob():
         return vercel_blob
@@ -183,6 +226,7 @@ def _connect() -> Iterator[_DbConnection]:
         finally:
             conn.close()
     else:
+        _assert_storage_ready_for_sqlite()
         conn = _open_sqlite(resolve_db_path())
         try:
             _bootstrap_schema(conn)

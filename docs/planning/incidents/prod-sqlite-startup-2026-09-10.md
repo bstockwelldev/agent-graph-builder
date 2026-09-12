@@ -116,7 +116,7 @@ Production always reaches a writable SQLite path on cold start, even when `GRAPH
 
 1. Confirm Vercel project env: `GRAPH_DB_PATH=/tmp/graphs.db` (Production + Preview).
 2. Redeploy after merging P0.
-3. Smoke: `GET /api/graphs` → 200 with demo graph id.
+3. Smoke: `GET /api/health` → 200 with `ok: true` and durable `storage_backend` (not `sqlite` on Vercel); then `GET /api/graphs` → 200 with demo graph id.
 
 ### P2 — Turso / durable store (roadmap slice 4) — implemented
 
