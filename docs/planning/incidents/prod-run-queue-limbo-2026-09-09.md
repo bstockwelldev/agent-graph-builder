@@ -9,6 +9,8 @@ deployment: dpl_GWqVbGjD32tbMSrvZuRpkGEZwsfe (commit 195e917)
 
 # RCA + PTR — production Run queue limbo
 
+> **Current production URL:** https://agent-graph-builder-app.vercel.app (this incident references legacy alias `agent-graph-builder-poc.vercel.app`).
+
 **Symptom:** After tapping **Run** on the Vercel playground, the UI stays on **queued** / **running**, the event log stays empty, history stays empty or stale, and the shell feels frozen.
 
 **Outcome of this doc:** Root cause, evidence, and a phased resolution plan. P0 A–C implemented on `feat/p0-vercel-run-await` after operator **implement P0**.
@@ -199,6 +201,8 @@ Updated after workspace rename (`bda1eac`): playground lives in `apps/playground
 | `apps/playground/src/components/RunPanel.tsx` | `queued \| running` disables Run |
 
 **Production URL after rename:** still [https://agent-graph-builder-poc.vercel.app](https://agent-graph-builder-poc.vercel.app) (project `agent-graph-builder`; shorter alias blocked).
+
+**Update (2026-09-12):** Canonical production URL is [https://agent-graph-builder-app.vercel.app](https://agent-graph-builder-app.vercel.app). Legacy aliases `agent-graph-builder-poc.vercel.app` and `theagenticengineer-graph-builder.vercel.app` remain supported. Bare `agent-graph-builder.vercel.app` is unavailable (owned by another Vercel account).
 
 ---
 

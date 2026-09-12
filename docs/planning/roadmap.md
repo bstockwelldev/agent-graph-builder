@@ -35,10 +35,10 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Repo dev scripts + global `dev` CLI docs | Shipped | `scripts/`, `README.md` |
 | Canvas visual language (node color/shape, blueprint background) | Shipped | `feat/p1-canvas-and-shell-ux` — `theme.ts` `nodeType`/`canvas`, `GraphNodeView.tsx`, `FlowCanvas.tsx` |
 | Empty states, loading shimmers, collapsible panels | Shipped | `feat/p1-canvas-and-shell-ux` — `ui/Skeleton.tsx`, `ui/CollapsibleSection.tsx`, `RunPanel.tsx`, `GraphLibrary.tsx` |
-| Vercel full-stack deploy | Shipped | `master` — https://agent-graph-builder.vercel.app |
+| Vercel full-stack deploy | Shipped | `master` — https://agent-graph-builder-app.vercel.app |
 | Git remote + CI | Shipped | `origin` → [bstockwelldev/agent-graph-builder](https://github.com/bstockwelldev/agent-graph-builder); `.github/workflows/ci.yml` on push/PR to `master` |
 | Ultra-wide layout tokens | Shipped | `feat/p2-ultra-wide-layout-tokens` — `shell.breakpoint.wide` (1280), `shell.canvasMinWidth`, inspector drawer below wide |
-| Playground shell panels (Execute vs Observe) | Shipped | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) — `c6b5467` on `master`; prod https://agent-graph-builder-poc.vercel.app |
+| Playground shell panels (Execute vs Observe) | Shipped | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) — `c6b5467` on `master`; prod https://agent-graph-builder-app.vercel.app |
 | Frontend tests (Vitest + RTL) | Shipped | `canvasFit.test.ts`, `Tooltip.test.tsx`, `shellLayout.test.ts`, `FlowCanvas.test.tsx` (mocked `fitView`) |
 
 ---
