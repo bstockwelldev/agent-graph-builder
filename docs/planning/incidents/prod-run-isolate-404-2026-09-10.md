@@ -144,15 +144,20 @@ Vercel → Project → Environment Variables (Production + Preview), then redepl
 
 Optional alternative (ignored when object-store env is set): `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`.
 
-Smoke after a shared store is set: Run → immediately open the same `run_id` on a **new** browser tab / after ~2 minutes → `GET /api/runs/{id}` **200** from any isolate.
+Smoke after a shared store is set:
+
+1. `GET /api/health` → **200** with `ok: true` and `storage_backend` not `sqlite`.
+2. Run → immediately open the same `run_id` on a **new** browser tab / after ~2 minutes → `GET /api/runs/{id}` **200** from any isolate.
 
 Optional: `CHAT_PROVIDER=groq` in the dashboard if you want omitted-provider API clients to default to Groq. The playground always sends an explicit provider (default **stub** until changed).
 
 ### P2 — Diagnostics and API shape
 
-1. Expose `storage_backend()` (`sqlite` vs `object_store` vs `turso`) on a cheap health/ready payload so operators can confirm the shared store without guessing from mixed 404s.
+1. **Implemented:** `GET /api/health` returns `{ "ok": true|false, "storage_backend": "vercel_blob"|"object_store"|"turso"|"sqlite" }` (503 when unhealthy). On Vercel without durable storage, API routes fail closed with 503 instead of silently using ephemeral `/tmp` SQLite.
 2. Include node traces on the serverless POST `RunSummary` (or a `traces` field) so the client never needs a second GET for the run it just created.
 3. Persist `events` in the run snapshot schema (today GET-from-storage reconstructs summary + traces, not the live event log).
+
+**Operator smoke (after deploy):** `GET /api/health` → `200` with `ok: true` and `storage_backend: "vercel_blob"` (or `object_store` / `turso`). If `ok: false` and `storage_backend: "sqlite"`, set `BLOB_READ_WRITE_TOKEN` (recommended) or `OBJECT_STORE_*` / `TURSO_*` and redeploy.
 
 ### Non-goals
 

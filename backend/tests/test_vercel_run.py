@@ -11,8 +11,14 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_vercel_run_returns_terminal_status(monkeypatch) -> None:
+def _enable_vercel_runtime(monkeypatch) -> None:
+    """Run-path tests use local SQLite; bypass fail-closed gate for runtime behavior."""
     monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setattr(storage, "storage_is_healthy", lambda: True)
+
+
+def test_vercel_run_returns_terminal_status(monkeypatch) -> None:
+    _enable_vercel_runtime(monkeypatch)
     graph = build_demo_graph()
     storage.save_graph(graph)
 
@@ -33,7 +39,7 @@ def test_vercel_run_returns_terminal_status(monkeypatch) -> None:
 
 
 def test_vercel_run_includes_events_in_response(monkeypatch) -> None:
-    monkeypatch.setenv("VERCEL", "1")
+    _enable_vercel_runtime(monkeypatch)
     graph = build_demo_graph()
     storage.save_graph(graph)
 

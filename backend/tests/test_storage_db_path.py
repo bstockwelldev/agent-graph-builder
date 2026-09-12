@@ -34,18 +34,26 @@ def test_connect_creates_parent_directory(monkeypatch, tmp_path) -> None:
     assert db_path.is_file()
 
 
-def test_bootstrap_succeeds_on_vercel_without_graph_db_path(monkeypatch, tmp_path) -> None:
-    """Startup must not fail when GRAPH_DB_PATH is unset on Vercel."""
-    vercel_db = tmp_path / "tmp" / "graphs.db"
+def test_vercel_without_durable_storage_fails_closed(monkeypatch) -> None:
+    """Vercel without durable storage must not serve API routes with ephemeral SQLite."""
     monkeypatch.delenv("GRAPH_DB_PATH", raising=False)
+    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    monkeypatch.delenv("OBJECT_STORE_BUCKET", raising=False)
+    monkeypatch.delenv("OBJECT_STORE_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("OBJECT_STORE_SECRET_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
     monkeypatch.setenv("VERCEL", "1")
-    monkeypatch.setattr(storage, "_VERCEL_EPHEMERAL_DB", vercel_db)
 
     from fastapi.testclient import TestClient
 
     from app.main import app
 
     with TestClient(app) as client:
+        health = client.get("/api/health")
+        assert health.status_code == 503
+        assert health.json()["storage_backend"] == "sqlite"
+
         response = client.get("/api/graphs")
-        assert response.status_code == 200
-        assert any(g["id"] == build_demo_graph().id for g in response.json())
+        assert response.status_code == 503
+        assert response.json()["ok"] is False
