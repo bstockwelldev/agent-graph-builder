@@ -474,7 +474,7 @@ Accepted 2026-09-10. Implement per this table; do not reopen without a SPEC revi
 - Split-pane Observe (NC) if NA/NB still feels cramped
 - Historical event replay API (only if 404 RCA is fixed and events persist)
 - Inspector Configure IA (router edge list) as a separate CAP
-- Vitest shell flex regression (roadmap P3 leftover from shell-layout-polish)
+- ~~Vitest shell flex regression (roadmap P3 leftover from shell-layout-polish)~~ — covered by `shellLayout.test.ts` (closed 2026-09-12)
 - Observe first-run auto-switch (`lastFocusedRunIdRef` skips the first `run_id`)
 - Compact viewport browser QA; tooltip portal over Observe overflow
 - Operator: set `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` on Vercel (out of this CAP)

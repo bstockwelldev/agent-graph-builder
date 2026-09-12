@@ -4,7 +4,7 @@ status: locked
 capability: shell-layout-polish
 linear_issue: none
 locked_at: 2026-09-09
-last_updated: 2026-09-09
+last_updated: 2026-09-12
 ---
 
 # Shell layout polish - change plan
@@ -301,7 +301,7 @@ stateDiagram-v2
 
 ### Phase F — Follow-ups
 
-- Optional Vitest + RTL tests for `FlowCanvas` fit gating
+- [x] Optional Vitest + RTL tests for `FlowCanvas` fit gating (`canvasFit.ts` + `FlowCanvas.test.tsx` mocked `fitView`, 2026-09-12)
 - Consider slightly wider center column min-width token if 1280px still tight after polish
 
 ### Progress diagram
