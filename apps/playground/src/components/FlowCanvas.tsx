@@ -20,6 +20,7 @@ import { applyEdgePointerAffordance } from "../diagnostics";
 import { shouldRunDagre } from "../lib/graphAuthoring";
 import type { GraphNodeData } from "./nodes/GraphNodeView";
 import type { GraphOrientation } from "../types";
+import { canFitView } from "../canvasFit";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "../theme";
 import { Button } from "./ui/Button";
 import { CanvasEdgeLegend } from "./CanvasEdgeLegend";
@@ -54,10 +55,6 @@ type FlowCanvasProps = {
   onLiveAnnouncement: (message: string) => void;
   onClearLiveAnnouncement: () => void;
 };
-
-function canFitView(width: number, height: number): boolean {
-  return width > 0 && height > 0;
-}
 
 function FlowCanvasInner({
   graphId,

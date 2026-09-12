@@ -40,9 +40,9 @@ Prioritized backlog (P0–P3) with **priority, impact, and utility** scoring:
 
 Highlights after the next-set:
 
-- **P1** — Canvas visual language (node color + shape taxonomy, blueprint background)
-- **P1** — Empty states, loading shimmers, collapsible panels
-- **P2** — Dev CLI Phase 2 (factory)
+- **P2** — Dev CLI Phase 2 (factory; not this repo)
+- **P3** — Canvas orientation Phase E (elk fallback)
+- ~~P3 frontend Vitest/RTL~~ — shipped 2026-09-12
 
 ## Conventions
 
