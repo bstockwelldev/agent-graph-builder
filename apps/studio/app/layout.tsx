@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { StudioShell } from "@/components/studio/studio-shell";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,7 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body>{children}</body>
+      <body>
+        <StudioShell>{children}</StudioShell>
+      </body>
     </html>
   );
 }
