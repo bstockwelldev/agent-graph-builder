@@ -220,6 +220,17 @@ Port in order: (1) `globals.css` + `components/ui/*` — design system; (2) `stu
 
 Keep AGB's `theme.ts` semantic roles re-pointed at MUI's CSS custom properties, and keep `apps/playground/src/content/taxonomy.ts` wholesale (no MUI equivalent for its plain-language edge-kind copy). Add MUI's ESLint config; add `ruff` for `backend/`. Add Zod parsing at the SDK client boundary (`client.ts` currently does an unchecked cast) and real client tests — the SDK has exactly one test today.
 
+Phase 4 lands in six independently-committable sub-phases (4a–4f), each gated on both `apps/playground` and `apps/studio` staying green: 4a tooling/pnpm migration + scaffold, 4b design system, 4c shell/IA/resource CRUD, 4d graph editor, 4e run surface + GenUI, 4f SDK hardening + parity checkpoint. The full sub-phase plan is in the locked plan-mode record; as-built notes below are added per sub-phase as each lands.
+
+**Implementation notes (as built) — 4a, tooling:**
+
+- Migrated the repo from npm workspaces to pnpm workspaces: added root `pnpm-workspace.yaml`, deleted `package-lock.json`, changed `apps/playground`'s `@bstockwelldev/agent-graph-sdk` dependency from a bare `"*"` range (which only resolved under npm's implicit workspace linking) to pnpm's explicit `workspace:*` protocol. Root `package.json` gained `engines`/`packageManager` fields and pnpm-`--filter`-based scripts (`build:studio`, `dev:studio`, `test:studio` added alongside, not replacing, the playground scripts).
+- `.github/workflows/ci.yml` gained a `studio` job (lint, typecheck, test, build) and both JS jobs now use `pnpm/action-setup` + `pnpm install --frozen-lockfile`. `vercel.json`'s `installCommand` swapped `npm ci` for `pnpm install --frozen-lockfile`; `buildCommand` still only builds the SDK + playground — `apps/studio` isn't the Vercel deploy target until Phase 6.
+- `apps/playground/Dockerfile` was rewritten for pnpm (`corepack enable`, `pnpm install --frozen-lockfile --filter @bstockwelldev/agent-graph-playground...`, `pnpm run dev`) rather than left as the pre-existing defect noted in Part 1 — it now also copies `apps/studio/package.json` (manifest only, not source) because pnpm's frozen-lockfile install validates every workspace member declared in `pnpm-lock.yaml` is present on disk, even under a scoped `--filter`.
+- Scaffolded `apps/studio` as a genuinely minimal Next.js 15.5.14 / React 19.1.2 shell (one placeholder route, one RTL test) — no Tailwind/shadcn yet, deliberately, since the design system is 4b's scope, not 4a's. Config files (`next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`) mirror MUI's `apps/web` almost verbatim, with the same jsdom+RTL Vitest setup AGB's playground already uses (MUI's own Vitest config is node-only and ships zero component tests — not carried forward).
+- Added `[tool.ruff]` to `backend/pyproject.toml` (line-length 100, `E`/`F`/`I`/`UP`/`B` rules) and a `ruff` dev dependency. Ran `ruff format` + `ruff check --fix` once across `app/`, `scripts/`, `tests/`, and `smoke_test.py`, then hand-wrapped the ~16 remaining long string literals ruff's formatter can't reflow on its own (error messages, the demo graph's prompt text, `nodes.py`'s `LOOKUP_TABLE` topic strings). `ruff check .` is clean repo-wide; all 169 pytest cases and the stub-provider smoke test still pass unchanged after the formatting pass — this was a pure style pass, no behavior changed.
+- `scripts/dev.sh`/`dev.ps1` and `docker-compose.yml` needed no changes — they invoke `docker compose`, not `npm`/`pnpm` directly.
+
 ### Phase 5 — Runtime hardening
 
 - **Telemetry:** port `lib/server/telemetry/` into `backend/app/telemetry/`, implementing the event contract from MUI's PRD §3 against AGB's existing `RunEventBus`.
@@ -306,9 +317,12 @@ Keep AGB's `theme.ts` semantic roles re-pointed at MUI's CSS custom properties, 
 
 ### Phase 4 — Studio
 
-- [ ] `apps/studio` scaffolded; pnpm migration
-- [ ] Design system, shell, flow editor, chat/GenUI ported
-- [ ] SDK client Zod-validated + tested
+- [x] 4a — `apps/studio` scaffolded; pnpm migration (CI, Vercel, Dockerfile updated; `ruff` added to backend)
+- [ ] 4b — Design system port
+- [ ] 4c — Shell, IA, resource CRUD screens (incl. new LLM Profiles nav item)
+- [ ] 4d — Graph editor
+- [ ] 4e — Run surface + GenUI
+- [ ] 4f — SDK client Zod-validated + tested; playground parity checkpoint
 
 ### Phase 5 — Hardening
 

@@ -295,7 +295,11 @@ def test_object_store_resource_crud(monkeypatch) -> None:
         storage.save_resource("prompts", "p1", {"id": "p1", "name": "Greeting", "body": "Hi"})
         storage.save_resource("prompts", "p2", {"id": "p2", "name": "Farewell", "body": "Bye"})
 
-        assert storage.get_resource("prompts", "p1") == {"id": "p1", "name": "Greeting", "body": "Hi"}
+        assert storage.get_resource("prompts", "p1") == {
+            "id": "p1",
+            "name": "Greeting",
+            "body": "Hi",
+        }
         listed = storage.list_resources("prompts")
         assert [item["id"] for item in listed] == ["p1", "p2"]
 

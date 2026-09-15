@@ -40,7 +40,9 @@ class GoogleGenAIChatModel:
         if system_prompt:
             body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
-        async with httpx.AsyncClient(base_url=GOOGLE_GENAI_BASE_URL, timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            base_url=GOOGLE_GENAI_BASE_URL, timeout=REQUEST_TIMEOUT_SECONDS
+        ) as client:
             response = await client.post(
                 f"/models/{self.model}:generateContent",
                 params={"key": self.api_key},

@@ -17,7 +17,8 @@ PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "azure": "gpt-4o-mini",
 }
 
-# Curated top-5 chat models per provider (one-time catalog pass; intersected with live IDs in ranking).
+# Curated top-5 chat models per provider (one-time catalog pass; intersected with live IDs
+# in ranking).
 PROVIDER_PREFERRED_MODELS: dict[str, list[str]] = {
     "groq": [
         "llama-3.3-70b-versatile",

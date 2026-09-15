@@ -205,9 +205,7 @@ def _bootstrap_schema(conn: _DbConnection) -> None:
 def _ensure_run_schema(conn: _DbConnection) -> None:
     columns = {row[1] for row in conn.execute("pragma table_info(run)").fetchall()}
     if "route_decisions_json" not in columns:
-        conn.execute(
-            "alter table run add column route_decisions_json text not null default '[]'"
-        )
+        conn.execute("alter table run add column route_decisions_json text not null default '[]'")
 
 
 def _open_sqlite(path: Path) -> sqlite3.Connection:
@@ -263,9 +261,7 @@ def get_graph(graph_id: str) -> GraphDefinition | None:
     if remote is not None:
         return remote.get_graph(graph_id)
     with _connect() as conn:
-        row = conn.execute(
-            "select definition from graph where id = ?", (graph_id,)
-        ).fetchone()
+        row = conn.execute("select definition from graph where id = ?", (graph_id,)).fetchone()
     if row is None:
         return None
     return GraphDefinition.model_validate(json.loads(row[0]))
@@ -276,9 +272,7 @@ def list_graphs() -> list[GraphDefinition]:
     if remote is not None:
         return remote.list_graphs()
     with _connect() as conn:
-        rows = conn.execute(
-            "select definition from graph order by updated_at desc"
-        ).fetchall()
+        rows = conn.execute("select definition from graph order by updated_at desc").fetchall()
     return [GraphDefinition.model_validate(json.loads(r[0])) for r in rows]
 
 

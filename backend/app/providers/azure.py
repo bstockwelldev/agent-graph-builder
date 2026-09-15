@@ -11,7 +11,6 @@ import httpx
 from ..env_config import (
     resolve_azure_api_key,
     resolve_azure_api_version,
-    resolve_azure_deployment_name,
     resolve_azure_endpoint,
 )
 from ..provider_defaults import default_model_for_provider
@@ -38,8 +37,8 @@ class AzureOpenAIChatModel:
     async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
         if not self.api_key:
             raise ValueError(
-                "Missing Azure OpenAI API key. Set AZURE_OPENAI_API_KEY or load tabletop-studio/.env.local "
-                "via BSTOCKWELL_DEV_ROOT or SHARED_ENV_FILE."
+                "Missing Azure OpenAI API key. Set AZURE_OPENAI_API_KEY or load "
+                "tabletop-studio/.env.local via BSTOCKWELL_DEV_ROOT or SHARED_ENV_FILE."
             )
         if not self.endpoint:
             raise ValueError(
@@ -48,7 +47,8 @@ class AzureOpenAIChatModel:
             )
         if not self.model:
             raise ValueError(
-                "Missing Azure OpenAI deployment. Set AZURE_OPENAI_DEPLOYMENT_NAME or pass a deployment id."
+                "Missing Azure OpenAI deployment. Set AZURE_OPENAI_DEPLOYMENT_NAME or pass "
+                "a deployment id."
             )
 
         messages: list[dict[str, str]] = []
@@ -56,7 +56,9 @@ class AzureOpenAIChatModel:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_prompt})
 
-        async with httpx.AsyncClient(base_url=self.endpoint, timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            base_url=self.endpoint, timeout=REQUEST_TIMEOUT_SECONDS
+        ) as client:
             response = await client.post(
                 f"/openai/deployments/{self.model}/chat/completions",
                 params={"api-version": self.api_version},

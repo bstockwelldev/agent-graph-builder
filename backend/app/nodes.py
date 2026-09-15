@@ -13,11 +13,18 @@ Each `compute_*` function returns (input_repr, output, state_delta):
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from . import storage
-from .builtin_tools import BUILTIN_CALCULATOR_ID, BUILTIN_WEB_SEARCH_ID, CalculatorError, calculator, web_search
+from .builtin_tools import (
+    BUILTIN_CALCULATOR_ID,
+    BUILTIN_WEB_SEARCH_ID,
+    CalculatorError,
+    calculator,
+    web_search,
+)
 from .events import RunEventBus
 from .guardrails import check_guardrail
 from .mcp.client import call_mcp_tool
@@ -41,15 +48,33 @@ class RunPaused(Exception):
         self.node_id = node_id
         super().__init__(f"human_gate node {node_id!r} is awaiting approval")
 
+
 # Intentionally tiny, deterministic "knowledge base" for the one demo tool.
 # Proves the tool-node seam; nothing more is needed for the POC.
 LOOKUP_TABLE: dict[str, str] = {
-    "kubernetes": "Kubernetes is a container orchestration platform for automating deployment, scaling, and management of containerized applications.",
-    "docker": "Docker packages an application and its dependencies into a portable container image.",
-    "database index": "A database index is a data structure that speeds up row lookups at the cost of extra writes and storage.",
-    "load balancer": "A load balancer distributes incoming network traffic across multiple backend servers to improve availability and throughput.",
-    "cache": "A cache stores frequently accessed data in fast storage to reduce latency and load on the primary data source.",
-    "api": "An API (application programming interface) defines how software components communicate with each other.",
+    "kubernetes": (
+        "Kubernetes is a container orchestration platform for automating deployment, "
+        "scaling, and management of containerized applications."
+    ),
+    "docker": (
+        "Docker packages an application and its dependencies into a portable container image."
+    ),
+    "database index": (
+        "A database index is a data structure that speeds up row lookups at the cost of "
+        "extra writes and storage."
+    ),
+    "load balancer": (
+        "A load balancer distributes incoming network traffic across multiple backend "
+        "servers to improve availability and throughput."
+    ),
+    "cache": (
+        "A cache stores frequently accessed data in fast storage to reduce latency and "
+        "load on the primary data source."
+    ),
+    "api": (
+        "An API (application programming interface) defines how software components "
+        "communicate with each other."
+    ),
 }
 
 
@@ -73,7 +98,9 @@ class ExecContext:
     # snapshot "everything computed so far" for `POST /api/runs/{id}/resume`
     # — LangGraph's own `ainvoke()` does not hand back partial state on the
     # exception path `RunPaused` takes, so this tracks it independently.
-    state_snapshot: dict[str, Any] = field(default_factory=lambda: {"variables": {}, "node_outputs": {}, "route_decisions": []})
+    state_snapshot: dict[str, Any] = field(
+        default_factory=lambda: {"variables": {}, "node_outputs": {}, "route_decisions": []}
+    )
     # Needed only to persist a resumable RunPauseState (studio-consolidation
     # Phase 2, human_gate) — no node executor reads these.
     compiled_workflow_id: str | None = None
@@ -164,7 +191,9 @@ async def compute_tool(node: GraphNode, state: dict[str, Any], ctx: ExecContext)
     if tool_def.mcp_server_id and tool_def.mcp_tool_name:
         server_resource = storage.get_resource("mcp_servers", tool_def.mcp_server_id)
         if server_resource is None:
-            raise ValueError(f"tool {tool_name!r} references unknown MCP server {tool_def.mcp_server_id!r}")
+            raise ValueError(
+                f"tool {tool_name!r} references unknown MCP server {tool_def.mcp_server_id!r}"
+            )
         server = McpServerConfig.model_validate(server_resource)
         if not server.enabled:
             raise ValueError(f"MCP server {server.id!r} is disabled")
@@ -180,7 +209,11 @@ async def compute_tool(node: GraphNode, state: dict[str, Any], ctx: ExecContext)
 
     # No MCP binding registered — mock echo, matching MUI's agent-tools.ts
     # convention for catalog tools with no real execution body.
-    output = {"toolId": tool_name, "input": raw_input, "note": "mock tool: no MCP binding registered"}
+    output = {
+        "toolId": tool_name,
+        "input": raw_input,
+        "note": "mock tool: no MCP binding registered",
+    }
     return {"toolName": tool_name}, output, {}
 
 
@@ -206,7 +239,9 @@ async def compute_router(node: GraphNode, state: dict[str, Any], ctx: ExecContex
         selected = default_edges[0]
         rationale = "default_fallback"
     else:
-        raise ValueError(f"Router node {node.id!r} has no matching conditional edge and no default edge")
+        raise ValueError(
+            f"Router node {node.id!r} has no matching conditional edge and no default edge"
+        )
 
     ctx.bus.emit(
         "edge.selected",
@@ -220,8 +255,16 @@ async def compute_router(node: GraphNode, state: dict[str, Any], ctx: ExecContex
         node_id=node.id,
     )
 
-    output = {"classification": upstream, "selectedTargetNodeId": selected.target, "rationale": rationale}
-    route_decision = {"nodeId": node.id, "selectedEdgeId": selected.id, "selectedTargetNodeId": selected.target}
+    output = {
+        "classification": upstream,
+        "selectedTargetNodeId": selected.target,
+        "rationale": rationale,
+    }
+    route_decision = {
+        "nodeId": node.id,
+        "selectedEdgeId": selected.id,
+        "selectedTargetNodeId": selected.target,
+    }
     return {"upstream": upstream}, output, {"route_decisions": [route_decision]}
 
 
@@ -282,9 +325,15 @@ async def compute_branch(node: GraphNode, state: dict[str, Any], ctx: ExecContex
     eligible: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
     if matched and conditional_edges:
-        eligible = [{"edgeId": e.id, "target": e.target, "condition": e.condition} for e in conditional_edges]
+        eligible = [
+            {"edgeId": e.id, "target": e.target, "condition": e.condition}
+            for e in conditional_edges
+        ]
     else:
-        excluded = [{"edgeId": e.id, "target": e.target, "condition": e.condition} for e in conditional_edges]
+        excluded = [
+            {"edgeId": e.id, "target": e.target, "condition": e.condition}
+            for e in conditional_edges
+        ]
 
     if eligible:
         selected = next(e for e in conditional_edges if e.id == eligible[0]["edgeId"])
@@ -293,7 +342,9 @@ async def compute_branch(node: GraphNode, state: dict[str, Any], ctx: ExecContex
         selected = default_edges[0]
         rationale = "branch_fallback"
     else:
-        raise ValueError(f"Branch node {node.id!r} has no matching conditional edge and no default edge")
+        raise ValueError(
+            f"Branch node {node.id!r} has no matching conditional edge and no default edge"
+        )
 
     ctx.bus.emit(
         "edge.selected",
@@ -313,8 +364,16 @@ async def compute_branch(node: GraphNode, state: dict[str, Any], ctx: ExecContex
         "selectedTargetNodeId": selected.target,
         "rationale": rationale,
     }
-    route_decision = {"nodeId": node.id, "selectedEdgeId": selected.id, "selectedTargetNodeId": selected.target}
-    return {"upstream": upstream, "requiredSubstring": required}, output, {"route_decisions": [route_decision]}
+    route_decision = {
+        "nodeId": node.id,
+        "selectedEdgeId": selected.id,
+        "selectedTargetNodeId": selected.target,
+    }
+    return (
+        {"upstream": upstream, "requiredSubstring": required},
+        output,
+        {"route_decisions": [route_decision]},
+    )
 
 
 # `tool_loop` node convention: a provider-agnostic, text-based tool-call
@@ -324,7 +383,9 @@ async def compute_branch(node: GraphNode, state: dict[str, Any], ctx: ExecContex
 # adapter (`providers/stub.py`) follows it deterministically so the loop is
 # fully testable offline. Only the existing `lookup_topic` tool is wired —
 # Phase 3's tool registry replaces this with real per-flow tool binding.
-_TOOL_CALL_PATTERN = re.compile(r"^\s*TOOL_CALL:\s*lookup_topic:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+_TOOL_CALL_PATTERN = re.compile(
+    r"^\s*TOOL_CALL:\s*lookup_topic:\s*(.+)$", re.IGNORECASE | re.DOTALL
+)
 
 
 def _tool_loop_system_prompt(base: str | None) -> str:
@@ -373,10 +434,14 @@ async def compute_tool_loop(node: GraphNode, state: dict[str, Any], ctx: ExecCon
 
         result = lookup_topic(topic)
         tool_results.append({"topic": topic, "result": result})
-        transcript.append({"iteration": iteration, "toolCall": "lookup_topic", "topic": topic, "result": result})
+        transcript.append(
+            {"iteration": iteration, "toolCall": "lookup_topic", "topic": topic, "result": result}
+        )
 
     if final_output is None:
-        final_output = f"[tool_loop] Iteration limit ({max_iterations}) reached without a final answer."
+        final_output = (
+            f"[tool_loop] Iteration limit ({max_iterations}) reached without a final answer."
+        )
 
     input_repr = {
         "provider": chat_model.provider_name,
@@ -403,14 +468,19 @@ async def compute_code_exec(node: GraphNode, state: dict[str, Any], ctx: ExecCon
         "language": language,
         "contract": contract,
         "toolName": tool_name,
-        "note": "No sandbox executor is wired yet (studio-consolidation Phase 2); validated and passed through only.",
+        "note": (
+            "No sandbox executor is wired yet (studio-consolidation Phase 2); "
+            "validated and passed through only."
+        ),
         "upstream": upstream,
     }
     input_repr = {"language": language, "contract": contract, "toolName": tool_name}
     return input_repr, output, {}
 
 
-async def compute_human_gate(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+async def compute_human_gate(
+    node: GraphNode, state: dict[str, Any], ctx: ExecContext
+) -> NodeResult:
     """Pauses the run on first execution (raises `RunPaused`, handled in
     runtime.py); once resumed with this node's id marked approved in
     `state["variables"]["__approved_gates__"]`, passes upstream through.

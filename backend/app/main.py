@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -25,11 +25,20 @@ from .env_config import (
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
-from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunResumeRequest, RunSummary
 from .model_catalog import list_provider_models
+from .models import (
+    CompileResult,
+    CreateGraphRequest,
+    GraphDefinition,
+    NodeTrace,
+    RunRequest,
+    RunResumeRequest,
+    RunSummary,
+)
 from .provider_credentials import get_provider_credentials
 from .resource_models import RESOURCE_MODELS
 from .spa_cache import SpaCacheControlMiddleware
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -55,7 +64,9 @@ class DurableStorageMiddleware(BaseHTTPMiddleware):
 
 _cors_origins = [
     origin.strip()
-    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
+    for origin in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"
+    ).split(",")
     if origin.strip()
 ]
 
@@ -71,11 +82,11 @@ app.add_middleware(
 
 
 if not os.environ.get("VERCEL"):
+
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:
         """API-only local dev: redirect to OpenAPI docs."""
         return RedirectResponse(url="/docs")
-
 
 
 @app.get("/api/health")
@@ -94,7 +105,7 @@ def list_graphs() -> list[GraphDefinition]:
 def create_graph(request: CreateGraphRequest) -> GraphDefinition:
     name = request.name.strip() or "Untitled graph"
     graph = create_graph_definition(name, request.template)
-    graph.updated_at = datetime.now(timezone.utc).isoformat()
+    graph.updated_at = datetime.now(UTC).isoformat()
     storage.save_graph(graph)
     return graph
 
@@ -111,7 +122,7 @@ def get_graph(graph_id: str) -> GraphDefinition:
 def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
     if graph.id != graph_id:
         raise HTTPException(status_code=400, detail="graph id mismatch between path and body")
-    graph.updated_at = datetime.now(timezone.utc).isoformat()
+    graph.updated_at = datetime.now(UTC).isoformat()
     storage.save_graph(graph)
     return graph
 
@@ -195,7 +206,9 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         storage.save_resource(kind, resource_id, payload)
         return payload
 
-    @app.delete(f"/api/{path}/{{resource_id}}", name=f"delete_{kind}", operation_id=f"delete_{kind}")
+    @app.delete(
+        f"/api/{path}/{{resource_id}}", name=f"delete_{kind}", operation_id=f"delete_{kind}"
+    )
     def delete_resource_route(resource_id: str) -> dict[str, bool]:
         if not storage.delete_resource(kind, resource_id):
             raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
@@ -219,7 +232,9 @@ def provider_ready(provider: str) -> dict[str, bool | str]:
         ready = bool(resolve_groq_api_key())
         return {
             "ready": ready,
-            "message": "" if ready else "Missing GROQ_API_KEY. Set it in the backend environment or SHARED_ENV_FILE.",
+            "message": ""
+            if ready
+            else "Missing GROQ_API_KEY. Set it in the backend environment or SHARED_ENV_FILE.",
         }
     if provider == "google":
         ready = bool(resolve_google_api_key())
@@ -228,12 +243,17 @@ def provider_ready(provider: str) -> dict[str, bool | str]:
             "message": "" if ready else "Missing GOOGLE_GENAI_API_KEY or GOOGLE_API_KEY.",
         }
     if provider == "azure":
-        ready = bool(resolve_azure_api_key() and resolve_azure_endpoint() and resolve_azure_deployment_name())
+        ready = bool(
+            resolve_azure_api_key() and resolve_azure_endpoint() and resolve_azure_deployment_name()
+        )
         return {
             "ready": ready,
             "message": ""
             if ready
-            else "Missing AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, or AZURE_OPENAI_DEPLOYMENT_NAME.",
+            else (
+                "Missing AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, "
+                "or AZURE_OPENAI_DEPLOYMENT_NAME."
+            ),
         }
     return {"ready": True, "message": ""}
 
@@ -256,7 +276,13 @@ async def start_run(request: RunRequest) -> RunSummary:
 
     compile_result = runtime.compile_workflow(graph)
     if not compile_result.ok or compile_result.compiled_workflow_id is None:
-        raise HTTPException(status_code=422, detail={"message": "graph failed compilation", "diagnostics": [d.model_dump() for d in compile_result.diagnostics]})
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "graph failed compilation",
+                "diagnostics": [d.model_dump() for d in compile_result.diagnostics],
+            },
+        )
 
     start_kwargs = {
         "compiled_workflow_id": compile_result.compiled_workflow_id,
@@ -294,16 +320,24 @@ async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
     compiled workflow was lost to a process restart).
     """
     if runtime.get_run_pause_state(run_id) is None:
-        raise HTTPException(status_code=404, detail="run has no pending human_gate checkpoint to resume")
+        raise HTTPException(
+            status_code=404, detail="run has no pending human_gate checkpoint to resume"
+        )
 
     if not request.approve:
         runtime.reject_run(run_id, reason=request.reason)
     elif runtime.is_serverless_runtime():
         if await runtime.resume_run_inline(run_id) is None:
-            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+            raise HTTPException(
+                status_code=409,
+                detail="run's compiled workflow is no longer available; cannot resume",
+            )
     else:
         if runtime.resume_run(run_id) is None:
-            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+            raise HTTPException(
+                status_code=409,
+                detail="run's compiled workflow is no longer available; cannot resume",
+            )
 
     summary = runtime.get_run_summary(run_id)
     if summary is None:
@@ -337,6 +371,8 @@ async def stream_run_events(run_id: str) -> StreamingResponse:
 if os.environ.get("VERCEL"):
     from pathlib import Path
 
-    _playground_dist = Path(__file__).resolve().parent.parent.parent / "apps" / "playground" / "dist"
+    _playground_dist = (
+        Path(__file__).resolve().parent.parent.parent / "apps" / "playground" / "dist"
+    )
     if _playground_dist.is_dir():
         app.frontend("/", directory=str(_playground_dist))

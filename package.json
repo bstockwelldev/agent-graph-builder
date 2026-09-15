@@ -3,15 +3,19 @@
   "private": true,
   "version": "0.2.0",
   "description": "Agent Graph Builder — visual graph authoring platform with playground UI and TypeScript SDK",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "npm run build --workspace=@bstockwelldev/agent-graph-sdk && npm run build --workspace=@bstockwelldev/agent-graph-playground",
-    "build:sdk": "npm run build --workspace=@bstockwelldev/agent-graph-sdk",
-    "build:playground": "npm run build --workspace=@bstockwelldev/agent-graph-playground",
-    "dev:playground": "npm run dev --workspace=@bstockwelldev/agent-graph-playground",
-    "test": "npm run build:sdk && npm run test --workspace=@bstockwelldev/agent-graph-sdk && npm run test --workspace=@bstockwelldev/agent-graph-playground"
+    "build": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-playground run build",
+    "build:sdk": "pnpm --filter @bstockwelldev/agent-graph-sdk run build",
+    "build:playground": "pnpm --filter @bstockwelldev/agent-graph-playground run build",
+    "build:studio": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-studio run build",
+    "dev:playground": "pnpm --filter @bstockwelldev/agent-graph-playground run dev",
+    "dev:studio": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
+    "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-playground run test",
+    "test:studio": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-studio run test"
   }
 }

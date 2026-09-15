@@ -10,7 +10,9 @@ import os
 
 import httpx
 
-OPENAI_COMPAT_BASE_URL = os.environ.get("OPENAI_COMPAT_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+OPENAI_COMPAT_BASE_URL = os.environ.get(
+    "OPENAI_COMPAT_BASE_URL", "https://api.openai.com/v1"
+).rstrip("/")
 OPENAI_COMPAT_API_KEY = os.environ.get("OPENAI_COMPAT_API_KEY", "")
 OPENAI_COMPAT_DEFAULT_MODEL = os.environ.get("OPENAI_COMPAT_DEFAULT_MODEL", "gpt-4o-mini")
 REQUEST_TIMEOUT_SECONDS = 180.0
@@ -40,7 +42,9 @@ class OpenAICompatChatModel:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, timeout=REQUEST_TIMEOUT_SECONDS
+        ) as client:
             response = await client.post(
                 "/chat/completions",
                 headers=headers,

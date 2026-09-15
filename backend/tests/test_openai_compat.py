@@ -41,7 +41,9 @@ async def test_openai_compat_omits_auth_when_no_api_key(httpx_mock) -> None:
         json={"choices": [{"message": {"content": "ok"}}]},
     )
 
-    model = OpenAICompatChatModel(model="local-model", api_key="", base_url="http://localhost:1234/v1")
+    model = OpenAICompatChatModel(
+        model="local-model", api_key="", base_url="http://localhost:1234/v1"
+    )
     result = await model.generate(system_prompt=None, user_prompt="hello")
 
     assert result == "ok"

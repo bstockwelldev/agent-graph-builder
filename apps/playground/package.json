@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bstockwelldev/agent-graph-sdk": "*",
+    "@bstockwelldev/agent-graph-sdk": "workspace:*",
     "@dagrejs/dagre": "^3.1.1",
     "@xyflow/react": "^12.3.6",
     "lucide-react": "^1.43.0",

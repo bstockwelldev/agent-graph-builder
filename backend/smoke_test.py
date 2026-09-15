@@ -21,7 +21,10 @@ async def main() -> None:
         run_id, bus = runtime.start_run(compile_result.compiled_workflow_id, {"question": question})
         print(f"\n=== run {run_id} for {question!r} ===")
         async for event in bus.stream():
-            print(f"[{event.sequence}] {event.event_type} node={event.node_id} payload={event.payload}")
+            print(
+                f"[{event.sequence}] {event.event_type} "
+                f"node={event.node_id} payload={event.payload}"
+            )
         summary = runtime.RUN_STORE[run_id]
         print("STATUS:", summary.status)
         print("RESULT:", summary.result)

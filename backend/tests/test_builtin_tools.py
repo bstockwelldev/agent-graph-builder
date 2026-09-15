@@ -76,7 +76,9 @@ async def test_web_search_parses_instant_answer(httpx_mock) -> None:
     assert result["heading"] == "Kubernetes"
     assert result["abstract"].startswith("An open-source")
     assert result["url"] == "https://en.wikipedia.org/wiki/Kubernetes"
-    assert result["relatedTopics"] == [{"text": "Docker", "url": "https://en.wikipedia.org/wiki/Docker_(software)"}]
+    assert result["relatedTopics"] == [
+        {"text": "Docker", "url": "https://en.wikipedia.org/wiki/Docker_(software)"}
+    ]
 
 
 @pytest.mark.asyncio

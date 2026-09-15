@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app import storage
 from app.demo_graph import build_demo_graph
 from app.main import app
-from app import storage
 
 client = TestClient(app)
 

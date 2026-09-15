@@ -18,12 +18,20 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from . import storage
 from .compiler import compile_graph as validate_and_diagnose
 from .events import RunEventBus, create_bus, now_iso
-from .models import CompileResult, GraphDefinition, NodeTrace, NodeType, RouteDecision, RunPauseState, RunSummary
+from .models import (
+    CompileResult,
+    GraphDefinition,
+    NodeTrace,
+    NodeType,
+    RouteDecision,
+    RunPauseState,
+    RunSummary,
+)
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .providers.base import get_chat_model, resolve_chat_provider
-from . import storage
 
 
 def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -111,7 +119,9 @@ def _build_langgraph(graph: GraphDefinition, ctx: ExecContext):
         builder.add_edge(edge.source, edge.target)
 
     for branching_id, targets in branching_targets.items():
-        builder.add_conditional_edges(branching_id, _make_route_decision_path_fn(branching_id), targets)
+        builder.add_conditional_edges(
+            branching_id, _make_route_decision_path_fn(branching_id), targets
+        )
 
     for node in graph.nodes:
         if node.type == NodeType.OUTPUT:
@@ -158,7 +168,9 @@ def _make_node_runner(node, ctx: ExecContext):
                 completed_at=now_iso(),
             )
             RUN_TRACES[ctx.run_id][node.id] = trace
-            ctx.bus.emit("node.started", {"nodeType": node.type.value, "replayed": True}, node_id=node.id)
+            ctx.bus.emit(
+                "node.started", {"nodeType": node.type.value, "replayed": True}, node_id=node.id
+            )
             ctx.bus.emit(
                 "node.completed", {"output": trace.output, "replayed": True}, node_id=node.id
             )
@@ -167,7 +179,9 @@ def _make_node_runner(node, ctx: ExecContext):
             return delta
 
         ctx.bus.emit("node.started", {"nodeType": node.type.value}, node_id=node.id)
-        trace = NodeTrace(node_id=node.id, node_type=node.type, status="running", started_at=now_iso())
+        trace = NodeTrace(
+            node_id=node.id, node_type=node.type, status="running", started_at=now_iso()
+        )
         RUN_TRACES[ctx.run_id][node.id] = trace
 
         try:
@@ -188,7 +202,9 @@ def _make_node_runner(node, ctx: ExecContext):
         trace.input = _jsonable(input_repr)
         trace.output = _jsonable(output)
         trace.completed_at = now_iso()
-        ctx.bus.emit("node.completed", {"input": trace.input, "output": trace.output}, node_id=node.id)
+        ctx.bus.emit(
+            "node.completed", {"input": trace.input, "output": trace.output}, node_id=node.id
+        )
 
         delta = dict(delta)
         delta["node_outputs"] = {**delta.get("node_outputs", {}), node.id: output}
@@ -209,7 +225,10 @@ def _merge_into_snapshot(snapshot: dict[str, Any], delta: dict[str, Any]) -> Non
     if "node_outputs" in delta:
         snapshot["node_outputs"] = {**snapshot.get("node_outputs", {}), **delta["node_outputs"]}
     if "route_decisions" in delta:
-        snapshot["route_decisions"] = [*snapshot.get("route_decisions", []), *delta["route_decisions"]]
+        snapshot["route_decisions"] = [
+            *snapshot.get("route_decisions", []),
+            *delta["route_decisions"],
+        ]
 
 
 def _jsonable(value: Any) -> Any:
@@ -226,7 +245,9 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
     bus = RUN_BUSES[run_id]
     was_paused = RUN_STORE[run_id].status == "paused"
     RUN_STORE[run_id].status = "running"
-    bus.emit("run.resumed" if was_paused else "run.started", {"graphId": graph.id, "input": run_input})
+    bus.emit(
+        "run.resumed" if was_paused else "run.started", {"graphId": graph.id, "input": run_input}
+    )
 
     initial_state: RunState = {
         "variables": dict(ctx.state_snapshot.get("variables", {})),
@@ -305,7 +326,11 @@ def _prepare_run(
         graph=graph,
         bus=bus,
         chat_model_factory=chat_model_factory,
-        state_snapshot={"variables": {"__run_input__": run_input}, "node_outputs": {}, "route_decisions": []},
+        state_snapshot={
+            "variables": {"__run_input__": run_input},
+            "node_outputs": {},
+            "route_decisions": [],
+        },
         compiled_workflow_id=compiled_workflow_id,
         resolved_provider=resolved_provider.value,
         requested_model=model,

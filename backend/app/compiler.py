@@ -30,7 +30,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             Diagnostic(
                 severity="error",
                 code="GRAPH_MISSING_ENTRY_NODE",
-                message=f"entryNodeId {graph.entry_node_id!r} does not reference a node in this graph",
+                message=(
+                    f"entryNodeId {graph.entry_node_id!r} does not reference a node in this graph"
+                ),
                 blocking=True,
             )
         )
@@ -138,7 +140,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     severity="error",
                     code=f"{prefix}_MISSING_FALLBACK",
                     node_id=node.id,
-                    message=f"{node.type.value} node {node.id!r} has no default/fallback outgoing edge",
+                    message=(
+                        f"{node.type.value} node {node.id!r} has no default/fallback outgoing edge"
+                    ),
                     blocking=True,
                 )
             )
@@ -148,7 +152,10 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     severity="warning",
                     code=f"{prefix}_NO_CONDITIONAL_EDGES",
                     node_id=node.id,
-                    message=f"{node.type.value} node {node.id!r} only has a default edge; it never branches",
+                    message=(
+                        f"{node.type.value} node {node.id!r} only has a default edge; "
+                        "it never branches"
+                    ),
                     blocking=False,
                 )
             )

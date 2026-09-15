@@ -43,8 +43,12 @@ def test_node_type_not_executable_guards_future_additions(monkeypatch) -> None:
     # depending on any *current* node type staying unregistered forever.
     import app.compiler as compiler_module
 
-    monkeypatch.setattr(compiler_module, "EXECUTORS", {k: v for k, v in EXECUTORS.items() if k != "guardrail"})
-    node = GraphNode(id="guardrail_1", type=NodeType.GUARDRAIL, position=NodePosition(x=0, y=0), config={})
+    monkeypatch.setattr(
+        compiler_module, "EXECUTORS", {k: v for k, v in EXECUTORS.items() if k != "guardrail"}
+    )
+    node = GraphNode(
+        id="guardrail_1", type=NodeType.GUARDRAIL, position=NodePosition(x=0, y=0), config={}
+    )
     graph = _graph_with_extra_node(node)
 
     diagnostics = validate_graph(graph)
@@ -62,7 +66,9 @@ def test_tool_loop_requires_model_and_max_tool_iterations() -> None:
 
 
 def test_tool_loop_rejects_out_of_range_iterations() -> None:
-    errors = validate_node_config(NodeType.TOOL_LOOP, {"model": "qwen2.5:3b", "maxToolIterations": 65})
+    errors = validate_node_config(
+        NodeType.TOOL_LOOP, {"model": "qwen2.5:3b", "maxToolIterations": 65}
+    )
     assert any("maxToolIterations" in e for e in errors)
 
 
@@ -89,7 +95,10 @@ def test_human_gate_requires_content_and_valid_genui_json() -> None:
 
     ok = validate_node_config(
         NodeType.HUMAN_GATE,
-        {"content": "Approve?", "genuiCheckpointSurfaceJson": '{"root": {"type": "Text", "props": {"content": "hi"}}}'},
+        {
+            "content": "Approve?",
+            "genuiCheckpointSurfaceJson": '{"root": {"type": "Text", "props": {"content": "hi"}}}',
+        },
     )
     assert ok == []
 
@@ -120,6 +129,8 @@ def test_node_config_invalid_diagnostic_surfaces_from_validate_graph() -> None:
 
     diagnostics = validate_graph(graph)
 
-    config_diags = [d for d in diagnostics if d.code == "NODE_CONFIG_INVALID" and d.node_id == "tool_loop_1"]
+    config_diags = [
+        d for d in diagnostics if d.code == "NODE_CONFIG_INVALID" and d.node_id == "tool_loop_1"
+    ]
     assert config_diags
     assert all(d.blocking for d in config_diags)

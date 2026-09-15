@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build:sdk && npm run build:playground",
-  "installCommand": "pip install -r requirements.txt && npm ci",
+  "buildCommand": "pnpm run build:sdk && pnpm run build:playground",
+  "installCommand": "pip install -r requirements.txt && pnpm install --frozen-lockfile",
   "headers": [
     {
       "source": "/assets/(.*)",

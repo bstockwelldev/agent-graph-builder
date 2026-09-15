@@ -36,7 +36,10 @@ def build_demo_graph() -> GraphDefinition:
             position=NodePosition(x=560, y=200),
             config={
                 "model": "qwen2.5:3b",
-                "systemPrompt": "You are a strict classifier. Respond with exactly one word: technical or other.",
+                "systemPrompt": (
+                    "You are a strict classifier. Respond with exactly one word: "
+                    "technical or other."
+                ),
             },
         ),
         GraphNode(
@@ -55,7 +58,11 @@ def build_demo_graph() -> GraphDefinition:
             id="prompt_answer",
             type=NodeType.PROMPT,
             position=NodePosition(x=1080, y=340),
-            config={"template": "Answer the user's question helpfully and concisely.\n\nQuestion: {question}"},
+            config={
+                "template": (
+                    "Answer the user's question helpfully and concisely.\n\nQuestion: {question}"
+                )
+            },
         ),
         GraphNode(
             id="llm_answer",
@@ -72,9 +79,18 @@ def build_demo_graph() -> GraphDefinition:
     ]
 
     edges = [
-        GraphEdge(id="e_input_prompt", source="input_1", target="prompt_classify", kind=EdgeKind.SEQUENCE),
-        GraphEdge(id="e_prompt_llm", source="prompt_classify", target="llm_classify", kind=EdgeKind.SEQUENCE),
-        GraphEdge(id="e_llm_router", source="llm_classify", target="router_1", kind=EdgeKind.SEQUENCE),
+        GraphEdge(
+            id="e_input_prompt", source="input_1", target="prompt_classify", kind=EdgeKind.SEQUENCE
+        ),
+        GraphEdge(
+            id="e_prompt_llm",
+            source="prompt_classify",
+            target="llm_classify",
+            kind=EdgeKind.SEQUENCE,
+        ),
+        GraphEdge(
+            id="e_llm_router", source="llm_classify", target="router_1", kind=EdgeKind.SEQUENCE
+        ),
         GraphEdge(
             id="e_router_tool",
             source="router_1",
@@ -82,10 +98,21 @@ def build_demo_graph() -> GraphDefinition:
             kind=EdgeKind.CONDITIONAL,
             condition="technical",
         ),
-        GraphEdge(id="e_router_answer", source="router_1", target="prompt_answer", kind=EdgeKind.DEFAULT),
-        GraphEdge(id="e_tool_output", source="tool_lookup", target="output_1", kind=EdgeKind.SEQUENCE),
-        GraphEdge(id="e_answerprompt_llm", source="prompt_answer", target="llm_answer", kind=EdgeKind.SEQUENCE),
-        GraphEdge(id="e_llmanswer_output", source="llm_answer", target="output_1", kind=EdgeKind.SEQUENCE),
+        GraphEdge(
+            id="e_router_answer", source="router_1", target="prompt_answer", kind=EdgeKind.DEFAULT
+        ),
+        GraphEdge(
+            id="e_tool_output", source="tool_lookup", target="output_1", kind=EdgeKind.SEQUENCE
+        ),
+        GraphEdge(
+            id="e_answerprompt_llm",
+            source="prompt_answer",
+            target="llm_answer",
+            kind=EdgeKind.SEQUENCE,
+        ),
+        GraphEdge(
+            id="e_llmanswer_output", source="llm_answer", target="output_1", kind=EdgeKind.SEQUENCE
+        ),
     ]
 
     return GraphDefinition(

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.env_config import load_shared_env, parse_env_file, resolve_groq_api_key, resolve_shared_env_file
+from app.env_config import (
+    load_shared_env,
+    parse_env_file,
+    resolve_groq_api_key,
+    resolve_shared_env_file,
+)
 from app.provider_defaults import resolve_model_for_provider
 from app.providers.base import ChatProvider, get_chat_model, resolve_chat_provider
 from app.providers.google import GoogleGenAIChatModel

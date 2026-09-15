@@ -33,16 +33,24 @@ class _FakeMcpServer:
         body = json.loads(request.content)
         self.methods.append(body["method"])
         if body["method"] == "initialize":
-            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05"}})
+            return httpx.Response(
+                200, json={"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05"}}
+            )
         if body["method"] == "notifications/initialized":
             return httpx.Response(200)
         if body["method"] == "tools/list":
             return httpx.Response(
                 200,
-                json={"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "search", "description": "Search"}]}},
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {"tools": [{"name": "search", "description": "Search"}]},
+                },
             )
         if body["method"] == "tools/call":
-            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {"content": "search result"}})
+            return httpx.Response(
+                200, json={"jsonrpc": "2.0", "id": 1, "result": {"content": "search result"}}
+            )
         return httpx.Response(500)
 
 
@@ -85,7 +93,10 @@ async def test_call_mcp_tool_degrades_on_jsonrpc_error(monkeypatch) -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         if body["method"] == "tools/call":
-            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "not found"}})
+            return httpx.Response(
+                200,
+                json={"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "not found"}},
+            )
         return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
 
     class _MockAsyncClient(httpx.AsyncClient):

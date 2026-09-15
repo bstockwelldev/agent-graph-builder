@@ -51,7 +51,9 @@ def resolve_chat_provider(explicit: str | None = None) -> ChatProvider:
     return ChatProvider.OLLAMA
 
 
-def get_chat_model(model: str | None = None, provider: str | None = None, *, api_key: str | None = None) -> ChatModel:
+def get_chat_model(
+    model: str | None = None, provider: str | None = None, *, api_key: str | None = None
+) -> ChatModel:
     resolved = resolve_chat_provider(provider)
     resolved_model = resolve_model_for_provider(resolved, model)
 

@@ -108,7 +108,9 @@ async def test_catalog_caps_at_five_models(httpx_mock, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_groq_preferred_models_rank_before_unordered_live_dump(httpx_mock, monkeypatch) -> None:
+async def test_groq_preferred_models_rank_before_unordered_live_dump(
+    httpx_mock, monkeypatch
+) -> None:
     monkeypatch.setenv("GROQ_API_KEY", "groq-test")
     httpx_mock.add_response(
         url="https://api.groq.com/openai/v1/models",

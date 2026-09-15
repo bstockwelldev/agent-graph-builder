@@ -22,26 +22,45 @@ def _graph_with_tool_node(tool_node: GraphNode, graph_id: str) -> object:
     edges = [e for e in demo.edges if e.id != "e_llmanswer_output"]
     edges.append(GraphEdge(id="e_llmanswer_tool", source="llm_answer", target=tool_node.id))
     edges.append(GraphEdge(id=f"e_{tool_node.id}_output", source=tool_node.id, target="output_1"))
-    return demo.model_copy(update={"id": graph_id, "nodes": [*demo.nodes, tool_node], "edges": edges})
+    return demo.model_copy(
+        update={"id": graph_id, "nodes": [*demo.nodes, tool_node], "edges": edges}
+    )
 
 
 def test_unsupported_tool_binding_still_blocks_compile() -> None:
-    node = GraphNode(id="tool_bad", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "not_a_real_tool"})
+    node = GraphNode(
+        id="tool_bad",
+        type=NodeType.TOOL,
+        position=NodePosition(x=0, y=0),
+        config={"toolName": "not_a_real_tool"},
+    )
     graph = _graph_with_tool_node(node, "graph_bad_tool")
     diagnostics = validate_graph(graph)
     assert any(d.code == "UNSUPPORTED_TOOL_BINDING" for d in diagnostics)
 
 
 def test_builtin_tool_binding_compiles_clean() -> None:
-    node = GraphNode(id="tool_calc", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "calculator"})
+    node = GraphNode(
+        id="tool_calc",
+        type=NodeType.TOOL,
+        position=NodePosition(x=0, y=0),
+        config={"toolName": "calculator"},
+    )
     graph = _graph_with_tool_node(node, "graph_builtin_tool")
     diagnostics = validate_graph(graph)
     assert not any(d.code == "UNSUPPORTED_TOOL_BINDING" for d in diagnostics)
 
 
 def test_registered_tool_binding_compiles_clean() -> None:
-    storage.save_resource("tools", "custom_tool", {"id": "custom_tool", "description": "A custom tool"})
-    node = GraphNode(id="tool_custom", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "custom_tool"})
+    storage.save_resource(
+        "tools", "custom_tool", {"id": "custom_tool", "description": "A custom tool"}
+    )
+    node = GraphNode(
+        id="tool_custom",
+        type=NodeType.TOOL,
+        position=NodePosition(x=0, y=0),
+        config={"toolName": "custom_tool"},
+    )
     graph = _graph_with_tool_node(node, "graph_registered_tool")
     diagnostics = validate_graph(graph)
     assert not any(d.code == "UNSUPPORTED_TOOL_BINDING" for d in diagnostics)
@@ -50,15 +69,32 @@ def test_registered_tool_binding_compiles_clean() -> None:
 
 @pytest.mark.asyncio
 async def test_calculator_tool_node_runs_end_to_end() -> None:
-    input_node = GraphNode(id="input_1", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "question"})
-    tool_node = GraphNode(id="calc_1", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "calculator", "inputVariable": "question"})
-    output_node = GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={})
+    input_node = GraphNode(
+        id="input_1",
+        type=NodeType.INPUT,
+        position=NodePosition(x=0, y=0),
+        config={"variableName": "question"},
+    )
+    tool_node = GraphNode(
+        id="calc_1",
+        type=NodeType.TOOL,
+        position=NodePosition(x=0, y=0),
+        config={"toolName": "calculator", "inputVariable": "question"},
+    )
+    output_node = GraphNode(
+        id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}
+    )
     edges = [
         GraphEdge(id="e_input_calc", source="input_1", target="calc_1"),
         GraphEdge(id="e_calc_output", source="calc_1", target="output_1"),
     ]
     graph = build_demo_graph().model_copy(
-        update={"id": "graph_calc", "nodes": [input_node, tool_node, output_node], "edges": edges, "entry_node_id": "input_1"}
+        update={
+            "id": "graph_calc",
+            "nodes": [input_node, tool_node, output_node],
+            "edges": edges,
+            "entry_node_id": "input_1",
+        }
     )
     compiled = compile_graph(graph, "cwf_calc")
     assert compiled.ok, compiled.diagnostics
@@ -72,17 +108,36 @@ async def test_calculator_tool_node_runs_end_to_end() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_tool_echo_for_unbound_registered_tool() -> None:
-    storage.save_resource("tools", "echo_tool", {"id": "echo_tool", "description": "no MCP binding"})
+    storage.save_resource(
+        "tools", "echo_tool", {"id": "echo_tool", "description": "no MCP binding"}
+    )
     try:
-        input_node = GraphNode(id="input_1", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "question"})
-        tool_node = GraphNode(id="echo_1", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "echo_tool", "inputVariable": "question"})
-        output_node = GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={})
+        input_node = GraphNode(
+            id="input_1",
+            type=NodeType.INPUT,
+            position=NodePosition(x=0, y=0),
+            config={"variableName": "question"},
+        )
+        tool_node = GraphNode(
+            id="echo_1",
+            type=NodeType.TOOL,
+            position=NodePosition(x=0, y=0),
+            config={"toolName": "echo_tool", "inputVariable": "question"},
+        )
+        output_node = GraphNode(
+            id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}
+        )
         edges = [
             GraphEdge(id="e_input_echo", source="input_1", target="echo_1"),
             GraphEdge(id="e_echo_output", source="echo_1", target="output_1"),
         ]
         graph = build_demo_graph().model_copy(
-            update={"id": "graph_echo", "nodes": [input_node, tool_node, output_node], "edges": edges, "entry_node_id": "input_1"}
+            update={
+                "id": "graph_echo",
+                "nodes": [input_node, tool_node, output_node],
+                "edges": edges,
+                "entry_node_id": "input_1",
+            }
         )
         compiled = compile_graph(graph, "cwf_echo")
         assert compiled.ok, compiled.diagnostics
@@ -91,7 +146,11 @@ async def test_mock_tool_echo_for_unbound_registered_tool() -> None:
         run_id, _bus = await start_run_inline("cwf_echo", {"question": "hello"}, provider="stub")
         summary = get_run_summary(run_id)
         assert summary.status == "succeeded"
-        assert summary.result == {"toolId": "echo_tool", "input": "hello", "note": "mock tool: no MCP binding registered"}
+        assert summary.result == {
+            "toolId": "echo_tool",
+            "input": "hello",
+            "note": "mock tool: no MCP binding registered",
+        }
     finally:
         storage.delete_resource("tools", "echo_tool")
 
@@ -103,7 +162,9 @@ async def test_mcp_bound_tool_dispatches_to_mcp_server(monkeypatch) -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         body = json_mod.loads(request.content)
         if body["method"] == "tools/call":
-            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {"content": "mcp result"}})
+            return httpx.Response(
+                200, json={"jsonrpc": "2.0", "id": 1, "result": {"content": "mcp result"}}
+            )
         return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
 
     class _MockAsyncClient(httpx.AsyncClient):
@@ -113,26 +174,56 @@ async def test_mcp_bound_tool_dispatches_to_mcp_server(monkeypatch) -> None:
 
     monkeypatch.setattr("app.mcp.client.httpx.AsyncClient", _MockAsyncClient)
 
-    storage.save_resource("mcp_servers", "srv_1", {"id": "srv_1", "name": "Test", "url": "https://mcp.example.com/rpc"})
     storage.save_resource(
-        "tools", "mcp_search", {"id": "mcp_search", "description": "search", "mcp_server_id": "srv_1", "mcp_tool_name": "search"}
+        "mcp_servers",
+        "srv_1",
+        {"id": "srv_1", "name": "Test", "url": "https://mcp.example.com/rpc"},
+    )
+    storage.save_resource(
+        "tools",
+        "mcp_search",
+        {
+            "id": "mcp_search",
+            "description": "search",
+            "mcp_server_id": "srv_1",
+            "mcp_tool_name": "search",
+        },
     )
     try:
-        input_node = GraphNode(id="input_1", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "question"})
-        tool_node = GraphNode(id="mcp_1", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "mcp_search", "inputVariable": "question"})
-        output_node = GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={})
+        input_node = GraphNode(
+            id="input_1",
+            type=NodeType.INPUT,
+            position=NodePosition(x=0, y=0),
+            config={"variableName": "question"},
+        )
+        tool_node = GraphNode(
+            id="mcp_1",
+            type=NodeType.TOOL,
+            position=NodePosition(x=0, y=0),
+            config={"toolName": "mcp_search", "inputVariable": "question"},
+        )
+        output_node = GraphNode(
+            id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}
+        )
         edges = [
             GraphEdge(id="e_input_mcp", source="input_1", target="mcp_1"),
             GraphEdge(id="e_mcp_output", source="mcp_1", target="output_1"),
         ]
         graph = build_demo_graph().model_copy(
-            update={"id": "graph_mcp_tool", "nodes": [input_node, tool_node, output_node], "edges": edges, "entry_node_id": "input_1"}
+            update={
+                "id": "graph_mcp_tool",
+                "nodes": [input_node, tool_node, output_node],
+                "edges": edges,
+                "entry_node_id": "input_1",
+            }
         )
         compiled = compile_graph(graph, "cwf_mcp_tool")
         assert compiled.ok, compiled.diagnostics
         COMPILED_WORKFLOWS["cwf_mcp_tool"] = graph
 
-        run_id, _bus = await start_run_inline("cwf_mcp_tool", {"question": "hello"}, provider="stub")
+        run_id, _bus = await start_run_inline(
+            "cwf_mcp_tool", {"question": "hello"}, provider="stub"
+        )
         summary = get_run_summary(run_id)
         assert summary.status == "succeeded"
         assert summary.result == {"content": "mcp result"}
@@ -146,28 +237,61 @@ async def test_mcp_bound_tool_dispatches_to_mcp_server(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_disabled_mcp_server_fails_the_run() -> None:
-    storage.save_resource("mcp_servers", "srv_disabled", {"id": "srv_disabled", "name": "Disabled", "url": "https://mcp.example.com", "enabled": False})
+    storage.save_resource(
+        "mcp_servers",
+        "srv_disabled",
+        {
+            "id": "srv_disabled",
+            "name": "Disabled",
+            "url": "https://mcp.example.com",
+            "enabled": False,
+        },
+    )
     storage.save_resource(
         "tools",
         "disabled_tool",
-        {"id": "disabled_tool", "description": "bound to a disabled server", "mcp_server_id": "srv_disabled", "mcp_tool_name": "x"},
+        {
+            "id": "disabled_tool",
+            "description": "bound to a disabled server",
+            "mcp_server_id": "srv_disabled",
+            "mcp_tool_name": "x",
+        },
     )
     try:
-        input_node = GraphNode(id="input_1", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "question"})
-        tool_node = GraphNode(id="tool_1", type=NodeType.TOOL, position=NodePosition(x=0, y=0), config={"toolName": "disabled_tool", "inputVariable": "question"})
-        output_node = GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={})
+        input_node = GraphNode(
+            id="input_1",
+            type=NodeType.INPUT,
+            position=NodePosition(x=0, y=0),
+            config={"variableName": "question"},
+        )
+        tool_node = GraphNode(
+            id="tool_1",
+            type=NodeType.TOOL,
+            position=NodePosition(x=0, y=0),
+            config={"toolName": "disabled_tool", "inputVariable": "question"},
+        )
+        output_node = GraphNode(
+            id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}
+        )
         edges = [
             GraphEdge(id="e_input_tool", source="input_1", target="tool_1"),
             GraphEdge(id="e_tool_output", source="tool_1", target="output_1"),
         ]
         graph = build_demo_graph().model_copy(
-            update={"id": "graph_disabled_mcp", "nodes": [input_node, tool_node, output_node], "edges": edges, "entry_node_id": "input_1"}
+            update={
+                "id": "graph_disabled_mcp",
+                "nodes": [input_node, tool_node, output_node],
+                "edges": edges,
+                "entry_node_id": "input_1",
+            }
         )
         compiled = compile_graph(graph, "cwf_disabled_mcp")
         assert compiled.ok, compiled.diagnostics
         COMPILED_WORKFLOWS["cwf_disabled_mcp"] = graph
 
-        run_id, _bus = await start_run_inline("cwf_disabled_mcp", {"question": "hi"}, provider="stub")
+        run_id, _bus = await start_run_inline(
+            "cwf_disabled_mcp", {"question": "hi"}, provider="stub"
+        )
         summary = get_run_summary(run_id)
         assert summary.status == "failed"
         assert "disabled" in summary.error
