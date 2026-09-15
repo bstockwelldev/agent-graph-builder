@@ -24,3 +24,37 @@ packageExtensions:
     peerDependenciesMeta:
       "@types/react":
         optional: true
+  "@xyflow/react":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@dagrejs/dagre":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  # next itself has this same gap — its bundled styled-jsx type files do a
+  # bare `import ... from "react"`, and since every studio file transitively
+  # touches Next's own types, an unscoped next.js poisons the *entire*
+  # program's ambient React namespace, not just canvas-adjacent files.
+  # Discovered when adding @xyflow/react shifted pnpm's hoist-ambiguity
+  # tie-break away from 19.x and broke unrelated pages (e.g. plain Badge
+  # usage) that had never touched xyflow at all.
+  next:
+    peerDependencies:
+      "@types/react": "*"
+      "@types/react-dom": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+      "@types/react-dom":
+        optional: true
+  react-dom:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
