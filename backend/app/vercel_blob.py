@@ -149,8 +149,12 @@ def list_graphs() -> list[GraphDefinition]:
 
 
 def _run_blob(summary: RunSummary, traces: list[NodeTrace]) -> dict[str, Any]:
+    # by_alias=True keeps route_decisions camelCase here too, matching the
+    # SQLite/Turso path in storage.py (studio-consolidation Phase 1 hygiene
+    # fix) — RunSummary.model_validate() below tolerates either casing on
+    # read regardless, since RouteDecision sets populate_by_name=True.
     return {
-        "summary": summary.model_dump(mode="json"),
+        "summary": summary.model_dump(mode="json", by_alias=True),
         "traces": [trace.model_dump(mode="json") for trace in traces],
     }
 

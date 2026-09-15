@@ -23,6 +23,18 @@ class NodeType(StrEnum):
     TOOL = "tool"
     ROUTER = "router"
     OUTPUT = "output"
+    # Added for the studio-consolidation program (see
+    # docs/planning/features/studio-consolidation-plan.md, Phase 1): absorbed
+    # from micro-ui-agent-builder's FlowStep node vocabulary. Schema-only in
+    # Phase 1 — runtime executors land in Phase 2 (backend/app/nodes.py); a
+    # graph containing one of these blocks compile with NODE_TYPE_NOT_EXECUTABLE
+    # until then (see compiler.py).
+    GUARDRAIL = "guardrail"
+    RUBRIC = "rubric"
+    HUMAN_GATE = "human_gate"
+    TOOL_LOOP = "tool_loop"
+    CODE_EXEC = "code_exec"
+    BRANCH = "branch"
 
 
 class EdgeKind(StrEnum):

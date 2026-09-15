@@ -1,5 +1,19 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Bot, GitBranch, LogIn, LogOut, PenLine, Wrench, type LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Code2,
+  GitBranch,
+  GitFork,
+  ListChecks,
+  LogIn,
+  LogOut,
+  PauseCircle,
+  PenLine,
+  Repeat,
+  ShieldCheck,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import type { CSSProperties } from "react";
 import type { CompileIssue } from "../../diagnostics";
 import type { NodeType } from "../../types";
@@ -12,6 +26,15 @@ const ICONS: Record<NodeType, LucideIcon> = {
   tool: Wrench,
   router: GitBranch,
   output: LogOut,
+  // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
+  // (studio-consolidation Phase 1) — not yet creatable via NodePalette.tsx
+  // or executable until Phase 2; icons are provisional.
+  guardrail: ShieldCheck,
+  rubric: ListChecks,
+  human_gate: PauseCircle,
+  tool_loop: Repeat,
+  code_exec: Code2,
+  branch: GitFork,
 };
 
 export interface GraphNodeData extends Record<string, unknown> {

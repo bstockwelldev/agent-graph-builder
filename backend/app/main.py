@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -27,7 +28,15 @@ from .model_catalog import list_provider_models
 from .provider_credentials import get_provider_credentials
 from .spa_cache import SpaCacheControlMiddleware
 
-app = FastAPI(title="Agent Graph Builder POC")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    load_app_env()
+    if storage.storage_is_healthy() and storage.get_graph(build_demo_graph().id) is None:
+        storage.save_graph(build_demo_graph())
+    yield
+
+
+app = FastAPI(title="Agent Graph Builder POC", lifespan=lifespan)
 
 
 class DurableStorageMiddleware(BaseHTTPMiddleware):
@@ -64,14 +73,6 @@ if not os.environ.get("VERCEL"):
         """API-only local dev: redirect to OpenAPI docs."""
         return RedirectResponse(url="/docs")
 
-
-@app.on_event("startup")
-def bootstrap() -> None:
-    load_app_env()
-    if not storage.storage_is_healthy():
-        return
-    if storage.get_graph(build_demo_graph().id) is None:
-        storage.save_graph(build_demo_graph())
 
 
 @app.get("/api/health")

@@ -39,6 +39,41 @@ export const NODE_TYPE_TAXONOMY: Record<
     summary: "Return the final run result",
     details: "Whatever value reaches this node becomes the run result shown in the Run panel.",
   },
+  // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
+  // (studio-consolidation Phase 1, docs/planning/features/studio-consolidation-plan.md).
+  // No palette entry yet — NodePalette.tsx has its own literal node-type
+  // list — and no executor until Phase 2; a graph using one blocks compile
+  // with NODE_TYPE_NOT_EXECUTABLE. Copy here is provisional.
+  guardrail: {
+    title: "Guardrail node",
+    summary: "Validate input before the model runs",
+    details: "Checks the latest user text against an input-safety policy. Not yet executable in this playground.",
+  },
+  rubric: {
+    title: "Rubric node",
+    summary: "Static prompt-quality check",
+    details: "Scans the compiled prompt for static quality findings. Not yet executable in this playground.",
+  },
+  human_gate: {
+    title: "Human gate node",
+    summary: "Pause the run for approval",
+    details: "Pauses execution for a human checkpoint before continuing. Not yet executable in this playground.",
+  },
+  tool_loop: {
+    title: "Tool-loop node",
+    summary: "Multi-step tool-calling agent",
+    details: "Repeats tool calls up to a configured limit before returning. Not yet executable in this playground.",
+  },
+  code_exec: {
+    title: "Code execution node",
+    summary: "Declare a code-execution contract",
+    details: "Describes code the model should run via a linked tool. Not yet executable in this playground.",
+  },
+  branch: {
+    title: "Branch node",
+    summary: "Substring gate with real out-edges",
+    details: "Gates on a substring match in upstream text, with its own conditional out-edges. Not yet executable in this playground.",
+  },
 };
 
 export const EDGE_KIND_TAXONOMY = {

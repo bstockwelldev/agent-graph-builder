@@ -1,6 +1,26 @@
 export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "google" | "azure";
 
-export type NodeType = "input" | "prompt" | "llm" | "tool" | "router" | "output";
+/**
+ * The six original POC node types plus six absorbed from
+ * micro-ui-agent-builder's FlowStep vocabulary (studio-consolidation
+ * program, Phase 1 — see docs/planning/features/studio-consolidation-plan.md).
+ * The absorbed six are schema-only until Phase 2 adds runtime executors;
+ * the backend blocks compiling a graph that uses one with a
+ * NODE_TYPE_NOT_EXECUTABLE diagnostic.
+ */
+export type NodeType =
+  | "input"
+  | "prompt"
+  | "llm"
+  | "tool"
+  | "router"
+  | "output"
+  | "guardrail"
+  | "rubric"
+  | "human_gate"
+  | "tool_loop"
+  | "code_exec"
+  | "branch";
 export type EdgeKind = "sequence" | "conditional" | "default";
 export type GraphOrientation = "auto" | "horizontal" | "vertical";
 

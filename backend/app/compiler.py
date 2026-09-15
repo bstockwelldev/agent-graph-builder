@@ -11,12 +11,13 @@ does not apply to this slice.
 from __future__ import annotations
 
 from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
+from .node_configs import validate_node_config
+from .nodes import EXECUTORS
 
 
 def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     node_ids = {n.id for n in graph.nodes}
-    nodes_by_id = {n.id for n in graph.nodes}
 
     if graph.entry_node_id not in node_ids:
         diagnostics.append(
@@ -152,6 +153,35 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     code="UNSUPPORTED_TOOL_BINDING",
                     node_id=node.id,
                     message=f"Tool node {node.id!r} references unsupported tool {tool_name!r}",
+                    blocking=True,
+                )
+            )
+
+    # Node types absorbed from micro-ui-agent-builder's FlowStep vocabulary
+    # (studio-consolidation Phase 1) have no runtime executor yet — that
+    # lands in Phase 2. Block compiling/running them now rather than letting
+    # runtime.py KeyError on EXECUTORS[node.type] mid-run.
+    for node in graph.nodes:
+        if node.type.value not in EXECUTORS:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="NODE_TYPE_NOT_EXECUTABLE",
+                    node_id=node.id,
+                    message=f"Node type {node.type.value!r} has no runtime executor yet",
+                    blocking=True,
+                )
+            )
+
+    # Typed per-node-type config validation (studio-consolidation Phase 1).
+    for node in graph.nodes:
+        for message in validate_node_config(node.type, node.config):
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="NODE_CONFIG_INVALID",
+                    node_id=node.id,
+                    message=f"{node.type.value} node {node.id!r}: {message}",
                     blocking=True,
                 )
             )

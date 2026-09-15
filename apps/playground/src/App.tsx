@@ -81,6 +81,22 @@ function defaultConfig(type: NodeType): Record<string, unknown> {
       return {};
     case "output":
       return {};
+    // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
+    // (studio-consolidation Phase 1) — not creatable via NodePalette.tsx yet
+    // (Phase 4 wires the ported studio's node picker instead), so these
+    // defaults exist only to keep this switch exhaustive over NodeType.
+    case "guardrail":
+      return { allowUrls: false };
+    case "rubric":
+      return { rubricFailOnFindings: false };
+    case "branch":
+      return { content: "" };
+    case "tool_loop":
+      return { provider: "ollama", model: "qwen2.5:3b", systemPrompt: "", maxToolIterations: 4 };
+    case "code_exec":
+      return { content: "", codeExecLanguage: "python" };
+    case "human_gate":
+      return { content: "" };
   }
 }
 
@@ -100,6 +116,18 @@ function labelFor(type: NodeType, config: Record<string, unknown>): string {
       return "router";
     case "output":
       return "output";
+    case "guardrail":
+      return "guardrail";
+    case "rubric":
+      return "rubric";
+    case "branch":
+      return String(config.content ?? "branch");
+    case "tool_loop":
+      return String(config.model ?? "tool loop");
+    case "code_exec":
+      return String(config.codeExecLanguage ?? "code exec");
+    case "human_gate":
+      return "human gate";
   }
 }
 
