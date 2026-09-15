@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 import HomePage from "./page";
 
 describe("HomePage", () => {
-  it("renders the scaffold placeholder", () => {
+  it("renders the themed shell with a shadcn Button", () => {
     render(<HomePage />);
     expect(screen.getByText("Agent Graph Studio")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Compile" })).toBeTruthy();
   });
 });
