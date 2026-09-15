@@ -27,8 +27,8 @@ const ICONS: Record<NodeType, LucideIcon> = {
   router: GitBranch,
   output: LogOut,
   // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
-  // (studio-consolidation Phase 1) — not yet creatable via NodePalette.tsx
-  // or executable until Phase 2; icons are provisional.
+  // (studio-consolidation program) — fully executable as of Phase 2, but
+  // not yet creatable via NodePalette.tsx; icons are provisional.
   guardrail: ShieldCheck,
   rubric: ListChecks,
   human_gate: PauseCircle,
@@ -41,7 +41,10 @@ export interface GraphNodeData extends Record<string, unknown> {
   nodeType: NodeType;
   label: string;
   config: Record<string, unknown>;
-  status?: "idle" | "running" | "succeeded" | "failed";
+  // "paused" added for the `human_gate` node type (studio-consolidation
+  // Phase 2) — not creatable via NodePalette.tsx yet, but a NodeTrace can
+  // already carry this status once the API is used directly.
+  status?: "idle" | "running" | "succeeded" | "failed" | "paused";
   compileIssue?: CompileIssue | null;
   inspectionDimmed?: boolean;
 }

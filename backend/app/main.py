@@ -23,7 +23,7 @@ from .env_config import (
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
-from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunSummary
+from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunResumeRequest, RunSummary
 from .model_catalog import list_provider_models
 from .provider_credentials import get_provider_credentials
 from .spa_cache import SpaCacheControlMiddleware
@@ -201,6 +201,34 @@ def get_run(run_id: str) -> RunSummary:
     summary = runtime.get_run_summary(run_id)
     if summary is None:
         raise HTTPException(status_code=404, detail="run not found")
+    return summary
+
+
+@app.post("/api/runs/{run_id}/resume")
+async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
+    """Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
+
+    approve=True (default) continues execution from the paused node;
+    approve=False fails the run instead. 404 when there is nothing paused
+    for this run_id (already resolved, unknown run, or — same accepted
+    simplification as compiled-workflow lookup elsewhere in this API — the
+    compiled workflow was lost to a process restart).
+    """
+    if runtime.get_run_pause_state(run_id) is None:
+        raise HTTPException(status_code=404, detail="run has no pending human_gate checkpoint to resume")
+
+    if not request.approve:
+        runtime.reject_run(run_id, reason=request.reason)
+    elif runtime.is_serverless_runtime():
+        if await runtime.resume_run_inline(run_id) is None:
+            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+    else:
+        if runtime.resume_run(run_id) is None:
+            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+
+    summary = runtime.get_run_summary(run_id)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="run vanished after resume")
     return summary
 
 

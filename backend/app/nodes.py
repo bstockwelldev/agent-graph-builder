@@ -12,14 +12,30 @@ Each `compute_*` function returns (input_repr, output, state_delta):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from .events import RunEventBus
+from .guardrails import check_guardrail
 from .models import EdgeKind, GraphDefinition, GraphNode
 from .providers.base import ChatModel
+from .rubric import analyze_prompt
 
 NodeResult = tuple[Any, Any, dict[str, Any]]
+
+
+class RunPaused(Exception):
+    """Raised by `compute_human_gate` when a checkpoint has not been
+    approved yet. Caught specifically in runtime.py's `_make_node_runner`
+    (studio-consolidation Phase 2) — distinct from a real failure: the run
+    stops cleanly with status="paused" rather than "failed", resumable via
+    `POST /api/runs/{id}/resume`.
+    """
+
+    def __init__(self, node_id: str) -> None:
+        self.node_id = node_id
+        super().__init__(f"human_gate node {node_id!r} is awaiting approval")
 
 # Intentionally tiny, deterministic "knowledge base" for the one demo tool.
 # Proves the tool-node seam; nothing more is needed for the POC.
@@ -47,6 +63,19 @@ class ExecContext:
     graph: GraphDefinition
     bus: RunEventBus
     chat_model_factory: Callable[[str | None], ChatModel]
+    # Shadow copy of the LangGraph RunState, kept in sync by
+    # runtime.py's `_make_node_runner` after every node completes.
+    # Exists only so a `human_gate` pause (studio-consolidation Phase 2) can
+    # snapshot "everything computed so far" for `POST /api/runs/{id}/resume`
+    # — LangGraph's own `ainvoke()` does not hand back partial state on the
+    # exception path `RunPaused` takes, so this tracks it independently.
+    state_snapshot: dict[str, Any] = field(default_factory=lambda: {"variables": {}, "node_outputs": {}, "route_decisions": []})
+    # Needed only to persist a resumable RunPauseState (studio-consolidation
+    # Phase 2, human_gate) — no node executor reads these.
+    compiled_workflow_id: str | None = None
+    resolved_provider: str | None = None
+    requested_model: str | None = None
+    api_key: str | None = None
 
 
 def get_upstream_output(node: GraphNode, state: dict[str, Any], graph: GraphDefinition) -> Any:
@@ -152,6 +181,198 @@ async def compute_output(node: GraphNode, state: dict[str, Any], ctx: ExecContex
     return upstream, upstream, {"result": upstream}
 
 
+# ---------------------------------------------------------------------------
+# Studio-consolidation Phase 2 executors (see
+# docs/planning/features/studio-consolidation-plan.md). Node types absorbed
+# from micro-ui-agent-builder's FlowStep vocabulary in Phase 1 gain their
+# runtime behavior here.
+# ---------------------------------------------------------------------------
+
+
+async def compute_guardrail(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Validates the upstream text; raises (failing the run, per
+    _make_node_runner's exception handling) on the first violation found.
+    """
+    upstream = str(get_upstream_output(node, state, ctx.graph))
+    allow_urls = bool(node.config.get("allowUrls", False))
+    check_guardrail(upstream, allow_urls=allow_urls)
+    return {"allowUrls": allow_urls}, upstream, {}
+
+
+async def compute_rubric(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Runs static findings on the upstream text; blocks the run only when
+    `rubricFailOnFindings` is set and findings exist — otherwise passes
+    upstream through with the findings attached for observability.
+    """
+    upstream = str(get_upstream_output(node, state, ctx.graph))
+    findings = analyze_prompt(upstream)
+    fail_on_findings = bool(node.config.get("rubricFailOnFindings", False))
+    if fail_on_findings and findings:
+        raise ValueError(f"rubric findings blocked this run: {'; '.join(findings)}")
+    output = {"findings": findings, "text": upstream}
+    return {"rubricFailOnFindings": fail_on_findings}, output, {}
+
+
+async def compute_branch(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Substring gate with real conditional out-edges — a genuine upgrade
+    over micro-ui-agent-builder's `branch` step, which is a whole-run
+    precondition with no alternate targets. Mirrors `compute_router`'s
+    edge-selection and `edge.selected` emission, keyed on a single boolean
+    match rather than a classification string. An empty `content` always
+    matches (a documentation-only gate, same convention as an empty
+    conditional-edge `condition`).
+    """
+    upstream = str(get_upstream_output(node, state, ctx.graph))
+    required = (node.config.get("content") or "").strip()
+    matched = not required or required.lower() in upstream.lower()
+
+    outgoing = [e for e in ctx.graph.edges if e.source == node.id]
+    conditional_edges = [e for e in outgoing if e.kind == EdgeKind.CONDITIONAL]
+    default_edges = [e for e in outgoing if e.kind == EdgeKind.DEFAULT]
+
+    eligible: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    if matched and conditional_edges:
+        eligible = [{"edgeId": e.id, "target": e.target, "condition": e.condition} for e in conditional_edges]
+    else:
+        excluded = [{"edgeId": e.id, "target": e.target, "condition": e.condition} for e in conditional_edges]
+
+    if eligible:
+        selected = next(e for e in conditional_edges if e.id == eligible[0]["edgeId"])
+        rationale = "branch_matched"
+    elif default_edges:
+        selected = default_edges[0]
+        rationale = "branch_fallback"
+    else:
+        raise ValueError(f"Branch node {node.id!r} has no matching conditional edge and no default edge")
+
+    ctx.bus.emit(
+        "edge.selected",
+        {
+            "eligible": eligible,
+            "excluded": excluded,
+            "selectedEdgeId": selected.id,
+            "selectedTargetNodeId": selected.target,
+            "rationale": rationale,
+        },
+        node_id=node.id,
+    )
+
+    output = {
+        "matched": matched,
+        "requiredSubstring": required,
+        "selectedTargetNodeId": selected.target,
+        "rationale": rationale,
+    }
+    route_decision = {"nodeId": node.id, "selectedEdgeId": selected.id, "selectedTargetNodeId": selected.target}
+    return {"upstream": upstream, "requiredSubstring": required}, output, {"route_decisions": [route_decision]}
+
+
+# `tool_loop` node convention: a provider-agnostic, text-based tool-call
+# marker instead of each of the six provider adapters implementing native
+# function-calling (a much larger, separate effort not needed to prove this
+# node type). Real providers may or may not follow it faithfully; the Stub
+# adapter (`providers/stub.py`) follows it deterministically so the loop is
+# fully testable offline. Only the existing `lookup_topic` tool is wired —
+# Phase 3's tool registry replaces this with real per-flow tool binding.
+_TOOL_CALL_PATTERN = re.compile(r"^\s*TOOL_CALL:\s*lookup_topic:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+
+
+def _tool_loop_system_prompt(base: str | None) -> str:
+    instructions = (
+        "You can call the lookup_topic tool for factual lookups. To call it, respond with "
+        "exactly: TOOL_CALL: lookup_topic: <topic>. Otherwise, give your final answer directly "
+        "with no prefix."
+    )
+    return f"{base}\n\n{instructions}" if base else instructions
+
+
+def _render_tool_loop_prompt(question: str, tool_results: list[dict[str, str]]) -> str:
+    if not tool_results:
+        return str(question)
+    results_text = "\n".join(f"Tool result for '{r['topic']}': {r['result']}" for r in tool_results)
+    return f"{question}\n\n{results_text}\n\nGive your final answer now."
+
+
+def _parse_tool_call(response: str) -> str | None:
+    match = _TOOL_CALL_PATTERN.match(response.strip())
+    return match.group(1).strip() if match else None
+
+
+async def compute_tool_loop(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    upstream = get_upstream_output(node, state, ctx.graph)
+    base_system_prompt = node.config.get("systemPrompt")
+    model = node.config.get("model")
+    max_iterations = int(node.config.get("maxToolIterations", 1))
+    chat_model = ctx.chat_model_factory(model)
+
+    tool_results: list[dict[str, str]] = []
+    transcript: list[dict[str, Any]] = []
+    final_output: str | None = None
+
+    for iteration in range(1, max_iterations + 1):
+        user_prompt = _render_tool_loop_prompt(str(upstream), tool_results)
+        response = await chat_model.generate(
+            system_prompt=_tool_loop_system_prompt(base_system_prompt), user_prompt=user_prompt
+        )
+        transcript.append({"iteration": iteration, "modelResponse": response})
+
+        topic = _parse_tool_call(response)
+        if topic is None:
+            final_output = response
+            break
+
+        result = lookup_topic(topic)
+        tool_results.append({"topic": topic, "result": result})
+        transcript.append({"iteration": iteration, "toolCall": "lookup_topic", "topic": topic, "result": result})
+
+    if final_output is None:
+        final_output = f"[tool_loop] Iteration limit ({max_iterations}) reached without a final answer."
+
+    input_repr = {
+        "provider": chat_model.provider_name,
+        "model": chat_model.model,
+        "systemPrompt": base_system_prompt,
+        "userPrompt": upstream,
+        "maxToolIterations": max_iterations,
+        "transcript": transcript,
+    }
+    return input_repr, final_output, {}
+
+
+async def compute_code_exec(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Declares code-execution expectations and passes upstream through
+    unexecuted — no sandbox runner is wired in this phase, per the POC
+    simplifications table in README.md.
+    """
+    upstream = get_upstream_output(node, state, ctx.graph)
+    language = node.config.get("codeExecLanguage") or "unspecified"
+    contract = node.config.get("content", "")
+    tool_name = node.config.get("toolName")
+    output = {
+        "status": "not_executed",
+        "language": language,
+        "contract": contract,
+        "toolName": tool_name,
+        "note": "No sandbox executor is wired yet (studio-consolidation Phase 2); validated and passed through only.",
+        "upstream": upstream,
+    }
+    input_repr = {"language": language, "contract": contract, "toolName": tool_name}
+    return input_repr, output, {}
+
+
+async def compute_human_gate(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Pauses the run on first execution (raises `RunPaused`, handled in
+    runtime.py); once resumed with this node's id marked approved in
+    `state["variables"]["__approved_gates__"]`, passes upstream through.
+    """
+    approved_gates = state["variables"].get("__approved_gates__", {})
+    if not approved_gates.get(node.id, False):
+        raise RunPaused(node.id)
+    upstream = get_upstream_output(node, state, ctx.graph)
+    return {"content": node.config.get("content", ""), "approved": True}, upstream, {}
+
+
 EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitable[NodeResult]]] = {
     "input": compute_input,
     "prompt": compute_prompt,
@@ -159,4 +380,10 @@ EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitabl
     "tool": compute_tool,
     "router": compute_router,
     "output": compute_output,
+    "guardrail": compute_guardrail,
+    "rubric": compute_rubric,
+    "branch": compute_branch,
+    "tool_loop": compute_tool_loop,
+    "code_exec": compute_code_exec,
+    "human_gate": compute_human_gate,
 }

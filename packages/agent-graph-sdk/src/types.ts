@@ -3,10 +3,8 @@ export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "googl
 /**
  * The six original POC node types plus six absorbed from
  * micro-ui-agent-builder's FlowStep vocabulary (studio-consolidation
- * program, Phase 1 — see docs/planning/features/studio-consolidation-plan.md).
- * The absorbed six are schema-only until Phase 2 adds runtime executors;
- * the backend blocks compiling a graph that uses one with a
- * NODE_TYPE_NOT_EXECUTABLE diagnostic.
+ * program — see docs/planning/features/studio-consolidation-plan.md).
+ * All twelve have runtime executors as of Phase 2 (backend/app/nodes.py).
  */
 export type NodeType =
   | "input"
@@ -79,7 +77,10 @@ export interface RouteDecision {
 export interface RunSummary {
   run_id: string;
   graph_id: string;
-  status: "queued" | "running" | "succeeded" | "failed";
+  // "paused" added for the `human_gate` node type (studio-consolidation
+  // Phase 2): a run stopped at a human-approval checkpoint, resumable via
+  // `AgentGraphClient.resumeRun` (POST /api/runs/{id}/resume).
+  status: "queued" | "running" | "succeeded" | "failed" | "paused";
   result: unknown;
   input?: Record<string, unknown>;
   provider?: string | null;
@@ -93,7 +94,7 @@ export interface RunSummary {
 export interface NodeTrace {
   node_id: string;
   node_type: NodeType;
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "succeeded" | "failed" | "paused";
   input: unknown;
   output: unknown;
   started_at: string;
@@ -106,9 +107,12 @@ export interface PlatformEvent {
     | "run.started"
     | "run.completed"
     | "run.failed"
+    | "run.paused"
+    | "run.resumed"
     | "node.started"
     | "node.completed"
     | "node.failed"
+    | "node.paused"
     | "edge.selected";
   run_id: string;
   node_id?: string | null;

@@ -40,39 +40,39 @@ export const NODE_TYPE_TAXONOMY: Record<
     details: "Whatever value reaches this node becomes the run result shown in the Run panel.",
   },
   // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
-  // (studio-consolidation Phase 1, docs/planning/features/studio-consolidation-plan.md).
-  // No palette entry yet — NodePalette.tsx has its own literal node-type
-  // list — and no executor until Phase 2; a graph using one blocks compile
-  // with NODE_TYPE_NOT_EXECUTABLE. Copy here is provisional.
+  // (studio-consolidation program, docs/planning/features/studio-consolidation-plan.md).
+  // Fully executable via the API as of Phase 2 (backend/app/nodes.py) — no
+  // palette entry yet, since NodePalette.tsx has its own literal node-type
+  // list; Phase 4 wires the ported studio's node picker instead.
   guardrail: {
     title: "Guardrail node",
     summary: "Validate input before the model runs",
-    details: "Checks the latest user text against an input-safety policy. Not yet executable in this playground.",
+    details: "Checks the upstream text against an input-safety policy (length, URLs, injection phrases); fails the run on a violation. Not yet addable from this palette.",
   },
   rubric: {
     title: "Rubric node",
     summary: "Static prompt-quality check",
-    details: "Scans the compiled prompt for static quality findings. Not yet executable in this playground.",
+    details: "Scans upstream text for static quality findings (empty text, unresolved placeholders, TODO markers). Blocks the run only when rubricFailOnFindings is set. Not yet addable from this palette.",
   },
   human_gate: {
     title: "Human gate node",
     summary: "Pause the run for approval",
-    details: "Pauses execution for a human checkpoint before continuing. Not yet executable in this playground.",
+    details: "Pauses execution for a human checkpoint; resume or reject via POST /api/runs/{id}/resume. Not yet addable from this palette.",
   },
   tool_loop: {
     title: "Tool-loop node",
     summary: "Multi-step tool-calling agent",
-    details: "Repeats tool calls up to a configured limit before returning. Not yet executable in this playground.",
+    details: "Repeats tool calls (currently lookup_topic) up to a configured limit before returning a final answer. Not yet addable from this palette.",
   },
   code_exec: {
     title: "Code execution node",
     summary: "Declare a code-execution contract",
-    details: "Describes code the model should run via a linked tool. Not yet executable in this playground.",
+    details: "Describes code the model should run via a linked tool; validated and passed through — no sandbox executor is wired yet. Not yet addable from this palette.",
   },
   branch: {
     title: "Branch node",
     summary: "Substring gate with real out-edges",
-    details: "Gates on a substring match in upstream text, with its own conditional out-edges. Not yet executable in this playground.",
+    details: "Gates on a substring match in upstream text, with its own conditional and default out-edges — a real branch, not a whole-run precondition. Not yet addable from this palette.",
   },
 };
 

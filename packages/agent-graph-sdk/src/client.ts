@@ -62,6 +62,16 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         body: JSON.stringify({ graph_id: graphId, input, provider, model, api_key: apiKey }),
       }),
     getRunNodeTraces: (runId: string) => jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${runId}/nodes`),
+    /**
+     * Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
+     * `approve` defaults to true; pass false to fail the run instead of
+     * resuming it. 404s when there is nothing paused for this run id.
+     */
+    resumeRun: (runId: string, approve = true, reason?: string) =>
+      jsonFetch<RunSummary>(baseUrl, `/api/runs/${runId}/resume`, {
+        method: "POST",
+        body: JSON.stringify({ approve, reason }),
+      }),
     providerReady: (provider: ChatProvider) =>
       jsonFetch<{ ready: boolean; message: string }>(baseUrl, `/api/providers/${provider}/ready`),
     providerCredentials: (provider: ChatProvider) =>

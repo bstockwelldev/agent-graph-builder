@@ -104,6 +104,15 @@ class CreateGraphRequest(BaseModel):
     template: Literal["blank", "demo"] = "blank"
 
 
+class RunResumeRequest(BaseModel):
+    """Body for POST /api/runs/{id}/resume (studio-consolidation Phase 2,
+    human_gate). approve=False rejects the checkpoint and fails the run
+    without resuming execution."""
+
+    approve: bool = True
+    reason: str | None = None
+
+
 class RouteDecision(BaseModel):
     node_id: str = Field(alias="nodeId")
     selected_edge_id: str = Field(alias="selectedEdgeId")
@@ -115,7 +124,11 @@ class RouteDecision(BaseModel):
 class RunSummary(BaseModel):
     run_id: str
     graph_id: str
-    status: Literal["queued", "running", "succeeded", "failed"]
+    # "paused" added for the `human_gate` node type (studio-consolidation
+    # Phase 2): a run stopped at a human-approval checkpoint, resumable via
+    # POST /api/runs/{id}/resume. completed_at is set when paused too (this
+    # invocation's event bus has closed), same as succeeded/failed.
+    status: Literal["queued", "running", "succeeded", "failed", "paused"]
     result: Any | None = None
     input: dict[str, Any] = Field(default_factory=dict)
     provider: str | None = None
@@ -129,9 +142,31 @@ class RunSummary(BaseModel):
 class NodeTrace(BaseModel):
     node_id: str
     node_type: NodeType
-    status: Literal["running", "succeeded", "failed"]
+    status: Literal["running", "succeeded", "failed", "paused"]
     input: Any = None
     output: Any = None
     started_at: str
     completed_at: str | None = None
     error: str | None = None
+
+
+class RunPauseState(BaseModel):
+    """Persisted checkpoint for a run stopped at a `human_gate` node.
+
+    Added for studio-consolidation Phase 2. Deliberately process-local only
+    for now (kept in runtime.py's RUN_PAUSES, not storage.py) — the same
+    accepted simplification `COMPILED_WORKFLOWS` already makes in this file;
+    durable pause state across restarts/serverless isolates is a follow-up
+    (see docs/planning/features/studio-consolidation-plan.md, Phase 2 notes).
+    """
+
+    run_id: str
+    graph_id: str
+    compiled_workflow_id: str
+    paused_node_id: str
+    variables: dict[str, Any] = Field(default_factory=dict)
+    node_outputs: dict[str, Any] = Field(default_factory=dict)
+    route_decisions: list[dict[str, Any]] = Field(default_factory=list)
+    provider: str | None = None
+    model: str | None = None
+    api_key: str | None = None

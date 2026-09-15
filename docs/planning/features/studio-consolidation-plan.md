@@ -187,6 +187,13 @@ Add one `compute_*` per new type to `backend/app/nodes.py`'s `EXECUTORS` dict:
 
 Add a one-shot `FlowDocument → GraphDefinition` migration script under `scripts/` with a fixture test: map `steps[]` (ordered by `order`) into nodes, synthesize sequence edges where `flow.edges` is absent, set `entry_node_id` to the first step.
 
+**Implementation notes (as built):**
+
+- `tool_loop` does **not** extend the `ChatModel` protocol. Instead it uses a provider-agnostic, text-based tool-call marker (`nodes.py:_tool_loop_system_prompt`/`_parse_tool_call`) that every existing adapter already satisfies via plain `generate()` — avoiding a native function-calling implementation across all 6 providers for a node type that (until Phase 3's tool registry lands) can only call the one existing `lookup_topic` tool anyway. The Stub adapter follows the convention deterministically (`providers/stub.py`) so the loop is fully testable offline; real providers may or may not follow it faithfully.
+- `human_gate` pause state is **process-local only** (`runtime.py:RUN_PAUSES`), the same accepted simplification `COMPILED_WORKFLOWS` already makes in this file. A paused run's `RunSummary` still persists durably (`status="paused"`), but resuming it after a process restart is not possible until this gets a real `storage.py` backend — a deferred follow-up, not done in this phase, consistent with the plan's own allowance to scope `human_gate` down.
+- `branch` and `router` share LangGraph conditional-edge wiring and a `route_decisions`-replay path function in `runtime.py` (renamed `_make_route_decision_path_fn`); `compiler.py`'s router-only fallback/outgoing-edge diagnostics were generalized to both types under a shared `ROUTER_*`/`BRANCH_*` code prefix.
+- Resume replays every node whose output was already computed before the pause (from the persisted snapshot) instead of re-invoking real executors — see `ExecContext.state_snapshot` and `_merge_into_snapshot` in `runtime.py`/`nodes.py`. This is what keeps resume from re-running LLM/tool calls upstream of the gate. A `POST /api/runs/{id}/resume` body of `{"approve": false}` fails the run instead of resuming it (`reject_run`).
+
 ### Phase 3 — Real tool + resource registries
 
 Add stored resources to `storage.py` beside graphs and runs: `prompts`, `tools` (incl. `requiresApproval`), `mcp_servers`, `agents`, `llm_profiles` — modeled on `packages/shared/src/schemas.ts`. Add CRUD routes (`/api/prompts`, `/api/tools`, `/api/mcp-servers`, `/api/agents`, `/api/llm-profiles`) and matching SDK client methods.
@@ -268,15 +275,16 @@ Keep AGB's `theme.ts` semantic roles re-pointed at MUI's CSS custom properties, 
 
 ### Phase 1 — Schema
 
-- [ ] `NodeType` extended in `models.py` + SDK `types.ts`/`schema.ts`
-- [ ] Typed per-node Pydantic configs
-- [ ] `compiler.py` per-type diagnostics
-- [ ] `route_decisions` casing fix; `lifespan` migration
+- [x] `NodeType` extended in `models.py` + SDK `types.ts`/`schema.ts`
+- [x] Typed per-node Pydantic configs (`backend/app/node_configs.py`)
+- [x] `compiler.py` per-type diagnostics
+- [x] `route_decisions` casing fix; `lifespan` migration
 
 ### Phase 2 — Executors
 
-- [ ] `guardrail`, `rubric`, `branch`, `tool_loop`, `code_exec` executors
-- [ ] `human_gate` pause/resume
+- [x] `guardrail`, `rubric`, `branch`, `tool_loop`, `code_exec` executors
+- [x] `human_gate` pause/resume — `POST /api/runs/{id}/resume`, in-memory `RUN_PAUSES` (durable storage.py backend deferred; see Phase 2 notes below)
+- [x] `FlowDocument → GraphDefinition` migration script (`backend/scripts/migrate_flow_to_graph.py`) + fixture tests
 - [ ] `FlowDocument → GraphDefinition` migration script
 
 ### Phase 3 — Registries

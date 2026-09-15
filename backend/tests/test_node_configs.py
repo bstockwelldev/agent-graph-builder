@@ -1,4 +1,5 @@
-"""Studio-consolidation Phase 1: NodeType expansion + typed config validation.
+"""Studio-consolidation Phase 1 + 2: NodeType expansion, typed config
+validation, and the NODE_TYPE_NOT_EXECUTABLE safety net.
 
 See docs/planning/features/studio-consolidation-plan.md.
 """
@@ -9,6 +10,7 @@ from app.compiler import validate_graph
 from app.demo_graph import build_demo_graph
 from app.models import GraphEdge, GraphNode, NodePosition, NodeType
 from app.node_configs import validate_node_config
+from app.nodes import EXECUTORS
 
 
 def _graph_with_extra_node(node: GraphNode, edge_source: str = "output_1") -> object:
@@ -26,13 +28,23 @@ def _graph_with_extra_node(node: GraphNode, edge_source: str = "output_1") -> ob
     )
 
 
-def test_new_node_types_are_not_yet_executable() -> None:
-    node = GraphNode(
-        id="guardrail_1",
-        type=NodeType.GUARDRAIL,
-        position=NodePosition(x=0, y=0),
-        config={},
-    )
+def test_all_node_types_have_executors_as_of_phase_2() -> None:
+    # Guards the NODE_TYPE_NOT_EXECUTABLE safety net added in Phase 1: every
+    # current NodeType must be a registered executor as of Phase 2 (see
+    # test_node_executors.py for the individual executor behaviors, and
+    # test_node_type_not_executable_guards_future_additions below for the
+    # guard itself, exercised against a type EXECUTORS doesn't know).
+    for node_type in NodeType:
+        assert node_type.value in EXECUTORS, f"{node_type.value} has no registered executor"
+
+
+def test_node_type_not_executable_guards_future_additions(monkeypatch) -> None:
+    # Exercises the NODE_TYPE_NOT_EXECUTABLE diagnostic itself without
+    # depending on any *current* node type staying unregistered forever.
+    import app.compiler as compiler_module
+
+    monkeypatch.setattr(compiler_module, "EXECUTORS", {k: v for k, v in EXECUTORS.items() if k != "guardrail"})
+    node = GraphNode(id="guardrail_1", type=NodeType.GUARDRAIL, position=NodePosition(x=0, y=0), config={})
     graph = _graph_with_extra_node(node)
 
     diagnostics = validate_graph(graph)

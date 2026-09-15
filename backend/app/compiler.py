@@ -103,10 +103,16 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             )
         )
 
-    # Router-specific requirement: a default/fallback edge must exist.
+    # Router AND branch specific requirement: a default/fallback edge must
+    # exist. Both compile to LangGraph conditional edges in runtime.py
+    # (studio-consolidation Phase 2 generalizes the router-only wiring to
+    # cover `branch` too), so both need the same fallback guarantee; the
+    # diagnostic code prefix stays ROUTER_* for the original type so
+    # existing consumers of those exact codes are unaffected.
     for node in graph.nodes:
-        if node.type != NodeType.ROUTER:
+        if node.type not in (NodeType.ROUTER, NodeType.BRANCH):
             continue
+        prefix = "ROUTER" if node.type == NodeType.ROUTER else "BRANCH"
         outgoing = [e for e in graph.edges if e.source == node.id]
         has_default = any(e.kind == EdgeKind.DEFAULT for e in outgoing)
         has_conditional = any(e.kind == EdgeKind.CONDITIONAL for e in outgoing)
@@ -114,9 +120,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
-                    code="ROUTER_NO_OUTGOING_EDGES",
+                    code=f"{prefix}_NO_OUTGOING_EDGES",
                     node_id=node.id,
-                    message=f"Router node {node.id!r} has no outgoing edges",
+                    message=f"{node.type.value} node {node.id!r} has no outgoing edges",
                     blocking=True,
                 )
             )
@@ -124,9 +130,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
-                    code="ROUTER_MISSING_FALLBACK",
+                    code=f"{prefix}_MISSING_FALLBACK",
                     node_id=node.id,
-                    message=f"Router node {node.id!r} has no default/fallback outgoing edge",
+                    message=f"{node.type.value} node {node.id!r} has no default/fallback outgoing edge",
                     blocking=True,
                 )
             )
@@ -134,9 +140,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             diagnostics.append(
                 Diagnostic(
                     severity="warning",
-                    code="ROUTER_NO_CONDITIONAL_EDGES",
+                    code=f"{prefix}_NO_CONDITIONAL_EDGES",
                     node_id=node.id,
-                    message=f"Router node {node.id!r} only has a default edge; it never branches",
+                    message=f"{node.type.value} node {node.id!r} only has a default edge; it never branches",
                     blocking=False,
                 )
             )
@@ -157,10 +163,11 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                 )
             )
 
-    # Node types absorbed from micro-ui-agent-builder's FlowStep vocabulary
-    # (studio-consolidation Phase 1) have no runtime executor yet — that
-    # lands in Phase 2. Block compiling/running them now rather than letting
-    # runtime.py KeyError on EXECUTORS[node.type] mid-run.
+    # Generic safety net: any NodeType with no registered executor in
+    # nodes.py's EXECUTORS dict blocks compile with a clear diagnostic
+    # instead of runtime.py KeyError-ing on EXECUTORS[node.type] mid-run.
+    # All twelve current node types have executors as of studio-
+    # consolidation Phase 2; this now only guards future additions.
     for node in graph.nodes:
         if node.type.value not in EXECUTORS:
             diagnostics.append(
