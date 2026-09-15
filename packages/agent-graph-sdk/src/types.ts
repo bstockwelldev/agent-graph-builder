@@ -141,3 +141,52 @@ export interface ProviderCredentials {
   env_var: string;
   configured: boolean;
 }
+
+/**
+ * Stored resources (studio-consolidation Phase 3 — see
+ * docs/planning/features/studio-consolidation-plan.md and
+ * backend/app/resource_models.py). Field names are plain snake_case,
+ * matching this SDK's existing convention (`entry_node_id`, `run_id`, …)
+ * rather than micro-ui-agent-builder's camelCase Zod schemas.
+ */
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  body: string;
+}
+
+export interface ToolDefinition {
+  id: string;
+  description: string;
+  parameters_json: string;
+  requires_approval: boolean;
+  /** When set with mcp_tool_name, `tool` nodes calling this id dispatch to
+   * that MCP server + remote tool name instead of a builtin or mock echo. */
+  mcp_server_id?: string | null;
+  mcp_tool_name?: string | null;
+}
+
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  url: string;
+  transport: "http" | "sse" | "stdio";
+  enabled: boolean;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  description?: string | null;
+  default_flow_id?: string | null;
+  system_instructions?: string | null;
+  optional_elements: string[];
+}
+
+export interface LlmProfile {
+  id: string;
+  name: string;
+  model: string;
+  model_provider?: string | null;
+  description?: string | null;
+}

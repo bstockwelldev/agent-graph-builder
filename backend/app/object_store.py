@@ -92,6 +92,18 @@ def get_json(key: str) -> dict[str, Any] | None:
     return json.loads(raw)
 
 
+def delete_json(key: str) -> bool:
+    """Deletes `key` if present; returns whether it existed. S3's
+    delete_object does not itself distinguish "deleted" from "already
+    absent", so existence is checked first (added for studio-consolidation
+    Phase 3's resource CRUD — graphs/runs are never deleted today).
+    """
+    if get_json(key) is None:
+        return False
+    s3_client().delete_object(Bucket=_bucket(), Key=key)
+    return True
+
+
 def list_keys(prefix: str) -> list[str]:
     client = s3_client()
     bucket = _bucket()

@@ -16,10 +16,14 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
+from . import storage
+from .builtin_tools import BUILTIN_CALCULATOR_ID, BUILTIN_WEB_SEARCH_ID, CalculatorError, calculator, web_search
 from .events import RunEventBus
 from .guardrails import check_guardrail
+from .mcp.client import call_mcp_tool
 from .models import EdgeKind, GraphDefinition, GraphNode
 from .providers.base import ChatModel
+from .resource_models import McpServerConfig, ToolDefinition
 from .rubric import analyze_prompt
 
 NodeResult = tuple[Any, Any, dict[str, Any]]
@@ -126,13 +130,58 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
 
 
 async def compute_tool(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Resolution order (studio-consolidation Phase 3 adds the last two):
+    `lookup_topic` (the original POC tool, kept for the demo graph) -> the
+    two builtins (`web_search`, `calculator`) -> a registered `ToolDefinition`
+    (dispatched to its bound MCP server, or a mock echo if unbound) -> error.
+    """
     tool_name = node.config.get("toolName", "lookup_topic")
     input_variable = node.config.get("inputVariable", "question")
-    topic = state["variables"].get(input_variable, "")
-    if tool_name != "lookup_topic":
-        raise ValueError(f"Unsupported tool: {tool_name!r} (only 'lookup_topic' is implemented in this POC)")
-    output = lookup_topic(str(topic))
-    return {"toolName": tool_name, "topic": topic}, output, {}
+    raw_input = state["variables"].get(input_variable, "")
+
+    if tool_name == "lookup_topic":
+        output = lookup_topic(str(raw_input))
+        return {"toolName": tool_name, "topic": raw_input}, output, {}
+
+    if tool_name == BUILTIN_WEB_SEARCH_ID:
+        output = await web_search(str(raw_input))
+        return {"toolName": tool_name, "query": raw_input}, output, {}
+
+    if tool_name == BUILTIN_CALCULATOR_ID:
+        try:
+            output = calculator(str(raw_input))
+        except CalculatorError as exc:
+            raise ValueError(f"calculator error: {exc}") from exc
+        return {"toolName": tool_name, "expression": raw_input}, output, {}
+
+    resource = storage.get_resource("tools", tool_name)
+    if resource is None:
+        raise ValueError(
+            f"Unsupported tool: {tool_name!r} (not 'lookup_topic', a builtin, or a registered tool)"
+        )
+    tool_def = ToolDefinition.model_validate(resource)
+
+    if tool_def.mcp_server_id and tool_def.mcp_tool_name:
+        server_resource = storage.get_resource("mcp_servers", tool_def.mcp_server_id)
+        if server_resource is None:
+            raise ValueError(f"tool {tool_name!r} references unknown MCP server {tool_def.mcp_server_id!r}")
+        server = McpServerConfig.model_validate(server_resource)
+        if not server.enabled:
+            raise ValueError(f"MCP server {server.id!r} is disabled")
+        arguments = raw_input if isinstance(raw_input, dict) else {input_variable: raw_input}
+        output = await call_mcp_tool(server, tool_def.mcp_tool_name, arguments)
+        input_repr = {
+            "toolName": tool_name,
+            "mcpServerId": server.id,
+            "mcpToolName": tool_def.mcp_tool_name,
+            "arguments": arguments,
+        }
+        return input_repr, output, {}
+
+    # No MCP binding registered — mock echo, matching MUI's agent-tools.ts
+    # convention for catalog tools with no real execution body.
+    output = {"toolId": tool_name, "input": raw_input, "note": "mock tool: no MCP binding registered"}
+    return {"toolName": tool_name}, output, {}
 
 
 async def compute_router(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:

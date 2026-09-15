@@ -68,6 +68,14 @@ _SCHEMA_STATEMENTS = (
         primary key (run_id, node_id)
     )
     """,
+    """
+    create table if not exists resource (
+        kind text not null,
+        id text not null,
+        payload_json text not null,
+        primary key (kind, id)
+    )
+    """,
 )
 
 
@@ -408,3 +416,94 @@ def get_run_traces(run_id: str) -> list[NodeTrace]:
             (run_id,),
         ).fetchall()
     return [NodeTrace.model_validate(json.loads(row[0])) for row in rows]
+
+
+def delete_graph(graph_id: str) -> bool:
+    """Deletes a graph; returns whether it existed. Added for
+    studio-consolidation Phase 3 — graphs were previously never deletable
+    through this API."""
+    remote = _json_object_backend()
+    if remote is not None:
+        # Matches _graph_key("graphs/{id}.json") in object_store.py /
+        # vercel_blob.py — not exposed as a shared helper, so inlined here.
+        return remote.delete_json(f"graphs/{graph_id}.json")
+    with _connect() as conn:
+        row = conn.execute("select 1 from graph where id = ?", (graph_id,)).fetchone()
+        if row is None:
+            return False
+        conn.execute("delete from graph where id = ?", (graph_id,))
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Generic resource CRUD (studio-consolidation Phase 3, see
+# docs/planning/features/studio-consolidation-plan.md and
+# resource_models.py). Prompts, tools, MCP servers, agents, and LLM
+# profiles are all small, JSON-shaped, non-relational documents — same
+# shape as `graph` — so one generic store serves all five kinds rather
+# than duplicating the graph/run pattern five times across four backends.
+# Object-store/Blob key convention: ``resources/{kind}/{id}.json``.
+# ---------------------------------------------------------------------------
+
+_RESOURCE_PREFIX = "resources/"
+
+
+def _resource_key(kind: str, resource_id: str) -> str:
+    return f"{_RESOURCE_PREFIX}{kind}/{resource_id}.json"
+
+
+def save_resource(kind: str, resource_id: str, payload: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_resource_key(kind, resource_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into resource (kind, id, payload_json) values (?, ?, ?) "
+            "on conflict(kind, id) do update set payload_json = excluded.payload_json",
+            (kind, resource_id, json.dumps(payload)),
+        )
+
+
+def get_resource(kind: str, resource_id: str) -> dict[str, Any] | None:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.get_json(_resource_key(kind, resource_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select payload_json from resource where kind = ? and id = ?", (kind, resource_id)
+        ).fetchone()
+    if row is None:
+        return None
+    return json.loads(row[0])
+
+
+def list_resources(kind: str) -> list[dict[str, Any]]:
+    remote = _json_object_backend()
+    if remote is not None:
+        items: list[dict[str, Any]] = []
+        for key in remote.list_keys(f"{_RESOURCE_PREFIX}{kind}/"):
+            payload = remote.get_json(key)
+            if payload is not None:
+                items.append(payload)
+        items.sort(key=lambda item: item.get("id", ""))
+        return items
+    with _connect() as conn:
+        rows = conn.execute(
+            "select payload_json from resource where kind = ? order by id", (kind,)
+        ).fetchall()
+    return [json.loads(row[0]) for row in rows]
+
+
+def delete_resource(kind: str, resource_id: str) -> bool:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.delete_json(_resource_key(kind, resource_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select 1 from resource where kind = ? and id = ?", (kind, resource_id)
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute("delete from resource where kind = ? and id = ?", (kind, resource_id))
+    return True

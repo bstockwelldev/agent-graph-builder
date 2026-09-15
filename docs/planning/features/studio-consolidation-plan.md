@@ -200,6 +200,16 @@ Add stored resources to `storage.py` beside graphs and runs: `prompts`, `tools` 
 
 Port builtin tools (`web_search`, `calculator` — keep `safe-calculator.ts`'s no-`eval` restriction), the flow-scoped tool allowlist, and the MCP JSON-RPC HTTP client (`mcp-jsonrpc-http.ts` → `backend/app/mcp/`) with `serverId.toolName` identity and degrade-don't-throw error handling. Improve on MUI by converting remote JSON Schema into real parameter validation rather than a passthrough. Add `DELETE /api/graphs/{id}` and run cancel here. This retires `LOOKUP_TABLE` in `nodes.py`.
 
+**Implementation notes (as built):**
+
+- `storage.py` gains **one generic resource table/key convention** (`resource(kind, id, payload_json)` for SQLite/Turso; `resources/{kind}/{id}.json` for object-store/Blob) shared by all five kinds, rather than five bespoke schemas — these are opaque, non-relational JSON documents with no query needs beyond list-by-kind, the same shape `graphs` already has. `object_store.py`/`vercel_blob.py` each gain a `delete_json`, and `storage.py` a `delete_graph` — graphs, and now resources, are deletable for the first time.
+- CRUD routes for all five kinds are registered by **one generic loop** in `main.py` (`_register_resource_routes`), not five hand-written copies — request/response bodies are typed `dict` in the FastAPI signatures (validated against the resource's actual Pydantic model inside the function body) specifically to work under this file's `from __future__ import annotations`, since a closure-local `model` variable used as a live type annotation is not resolvable through `typing.get_type_hints()`'s `__globals__`-only lookup.
+- `tool_loop`'s builtin tool-call convention (Phase 2) and `compute_tool`'s new resolution order now share the same `lookup_topic` fallback — **`LOOKUP_TABLE` was not retired** as the plan originally called for: removing it would break the existing demo graph and its tests, and nothing in this phase requires deleting it. It is simply no longer the *only* option — builtins, a stored `ToolDefinition`, and MCP dispatch are tried first for anything else.
+- The **flow-scoped tool allowlist** (`flow-tool-allowlist.ts`) was **not ported**. MUI's allowlist scopes a *flow's* available tools; AGB's `tool` node binds a tool id directly per-node, so there is no per-graph allowlist concept to port until Phase 4 introduces a flow-like grouping in the studio. Revisit then.
+- **Remote MCP JSON Schema is still a passthrough**, not converted to real parameter validation — the plan's suggested improvement over MUI's `z.record(z.unknown())` is deferred; `call_mcp_tool` forwards whatever arguments the `tool` node's config produces.
+- **Run cancel was not implemented** — no cancellation token is threaded through the `asyncio.create_task`-based execution path. `DELETE /api/graphs/{id}` was added as explicitly named.
+- Tool-binding validation (`compiler.py`'s `UNSUPPORTED_TOOL_BINDING`) now calls `storage.get_resource(...)`, a new I/O dependency for what was previously a pure function — exercised by the debounced `POST /api/graphs/validate` live-validation path too. Acceptable at this scale; noted as a trade-off, not a defect.
+
 ### Phase 4 — Stand up the Next.js studio alongside the playground
 
 Create `apps/studio` (Next.js 15). Do not delete `apps/playground` yet.
@@ -285,13 +295,14 @@ Keep AGB's `theme.ts` semantic roles re-pointed at MUI's CSS custom properties, 
 - [x] `guardrail`, `rubric`, `branch`, `tool_loop`, `code_exec` executors
 - [x] `human_gate` pause/resume — `POST /api/runs/{id}/resume`, in-memory `RUN_PAUSES` (durable storage.py backend deferred; see Phase 2 notes below)
 - [x] `FlowDocument → GraphDefinition` migration script (`backend/scripts/migrate_flow_to_graph.py`) + fixture tests
-- [ ] `FlowDocument → GraphDefinition` migration script
 
 ### Phase 3 — Registries
 
-- [ ] Stored prompts/tools/mcp_servers/agents/llm_profiles + CRUD routes
-- [ ] Builtin tools + MCP JSON-RPC client
-- [ ] `DELETE /api/graphs/{id}` + run cancel
+- [x] Stored prompts/tools/mcp_servers/agents/llm_profiles + generic CRUD routes
+- [x] Builtin tools (`web_search`, `calculator`) + MCP JSON-RPC client (`backend/app/mcp/client.py`)
+- [x] `DELETE /api/graphs/{id}` — run cancel not implemented (see Phase 3 notes above)
+- [ ] Flow-scoped tool allowlist — no AGB equivalent yet; revisit in Phase 4
+- [ ] Remote MCP JSON Schema → real parameter validation — still a passthrough
 
 ### Phase 4 — Studio
 

@@ -33,6 +33,13 @@ class FakeS3:
             )
         return {"Body": io.BytesIO(self.objects[Key])}
 
+    def delete_object(self, *, Bucket: str, Key: str) -> dict:
+        # Added for studio-consolidation Phase 3 (resource + graph delete);
+        # real S3 delete_object is idempotent (no error on a missing key).
+        del Bucket
+        self.objects.pop(Key, None)
+        return {}
+
     def list_objects_v2(
         self,
         *,
@@ -263,3 +270,39 @@ def test_object_store_does_not_write_sqlite(monkeypatch, tmp_path) -> None:
         storage.save_graph(build_demo_graph())
 
     assert not db_path.exists()
+
+
+def test_object_store_delete_graph(monkeypatch) -> None:
+    # studio-consolidation Phase 3.
+    _enable_object_store(monkeypatch)
+    fake = FakeS3()
+    graph = build_demo_graph()
+
+    with patch("app.object_store.boto3.client", return_value=fake):
+        storage.save_graph(graph)
+        assert storage.delete_graph(graph.id) is True
+        assert storage.get_graph(graph.id) is None
+        assert storage.delete_graph(graph.id) is False
+
+
+def test_object_store_resource_crud(monkeypatch) -> None:
+    # studio-consolidation Phase 3 generic resource store.
+    _enable_object_store(monkeypatch)
+    fake = FakeS3()
+
+    with patch("app.object_store.boto3.client", return_value=fake):
+        assert storage.get_resource("prompts", "p1") is None
+        storage.save_resource("prompts", "p1", {"id": "p1", "name": "Greeting", "body": "Hi"})
+        storage.save_resource("prompts", "p2", {"id": "p2", "name": "Farewell", "body": "Bye"})
+
+        assert storage.get_resource("prompts", "p1") == {"id": "p1", "name": "Greeting", "body": "Hi"}
+        listed = storage.list_resources("prompts")
+        assert [item["id"] for item in listed] == ["p1", "p2"]
+
+        # A different kind under the same generic prefix must not collide.
+        storage.save_resource("tools", "p1", {"id": "p1", "description": "unrelated"})
+        assert storage.list_resources("prompts") == listed
+
+        assert storage.delete_resource("prompts", "p1") is True
+        assert storage.get_resource("prompts", "p1") is None
+        assert storage.delete_resource("prompts", "p1") is False

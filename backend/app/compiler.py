@@ -10,9 +10,15 @@ does not apply to this slice.
 
 from __future__ import annotations
 
+from . import storage
+from .builtin_tools import BUILTIN_TOOL_IDS
 from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
 from .node_configs import validate_node_config
 from .nodes import EXECUTORS
+
+# Tool ids valid without a stored registry entry (studio-consolidation
+# Phase 3): the original POC demo tool, plus the two builtins.
+_KNOWN_TOOL_IDS = frozenset({"lookup_topic", *BUILTIN_TOOL_IDS})
 
 
 def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
@@ -147,21 +153,26 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                 )
             )
 
-    # Tool binding: only lookup_topic is implemented in this POC.
+    # Tool binding: lookup_topic, a builtin, or a registered tool
+    # (studio-consolidation Phase 3's registry, backend/app/resource_models.py)
+    # are all valid; anything else is unsupported.
     for node in graph.nodes:
         if node.type != NodeType.TOOL:
             continue
         tool_name = node.config.get("toolName")
-        if tool_name != "lookup_topic":
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="UNSUPPORTED_TOOL_BINDING",
-                    node_id=node.id,
-                    message=f"Tool node {node.id!r} references unsupported tool {tool_name!r}",
-                    blocking=True,
-                )
+        if tool_name in _KNOWN_TOOL_IDS:
+            continue
+        if tool_name is not None and storage.get_resource("tools", tool_name) is not None:
+            continue
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="UNSUPPORTED_TOOL_BINDING",
+                node_id=node.id,
+                message=f"Tool node {node.id!r} references unsupported tool {tool_name!r}",
+                blocking=True,
             )
+        )
 
     # Generic safety net: any NodeType with no registered executor in
     # nodes.py's EXECUTORS dict blocks compile with a clear diagnostic

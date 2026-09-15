@@ -99,6 +99,22 @@ def get_json(key: str) -> dict[str, Any] | None:
     return json.loads(response.content)
 
 
+def delete_json(key: str) -> bool:
+    """Deletes `key` if present; returns whether it existed (added for
+    studio-consolidation Phase 3's resource CRUD — graphs/runs are never
+    deleted today). Existence is checked first, symmetric with
+    object_store.delete_json.
+    """
+    if get_json(key) is None:
+        return False
+    with _http_client() as client:
+        response = client.delete(f"{_API_BASE}/", params={"pathname": key}, headers=_auth_headers())
+    if response.status_code == 404:
+        return False
+    response.raise_for_status()
+    return True
+
+
 def list_keys(prefix: str) -> list[str]:
     keys: list[str] = []
     cursor: str | None = None
