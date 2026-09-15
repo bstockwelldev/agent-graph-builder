@@ -39,6 +39,41 @@ export const NODE_TYPE_TAXONOMY: Record<
     summary: "Return the final run result",
     details: "Whatever value reaches this node becomes the run result shown in the Run panel.",
   },
+  // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
+  // (studio-consolidation program, docs/planning/features/studio-consolidation-plan.md).
+  // Fully executable via the API as of Phase 2 (backend/app/nodes.py) — no
+  // palette entry yet, since NodePalette.tsx has its own literal node-type
+  // list; Phase 4 wires the ported studio's node picker instead.
+  guardrail: {
+    title: "Guardrail node",
+    summary: "Validate input before the model runs",
+    details: "Checks the upstream text against an input-safety policy (length, URLs, injection phrases); fails the run on a violation. Not yet addable from this palette.",
+  },
+  rubric: {
+    title: "Rubric node",
+    summary: "Static prompt-quality check",
+    details: "Scans upstream text for static quality findings (empty text, unresolved placeholders, TODO markers). Blocks the run only when rubricFailOnFindings is set. Not yet addable from this palette.",
+  },
+  human_gate: {
+    title: "Human gate node",
+    summary: "Pause the run for approval",
+    details: "Pauses execution for a human checkpoint; resume or reject via POST /api/runs/{id}/resume. Not yet addable from this palette.",
+  },
+  tool_loop: {
+    title: "Tool-loop node",
+    summary: "Multi-step tool-calling agent",
+    details: "Repeats tool calls (currently lookup_topic) up to a configured limit before returning a final answer. Not yet addable from this palette.",
+  },
+  code_exec: {
+    title: "Code execution node",
+    summary: "Declare a code-execution contract",
+    details: "Describes code the model should run via a linked tool; validated and passed through — no sandbox executor is wired yet. Not yet addable from this palette.",
+  },
+  branch: {
+    title: "Branch node",
+    summary: "Substring gate with real out-edges",
+    details: "Gates on a substring match in upstream text, with its own conditional and default out-edges — a real branch, not a whole-run precondition. Not yet addable from this palette.",
+  },
 };
 
 export const EDGE_KIND_TAXONOMY = {

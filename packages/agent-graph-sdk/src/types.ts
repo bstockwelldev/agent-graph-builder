@@ -1,6 +1,24 @@
 export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "google" | "azure";
 
-export type NodeType = "input" | "prompt" | "llm" | "tool" | "router" | "output";
+/**
+ * The six original POC node types plus six absorbed from
+ * micro-ui-agent-builder's FlowStep vocabulary (studio-consolidation
+ * program — see docs/planning/features/studio-consolidation-plan.md).
+ * All twelve have runtime executors as of Phase 2 (backend/app/nodes.py).
+ */
+export type NodeType =
+  | "input"
+  | "prompt"
+  | "llm"
+  | "tool"
+  | "router"
+  | "output"
+  | "guardrail"
+  | "rubric"
+  | "human_gate"
+  | "tool_loop"
+  | "code_exec"
+  | "branch";
 export type EdgeKind = "sequence" | "conditional" | "default";
 export type GraphOrientation = "auto" | "horizontal" | "vertical";
 
@@ -59,7 +77,10 @@ export interface RouteDecision {
 export interface RunSummary {
   run_id: string;
   graph_id: string;
-  status: "queued" | "running" | "succeeded" | "failed";
+  // "paused" added for the `human_gate` node type (studio-consolidation
+  // Phase 2): a run stopped at a human-approval checkpoint, resumable via
+  // `AgentGraphClient.resumeRun` (POST /api/runs/{id}/resume).
+  status: "queued" | "running" | "succeeded" | "failed" | "paused";
   result: unknown;
   input?: Record<string, unknown>;
   provider?: string | null;
@@ -73,7 +94,7 @@ export interface RunSummary {
 export interface NodeTrace {
   node_id: string;
   node_type: NodeType;
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "succeeded" | "failed" | "paused";
   input: unknown;
   output: unknown;
   started_at: string;
@@ -86,9 +107,12 @@ export interface PlatformEvent {
     | "run.started"
     | "run.completed"
     | "run.failed"
+    | "run.paused"
+    | "run.resumed"
     | "node.started"
     | "node.completed"
     | "node.failed"
+    | "node.paused"
     | "edge.selected";
   run_id: string;
   node_id?: string | null;
@@ -116,4 +140,53 @@ export interface ProviderCredentials {
   label: string;
   env_var: string;
   configured: boolean;
+}
+
+/**
+ * Stored resources (studio-consolidation Phase 3 — see
+ * docs/planning/features/studio-consolidation-plan.md and
+ * backend/app/resource_models.py). Field names are plain snake_case,
+ * matching this SDK's existing convention (`entry_node_id`, `run_id`, …)
+ * rather than micro-ui-agent-builder's camelCase Zod schemas.
+ */
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  body: string;
+}
+
+export interface ToolDefinition {
+  id: string;
+  description: string;
+  parameters_json: string;
+  requires_approval: boolean;
+  /** When set with mcp_tool_name, `tool` nodes calling this id dispatch to
+   * that MCP server + remote tool name instead of a builtin or mock echo. */
+  mcp_server_id?: string | null;
+  mcp_tool_name?: string | null;
+}
+
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  url: string;
+  transport: "http" | "sse" | "stdio";
+  enabled: boolean;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  description?: string | null;
+  default_flow_id?: string | null;
+  system_instructions?: string | null;
+  optional_elements: string[];
+}
+
+export interface LlmProfile {
+  id: string;
+  name: string;
+  model: string;
+  model_provider?: string | null;
+  description?: string | null;
 }

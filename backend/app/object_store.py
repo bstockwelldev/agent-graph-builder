@@ -92,6 +92,18 @@ def get_json(key: str) -> dict[str, Any] | None:
     return json.loads(raw)
 
 
+def delete_json(key: str) -> bool:
+    """Deletes `key` if present; returns whether it existed. S3's
+    delete_object does not itself distinguish "deleted" from "already
+    absent", so existence is checked first (added for studio-consolidation
+    Phase 3's resource CRUD — graphs/runs are never deleted today).
+    """
+    if get_json(key) is None:
+        return False
+    s3_client().delete_object(Bucket=_bucket(), Key=key)
+    return True
+
+
 def list_keys(prefix: str) -> list[str]:
     client = s3_client()
     bucket = _bucket()
@@ -137,8 +149,12 @@ def list_graphs() -> list[GraphDefinition]:
 
 
 def _run_blob(summary: RunSummary, traces: list[NodeTrace]) -> dict[str, Any]:
+    # by_alias=True keeps route_decisions camelCase here too, matching the
+    # SQLite/Turso path in storage.py (studio-consolidation Phase 1 hygiene
+    # fix) — RunSummary.model_validate() below tolerates either casing on
+    # read regardless, since RouteDecision sets populate_by_name=True.
     return {
-        "summary": summary.model_dump(mode="json"),
+        "summary": summary.model_dump(mode="json", by_alias=True),
         "traces": [trace.model_dump(mode="json") for trace in traces],
     }
 

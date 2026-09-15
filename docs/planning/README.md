@@ -12,6 +12,7 @@ Locked feature-change plans for the Agent Graph Builder POC next-set. Each SPEC 
 | [shell-layout-polish-plan.md](features/shell-layout-polish-plan.md) | Shell layout polish | Canvas fitView timing, header/run collision, Run panel polish, section hierarchy, empty states |
 | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) | Playground shell panels | Execute vs Observe rail IA; **Phase F closed 2026-09-10** (`c6b5467`) |
 | [canvas-authoring-literacy-plan.md](features/canvas-authoring-literacy-plan.md) | Canvas authoring literacy | In-flow coach, edge glossary, handles/snap, honest Tool/LLM copy; **Phase F closed 2026-09-11** (`212b0cb`) |
+| [studio-consolidation-plan.md](features/studio-consolidation-plan.md) | Studio consolidation (micro-ui-agent-builder → agent-graph-builder) | 6-phase program: absorb MUI's node vocabulary + studio UX + resource registries + telemetry/RAG/auth into this repo's engine, then sunset MUI. **Locked 2026-09-15.** |
 
 ## Suggested implement order
 
@@ -31,6 +32,9 @@ Implement in this sequence — later specs assume earlier seams exist:
 
 5. **Playground shell panels** — [`playground-shell-panels-plan.md`](features/playground-shell-panels-plan.md)  
    Execute vs Observe rail IA, accordion-one-open, shared Observe scroller, canvas-first inspector. **Locked 2026-09-10; Phase F closed 2026-09-10** (`c6b5467`).
+
+6. **Studio consolidation** — [`studio-consolidation-plan.md`](features/studio-consolidation-plan.md)  
+   Separate program, not part of the next-set sequence above. Absorbs micro-ui-agent-builder's node vocabulary, studio UX, and resource/runtime capabilities into this repo's Python engine across 6 phases, then sunsets that repo. **Locked 2026-09-15.**
 
 ## Roadmap
 

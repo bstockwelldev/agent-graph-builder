@@ -18,9 +18,17 @@ EventType = Literal[
     "run.started",
     "run.completed",
     "run.failed",
+    # Added for the `human_gate` node type (studio-consolidation Phase 2,
+    # see docs/planning/features/studio-consolidation-plan.md). A paused run
+    # is a terminal outcome for its current event bus, same as
+    # completed/failed; POST /api/runs/{id}/resume starts a fresh bus for
+    # the same run_id and emits run.resumed on it.
+    "run.paused",
+    "run.resumed",
     "node.started",
     "node.completed",
     "node.failed",
+    "node.paused",
     "edge.selected",
 ]
 

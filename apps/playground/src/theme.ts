@@ -56,6 +56,9 @@ export const status = {
   running: color.warning[600],
   succeeded: color.success[600],
   failed: color.error[600],
+  // "paused" added for the `human_gate` node type (studio-consolidation
+  // Phase 2) — a run stopped at a checkpoint, distinct from "failed".
+  paused: color.primary[500],
 } as const;
 
 /**
@@ -69,6 +72,19 @@ export const nodeType = {
   tool: { bg: "#262018", border: "#b98c1e", accent: "#e8bc4a", label: "#f0d88a" },
   router: { bg: "#281c2a", border: "#b060a8", accent: "#d88cc8", label: "#e8b8dc" },
   output: { bg: "#152420", border: "#2f9e5c", accent: "#3cb873", label: "#9eddb8" },
+  // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
+  // (studio-consolidation program). Fully executable as of Phase 2, but no
+  // palette entry can create these yet (NodePalette.tsx has its own literal
+  // node-type list — Phase 4 wires the ported studio's picker instead) —
+  // deliberately muted/neutral rather than given a real accent color, since
+  // Phase 4 replaces this whole token system with the ported design system
+  // anyway.
+  guardrail: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
+  rubric: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
+  human_gate: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
+  tool_loop: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
+  code_exec: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
+  branch: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
 } as const;
 
 /** Blueprint-style canvas pane — subtle paper tone over dark base. */

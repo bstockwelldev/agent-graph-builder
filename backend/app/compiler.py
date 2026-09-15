@@ -10,13 +10,20 @@ does not apply to this slice.
 
 from __future__ import annotations
 
+from . import storage
+from .builtin_tools import BUILTIN_TOOL_IDS
 from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
+from .node_configs import validate_node_config
+from .nodes import EXECUTORS
+
+# Tool ids valid without a stored registry entry (studio-consolidation
+# Phase 3): the original POC demo tool, plus the two builtins.
+_KNOWN_TOOL_IDS = frozenset({"lookup_topic", *BUILTIN_TOOL_IDS})
 
 
 def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     node_ids = {n.id for n in graph.nodes}
-    nodes_by_id = {n.id for n in graph.nodes}
 
     if graph.entry_node_id not in node_ids:
         diagnostics.append(
@@ -102,10 +109,16 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             )
         )
 
-    # Router-specific requirement: a default/fallback edge must exist.
+    # Router AND branch specific requirement: a default/fallback edge must
+    # exist. Both compile to LangGraph conditional edges in runtime.py
+    # (studio-consolidation Phase 2 generalizes the router-only wiring to
+    # cover `branch` too), so both need the same fallback guarantee; the
+    # diagnostic code prefix stays ROUTER_* for the original type so
+    # existing consumers of those exact codes are unaffected.
     for node in graph.nodes:
-        if node.type != NodeType.ROUTER:
+        if node.type not in (NodeType.ROUTER, NodeType.BRANCH):
             continue
+        prefix = "ROUTER" if node.type == NodeType.ROUTER else "BRANCH"
         outgoing = [e for e in graph.edges if e.source == node.id]
         has_default = any(e.kind == EdgeKind.DEFAULT for e in outgoing)
         has_conditional = any(e.kind == EdgeKind.CONDITIONAL for e in outgoing)
@@ -113,9 +126,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
-                    code="ROUTER_NO_OUTGOING_EDGES",
+                    code=f"{prefix}_NO_OUTGOING_EDGES",
                     node_id=node.id,
-                    message=f"Router node {node.id!r} has no outgoing edges",
+                    message=f"{node.type.value} node {node.id!r} has no outgoing edges",
                     blocking=True,
                 )
             )
@@ -123,9 +136,9 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
-                    code="ROUTER_MISSING_FALLBACK",
+                    code=f"{prefix}_MISSING_FALLBACK",
                     node_id=node.id,
-                    message=f"Router node {node.id!r} has no default/fallback outgoing edge",
+                    message=f"{node.type.value} node {node.id!r} has no default/fallback outgoing edge",
                     blocking=True,
                 )
             )
@@ -133,25 +146,60 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
             diagnostics.append(
                 Diagnostic(
                     severity="warning",
-                    code="ROUTER_NO_CONDITIONAL_EDGES",
+                    code=f"{prefix}_NO_CONDITIONAL_EDGES",
                     node_id=node.id,
-                    message=f"Router node {node.id!r} only has a default edge; it never branches",
+                    message=f"{node.type.value} node {node.id!r} only has a default edge; it never branches",
                     blocking=False,
                 )
             )
 
-    # Tool binding: only lookup_topic is implemented in this POC.
+    # Tool binding: lookup_topic, a builtin, or a registered tool
+    # (studio-consolidation Phase 3's registry, backend/app/resource_models.py)
+    # are all valid; anything else is unsupported.
     for node in graph.nodes:
         if node.type != NodeType.TOOL:
             continue
         tool_name = node.config.get("toolName")
-        if tool_name != "lookup_topic":
+        if tool_name in _KNOWN_TOOL_IDS:
+            continue
+        if tool_name is not None and storage.get_resource("tools", tool_name) is not None:
+            continue
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="UNSUPPORTED_TOOL_BINDING",
+                node_id=node.id,
+                message=f"Tool node {node.id!r} references unsupported tool {tool_name!r}",
+                blocking=True,
+            )
+        )
+
+    # Generic safety net: any NodeType with no registered executor in
+    # nodes.py's EXECUTORS dict blocks compile with a clear diagnostic
+    # instead of runtime.py KeyError-ing on EXECUTORS[node.type] mid-run.
+    # All twelve current node types have executors as of studio-
+    # consolidation Phase 2; this now only guards future additions.
+    for node in graph.nodes:
+        if node.type.value not in EXECUTORS:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
-                    code="UNSUPPORTED_TOOL_BINDING",
+                    code="NODE_TYPE_NOT_EXECUTABLE",
                     node_id=node.id,
-                    message=f"Tool node {node.id!r} references unsupported tool {tool_name!r}",
+                    message=f"Node type {node.type.value!r} has no runtime executor yet",
+                    blocking=True,
+                )
+            )
+
+    # Typed per-node-type config validation (studio-consolidation Phase 1).
+    for node in graph.nodes:
+        for message in validate_node_config(node.type, node.config):
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="NODE_CONFIG_INVALID",
+                    node_id=node.id,
+                    message=f"{node.type.value} node {node.id!r}: {message}",
                     blocking=True,
                 )
             )

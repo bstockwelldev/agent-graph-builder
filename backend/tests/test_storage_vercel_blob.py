@@ -66,6 +66,12 @@ class FakeBlob:
             if has_more:
                 payload["cursor"] = str(next_index)
             return httpx.Response(200, json=payload)
+        if request.method == "DELETE" and host == "vercel.com":
+            # Added for studio-consolidation Phase 3 (resource + graph
+            # delete); real Blob delete is idempotent on a missing key.
+            pathname = params.get("pathname", "")
+            self.objects.pop(pathname, None)
+            return httpx.Response(200, json={"pathname": pathname})
         if request.method == "GET" and host.endswith(".blob.vercel-storage.com"):
             pathname = parsed.path.lstrip("/")
             if pathname not in self.objects:
@@ -219,3 +225,31 @@ def test_store_id_from_token_and_env(monkeypatch) -> None:
 
     monkeypatch.setenv("BLOB_STORE_ID", "store_explicitid")
     assert vercel_blob._store_id() == "explicitid"
+
+
+def test_vercel_blob_delete_graph(monkeypatch) -> None:
+    # studio-consolidation Phase 3.
+    _enable_blob(monkeypatch)
+    graph = build_demo_graph()
+
+    storage.save_graph(graph)
+    assert storage.delete_graph(graph.id) is True
+    assert storage.get_graph(graph.id) is None
+    assert storage.delete_graph(graph.id) is False
+
+
+def test_vercel_blob_resource_crud(monkeypatch) -> None:
+    # studio-consolidation Phase 3 generic resource store.
+    _enable_blob(monkeypatch)
+
+    assert storage.get_resource("prompts", "p1") is None
+    storage.save_resource("prompts", "p1", {"id": "p1", "name": "Greeting", "body": "Hi"})
+    storage.save_resource("prompts", "p2", {"id": "p2", "name": "Farewell", "body": "Bye"})
+
+    assert storage.get_resource("prompts", "p1") == {"id": "p1", "name": "Greeting", "body": "Hi"}
+    listed = storage.list_resources("prompts")
+    assert [item["id"] for item in listed] == ["p1", "p2"]
+
+    assert storage.delete_resource("prompts", "p1") is True
+    assert storage.get_resource("prompts", "p1") is None
+    assert storage.delete_resource("prompts", "p1") is False

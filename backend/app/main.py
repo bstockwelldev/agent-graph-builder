@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from pydantic import BaseModel, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -22,12 +25,21 @@ from .env_config import (
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
-from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunSummary
+from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunResumeRequest, RunSummary
 from .model_catalog import list_provider_models
 from .provider_credentials import get_provider_credentials
+from .resource_models import RESOURCE_MODELS
 from .spa_cache import SpaCacheControlMiddleware
 
-app = FastAPI(title="Agent Graph Builder POC")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    load_app_env()
+    if storage.storage_is_healthy() and storage.get_graph(build_demo_graph().id) is None:
+        storage.save_graph(build_demo_graph())
+    yield
+
+
+app = FastAPI(title="Agent Graph Builder POC", lifespan=lifespan)
 
 
 class DurableStorageMiddleware(BaseHTTPMiddleware):
@@ -64,14 +76,6 @@ if not os.environ.get("VERCEL"):
         """API-only local dev: redirect to OpenAPI docs."""
         return RedirectResponse(url="/docs")
 
-
-@app.on_event("startup")
-def bootstrap() -> None:
-    load_app_env()
-    if not storage.storage_is_healthy():
-        return
-    if storage.get_graph(build_demo_graph().id) is None:
-        storage.save_graph(build_demo_graph())
 
 
 @app.get("/api/health")
@@ -112,6 +116,15 @@ def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
     return graph
 
 
+@app.delete("/api/graphs/{graph_id}")
+def delete_graph(graph_id: str) -> dict[str, bool]:
+    """Added for studio-consolidation Phase 3 — graphs were previously
+    never deletable through this API."""
+    if not storage.delete_graph(graph_id):
+        raise HTTPException(status_code=404, detail="graph not found")
+    return {"deleted": True}
+
+
 @app.post("/api/graphs/validate")
 def validate_graph_endpoint(graph: GraphDefinition) -> CompileResult:
     """Validate a graph payload without saving or registering a compiled workflow."""
@@ -124,6 +137,73 @@ def compile_graph_endpoint(graph_id: str) -> CompileResult:
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return runtime.compile_workflow(graph)
+
+
+# ---------------------------------------------------------------------------
+# Resource CRUD (studio-consolidation Phase 3, see
+# docs/planning/features/studio-consolidation-plan.md and
+# resource_models.py): prompts, tools, mcp_servers, agents, llm_profiles.
+# One generic registration loop rather than five hand-written copies of the
+# same list/get/create/update/delete shape — request/response bodies are
+# typed `dict` in the route signatures (validated against the resource's
+# actual Pydantic model inside the function body) specifically so this
+# works under `from __future__ import annotations`: FastAPI resolves
+# string annotations via the module's globals, which a closure-local
+# `model` variable is not part of.
+# ---------------------------------------------------------------------------
+
+_RESOURCE_ROUTE_PATHS: dict[str, str] = {
+    "prompts": "prompts",
+    "tools": "tools",
+    "mcp_servers": "mcp-servers",
+    "agents": "agents",
+    "llm_profiles": "llm-profiles",
+}
+
+
+def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> None:
+    def _validate(body: dict[str, Any]) -> BaseModel:
+        try:
+            return model.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    @app.get(f"/api/{path}", name=f"list_{kind}", operation_id=f"list_{kind}")
+    def list_resources_route() -> list[dict[str, Any]]:
+        return storage.list_resources(kind)
+
+    @app.get(f"/api/{path}/{{resource_id}}", name=f"get_{kind}", operation_id=f"get_{kind}")
+    def get_resource_route(resource_id: str) -> dict[str, Any]:
+        payload = storage.get_resource(kind, resource_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
+        return payload
+
+    @app.post(f"/api/{path}", name=f"create_{kind}", operation_id=f"create_{kind}")
+    def create_resource_route(body: dict[str, Any]) -> dict[str, Any]:
+        validated = _validate(body)
+        payload = validated.model_dump(mode="json")
+        storage.save_resource(kind, payload["id"], payload)
+        return payload
+
+    @app.put(f"/api/{path}/{{resource_id}}", name=f"update_{kind}", operation_id=f"update_{kind}")
+    def update_resource_route(resource_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        validated = _validate(body)
+        payload = validated.model_dump(mode="json")
+        if payload["id"] != resource_id:
+            raise HTTPException(status_code=400, detail=f"{kind} id mismatch between path and body")
+        storage.save_resource(kind, resource_id, payload)
+        return payload
+
+    @app.delete(f"/api/{path}/{{resource_id}}", name=f"delete_{kind}", operation_id=f"delete_{kind}")
+    def delete_resource_route(resource_id: str) -> dict[str, bool]:
+        if not storage.delete_resource(kind, resource_id):
+            raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
+        return {"deleted": True}
+
+
+for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
+    _register_resource_routes(_kind, _path, RESOURCE_MODELS[_kind])
 
 
 @app.get("/api/graphs/{graph_id}/runs")
@@ -200,6 +280,34 @@ def get_run(run_id: str) -> RunSummary:
     summary = runtime.get_run_summary(run_id)
     if summary is None:
         raise HTTPException(status_code=404, detail="run not found")
+    return summary
+
+
+@app.post("/api/runs/{run_id}/resume")
+async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
+    """Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
+
+    approve=True (default) continues execution from the paused node;
+    approve=False fails the run instead. 404 when there is nothing paused
+    for this run_id (already resolved, unknown run, or — same accepted
+    simplification as compiled-workflow lookup elsewhere in this API — the
+    compiled workflow was lost to a process restart).
+    """
+    if runtime.get_run_pause_state(run_id) is None:
+        raise HTTPException(status_code=404, detail="run has no pending human_gate checkpoint to resume")
+
+    if not request.approve:
+        runtime.reject_run(run_id, reason=request.reason)
+    elif runtime.is_serverless_runtime():
+        if await runtime.resume_run_inline(run_id) is None:
+            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+    else:
+        if runtime.resume_run(run_id) is None:
+            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+
+    summary = runtime.get_run_summary(run_id)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="run vanished after resume")
     return summary
 
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { fingerprintGraph, fingerprintGraphSemantics } from "./schema.js";
-import type { GraphDefinition } from "./types.js";
+import { fingerprintGraph, fingerprintGraphSemantics, isNodeType, NODE_TYPES } from "./schema.js";
+import type { GraphDefinition, NodeType } from "./types.js";
 
 function sampleGraph(positionOffset = 0): GraphDefinition {
   return {
@@ -41,5 +41,26 @@ describe("fingerprintGraphSemantics", () => {
 
     expect(fingerprintGraphSemantics(left)).toBe(fingerprintGraphSemantics(right));
     expect(fingerprintGraph(left)).not.toBe(fingerprintGraph(right));
+  });
+});
+
+// Studio-consolidation Phase 1 (docs/planning/features/studio-consolidation-plan.md):
+// NodeType absorbed six kinds from micro-ui-agent-builder's FlowStep vocabulary.
+describe("NODE_TYPES (studio-consolidation Phase 1)", () => {
+  const absorbed: NodeType[] = ["guardrail", "rubric", "human_gate", "tool_loop", "code_exec", "branch"];
+  const original: NodeType[] = ["input", "prompt", "llm", "tool", "router", "output"];
+
+  it("includes both the original six and the six absorbed node types", () => {
+    expect(NODE_TYPES).toHaveLength(12);
+    for (const type of [...original, ...absorbed]) {
+      expect(NODE_TYPES).toContain(type);
+    }
+  });
+
+  it("isNodeType recognizes every absorbed type and rejects unknown strings", () => {
+    for (const type of absorbed) {
+      expect(isNodeType(type)).toBe(true);
+    }
+    expect(isNodeType("not_a_real_type")).toBe(false);
   });
 });
