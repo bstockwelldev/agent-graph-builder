@@ -8,11 +8,15 @@ persist here; live SSE buses stay in memory until a run finishes.
 Backends (first match wins):
 - **Vercel Blob (recommended on Vercel):** when ``BLOB_READ_WRITE_TOKEN`` is
   set. REST PUT/GET/LIST of JSON objects (not S3).
+- **Supabase Storage:** when ``SUPABASE_URL`` and
+  ``SUPABASE_SERVICE_ROLE_KEY`` are set (studio-consolidation Phase 5, see
+  docs/planning/features/studio-consolidation-plan.md and
+  ``supabase_store.py``). JSON objects in a bucket, same shape as Blob.
 - **S3-compatible object store:** when ``OBJECT_STORE_BUCKET``,
   ``OBJECT_STORE_ACCESS_KEY_ID``, and ``OBJECT_STORE_SECRET_ACCESS_KEY`` are
   set. Works with AWS S3, Cloudflare R2, MinIO, and Azure Blob S3 API.
 - **Turso (optional):** when ``TURSO_DATABASE_URL`` and ``TURSO_AUTH_TOKEN``
-  are both set and neither Blob nor object-store env is set.
+  are both set and none of the above are.
 - **File SQLite:** local / Docker / Vercel ``GRAPH_DB_PATH`` (or Vercel
   ``/tmp`` fallback). Isolate-local on serverless — not durable across GET
   after POST.
@@ -28,7 +32,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Protocol
 
-from . import object_store, vercel_blob
+from . import object_store, supabase_store, vercel_blob
 from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
@@ -116,6 +120,18 @@ def use_vercel_blob() -> bool:
     return bool(os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip())
 
 
+def use_supabase() -> bool:
+    """True when Supabase project URL + service-role key are set
+    (studio-consolidation Phase 5 — see
+    docs/planning/features/studio-consolidation-plan.md). Checked after
+    Vercel Blob (Vercel stays the recommended-on-Vercel default) and before
+    the generic S3-compatible object store.
+    """
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    return bool(url and service_role_key)
+
+
 def use_object_store() -> bool:
     """True when object-store bucket and credentials are set."""
     bucket = os.environ.get("OBJECT_STORE_BUCKET", "").strip()
@@ -135,6 +151,8 @@ def storage_backend() -> str:
     """Active persistence backend label (for diagnostics)."""
     if use_vercel_blob():
         return "vercel_blob"
+    if use_supabase():
+        return "supabase"
     if use_object_store():
         return "object_store"
     if use_turso():
@@ -148,6 +166,7 @@ class StorageMisconfiguredError(RuntimeError):
 
 STORAGE_MISCONFIGURED_DETAIL = (
     "Vercel requires durable storage. Set BLOB_READ_WRITE_TOKEN, "
+    "SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, "
     "OBJECT_STORE_BUCKET + OBJECT_STORE_ACCESS_KEY_ID + "
     "OBJECT_STORE_SECRET_ACCESS_KEY, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN."
 )
@@ -160,7 +179,7 @@ def is_vercel_runtime() -> bool:
 
 def is_durable_storage_configured() -> bool:
     """True when a shared store is configured (not isolate-local SQLite)."""
-    return use_vercel_blob() or use_object_store() or use_turso()
+    return use_vercel_blob() or use_supabase() or use_object_store() or use_turso()
 
 
 def storage_is_healthy() -> bool:
@@ -188,6 +207,8 @@ def _assert_storage_ready_for_sqlite() -> None:
 def _json_object_backend():
     if use_vercel_blob():
         return vercel_blob
+    if use_supabase():
+        return supabase_store
     if use_object_store():
         return object_store
     return None
