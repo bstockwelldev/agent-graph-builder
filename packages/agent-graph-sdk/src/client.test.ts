@@ -99,7 +99,7 @@ describe("createAgentGraphClient resource CRUD", () => {
   });
 
   it("resumeRun POSTs approve/reason to /api/runs/{id}/resume", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ run_id: "run1", status: "succeeded" }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ run_id: "run1", graph_id: "graph1", status: "succeeded" }));
 
     const client = createAgentGraphClient({ baseUrl });
     await client.resumeRun("run1", false, "not today");
@@ -107,5 +107,70 @@ describe("createAgentGraphClient resource CRUD", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${baseUrl}/api/runs/run1/resume`);
     expect(JSON.parse(init.body as string)).toEqual({ approve: false, reason: "not today" });
+  });
+});
+
+// Studio-consolidation Phase 4f: jsonFetch now parses every response through
+// a Zod schema instead of an unchecked `response.json() as T` cast. These
+// cases exercise that rejection path for the highest-traffic response types.
+describe("createAgentGraphClient response validation", () => {
+  const baseUrl = "http://localhost:8000";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function jsonResponse(body: unknown, ok = true, status = 200) {
+    return {
+      ok,
+      status,
+      text: async () => JSON.stringify(body),
+      json: async () => body,
+    };
+  }
+
+  it("getGraph rejects a GraphDefinition response missing required fields", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "g1", name: "Untitled" }));
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.getGraph("g1")).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("getRun rejects a RunSummary response with the wrong status enum", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ run_id: "run1", graph_id: "graph1", status: "not_a_real_status" }),
+    );
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.getRun("run1")).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("compileGraph rejects a CompileResult response whose diagnostics aren't an array", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ graph_id: "g1", compiled_workflow_id: null, diagnostics: "none", ok: true }),
+    );
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.compileGraph("g1")).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("prompts.get rejects a PromptTemplate response missing body", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "p1", name: "Greeting" }));
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.prompts.get("p1")).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("llmProfiles.list rejects a response that isn't an array", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "lp1", name: "Default", model: "gpt-4o" }));
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.llmProfiles.list()).rejects.toThrow(/unexpected shape/);
   });
 });

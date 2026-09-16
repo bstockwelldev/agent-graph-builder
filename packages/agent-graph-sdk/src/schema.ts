@@ -1,20 +1,8 @@
+import { edgeKindSchema, nodeTypeSchema } from "./schemas.js";
 import type { EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodeType } from "./types.js";
 
-export const NODE_TYPES: readonly NodeType[] = [
-  "input",
-  "prompt",
-  "llm",
-  "tool",
-  "router",
-  "output",
-  "guardrail",
-  "rubric",
-  "human_gate",
-  "tool_loop",
-  "code_exec",
-  "branch",
-];
-export const EDGE_KINDS: readonly EdgeKind[] = ["sequence", "conditional", "default"];
+export const NODE_TYPES = nodeTypeSchema.options;
+export const EDGE_KINDS = edgeKindSchema.options;
 
 export function isNodeType(value: string): value is NodeType {
   return (NODE_TYPES as readonly string[]).includes(value);
