@@ -204,3 +204,39 @@ export const llmProfileSchema = z.object({
   model_provider: z.string().nullish(),
   description: z.string().nullish(),
 });
+
+/**
+ * Run analytics / spend estimation (studio-consolidation Phase 5 — see
+ * docs/planning/features/studio-consolidation-plan.md and backend's
+ * analytics.py). `estimated_usd`/token counts are rough estimates, not
+ * billing truth — see analytics.py's module docstring.
+ */
+export const analyticsDailyPointSchema = z.object({
+  date: z.string(),
+  invocations: z.number(),
+  tokens: z.number(),
+  estimated_usd: z.number(),
+});
+
+export const analyticsGraphRowSchema = z.object({
+  graph_id: z.string(),
+  name: z.string(),
+  invocations: z.number(),
+  tokens: z.number(),
+  estimated_usd: z.number(),
+});
+
+export const analyticsTotalsSchema = z.object({
+  invocations: z.number(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  total_tokens: z.number(),
+  estimated_usd: z.number(),
+  avg_duration_ms: z.number(),
+});
+
+export const analyticsDashboardPayloadSchema = z.object({
+  totals: analyticsTotalsSchema,
+  daily: z.array(analyticsDailyPointSchema),
+  by_graph: z.array(analyticsGraphRowSchema),
+});

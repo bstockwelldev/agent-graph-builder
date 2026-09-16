@@ -402,6 +402,22 @@ def get_run(run_id: str) -> RunSummary | None:
     return _row_to_run_summary(row)
 
 
+def list_all_runs(*, limit: int = 200) -> list[RunSummary]:
+    """Cross-graph run history (studio-consolidation Phase 5 — see
+    docs/planning/features/studio-consolidation-plan.md). AGB had no
+    cross-graph run listing before this — Phase 4c's as-built notes flagged
+    it as "a candidate Phase 5+ backend addition." Composes `list_graphs()`
+    + `list_runs_for_graph()` rather than adding a fifth per-backend
+    function: same N+1-ish shape `list_runs_for_graph` itself already has
+    on the remote backends (list-then-filter), not a new inefficiency.
+    """
+    runs: list[RunSummary] = []
+    for graph in list_graphs():
+        runs.extend(list_runs_for_graph(graph.id, limit=limit))
+    runs.sort(key=lambda item: item.started_at or "", reverse=True)
+    return runs[:limit]
+
+
 def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
     remote = _json_object_backend()
     if remote is not None:

@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from . import runtime, storage
+from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .demo_graph import build_demo_graph
 from .env_config import (
     load_app_env,
@@ -280,6 +281,23 @@ def list_graph_runs(graph_id: str) -> list[RunSummary]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return storage.list_runs_for_graph(graph_id)
+
+
+@app.get("/api/runs")
+def list_all_runs() -> list[RunSummary]:
+    """Cross-graph run history (studio-consolidation Phase 5) — flagged as
+    a gap in Phase 4c's as-built notes ("/runs in the studio becomes
+    'pick a graph -> see its runs', not a single global run feed... a true
+    cross-graph GET /api/runs endpoint is a candidate Phase 5+ backend
+    addition"). Backs the analytics dashboard below; the studio UI itself
+    still uses the per-graph route for its Runs screen.
+    """
+    return storage.list_all_runs()
+
+
+@app.get("/api/analytics")
+def get_analytics() -> AnalyticsDashboardPayload:
+    return get_analytics_dashboard()
 
 
 @app.get("/api/providers/{provider}/ready")

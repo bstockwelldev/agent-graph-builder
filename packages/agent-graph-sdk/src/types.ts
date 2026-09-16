@@ -2,6 +2,10 @@ import type { z } from "zod";
 
 import type {
   agentProfileSchema,
+  analyticsDailyPointSchema,
+  analyticsDashboardPayloadSchema,
+  analyticsGraphRowSchema,
+  analyticsTotalsSchema,
   chatProviderSchema,
   compileResultSchema,
   diagnosticSchema,
@@ -74,3 +78,14 @@ export type ToolDefinition = z.infer<typeof toolDefinitionSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type LlmProfile = z.infer<typeof llmProfileSchema>;
+
+/**
+ * Run analytics / spend estimation (studio-consolidation Phase 5 — see
+ * docs/planning/features/studio-consolidation-plan.md and
+ * backend/app/analytics.py). `estimated_usd`/token counts are rough
+ * estimates, not billing truth.
+ */
+export type AnalyticsDailyPoint = z.infer<typeof analyticsDailyPointSchema>;
+export type AnalyticsGraphRow = z.infer<typeof analyticsGraphRowSchema>;
+export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
+export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayloadSchema>;

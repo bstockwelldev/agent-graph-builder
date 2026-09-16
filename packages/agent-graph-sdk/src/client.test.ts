@@ -108,6 +108,41 @@ describe("createAgentGraphClient resource CRUD", () => {
     expect(url).toBe(`${baseUrl}/api/runs/run1/resume`);
     expect(JSON.parse(init.body as string)).toEqual({ approve: false, reason: "not today" });
   });
+
+  it("listAllRuns fetches GET /api/runs", async () => {
+    const runs = [{ run_id: "run1", graph_id: "graph1", status: "succeeded" as const }];
+    fetchMock.mockResolvedValueOnce(jsonResponse(runs));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.listAllRuns();
+
+    expect(result).toEqual(runs);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/runs`, expect.objectContaining({}));
+  });
+
+  it("getAnalytics fetches GET /api/analytics", async () => {
+    const payload = {
+      totals: {
+        invocations: 3,
+        input_tokens: 100,
+        output_tokens: 50,
+        total_tokens: 150,
+        estimated_usd: 0.01,
+        avg_duration_ms: 250,
+      },
+      daily: [{ date: "2026-01-01", invocations: 3, tokens: 150, estimated_usd: 0.01 }],
+      by_graph: [
+        { graph_id: "g1", name: "Demo", invocations: 3, tokens: 150, estimated_usd: 0.01 },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.getAnalytics();
+
+    expect(result).toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/analytics`, expect.objectContaining({}));
+  });
 });
 
 // Studio-consolidation Phase 4f: jsonFetch now parses every response through
@@ -158,6 +193,13 @@ describe("createAgentGraphClient response validation", () => {
 
     const client = createAgentGraphClient({ baseUrl });
     await expect(client.compileGraph("g1")).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("getAnalytics rejects a response missing the totals object", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ daily: [], by_graph: [] }));
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.getAnalytics()).rejects.toThrow(/unexpected shape/);
   });
 
   it("prompts.get rejects a PromptTemplate response missing body", async () => {

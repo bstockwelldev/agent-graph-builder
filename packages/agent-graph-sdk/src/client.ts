@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import {
   agentProfileSchema,
+  analyticsDashboardPayloadSchema,
   compileResultSchema,
   deletedSchema,
   graphDefinitionSchema,
@@ -17,6 +18,7 @@ import {
 } from "./schemas.js";
 import type {
   AgentProfile,
+  AnalyticsDashboardPayload,
   ChatProvider,
   CompileResult,
   GraphDefinition,
@@ -92,6 +94,10 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     listGraphs: () => jsonFetch<GraphDefinition[]>(baseUrl, "/api/graphs", undefined, graphDefinitionSchema.array()),
     listRuns: (graphId: string) =>
       jsonFetch<RunSummary[]>(baseUrl, `/api/graphs/${graphId}/runs`, undefined, runSummarySchema.array()),
+    /** Cross-graph run history (studio-consolidation Phase 5) — flagged as
+     * a gap in Phase 4c's as-built notes; `listRuns` above stays the
+     * per-graph route the Runs screen uses. */
+    listAllRuns: () => jsonFetch<RunSummary[]>(baseUrl, "/api/runs", undefined, runSummarySchema.array()),
     getRun: (runId: string) => jsonFetch<RunSummary>(baseUrl, `/api/runs/${runId}`, undefined, runSummarySchema),
     createGraph: (name: string, template: "blank" | "demo") =>
       jsonFetch<GraphDefinition>(
@@ -172,6 +178,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         providerModelCatalogSchema,
       );
     },
+    /** Run analytics / spend estimation (studio-consolidation Phase 5). */
+    getAnalytics: () =>
+      jsonFetch<AnalyticsDashboardPayload>(
+        baseUrl,
+        "/api/analytics",
+        undefined,
+        analyticsDashboardPayloadSchema,
+      ),
     // Stored resources (studio-consolidation Phase 3).
     prompts: resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),
     tools: resourceClient<ToolDefinition>(baseUrl, "tools", toolDefinitionSchema),
