@@ -15,6 +15,8 @@
     "@bstockwelldev/agent-graph-sdk": "workspace:*",
     "@dagrejs/dagre": "^3.1.1",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.49.1",
     "@xyflow/react": "^12.3.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

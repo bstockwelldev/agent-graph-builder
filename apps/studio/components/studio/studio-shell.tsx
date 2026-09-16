@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { Sidebar } from "lucide-react";
 
+import { StudioAuthSection } from "@/components/studio/studio-auth-section";
 import { StudioNav } from "@/components/studio/studio-nav";
 import { StudioNavProvider } from "@/components/studio/studio-nav-context";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ export function StudioShell({
           >
             <div className="flex min-h-dvh flex-col gap-6 px-4 py-6">
               <StudioNav pathname={safePathname} onNavigate={() => setMobileNavOpen(false)} />
+              <StudioAuthSection />
             </div>
           </SheetContent>
         </Sheet>
@@ -72,6 +74,7 @@ export function StudioShell({
           aria-hidden={graphCanvas}
         >
           <StudioNav pathname={safePathname} />
+          <StudioAuthSection />
         </aside>
         <div className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <header
