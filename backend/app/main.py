@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
@@ -26,6 +26,13 @@ from .env_config import (
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
+from .knowledge import (
+    KnowledgeUploadError,
+    delete_knowledge_document,
+    get_knowledge_entry,
+    summarize_entry,
+    upload_knowledge_document,
+)
 from .model_catalog import list_provider_models
 from .models import (
     CompileResult,
@@ -155,6 +162,48 @@ def compile_graph_endpoint(graph_id: str) -> CompileResult:
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return runtime.compile_workflow(graph)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge base / RAG (studio-consolidation Phase 5, see
+# docs/planning/features/studio-consolidation-plan.md and knowledge.py):
+# upload .txt/.md documents per graph, chunked + embedded on upload.
+# `compute_llm` (nodes.py) augments its system prompt automatically for any
+# graph with an uploaded knowledge base — there is no per-node opt-in, so
+# these routes are graph-scoped, not node-scoped.
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/graphs/{graph_id}/knowledge")
+def get_graph_knowledge(graph_id: str) -> dict[str, Any]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return {"graphId": graph_id, **summarize_entry(get_knowledge_entry(graph_id))}
+
+
+@app.post("/api/graphs/{graph_id}/knowledge")
+async def upload_graph_knowledge(
+    graph_id: str, file: UploadFile = File(...)  # noqa: B008 - FastAPI's own dependency idiom
+) -> dict[str, Any]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    content = await file.read()
+    try:
+        return await upload_knowledge_document(
+            graph_id, file.filename or "upload.txt", file.content_type or "", content
+        )
+    except KnowledgeUploadError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@app.delete("/api/graphs/{graph_id}/knowledge/{document_id}")
+def delete_graph_knowledge_document(graph_id: str, document_id: str) -> dict[str, Any]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    result = delete_knowledge_document(graph_id, document_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    return result
 
 
 # ---------------------------------------------------------------------------

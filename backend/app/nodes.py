@@ -27,6 +27,7 @@ from .builtin_tools import (
 )
 from .events import RunEventBus
 from .guardrails import check_guardrail
+from .knowledge import augment_system_with_knowledge
 from .mcp.client import call_mcp_tool
 from .models import EdgeKind, GraphDefinition, GraphNode
 from .providers.base import ChatModel
@@ -146,7 +147,16 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
     system_prompt = node.config.get("systemPrompt")
     model = node.config.get("model")
     chat_model = ctx.chat_model_factory(model)
-    output = await chat_model.generate(system_prompt=system_prompt, user_prompt=str(upstream))
+    # RAG augmentation (studio-consolidation Phase 5): a no-op unless
+    # ctx.graph has an uploaded knowledge base (see knowledge.py) — degrades
+    # silently to the unmodified prompt on any failure, so a knowledge
+    # lookup issue never fails the run.
+    augmented_system_prompt = await augment_system_with_knowledge(
+        system_prompt or "", ctx.graph.id, str(upstream)
+    )
+    output = await chat_model.generate(
+        system_prompt=augmented_system_prompt, user_prompt=str(upstream)
+    )
     input_repr = {
         "provider": chat_model.provider_name,
         "model": chat_model.model,
