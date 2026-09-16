@@ -46,6 +46,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Build SDK
+        run: pnpm run build:sdk
       - name: Lint
         run: pnpm --filter @bstockwelldev/agent-graph-studio run lint
       - name: Typecheck
