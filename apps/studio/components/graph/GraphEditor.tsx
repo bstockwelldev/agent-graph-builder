@@ -14,16 +14,21 @@ import { useRouter } from "next/navigation";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
+  type ChatProvider,
   type Diagnostic,
   type EdgeKind,
   type GraphDefinition,
   type GraphEdge,
   type GraphNode,
   type GraphOrientation,
+  type NodeTrace,
   type NodeType,
+  type PlatformEvent,
+  type RouteDecision,
+  type RunSummary,
 } from "@bstockwelldev/agent-graph-sdk";
 
-import { client } from "@/lib/api-client";
+import { client, streamRunEvents } from "@/lib/api-client";
 import {
   applyCompileIssueToEdge,
   applyCompileIssueToNodeData,
@@ -44,6 +49,15 @@ import {
   isEditableKeyboardTarget,
 } from "@/lib/graphAuthoring";
 import { defaultConfig, labelFor } from "@/lib/nodeDefaults";
+import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
+import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
+import {
+  failedUnavailableRunSummary,
+  isRunNotFoundError,
+  isTerminalRunStatus,
+  RUN_NOT_FOUND_HINT,
+  watchRunCompletion,
+} from "@/lib/watchRun";
 import { useUndoStack } from "@/hooks/useUndoStack";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { NodePalette } from "./NodePalette";
@@ -51,6 +65,7 @@ import { ConnectKindMenu } from "./ConnectKindMenu";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
+import { RunPanel, type RunSelection } from "./RunPanel";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -139,6 +154,17 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [coachDismissed, setCoachDismissed] = useState(false);
   const [relayoutNonce, setRelayoutNonce] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
+  const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
+  const [runHistoryLoading, setRunHistoryLoading] = useState(false);
+  const [events, setEvents] = useState<PlatformEvent[]>([]);
+  const [nodeTraces, setNodeTraces] = useState<Record<string, NodeTrace>>({});
+  const [inspectionRunId, setInspectionRunId] = useState<string | null>(null);
+  const [inspectionRouteDecisions, setInspectionRouteDecisions] = useState<RouteDecision[]>([]);
+  const [inspectLoadError, setInspectLoadError] = useState(false);
+  const [providerBlockMessage, setProviderBlockMessage] = useState<string | null>(null);
+  const [compiling, setCompiling] = useState(false);
   const [pendingConnection, setPendingConnection] = useState<{
     connection: Connection;
     x: number;
@@ -148,8 +174,49 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const shiftConnectRef = useRef(false);
   const connectPointerRef = useRef({ x: 0, y: 0 });
   const lastAppliedIssueFingerprintRef = useRef<string>("");
+  const closeStreamRef = useRef<(() => void) | null>(null);
+  const lastInspectAttemptRef = useRef<string | null>(null);
+  const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
   const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
+
+  const closeStream = useCallback(() => {
+    closeStreamRef.current?.();
+    closeStreamRef.current = null;
+  }, []);
+
+  const focusDiagnostics = useCallback(() => {
+    diagnosticsSectionRef.current?.focus();
+    diagnosticsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+
+  const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
+    if (diagnostic.edge_id) {
+      setSelectedEdgeId(diagnostic.edge_id);
+      setSelectedNodeId(null);
+      return;
+    }
+    if (diagnostic.node_id) {
+      setSelectedNodeId(diagnostic.node_id);
+      setSelectedEdgeId(null);
+    }
+  }, []);
+
+  const refreshRunHistory = useCallback(async () => {
+    setRunHistoryLoading(true);
+    try {
+      const runs = await client.listRuns(graphId);
+      setRunHistory(runs);
+    } finally {
+      setRunHistoryLoading(false);
+    }
+  }, [graphId]);
+
+  useEffect(() => {
+    void refreshRunHistory();
+  }, [refreshRunHistory]);
+
+  useEffect(() => closeStream, [closeStream]);
 
   useEffect(() => {
     setCoachDismissed(isCoachDismissed(graphId));
@@ -434,6 +501,254 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }
   }, [buildGraphDefinition, dirty]);
 
+  const paintInspectionPath = useCallback(
+    (traces: Record<string, NodeTrace>, routeDecisions: RouteDecision[]) => {
+      const graphEdges: GraphEdge[] = edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        kind: (edge.data?.kind as EdgeKind) ?? "sequence",
+        condition: (edge.data?.condition as string | null) ?? null,
+      }));
+      const path = buildExecutedPath(traces, routeDecisions, graphEdges, nodes.map((node) => node.id));
+      const { nodeIssues } = buildIssueMaps(diagnostics);
+
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          data: {
+            ...applyCompileIssueToNodeData(node.data, nodeIssues.get(node.id)),
+            status: traces[node.id]?.status ?? "idle",
+            inspectionDimmed: path.dimNodeIds.has(node.id),
+          },
+        })),
+      );
+
+      setEdges((eds) =>
+        eds.map((edge) => {
+          const kind = (edge.data?.kind as EdgeKind) ?? "sequence";
+          const { stroke, strokeWidth, opacity } = edgeStrokeForInspection(edge, path, kind);
+          return {
+            ...edge,
+            style: { stroke, strokeWidth, opacity },
+            animated: kind === "conditional" && path.highlightEdgeIds.has(edge.id),
+          };
+        }),
+      );
+    },
+    [diagnostics, edges, nodes, setEdges, setNodes],
+  );
+
+  const exitInspection = useCallback(() => {
+    setInspectionRunId(null);
+    setInspectionRouteDecisions([]);
+    setNodeTraces({});
+    setNodes((nds) => nds.map((node) => ({ ...node, data: { ...node.data, status: "idle", inspectionDimmed: false } })));
+    applyDiagnosticsToCanvas(diagnostics);
+  }, [applyDiagnosticsToCanvas, diagnostics, setNodes]);
+
+  useEffect(() => {
+    if (!inspectionRunId) return;
+    paintInspectionPath(nodeTraces, inspectionRouteDecisions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspectionRunId, inspectionRouteDecisions, nodeTraces]);
+
+  const applyRunInspection = useCallback((summary: RunSummary, traces: NodeTrace[]) => {
+    closeStreamRef.current?.();
+    closeStreamRef.current = null;
+    setEvents(summary.events && summary.events.length > 0 ? summary.events : []);
+    setRunSummary(summary);
+    setInspectionRunId(summary.run_id);
+    const routeDecisions = normalizeRouteDecisions(summary.route_decisions ?? []);
+    setInspectionRouteDecisions(routeDecisions);
+    setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
+  }, []);
+
+  const handleSelectHistoricalRun = useCallback(
+    async (runId: string) => {
+      lastInspectAttemptRef.current = runId;
+      try {
+        const [summary, traces] = await Promise.all([client.getRun(runId), client.getRunNodeTraces(runId)]);
+        applyRunInspection(summary, traces);
+        setInspectLoadError(false);
+      } catch (err: unknown) {
+        setInspectLoadError(true);
+        if (isRunNotFoundError(err)) {
+          setRunSummary((current) => {
+            if (current?.run_id === runId) return current;
+            return failedUnavailableRunSummary(
+              current ?? { run_id: runId, graph_id: graphId, status: "queued", result: null },
+              RUN_NOT_FOUND_HINT,
+            );
+          });
+          return;
+        }
+        console.error("Failed to load run inspection:", err);
+      }
+    },
+    [applyRunInspection, graphId],
+  );
+
+  const handleCompile = useCallback(
+    async (selection: RunSelection) => {
+      setCompiling(true);
+      try {
+        const synced = applyRunSelectionToLlmNodes(nodes, selection.provider, selection.model);
+        if (synced !== nodes) setNodes(synced);
+        const graph = buildGraphDefinition(synced);
+        await client.saveGraph(graph);
+        setSavedFingerprint(fingerprintGraph(graph));
+        const result = await client.compileGraph(graph.id);
+        setDiagnostics(result.diagnostics);
+        if (!result.ok) focusDiagnostics();
+      } finally {
+        setCompiling(false);
+      }
+    },
+    [buildGraphDefinition, focusDiagnostics, nodes, setNodes],
+  );
+
+  const handleRun = useCallback(
+    async (question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
+      setProviderBlockMessage(null);
+      setCompiling(true);
+      try {
+        const needsServerKey = provider === "groq" || provider === "google" || provider === "azure";
+        if (needsServerKey && !apiKey?.trim()) {
+          const readiness = await client.providerReady(provider);
+          if (!readiness.ready) {
+            setProviderBlockMessage(readiness.message);
+            return;
+          }
+        }
+
+        const synced = applyRunSelectionToLlmNodes(nodes, provider, model);
+        if (synced !== nodes) setNodes(synced);
+
+        const graph = buildGraphDefinition(synced);
+        await client.saveGraph(graph);
+        setSavedFingerprint(fingerprintGraph(graph));
+        const compileResult = await client.compileGraph(graph.id);
+        setDiagnostics(compileResult.diagnostics);
+        if (!compileResult.ok) {
+          focusDiagnostics();
+          return;
+        }
+
+        setEvents([]);
+        setNodeTraces({});
+        setInspectionRouteDecisions([]);
+        closeStreamRef.current?.();
+
+        const summary = await client.startRun(graph.id, { question }, provider, model, apiKey);
+        setRunSummary(summary);
+        setInspectionRunId(summary.run_id);
+
+        const applyTerminalSummary = async (latest: RunSummary) => {
+          setRunSummary(latest);
+          setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
+          try {
+            const traces = await client.getRunNodeTraces(latest.run_id);
+            setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
+          } catch (err: unknown) {
+            const fallback = tracesFromEvents(latest.events ?? []);
+            if (fallback.length > 0) {
+              setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
+            } else {
+              console.error("Failed to load run traces:", err);
+            }
+          }
+          await refreshRunHistory();
+        };
+
+        if (isTerminalRunStatus(summary.status)) {
+          if (summary.events && summary.events.length > 0) setEvents(summary.events);
+          await applyTerminalSummary(summary);
+          return;
+        }
+
+        const nodeTypeById = new Map(nodes.map((n) => [n.id, n.data.nodeType]));
+
+        closeStreamRef.current = watchRunCompletion({
+          initial: summary,
+          streamRunEvents,
+          getRun: client.getRun,
+          onEvent: (event) => {
+            setEvents((evts) => [...evts, event]);
+
+            if (event.event_type === "edge.selected" && event.node_id) {
+              const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
+              const selectedTargetNodeId = String(event.payload.selectedTargetNodeId ?? "");
+              setInspectionRouteDecisions((decisions) => [
+                ...decisions.filter((decision) => decision.nodeId !== event.node_id),
+                { nodeId: event.node_id!, selectedEdgeId, selectedTargetNodeId },
+              ]);
+            }
+
+            if (event.node_id) {
+              if (event.event_type === "node.started") {
+                setNodeTraces((traces) => ({
+                  ...traces,
+                  [event.node_id!]: {
+                    node_id: event.node_id!,
+                    node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                    status: "running",
+                    input: null,
+                    output: null,
+                    started_at: event.occurred_at,
+                  },
+                }));
+              } else if (event.event_type === "node.completed") {
+                setNodeTraces((traces) => ({
+                  ...traces,
+                  [event.node_id!]: {
+                    ...traces[event.node_id!],
+                    node_id: event.node_id!,
+                    node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                    status: "succeeded",
+                    input: event.payload.input,
+                    output: event.payload.output,
+                    completed_at: event.occurred_at,
+                  },
+                }));
+              } else if (event.event_type === "node.failed") {
+                setNodeTraces((traces) => ({
+                  ...traces,
+                  [event.node_id!]: {
+                    ...traces[event.node_id!],
+                    node_id: event.node_id!,
+                    node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                    status: "failed",
+                    completed_at: event.occurred_at,
+                    error: String(event.payload.error),
+                  },
+                }));
+              }
+            }
+
+            if (event.event_type === "run.completed" || event.event_type === "run.failed") {
+              closeStreamRef.current?.();
+              closeStreamRef.current = null;
+              void applyTerminalSummary({
+                ...summary,
+                status: event.event_type === "run.completed" ? "succeeded" : "failed",
+                result: event.payload.result ?? summary.result,
+                error: event.payload.error != null ? String(event.payload.error) : summary.error,
+              });
+            }
+          },
+          onTerminal: (latest) => {
+            closeStreamRef.current = null;
+            void applyTerminalSummary(latest);
+          },
+        });
+      } finally {
+        setCompiling(false);
+      }
+    },
+    [buildGraphDefinition, focusDiagnostics, nodes, refreshRunHistory, setNodes],
+  );
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
   const routerOutgoingEdges: GraphEdge[] =
@@ -448,6 +763,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             condition: (edge.data?.condition as string | null) ?? null,
           }))
       : [];
+  const selectedTrace = selectedNodeId ? nodeTraces[selectedNodeId] ?? null : null;
   const showEmptyCoach = isCoachVisible(graphId, coachDismissed, nodes, edges);
   const authoringCoachStep = coachStep(nodes, edges);
 
@@ -493,6 +809,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           <Button variant="outline" size="sm" onClick={() => setPaletteOpen((open) => !open)}>
             {paletteOpen ? "Close palette" : "Add node"}
           </Button>
+          <Button
+            variant={runPanelOpen ? "synth" : "outline"}
+            size="sm"
+            onClick={() => setRunPanelOpen((open) => !open)}
+          >
+            {runPanelOpen ? "Close run" : "Run"}
+          </Button>
         </div>
       </div>
 
@@ -509,8 +832,43 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         </div>
       )}
 
+      {/* Floating run panel — Execute (question/provider/Compile/Run) + Observe
+          (status/trace/events/history), restyled AGB's RunPanel.tsx per the
+          Phase 4e plan's disclosed fallback: cosmetic AI Elements reuse was
+          evaluated and skipped in favor of this inline-styled accordion,
+          which already has the run-status semantics AI Elements doesn't. */}
+      {runPanelOpen && (
+        <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[80vh] w-96 overflow-hidden rounded-2xl border">
+          <RunPanel
+            layout="rail"
+            graphId={graphId}
+            diagnostics={diagnostics}
+            diagnosticsSectionRef={diagnosticsSectionRef}
+            providerBlockMessage={providerBlockMessage}
+            inspectionRunId={inspectionRunId}
+            onExitInspection={exitInspection}
+            onCompile={handleCompile}
+            onRun={handleRun}
+            onDiagnosticClick={handleDiagnosticClick}
+            runSummary={runSummary}
+            runHistory={runHistory}
+            runHistoryLoading={runHistoryLoading}
+            compiling={compiling}
+            onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
+            events={events}
+            selectedTrace={selectedTrace}
+            selectedNodeId={selectedNodeId}
+            inspectLoadError={inspectLoadError}
+            onRetryInspect={() => {
+              const runId = lastInspectAttemptRef.current ?? inspectionRunId;
+              if (runId) void handleSelectHistoricalRun(runId);
+            }}
+          />
+        </div>
+      )}
+
       {/* Floating inspector */}
-      {(selectedNode || selectedEdge) && (
+      {!runPanelOpen && (selectedNode || selectedEdge) && (
         <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
           {selectedNode ? (
             <NodeInspector

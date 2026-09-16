@@ -2,6 +2,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import type { ChatProvider, EdgeKind, GraphEdge, GraphNode, Diagnostic, NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { GenuiSurfaceView } from "@/components/genui/genui-renderer";
+import { tryParseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
@@ -262,6 +264,7 @@ export function NodeInspector({
               onChange={(e) => set("genuiCheckpointSurfaceJson", e.target.value)}
             />
           </Field>
+          <GenuiCheckpointPreview raw={(node.config.genuiCheckpointSurfaceJson as string) ?? ""} />
         </>
       )}
 
@@ -379,6 +382,17 @@ function IntentBlurb({ nodeType }: { nodeType: NodeType }) {
     <p style={{ ...typeScale.caption, opacity: 0.8, lineHeight: "18px", margin: `0 0 ${spacing[3]}px` }}>
       {taxonomy.details}
     </p>
+  );
+}
+
+function GenuiCheckpointPreview({ raw }: { raw: string }) {
+  const surface = tryParseGenuiSurface(raw);
+  if (!surface) return null;
+  return (
+    <div style={{ marginBottom: spacing[3] }}>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Live preview</div>
+      <GenuiSurfaceView surface={surface} />
+    </div>
   );
 }
 

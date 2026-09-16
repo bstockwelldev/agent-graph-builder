@@ -1,3 +1,14 @@
-import { createAgentGraphClient } from "@bstockwelldev/agent-graph-sdk";
+import { createAgentGraphClient, streamRunEvents as sdkStreamRunEvents } from "@bstockwelldev/agent-graph-sdk";
+import type { PlatformEvent } from "@bstockwelldev/agent-graph-sdk";
 
-export const client = createAgentGraphClient();
+const BASE_URL = "";
+
+export const client = createAgentGraphClient({ baseUrl: BASE_URL });
+
+export function streamRunEvents(
+  runId: string,
+  onEvent: (event: PlatformEvent) => void,
+  onClose?: () => void,
+): () => void {
+  return sdkStreamRunEvents(BASE_URL, runId, onEvent, onClose);
+}
