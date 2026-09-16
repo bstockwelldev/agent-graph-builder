@@ -22,6 +22,7 @@ from .env_config import (
     resolve_azure_endpoint,
     resolve_google_api_key,
     resolve_groq_api_key,
+    telemetry_health,
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
@@ -92,6 +93,12 @@ if not os.environ.get("VERCEL"):
 @app.get("/api/health")
 def health_check() -> JSONResponse:
     payload = storage.storage_health()
+    # Telemetry readiness (studio-consolidation Phase 5) is diagnostic, not
+    # load-bearing: a misconfigured TELEMETRY_PROVIDER=langfuse degrades runs
+    # to untraced (see telemetry/provider.py's fail-open get_server_telemetry)
+    # rather than 503ing the whole API the way storage misconfiguration does,
+    # so it's nested here and never flips the top-level `ok`/status code.
+    payload["telemetry"] = telemetry_health()
     status_code = 200 if payload["ok"] else 503
     return JSONResponse(status_code=status_code, content=payload)
 

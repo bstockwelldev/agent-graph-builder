@@ -20,6 +20,14 @@ dev = [
     "pytest-httpx>=0.35",
     "ruff>=0.8",
 ]
+# Only needed when TELEMETRY_PROVIDER=langfuse (studio-consolidation Phase 5
+# — see docs/planning/features/studio-consolidation-plan.md); the default
+# noop provider never imports this. Pinned <3 for the trace()/.event() API
+# app/telemetry/langfuse_telemetry.py ports from micro-ui-agent-builder's JS
+# SDK usage — the 3.x client is OpenTelemetry-based with a different shape.
+telemetry = [
+    "langfuse>=2.60,<3",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

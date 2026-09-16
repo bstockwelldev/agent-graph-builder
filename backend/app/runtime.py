@@ -32,6 +32,13 @@ from .models import (
 )
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .providers.base import get_chat_model, resolve_chat_provider
+from .telemetry.provider import get_server_telemetry
+from .telemetry.types import (
+    ServerTelemetry,
+    TelemetryModelEvent,
+    TelemetryToolEvent,
+    TelemetryTraceContext,
+)
 
 
 def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -57,6 +64,10 @@ RUN_BUSES: dict[str, RunEventBus] = {}
 # it after a process restart is not possible until this gets a storage.py
 # backend (see docs/planning/features/studio-consolidation-plan.md).
 RUN_PAUSES: dict[str, RunPauseState] = {}
+# Telemetry trace per run (studio-consolidation Phase 5). Process-local like
+# the stores above; a resumed run starts a fresh trace, same accepted
+# simplification RUN_BUSES already has (see `_prepare_resume`).
+RUN_TELEMETRY: dict[str, tuple[ServerTelemetry, str]] = {}
 
 
 def get_run_summary(run_id: str) -> RunSummary | None:
@@ -196,6 +207,7 @@ def _make_node_runner(node, ctx: ExecContext):
             trace.error = str(exc)
             trace.completed_at = now_iso()
             ctx.bus.emit("node.failed", {"error": str(exc)}, node_id=node.id)
+            _record_node_telemetry_error(ctx.run_id, node, exc)
             raise
 
         trace.status = "succeeded"
@@ -205,6 +217,7 @@ def _make_node_runner(node, ctx: ExecContext):
         ctx.bus.emit(
             "node.completed", {"input": trace.input, "output": trace.output}, node_id=node.id
         )
+        _record_node_telemetry_success(ctx.run_id, node, trace.input)
 
         delta = dict(delta)
         delta["node_outputs"] = {**delta.get("node_outputs", {}), node.id: output}
@@ -212,6 +225,82 @@ def _make_node_runner(node, ctx: ExecContext):
         return delta
 
     return run_node
+
+
+_MODEL_NODE_TYPES = {NodeType.LLM, NodeType.TOOL_LOOP}
+_TOOL_NODE_TYPES = {NodeType.TOOL}
+
+
+def _record_node_telemetry_success(run_id: str, node, input_repr: Any) -> None:
+    """Records a model/tool telemetry event for a completed node
+    (studio-consolidation Phase 5). Recorded at the node-runner level, once
+    per node, rather than threaded through each `compute_*` executor in
+    nodes.py — a disclosed simplification vs. MUI's per-phase
+    (preflight/model_selection/generation_start/generation_finish) model
+    events, since AGB's `ChatModel.generate` doesn't expose that granularity
+    or token usage. `input_repr` is already the dict each executor returns
+    for node-trace `input` (see nodes.py's `NodeResult` docstring), so the
+    provider/model/toolName fields are read from the same data, not
+    recomputed.
+    """
+    entry = RUN_TELEMETRY.get(run_id)
+    if entry is None or not isinstance(input_repr, dict):
+        return
+    telemetry, trace_id = entry
+    if node.type in _MODEL_NODE_TYPES:
+        telemetry.record_model_event(
+            trace_id,
+            TelemetryModelEvent(
+                phase="generation_finish",
+                provider=input_repr.get("provider"),
+                model=input_repr.get("model"),
+                metadata={"nodeId": node.id},
+            ),
+        )
+    elif node.type in _TOOL_NODE_TYPES:
+        telemetry.record_tool_event(
+            trace_id,
+            TelemetryToolEvent(
+                phase="tool_call_finish",
+                tool_name=str(input_repr.get("toolName") or node.type.value),
+                metadata={"nodeId": node.id},
+            ),
+        )
+
+
+def _record_node_telemetry_error(run_id: str, node, error: BaseException) -> None:
+    entry = RUN_TELEMETRY.get(run_id)
+    if entry is None:
+        return
+    telemetry, trace_id = entry
+    telemetry.capture_error(trace_id, error, {"nodeId": node.id, "nodeType": node.type.value})
+
+
+def _start_telemetry_trace(run_id: str, graph_id: str) -> None:
+    telemetry = get_server_telemetry()
+    trace_id = f"trace_{uuid.uuid4().hex[:12]}"
+    context = TelemetryTraceContext(trace_id=trace_id, run_id=run_id, graph_id=graph_id)
+    telemetry.start_trace(context)
+    RUN_TELEMETRY[run_id] = (telemetry, trace_id)
+
+
+def _finish_telemetry_trace(
+    run_id: str, status: str, metadata: dict[str, Any] | None = None
+) -> None:
+    entry = RUN_TELEMETRY.pop(run_id, None)
+    if entry is None:
+        return
+    telemetry, trace_id = entry
+    telemetry.finish_trace(trace_id, status, metadata)  # type: ignore[arg-type]
+
+
+def _fail_telemetry_trace(run_id: str, error: BaseException) -> None:
+    entry = RUN_TELEMETRY.get(run_id)
+    if entry is None:
+        return
+    telemetry, trace_id = entry
+    telemetry.capture_error(trace_id, error)
+    _finish_telemetry_trace(run_id, "error", {"error": str(error)})
 
 
 def _merge_into_snapshot(snapshot: dict[str, Any], delta: dict[str, Any]) -> None:
@@ -281,11 +370,15 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
             api_key=ctx.api_key,
         )
         bus.emit("run.paused", {"nodeId": exc.node_id})
+        _finish_telemetry_trace(run_id, "ok", {"paused": True, "nodeId": exc.node_id})
     except Exception as exc:  # noqa: BLE001 - reported via run status + SSE, not raised further
         RUN_STORE[run_id].status = "failed"
         RUN_STORE[run_id].error = str(exc)
         RUN_PAUSES.pop(run_id, None)
         bus.emit("run.failed", {"error": str(exc)})
+        _fail_telemetry_trace(run_id, exc)
+    else:
+        _finish_telemetry_trace(run_id, "ok")
     finally:
         RUN_STORE[run_id].completed_at = now_iso()
         RUN_STORE[run_id].events = bus.collected_events()
@@ -316,6 +409,7 @@ def _prepare_run(
 
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
+    _start_telemetry_trace(run_id, graph.id)
 
     def chat_model_factory(node_model: str | None):
         effective_model = model or node_model
@@ -399,6 +493,7 @@ def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | No
     run_input = RUN_STORE[run_id].input if run_id in RUN_STORE else {}
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
+    _start_telemetry_trace(run_id, graph.id)
 
     def chat_model_factory(node_model: str | None):
         effective_model = pause.model or node_model

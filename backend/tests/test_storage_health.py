@@ -71,6 +71,7 @@ def test_health_reports_unhealthy_on_vercel_sqlite(monkeypatch: pytest.MonkeyPat
         "ok": False,
         "storage_backend": "sqlite",
         "message": storage.STORAGE_MISCONFIGURED_DETAIL,
+        "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
     }
 
 
@@ -85,7 +86,11 @@ def test_health_reports_healthy_on_vercel_with_blob(monkeypatch: pytest.MonkeyPa
         response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True, "storage_backend": "vercel_blob"}
+    assert response.json() == {
+        "ok": True,
+        "storage_backend": "vercel_blob",
+        "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
+    }
 
 
 def test_health_reports_healthy_local_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,7 +101,11 @@ def test_health_reports_healthy_local_sqlite(monkeypatch: pytest.MonkeyPatch) ->
         response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True, "storage_backend": "sqlite"}
+    assert response.json() == {
+        "ok": True,
+        "storage_backend": "sqlite",
+        "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
+    }
 
 
 def test_api_routes_fail_closed_on_vercel_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
