@@ -1,42 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm run build:sdk && pnpm run build:playground",
-  "installCommand": "pip install -r requirements.txt && pnpm install --frozen-lockfile",
-  "headers": [
-    {
-      "source": "/assets/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
+  "services": {
+    "studio": {
+      "root": "apps/studio/",
+      "framework": "nextjs"
     },
-    {
-      "source": "/",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, must-revalidate"
+    "backend": {
+      "root": "backend/",
+      "framework": "fastapi",
+      "entrypoint": "app.main:app",
+      "functions": {
+        "**/*.py": {
+          "maxDuration": 60,
+          "excludeFiles": "{tests/**,.venv/**,.pytest_cache/**,**/__pycache__/**,**/*.pyc}"
         }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, must-revalidate"
-        }
-      ]
-    }
-  ],
-  "functions": {
-    "backend/**/*.py": {
-      "maxDuration": 60,
-      "excludeFiles": "{backend/tests/**,backend/.venv/**,backend/.pytest_cache/**,apps/playground/src/**,apps/playground/node_modules/**,packages/**,node_modules/**,**/__pycache__/**,**/*.pyc,.git/**,docs/**,scripts/**}"
+      }
     }
   },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "studio" } }
+  ],
   "env": {
     "GRAPH_DB_PATH": "/tmp/graphs.db",
     "CHAT_PROVIDER": "stub"
