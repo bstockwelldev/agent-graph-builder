@@ -32,7 +32,7 @@ export const NODE_TYPE_TAXONOMY: Record<
     title: "Router node",
     summary: "Choose exactly one outgoing edge",
     details:
-      "One Fallback (default) edge plus one or more Match-text (conditional) edges on upstream LLM output. Cycles are not supported; this playground is acyclic only.",
+      "One Fallback (default) edge plus one or more Match-text (conditional) edges on upstream LLM output. Cycles are not supported; graphs must be acyclic.",
   },
   output: {
     title: "Output node",
@@ -99,7 +99,7 @@ export const ROUTER_RULES_TAXONOMY = {
   title: "Router rules",
   summary: "How routing chooses an edge",
   details:
-    "Mark outgoing edges as Fallback (default) or Match text (conditional, substring of upstream LLM output). The compiler requires exactly one Fallback. This playground does not support loops (acyclic graphs only).",
+    "Mark outgoing edges as Fallback (default) or Match text (conditional, substring of upstream LLM output). The compiler requires exactly one Fallback. Loops are not supported (acyclic graphs only).",
 };
 
 export const PROVIDER_TAXONOMY: Record<string, { title: string; summary: string; details: string }> = {

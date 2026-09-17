@@ -1,6 +1,6 @@
+import type { PlatformEvent } from "@bstockwelldev/agent-graph-sdk";
 import { describe, expect, it } from "vitest";
 
-import type { PlatformEvent } from "./types";
 import {
   INSPECTED_EVENT_LOG_EMPTY,
   LIVE_EVENT_LOG_EMPTY,

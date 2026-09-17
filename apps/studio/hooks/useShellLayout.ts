@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { drawerPanelWidth, shouldUseInspectorDrawer } from "../shellLayout";
-import { shell } from "../theme";
+import { drawerPanelWidth, shouldUseInspectorDrawer } from "@/lib/shellLayout";
+import { shell } from "@/lib/graph-theme";
 
 export type ShellBreakpoint = "desktop" | "compact" | "phone";
-export type ShellDrawer = "library" | "inspector" | "run";
+export type ShellDrawerName = "library" | "palette" | "run";
 
 export function useShellLayout() {
   const [breakpoint, setBreakpoint] = useState<ShellBreakpoint>("desktop");
@@ -12,7 +12,7 @@ export function useShellLayout() {
   );
   const [isWide, setIsWide] = useState(true);
   const [inspectorInDrawer, setInspectorInDrawer] = useState(false);
-  const [openDrawer, setOpenDrawer] = useState<ShellDrawer | null>(null);
+  const [openDrawer, setOpenDrawer] = useState<ShellDrawerName | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
@@ -44,12 +44,6 @@ export function useShellLayout() {
   }, []);
 
   useEffect(() => {
-    if (breakpoint === "desktop") {
-      setOpenDrawer(null);
-    }
-  }, [breakpoint]);
-
-  useEffect(() => {
     if (!openDrawer) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -60,14 +54,13 @@ export function useShellLayout() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [openDrawer]);
 
-  const toggleDrawer = useCallback((drawer: ShellDrawer) => {
+  const toggleDrawer = useCallback((drawer: ShellDrawerName) => {
     setOpenDrawer((current) => (current === drawer ? null : drawer));
   }, []);
 
   const closeDrawer = useCallback(() => setOpenDrawer(null), []);
 
   const isCompact = breakpoint !== "desktop";
-  const authoringEnabled = breakpoint !== "phone";
 
   return {
     breakpoint,
@@ -75,7 +68,6 @@ export function useShellLayout() {
     isPhone: breakpoint === "phone",
     isWide,
     inspectorInDrawer,
-    authoringEnabled,
     drawerPanelWidth: drawerPanelWidth(viewportWidth),
     openDrawer,
     setOpenDrawer,

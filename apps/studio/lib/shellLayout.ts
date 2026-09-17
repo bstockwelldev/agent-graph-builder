@@ -1,4 +1,4 @@
-import { shell } from "./theme";
+import { shell } from "./graph-theme";
 
 export function inspectorColumnFits(viewportWidth: number): boolean {
   const chrome = shell.rail.library + shell.rail.run + shell.rail.inspector;

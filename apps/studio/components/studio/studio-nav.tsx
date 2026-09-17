@@ -15,16 +15,22 @@ import {
 
 import { cn } from "@/lib/utils";
 
-// Nav groups locked in docs/planning/features/studio-consolidation-plan.md's
-// Phase 4c: Build = Graphs/Agents/Prompts/Tools/MCP/LLM Profiles/GenUI,
-// Operate = Runs/Analytics. No Dashboard (root "/" redirects straight to
-// "/graphs"); Deployments/History/Evaluations dropped — MUI's versions were
-// placeholder screens or superseded by AGB's real run history.
+// Nav groups (studio-consolidation Phase 7 regroup, superseding Phase 4c's
+// original two-group Build/Operate split): "Agent Graphs" is split out as
+// its own top-level section since it's the app's main value point and the
+// landing page ("/" redirects straight to "/graphs"); "Agent Anatomy
+// Management" holds the resource-CRUD screens; "Observability & Analytics"
+// is Phase 4c's old "Operate" group, renamed. Deployments/History/
+// Evaluations remain dropped — MUI's versions were placeholder screens or
+// superseded by AGB's real run history.
 const studioNavGroups = [
   {
-    label: "Build",
+    label: "Agent Graphs",
+    items: [{ href: "/graphs", label: "Graphs", icon: Workflow }],
+  },
+  {
+    label: "Agent Anatomy Management",
     items: [
-      { href: "/graphs", label: "Graphs", icon: Workflow },
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/prompts", label: "Prompts", icon: FileText },
       { href: "/tools", label: "Tools", icon: Wrench },
@@ -34,7 +40,7 @@ const studioNavGroups = [
     ],
   },
   {
-    label: "Operate",
+    label: "Observability & Analytics",
     items: [
       { href: "/runs", label: "Runs", icon: ListTree },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
