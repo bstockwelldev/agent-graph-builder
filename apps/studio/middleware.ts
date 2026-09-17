@@ -9,6 +9,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Vercel's `services` config (used to deploy studio + backend together)
+  // does not support Edge Function output, so middleware must run on Node.js.
+  runtime: "nodejs",
   matcher: [
     /*
      * Match all paths except static assets and images.

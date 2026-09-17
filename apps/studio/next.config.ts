@@ -14,6 +14,14 @@ const nextConfig: NextConfig = {
     // Monorepo lives here; avoids picking a parent-folder lockfile as workspace root.
     root: path.join(__dirname, "..", ".."),
   },
+  experimental: {
+    // Vercel's `services` config (studio + backend deployed together) does
+    // not support Edge Function output, so middleware must run on Node.js.
+    // Supported at runtime in Next.js 15.5, but missing from this version's
+    // type declarations.
+    // @ts-expect-error -- nodeMiddleware is valid, see comment above
+    nodeMiddleware: true,
+  },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiProxyTarget}/api/:path*` }];
   },
