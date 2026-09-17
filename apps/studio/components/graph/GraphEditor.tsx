@@ -59,6 +59,7 @@ import {
   watchRunCompletion,
 } from "@/lib/watchRun";
 import { useUndoStack } from "@/hooks/useUndoStack";
+import { useShellLayout } from "@/hooks/useShellLayout";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { NodePalette } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
@@ -66,11 +67,19 @@ import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
+import { GraphLibrary } from "./GraphLibrary";
+import { ShellDrawer } from "./ShellDrawer";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { shell } from "@/lib/graph-theme";
+
+/** True when the viewport is wide enough for docked (non-drawer) panels. */
+function isDesktopViewport(): boolean {
+  return typeof window === "undefined" || window.innerWidth >= shell.breakpoint.compact;
+}
 
 const nodeTypes = {
   input: GraphNodeView,
@@ -153,8 +162,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
   const [relayoutNonce, setRelayoutNonce] = useState(0);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [runPanelOpen, setRunPanelOpen] = useState(false);
+  // Default open on desktop, matching the old playground's persistently
+  // docked panels; computed once at mount, not tied to live resize, so a
+  // window resize doesn't fight a user's manual toggle (studio-consolidation
+  // Phase 7).
+  const [paletteOpen, setPaletteOpen] = useState(isDesktopViewport);
+  const [runPanelOpen, setRunPanelOpen] = useState(isDesktopViewport);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const shellLayout = useShellLayout();
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
   const [runHistoryLoading, setRunHistoryLoading] = useState(false);
@@ -215,6 +232,27 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   useEffect(() => {
     void refreshRunHistory();
   }, [refreshRunHistory]);
+
+  const refreshLibraryGraphs = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      setLibraryGraphs(await client.listGraphs());
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (libraryOpen) void refreshLibraryGraphs();
+  }, [libraryOpen, refreshLibraryGraphs]);
+
+  const handleLibrarySelect = useCallback(
+    (selectedGraphId: string) => {
+      setLibraryOpen(false);
+      if (selectedGraphId !== graphId) router.push(`/graphs/${selectedGraphId}`);
+    },
+    [graphId, router],
+  );
 
   useEffect(() => closeStream, [closeStream]);
 
@@ -778,6 +816,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           &larr; Graphs
         </Button>
+        <Button
+          variant={libraryOpen ? "synth" : "outline"}
+          size="sm"
+          onClick={() => setLibraryOpen((open) => !open)}
+        >
+          {libraryOpen ? "Close switcher" : "Switch graph"}
+        </Button>
         <Input
           value={graphName}
           onChange={(e) => setGraphName(e.target.value)}
@@ -825,20 +870,66 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         </div>
       )}
 
-      {/* Floating node palette */}
-      {paletteOpen && (
+      {/* Graph library / switcher — docked on desktop, a drawer at
+          compact/phone widths (studio-consolidation Phase 7). */}
+      {libraryOpen && !shellLayout.isCompact && (
+        <div className="glass-panel ghost-border absolute left-4 top-24 z-20 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border">
+          <GraphLibrary
+            graphs={libraryGraphs}
+            activeGraphId={graphId}
+            loading={libraryLoading}
+            onSelect={handleLibrarySelect}
+          />
+        </div>
+      )}
+      {libraryOpen && shellLayout.isCompact && (
+        <ShellDrawer
+          open
+          onClose={() => setLibraryOpen(false)}
+          side="left"
+          title="Switch graph"
+          drawerId="graph-library-drawer"
+          reducedMotion={shellLayout.reducedMotion}
+          panelWidth={shellLayout.drawerPanelWidth}
+        >
+          <GraphLibrary
+            graphs={libraryGraphs}
+            activeGraphId={graphId}
+            loading={libraryLoading}
+            onSelect={handleLibrarySelect}
+          />
+        </ShellDrawer>
+      )}
+
+      {/* Floating node palette — docked on desktop, a drawer at
+          compact/phone widths (studio-consolidation Phase 7). */}
+      {paletteOpen && !shellLayout.isCompact && (
         <div className="glass-panel ghost-border absolute left-4 top-24 z-20 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border">
           <NodePalette onAdd={addNode} authoringEnabled />
         </div>
+      )}
+      {paletteOpen && shellLayout.isCompact && (
+        <ShellDrawer
+          open
+          onClose={() => setPaletteOpen(false)}
+          side="left"
+          title="Add node"
+          drawerId="node-palette-drawer"
+          reducedMotion={shellLayout.reducedMotion}
+          panelWidth={shellLayout.drawerPanelWidth}
+        >
+          <NodePalette onAdd={addNode} authoringEnabled />
+        </ShellDrawer>
       )}
 
       {/* Floating run panel — Execute (question/provider/Compile/Run) + Observe
           (status/trace/events/history), restyled AGB's RunPanel.tsx per the
           Phase 4e plan's disclosed fallback: cosmetic AI Elements reuse was
           evaluated and skipped in favor of this inline-styled accordion,
-          which already has the run-status semantics AI Elements doesn't. */}
-      {runPanelOpen && (
-        <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[80vh] w-96 overflow-hidden rounded-2xl border">
+          which already has the run-status semantics AI Elements doesn't.
+          Docked on desktop, a drawer at compact/phone widths (Phase 7). */}
+      {runPanelOpen && (() => {
+        const runPanelContent = (
           <RunPanel
             layout="rail"
             graphId={graphId}
@@ -864,8 +955,25 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               if (runId) void handleSelectHistoricalRun(runId);
             }}
           />
-        </div>
-      )}
+        );
+        return shellLayout.isCompact ? (
+          <ShellDrawer
+            open
+            onClose={() => setRunPanelOpen(false)}
+            side="right"
+            title="Run"
+            drawerId="run-panel-drawer"
+            reducedMotion={shellLayout.reducedMotion}
+            panelWidth={shellLayout.drawerPanelWidth}
+          >
+            {runPanelContent}
+          </ShellDrawer>
+        ) : (
+          <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[80vh] w-96 overflow-hidden rounded-2xl border">
+            {runPanelContent}
+          </div>
+        );
+      })()}
 
       {/* Floating inspector */}
       {!runPanelOpen && (selectedNode || selectedEdge) && (
