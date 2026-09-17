@@ -11,6 +11,9 @@ import { StudioNavProvider } from "@/components/studio/studio-nav-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { client } from "@/lib/api-client";
+import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
+import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
 
 /**
  * Single-segment graph canvas route: /graphs/:id (not /graphs, not
@@ -115,6 +118,26 @@ export function StudioShell({
           </main>
         </div>
       </div>
+
+      {/* App-wide workbench panels (studio-consolidation Phase 8) — mounted
+          once here so they're reachable from every route, not just the
+          graph canvas. List-only; "Open full page" links to the existing
+          CRUD route for editing. */}
+      <WorkbenchDrawer panelId="agents" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.agents} title="Agents" routeHref="/agents" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="prompts" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.prompts} title="Prompts" routeHref="/prompts" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="tools" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.tools} title="Tools" routeHref="/tools" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="mcp" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.mcpServers} title="MCP Servers" routeHref="/mcp" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="llmProfiles" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.llmProfiles} title="LLM Profiles" routeHref="/llm-profiles" />
+      </WorkbenchDrawer>
     </StudioNavProvider>
   );
 }
