@@ -111,7 +111,7 @@ export function coachStep(nodes: Node<GraphNodeData>[], edges: Edge[]): CoachSte
     "Always (sequence): follow this path every run.",
     "Match text (conditional): Router takes this path when upstream LLM text contains the condition.",
     "Fallback (default): Router takes this path when no condition matches. Each Router needs exactly one.",
-    "This playground only allows acyclic graphs (no loops).",
+    "Only acyclic graphs are allowed (no loops).",
   ];
 
   if (blank || (!hasPrompt && !hasLlm)) {

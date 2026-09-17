@@ -1,20 +1,16 @@
 {
   "name": "agent-graph-builder",
   "version": "0.2.0",
-  "description": "Agent Graph Builder — visual graph authoring platform with playground UI and TypeScript SDK",
+  "description": "Agent Graph Builder — visual graph authoring studio and TypeScript SDK",
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-playground run build",
+    "build": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-studio run build",
     "build:sdk": "pnpm --filter @bstockwelldev/agent-graph-sdk run build",
-    "build:playground": "pnpm --filter @bstockwelldev/agent-graph-playground run build",
-    "build:studio": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-studio run build",
-    "dev:playground": "pnpm --filter @bstockwelldev/agent-graph-playground run dev",
-    "dev:studio": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
-    "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-playground run test",
-    "test:studio": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-studio run test"
+    "dev": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
+    "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-studio run test"
   }
 }
