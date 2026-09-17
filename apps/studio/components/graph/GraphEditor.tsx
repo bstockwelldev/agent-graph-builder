@@ -59,7 +59,8 @@ import {
   watchRunCompletion,
 } from "@/lib/watchRun";
 import { useUndoStack } from "@/hooks/useUndoStack";
-import { useShellLayout } from "@/hooks/useShellLayout";
+import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
+import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
@@ -70,7 +71,6 @@ import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
 import { GraphLibrary } from "./GraphLibrary";
-import { ShellDrawer } from "./ShellDrawer";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -164,16 +164,17 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
   const [relayoutNonce, setRelayoutNonce] = useState(0);
-  // Default open on desktop, matching the old playground's persistently
-  // docked panels; computed once at mount, not tied to live resize, so a
-  // window resize doesn't fight a user's manual toggle (studio-consolidation
-  // Phase 7).
-  const [paletteOpen, setPaletteOpen] = useState(isDesktopViewport);
-  const [runPanelOpen, setRunPanelOpen] = useState(isDesktopViewport);
-  const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
-  const shellLayout = useShellLayout();
+  const workbench = useWorkbench();
+  // Default the Run panel open on desktop, matching the old playground's
+  // persistently docked Run rail; computed once at mount, not tied to live
+  // resize, so a window resize doesn't fight a user's manual toggle
+  // (studio-consolidation Phase 7). Palette/library/run are now one
+  // mutually-exclusive `activePanel` (Phase 8) rather than three
+  // independent booleans — they previously rendered at the identical
+  // top-24/left-4 position when more than one was open, an unnoticed
+  // Phase 7 overlap bug this also fixes.
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
   const [runHistoryLoading, setRunHistoryLoading] = useState(false);
@@ -235,6 +236,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     void refreshRunHistory();
   }, [refreshRunHistory]);
 
+  useEffect(() => {
+    if (isDesktopViewport() && workbench.activePanel === null) workbench.open("run");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once at mount only, guarded above
+  }, []);
+
   const refreshLibraryGraphs = useCallback(async () => {
     setLibraryLoading(true);
     try {
@@ -245,15 +251,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, []);
 
   useEffect(() => {
-    if (libraryOpen) void refreshLibraryGraphs();
-  }, [libraryOpen, refreshLibraryGraphs]);
+    if (workbench.activePanel === "library") void refreshLibraryGraphs();
+  }, [workbench.activePanel, refreshLibraryGraphs]);
 
   const handleLibrarySelect = useCallback(
     (selectedGraphId: string) => {
-      setLibraryOpen(false);
+      workbench.close();
       if (selectedGraphId !== graphId) router.push(`/graphs/${selectedGraphId}`);
     },
-    [graphId, router],
+    [graphId, router, workbench],
   );
 
   useEffect(() => closeStream, [closeStream]);
@@ -500,9 +506,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
       setNodes((current) => [...current, node]);
-      setPaletteOpen(false);
+      if (workbench.activePanel === "palette") workbench.close();
     },
-    [recordMutation, setNodes],
+    [recordMutation, setNodes, workbench],
   );
 
   // Right-click context menu (studio-consolidation Phase 7 — new scope, no
@@ -846,11 +852,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           &larr; Graphs
         </Button>
         <Button
-          variant={libraryOpen ? "synth" : "outline"}
+          variant={workbench.activePanel === "library" ? "synth" : "outline"}
           size="sm"
-          onClick={() => setLibraryOpen((open) => !open)}
+          onClick={() => workbench.toggle("library")}
         >
-          {libraryOpen ? "Close switcher" : "Switch graph"}
+          {workbench.activePanel === "library" ? "Close switcher" : "Switch graph"}
         </Button>
         <Input
           value={graphName}
@@ -880,15 +886,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               setRelayoutNonce((v) => v + 1);
             }}
           />
-          <Button variant="outline" size="sm" onClick={() => setPaletteOpen((open) => !open)}>
-            {paletteOpen ? "Close palette" : "Add node"}
+          <Button variant="outline" size="sm" onClick={() => workbench.toggle("palette")}>
+            {workbench.activePanel === "palette" ? "Close palette" : "Add node"}
           </Button>
           <Button
-            variant={runPanelOpen ? "synth" : "outline"}
+            variant={workbench.activePanel === "run" ? "synth" : "outline"}
             size="sm"
-            onClick={() => setRunPanelOpen((open) => !open)}
+            onClick={() => workbench.toggle("run")}
           >
-            {runPanelOpen ? "Close run" : "Run"}
+            {workbench.activePanel === "run" ? "Close run" : "Run"}
           </Button>
         </div>
       </div>
@@ -899,113 +905,58 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         </div>
       )}
 
-      {/* Graph library / switcher — docked on desktop, a drawer at
-          compact/phone widths (studio-consolidation Phase 7). */}
-      {libraryOpen && !shellLayout.isCompact && (
-        <div className="glass-panel ghost-border absolute left-4 top-24 z-20 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border">
-          <GraphLibrary
-            graphs={libraryGraphs}
-            activeGraphId={graphId}
-            loading={libraryLoading}
-            onSelect={handleLibrarySelect}
-          />
-        </div>
-      )}
-      {libraryOpen && shellLayout.isCompact && (
-        <ShellDrawer
-          open
-          onClose={() => setLibraryOpen(false)}
-          side="left"
-          title="Switch graph"
-          drawerId="graph-library-drawer"
-          reducedMotion={shellLayout.reducedMotion}
-          panelWidth={shellLayout.drawerPanelWidth}
-        >
-          <GraphLibrary
-            graphs={libraryGraphs}
-            activeGraphId={graphId}
-            loading={libraryLoading}
-            onSelect={handleLibrarySelect}
-          />
-        </ShellDrawer>
-      )}
+      {/* Graph library / switcher — WorkbenchDrawer centralizes the
+          docked-on-desktop / drawer-at-compact-width decision that used to
+          be hand-written per panel (studio-consolidation Phase 8). */}
+      <WorkbenchDrawer panelId="library" side="left" dockedClassName="left-4 top-24 max-h-[70vh] w-72 overflow-y-auto">
+        <GraphLibrary
+          graphs={libraryGraphs}
+          activeGraphId={graphId}
+          loading={libraryLoading}
+          onSelect={handleLibrarySelect}
+        />
+      </WorkbenchDrawer>
 
-      {/* Floating node palette — docked on desktop, a drawer at
-          compact/phone widths (studio-consolidation Phase 7). */}
-      {paletteOpen && !shellLayout.isCompact && (
-        <div className="glass-panel ghost-border absolute left-4 top-24 z-20 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border">
-          <NodePalette onAdd={addNode} authoringEnabled />
-        </div>
-      )}
-      {paletteOpen && shellLayout.isCompact && (
-        <ShellDrawer
-          open
-          onClose={() => setPaletteOpen(false)}
-          side="left"
-          title="Add node"
-          drawerId="node-palette-drawer"
-          reducedMotion={shellLayout.reducedMotion}
-          panelWidth={shellLayout.drawerPanelWidth}
-        >
-          <NodePalette onAdd={addNode} authoringEnabled />
-        </ShellDrawer>
-      )}
+      {/* Floating node palette */}
+      <WorkbenchDrawer panelId="palette" side="left" dockedClassName="left-4 top-24 max-h-[70vh] w-72 overflow-y-auto">
+        <NodePalette onAdd={addNode} authoringEnabled />
+      </WorkbenchDrawer>
 
       {/* Floating run panel — Execute (question/provider/Compile/Run) + Observe
           (status/trace/events/history), restyled AGB's RunPanel.tsx per the
           Phase 4e plan's disclosed fallback: cosmetic AI Elements reuse was
           evaluated and skipped in favor of this inline-styled accordion,
-          which already has the run-status semantics AI Elements doesn't.
-          Docked on desktop, a drawer at compact/phone widths (Phase 7). */}
-      {runPanelOpen && (() => {
-        const runPanelContent = (
-          <RunPanel
-            layout="rail"
-            graphId={graphId}
-            diagnostics={diagnostics}
-            diagnosticsSectionRef={diagnosticsSectionRef}
-            providerBlockMessage={providerBlockMessage}
-            inspectionRunId={inspectionRunId}
-            onExitInspection={exitInspection}
-            onCompile={handleCompile}
-            onRun={handleRun}
-            onDiagnosticClick={handleDiagnosticClick}
-            runSummary={runSummary}
-            runHistory={runHistory}
-            runHistoryLoading={runHistoryLoading}
-            compiling={compiling}
-            onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
-            events={events}
-            selectedTrace={selectedTrace}
-            selectedNodeId={selectedNodeId}
-            inspectLoadError={inspectLoadError}
-            onRetryInspect={() => {
-              const runId = lastInspectAttemptRef.current ?? inspectionRunId;
-              if (runId) void handleSelectHistoricalRun(runId);
-            }}
-          />
-        );
-        return shellLayout.isCompact ? (
-          <ShellDrawer
-            open
-            onClose={() => setRunPanelOpen(false)}
-            side="right"
-            title="Run"
-            drawerId="run-panel-drawer"
-            reducedMotion={shellLayout.reducedMotion}
-            panelWidth={shellLayout.drawerPanelWidth}
-          >
-            {runPanelContent}
-          </ShellDrawer>
-        ) : (
-          <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[80vh] w-96 overflow-hidden rounded-2xl border">
-            {runPanelContent}
-          </div>
-        );
-      })()}
+          which already has the run-status semantics AI Elements doesn't. */}
+      <WorkbenchDrawer panelId="run" side="right" dockedClassName="right-4 top-24 max-h-[80vh] w-96 overflow-hidden">
+        <RunPanel
+          layout="rail"
+          graphId={graphId}
+          diagnostics={diagnostics}
+          diagnosticsSectionRef={diagnosticsSectionRef}
+          providerBlockMessage={providerBlockMessage}
+          inspectionRunId={inspectionRunId}
+          onExitInspection={exitInspection}
+          onCompile={handleCompile}
+          onRun={handleRun}
+          onDiagnosticClick={handleDiagnosticClick}
+          runSummary={runSummary}
+          runHistory={runHistory}
+          runHistoryLoading={runHistoryLoading}
+          compiling={compiling}
+          onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
+          events={events}
+          selectedTrace={selectedTrace}
+          selectedNodeId={selectedNodeId}
+          inspectLoadError={inspectLoadError}
+          onRetryInspect={() => {
+            const runId = lastInspectAttemptRef.current ?? inspectionRunId;
+            if (runId) void handleSelectHistoricalRun(runId);
+          }}
+        />
+      </WorkbenchDrawer>
 
       {/* Floating inspector */}
-      {!runPanelOpen && (selectedNode || selectedEdge) && (
+      {workbench.activePanel !== "run" && (selectedNode || selectedEdge) && (
         <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
           {selectedNode ? (
             <NodeInspector
@@ -1090,12 +1041,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onNodeClick={(nodeId) => {
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
-            setPaletteOpen(false);
+            if (workbench.activePanel === "palette") workbench.close();
           }}
           onEdgeClick={(edgeId) => {
             setSelectedEdgeId(edgeId);
             setSelectedNodeId(null);
-            setPaletteOpen(false);
+            if (workbench.activePanel === "palette") workbench.close();
           }}
           onPaneClick={() => {
             setPendingConnection(null);
