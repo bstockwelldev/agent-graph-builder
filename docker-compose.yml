@@ -18,21 +18,21 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  playground:
+  studio:
     build:
       context: .
-      dockerfile: apps/playground/Dockerfile
+      dockerfile: apps/studio/Dockerfile
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
       API_PROXY_TARGET: http://backend:8000
     volumes:
-      - ./apps/playground:/app
-      - ./packages/agent-graph-sdk:/packages/agent-graph-sdk
-      - playground_node_modules:/app/node_modules
+      - ./apps/studio:/workspace/apps/studio
+      - ./packages/agent-graph-sdk:/workspace/packages/agent-graph-sdk
+      - studio_node_modules:/workspace/apps/studio/node_modules
     depends_on:
       - backend
 
 volumes:
   graph_db:
-  playground_node_modules:
+  studio_node_modules:

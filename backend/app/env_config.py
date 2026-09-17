@@ -140,3 +140,78 @@ def resolve_ai_model_override() -> str | None:
 
 def resolve_openai_compat_api_key() -> str:
     return first_env("OPENAI_COMPAT_API_KEY")
+
+
+# --- Runtime config: telemetry provider selection (studio-consolidation
+# Phase 5 — see docs/planning/features/studio-consolidation-plan.md).
+# Ported from micro-ui-agent-builder's `lib/server/runtime-config.ts`,
+# trimmed to the telemetry-provider subset: AGB has no `orchestrationBackend`
+# toggle (`ai_sdk` vs `langgraph`) to port — it always runs the LangGraph
+# engine, which is the whole point of this consolidation.
+
+TelemetryProvider = str  # "noop" | "langfuse", kept as `str` to avoid a
+# backend-wide Literal import just for two values compared with `==`.
+
+LANGFUSE_DEFAULT_HOST = "https://cloud.langfuse.com"
+
+
+class RuntimeConfigError(ValueError):
+    """Raised when an env var combination for a runtime flag is invalid."""
+
+
+def parse_telemetry_provider(raw: str | None) -> TelemetryProvider:
+    normalized = (raw or "").strip().lower()
+    if not normalized or normalized == "noop":
+        return "noop"
+    if normalized == "langfuse":
+        return "langfuse"
+    raise RuntimeConfigError(
+        f'Invalid TELEMETRY_PROVIDER="{raw}". Use "noop" (default) or "langfuse".'
+    )
+
+
+def resolve_langfuse_public_key() -> str:
+    return first_env("LANGFUSE_PUBLIC_KEY")
+
+
+def resolve_langfuse_secret_key() -> str:
+    return first_env("LANGFUSE_SECRET_KEY")
+
+
+def resolve_langfuse_host() -> str:
+    return first_env("LANGFUSE_HOST", "LANGFUSE_BASEURL") or LANGFUSE_DEFAULT_HOST
+
+
+def telemetry_provider() -> TelemetryProvider:
+    """The configured telemetry provider, validated. Raises `RuntimeConfigError`
+    when `TELEMETRY_PROVIDER=langfuse` is set without both Langfuse keys —
+    the same fail-loud posture MUI's `getServerRuntimeConfig` used.
+    """
+    provider = parse_telemetry_provider(os.environ.get("TELEMETRY_PROVIDER"))
+    langfuse_ready = resolve_langfuse_public_key() and resolve_langfuse_secret_key()
+    if provider == "langfuse" and not langfuse_ready:
+        raise RuntimeConfigError(
+            "TELEMETRY_PROVIDER=langfuse requires LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY. "
+            "Set both values or switch TELEMETRY_PROVIDER=noop."
+        )
+    return provider
+
+
+def telemetry_health() -> dict[str, bool | str]:
+    """Cheap diagnostics payload for `/api/health` — mirrors `storage_health()`'s
+    shape (`ok` + a `message` only when not ok) so both can sit side by side
+    in the same response body.
+    """
+    requested = parse_telemetry_provider(os.environ.get("TELEMETRY_PROVIDER"))
+    configured = bool(resolve_langfuse_public_key() and resolve_langfuse_secret_key())
+    payload: dict[str, bool | str] = {
+        "ok": True,
+        "telemetry_provider": requested,
+        "telemetry_configured": configured if requested == "langfuse" else True,
+    }
+    if requested == "langfuse" and not configured:
+        payload["ok"] = False
+        payload["message"] = (
+            "TELEMETRY_PROVIDER=langfuse requires LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY."
+        )
+    return payload

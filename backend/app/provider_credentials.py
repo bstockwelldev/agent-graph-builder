@@ -9,7 +9,7 @@ server's own are sent with that run request and never persisted server-side.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from .env_config import (
     resolve_azure_api_key,
@@ -53,7 +53,13 @@ def get_provider_credentials(provider: str) -> dict[str, str | bool]:
     is configured. See module docstring."""
     field = PROVIDER_API_KEY_FIELDS.get(provider)
     if field is None:
-        return {"provider": provider, "requires_api_key": False, "label": "", "env_var": "", "configured": False}
+        return {
+            "provider": provider,
+            "requires_api_key": False,
+            "label": "",
+            "env_var": "",
+            "configured": False,
+        }
 
     resolve = field["resolve"]
     assert callable(resolve)

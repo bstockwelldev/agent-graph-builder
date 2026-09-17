@@ -73,7 +73,9 @@ class _CalculatorParser:
         value = self._expr()
         self._skip_spaces()
         if self._pos != len(self._text):
-            raise CalculatorError(f"unexpected character {self._text[self._pos]!r} at position {self._pos}")
+            raise CalculatorError(
+                f"unexpected character {self._text[self._pos]!r} at position {self._pos}"
+            )
         return value
 
     def _peek(self) -> str | None:
@@ -153,5 +155,7 @@ def calculator(expression: str) -> float:
         raise CalculatorError("expression is empty")
     disallowed = set(expression) - _ALLOWED_CHARS
     if disallowed:
-        raise CalculatorError(f"expression contains disallowed characters: {''.join(sorted(disallowed))!r}")
+        raise CalculatorError(
+            f"expression contains disallowed characters: {''.join(sorted(disallowed))!r}"
+        )
     return _CalculatorParser(expression).parse()

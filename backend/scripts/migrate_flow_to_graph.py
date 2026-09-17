@@ -50,7 +50,14 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.models import EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodePosition, NodeType  # noqa: E402
+from app.models import (  # noqa: E402
+    EdgeKind,
+    GraphDefinition,
+    GraphEdge,
+    GraphNode,
+    NodePosition,
+    NodeType,
+)
 
 _STEP_TYPE_TO_NODE_TYPE: dict[str, NodeType] = {
     "system": NodeType.PROMPT,
@@ -69,7 +76,9 @@ _STEP_TYPE_TO_NODE_TYPE: dict[str, NodeType] = {
 _TOOL_LOOP_PROMOTION_THRESHOLD = 2
 
 
-def _node_config_for_step(step: dict[str, Any], node_type: NodeType, warnings: list[str]) -> dict[str, Any]:
+def _node_config_for_step(
+    step: dict[str, Any], node_type: NodeType, warnings: list[str]
+) -> dict[str, Any]:
     step_id = step.get("id", "?")
     step_type = step.get("type")
     content = step.get("content")
@@ -146,7 +155,9 @@ def _node_config_for_step(step: dict[str, Any], node_type: NodeType, warnings: l
             config["toolName"] = ref_id
         return config
 
-    warnings.append(f"step {step_id!r} has unrecognized type {step_type!r}; produced an empty config")
+    warnings.append(
+        f"step {step_id!r} has unrecognized type {step_type!r}; produced an empty config"
+    )
     return {}
 
 
@@ -168,7 +179,10 @@ def migrate_flow_document(flow: dict[str, Any]) -> tuple[dict[str, Any], list[st
         if node_type is None:
             raise ValueError(f"step {step.get('id')!r} has unmapped type {step_type!r}")
 
-        if node_type == NodeType.LLM and (step.get("maxToolIterations") or 0) >= _TOOL_LOOP_PROMOTION_THRESHOLD:
+        if (
+            node_type == NodeType.LLM
+            and (step.get("maxToolIterations") or 0) >= _TOOL_LOOP_PROMOTION_THRESHOLD
+        ):
             warnings.append(
                 f"step {step.get('id')!r} (llm) has maxToolIterations="
                 f"{step['maxToolIterations']}; promoted to a tool_loop node, since that is what "
@@ -195,7 +209,11 @@ def migrate_flow_document(flow: dict[str, Any]) -> tuple[dict[str, Any], list[st
         ]
     else:
         edges = [
-            GraphEdge(id=f"e_{steps[i]['id']}_{steps[i + 1]['id']}", source=steps[i]["id"], target=steps[i + 1]["id"])
+            GraphEdge(
+                id=f"e_{steps[i]['id']}_{steps[i + 1]['id']}",
+                source=steps[i]["id"],
+                target=steps[i + 1]["id"],
+            )
             for i in range(len(steps) - 1)
         ]
 
@@ -213,8 +231,16 @@ def migrate_flow_document(flow: dict[str, Any]) -> tuple[dict[str, Any], list[st
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("flow_json", type=Path, help="Path to a micro-ui-agent-builder FlowDocument JSON file")
-    parser.add_argument("-o", "--output", type=Path, default=None, help="Write the GraphDefinition JSON here (default: stdout)")
+    parser.add_argument(
+        "flow_json", type=Path, help="Path to a micro-ui-agent-builder FlowDocument JSON file"
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Write the GraphDefinition JSON here (default: stdout)",
+    )
     args = parser.parse_args()
 
     flow = json.loads(args.flow_json.read_text())

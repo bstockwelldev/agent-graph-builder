@@ -1,5 +1,24 @@
+import type { z } from "zod";
+
+import {
+  agentProfileSchema,
+  analyticsDashboardPayloadSchema,
+  compileResultSchema,
+  deletedSchema,
+  graphDefinitionSchema,
+  llmProfileSchema,
+  mcpServerConfigSchema,
+  nodeTraceSchema,
+  promptTemplateSchema,
+  providerCredentialsSchema,
+  providerModelCatalogSchema,
+  providerReadySchema,
+  runSummarySchema,
+  toolDefinitionSchema,
+} from "./schemas.js";
 import type {
   AgentProfile,
+  AnalyticsDashboardPayload,
   ChatProvider,
   CompileResult,
   GraphDefinition,
@@ -18,7 +37,13 @@ export type AgentGraphClientOptions = {
   baseUrl?: string;
 };
 
-async function jsonFetch<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
+/**
+ * `schema` is optional so callers that don't (yet) have a Zod schema for a
+ * given response can still use `jsonFetch` — but every method on
+ * `createAgentGraphClient` below passes one, so in practice every response
+ * this SDK returns is runtime-validated (studio-consolidation Phase 4f).
+ */
+async function jsonFetch<T>(baseUrl: string, path: string, init?: RequestInit, schema?: z.ZodType<T>): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...init,
@@ -27,7 +52,15 @@ async function jsonFetch<T>(baseUrl: string, path: string, init?: RequestInit): 
     const body = await response.text();
     throw new Error(`${init?.method ?? "GET"} ${path} failed (${response.status}): ${body}`);
   }
-  return response.json() as Promise<T>;
+  const data: unknown = await response.json();
+  if (!schema) {
+    return data as T;
+  }
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    throw new Error(`${init?.method ?? "GET"} ${path} returned an unexpected shape: ${result.error.message}`);
+  }
+  return result.data;
 }
 
 /**
@@ -36,16 +69,21 @@ async function jsonFetch<T>(baseUrl: string, path: string, init?: RequestInit): 
  * `_register_resource_routes` and resource_models.py). Each resource type
  * has an `id` field, so create/update both take the full object.
  */
-function resourceClient<T extends { id: string }>(baseUrl: string, path: string) {
+function resourceClient<T extends { id: string }>(baseUrl: string, path: string, schema: z.ZodType<T>) {
   return {
-    list: () => jsonFetch<T[]>(baseUrl, `/api/${path}`),
-    get: (id: string) => jsonFetch<T>(baseUrl, `/api/${path}/${id}`),
+    list: () => jsonFetch<T[]>(baseUrl, `/api/${path}`, undefined, schema.array()),
+    get: (id: string) => jsonFetch<T>(baseUrl, `/api/${path}/${id}`, undefined, schema),
     create: (resource: T) =>
-      jsonFetch<T>(baseUrl, `/api/${path}`, { method: "POST", body: JSON.stringify(resource) }),
+      jsonFetch<T>(baseUrl, `/api/${path}`, { method: "POST", body: JSON.stringify(resource) }, schema),
     update: (resource: T) =>
-      jsonFetch<T>(baseUrl, `/api/${path}/${resource.id}`, { method: "PUT", body: JSON.stringify(resource) }),
+      jsonFetch<T>(
+        baseUrl,
+        `/api/${path}/${resource.id}`,
+        { method: "PUT", body: JSON.stringify(resource) },
+        schema,
+      ),
     delete: (id: string) =>
-      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${id}`, { method: "DELETE" }),
+      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${id}`, { method: "DELETE" }, deletedSchema),
   };
 }
 
@@ -53,31 +91,43 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
   const baseUrl = options.baseUrl ?? "";
 
   return {
-    listGraphs: () => jsonFetch<GraphDefinition[]>(baseUrl, "/api/graphs"),
-    listRuns: (graphId: string) => jsonFetch<RunSummary[]>(baseUrl, `/api/graphs/${graphId}/runs`),
-    getRun: (runId: string) => jsonFetch<RunSummary>(baseUrl, `/api/runs/${runId}`),
+    listGraphs: () => jsonFetch<GraphDefinition[]>(baseUrl, "/api/graphs", undefined, graphDefinitionSchema.array()),
+    listRuns: (graphId: string) =>
+      jsonFetch<RunSummary[]>(baseUrl, `/api/graphs/${graphId}/runs`, undefined, runSummarySchema.array()),
+    /** Cross-graph run history (studio-consolidation Phase 5) — flagged as
+     * a gap in Phase 4c's as-built notes; `listRuns` above stays the
+     * per-graph route the Runs screen uses. */
+    listAllRuns: () => jsonFetch<RunSummary[]>(baseUrl, "/api/runs", undefined, runSummarySchema.array()),
+    getRun: (runId: string) => jsonFetch<RunSummary>(baseUrl, `/api/runs/${runId}`, undefined, runSummarySchema),
     createGraph: (name: string, template: "blank" | "demo") =>
-      jsonFetch<GraphDefinition>(baseUrl, "/api/graphs", {
-        method: "POST",
-        body: JSON.stringify({ name, template }),
-      }),
-    getGraph: (id: string) => jsonFetch<GraphDefinition>(baseUrl, `/api/graphs/${id}`),
+      jsonFetch<GraphDefinition>(
+        baseUrl,
+        "/api/graphs",
+        { method: "POST", body: JSON.stringify({ name, template }) },
+        graphDefinitionSchema,
+      ),
+    getGraph: (id: string) =>
+      jsonFetch<GraphDefinition>(baseUrl, `/api/graphs/${id}`, undefined, graphDefinitionSchema),
     saveGraph: (graph: GraphDefinition) =>
-      jsonFetch<GraphDefinition>(baseUrl, `/api/graphs/${graph.id}`, {
-        method: "PUT",
-        body: JSON.stringify(graph),
-      }),
+      jsonFetch<GraphDefinition>(
+        baseUrl,
+        `/api/graphs/${graph.id}`,
+        { method: "PUT", body: JSON.stringify(graph) },
+        graphDefinitionSchema,
+      ),
     /** Added for studio-consolidation Phase 3 — graphs were previously
      * never deletable through this API. */
     deleteGraph: (id: string) =>
-      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/graphs/${id}`, { method: "DELETE" }),
+      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/graphs/${id}`, { method: "DELETE" }, deletedSchema),
     validateGraph: (graph: GraphDefinition, init?: { signal?: AbortSignal }) =>
-      jsonFetch<CompileResult>(baseUrl, "/api/graphs/validate", {
-        method: "POST",
-        body: JSON.stringify(graph),
-        signal: init?.signal,
-      }),
-    compileGraph: (id: string) => jsonFetch<CompileResult>(baseUrl, `/api/graphs/${id}/compile`, { method: "POST" }),
+      jsonFetch<CompileResult>(
+        baseUrl,
+        "/api/graphs/validate",
+        { method: "POST", body: JSON.stringify(graph), signal: init?.signal },
+        compileResultSchema,
+      ),
+    compileGraph: (id: string) =>
+      jsonFetch<CompileResult>(baseUrl, `/api/graphs/${id}/compile`, { method: "POST" }, compileResultSchema),
     startRun: (
       graphId: string,
       input: Record<string, unknown>,
@@ -85,35 +135,63 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       model?: string,
       apiKey?: string,
     ) =>
-      jsonFetch<RunSummary>(baseUrl, "/api/runs", {
-        method: "POST",
-        body: JSON.stringify({ graph_id: graphId, input, provider, model, api_key: apiKey }),
-      }),
-    getRunNodeTraces: (runId: string) => jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${runId}/nodes`),
+      jsonFetch<RunSummary>(
+        baseUrl,
+        "/api/runs",
+        { method: "POST", body: JSON.stringify({ graph_id: graphId, input, provider, model, api_key: apiKey }) },
+        runSummarySchema,
+      ),
+    getRunNodeTraces: (runId: string) =>
+      jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${runId}/nodes`, undefined, nodeTraceSchema.array()),
     /**
      * Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
      * `approve` defaults to true; pass false to fail the run instead of
      * resuming it. 404s when there is nothing paused for this run id.
      */
     resumeRun: (runId: string, approve = true, reason?: string) =>
-      jsonFetch<RunSummary>(baseUrl, `/api/runs/${runId}/resume`, {
-        method: "POST",
-        body: JSON.stringify({ approve, reason }),
-      }),
+      jsonFetch<RunSummary>(
+        baseUrl,
+        `/api/runs/${runId}/resume`,
+        { method: "POST", body: JSON.stringify({ approve, reason }) },
+        runSummarySchema,
+      ),
     providerReady: (provider: ChatProvider) =>
-      jsonFetch<{ ready: boolean; message: string }>(baseUrl, `/api/providers/${provider}/ready`),
+      jsonFetch<{ ready: boolean; message: string }>(
+        baseUrl,
+        `/api/providers/${provider}/ready`,
+        undefined,
+        providerReadySchema,
+      ),
     providerCredentials: (provider: ChatProvider) =>
-      jsonFetch<ProviderCredentials>(baseUrl, `/api/providers/${provider}/credentials`),
+      jsonFetch<ProviderCredentials>(
+        baseUrl,
+        `/api/providers/${provider}/credentials`,
+        undefined,
+        providerCredentialsSchema,
+      ),
     listProviderModels: (provider: ChatProvider, graphId?: string) => {
       const query = graphId ? `?graph_id=${encodeURIComponent(graphId)}` : "";
-      return jsonFetch<ProviderModelCatalog>(baseUrl, `/api/providers/${provider}/models${query}`);
+      return jsonFetch<ProviderModelCatalog>(
+        baseUrl,
+        `/api/providers/${provider}/models${query}`,
+        undefined,
+        providerModelCatalogSchema,
+      );
     },
+    /** Run analytics / spend estimation (studio-consolidation Phase 5). */
+    getAnalytics: () =>
+      jsonFetch<AnalyticsDashboardPayload>(
+        baseUrl,
+        "/api/analytics",
+        undefined,
+        analyticsDashboardPayloadSchema,
+      ),
     // Stored resources (studio-consolidation Phase 3).
-    prompts: resourceClient<PromptTemplate>(baseUrl, "prompts"),
-    tools: resourceClient<ToolDefinition>(baseUrl, "tools"),
-    mcpServers: resourceClient<McpServerConfig>(baseUrl, "mcp-servers"),
-    agents: resourceClient<AgentProfile>(baseUrl, "agents"),
-    llmProfiles: resourceClient<LlmProfile>(baseUrl, "llm-profiles"),
+    prompts: resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),
+    tools: resourceClient<ToolDefinition>(baseUrl, "tools", toolDefinitionSchema),
+    mcpServers: resourceClient<McpServerConfig>(baseUrl, "mcp-servers", mcpServerConfigSchema),
+    agents: resourceClient<AgentProfile>(baseUrl, "agents", agentProfileSchema),
+    llmProfiles: resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
   };
 }
 

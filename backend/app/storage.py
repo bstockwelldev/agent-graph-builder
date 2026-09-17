@@ -8,11 +8,15 @@ persist here; live SSE buses stay in memory until a run finishes.
 Backends (first match wins):
 - **Vercel Blob (recommended on Vercel):** when ``BLOB_READ_WRITE_TOKEN`` is
   set. REST PUT/GET/LIST of JSON objects (not S3).
+- **Supabase Storage:** when ``SUPABASE_URL`` and
+  ``SUPABASE_SERVICE_ROLE_KEY`` are set (studio-consolidation Phase 5, see
+  docs/planning/features/studio-consolidation-plan.md and
+  ``supabase_store.py``). JSON objects in a bucket, same shape as Blob.
 - **S3-compatible object store:** when ``OBJECT_STORE_BUCKET``,
   ``OBJECT_STORE_ACCESS_KEY_ID``, and ``OBJECT_STORE_SECRET_ACCESS_KEY`` are
   set. Works with AWS S3, Cloudflare R2, MinIO, and Azure Blob S3 API.
 - **Turso (optional):** when ``TURSO_DATABASE_URL`` and ``TURSO_AUTH_TOKEN``
-  are both set and neither Blob nor object-store env is set.
+  are both set and none of the above are.
 - **File SQLite:** local / Docker / Vercel ``GRAPH_DB_PATH`` (or Vercel
   ``/tmp`` fallback). Isolate-local on serverless — not durable across GET
   after POST.
@@ -28,7 +32,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Protocol
 
-from . import object_store, vercel_blob
+from . import object_store, supabase_store, vercel_blob
 from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
@@ -116,6 +120,18 @@ def use_vercel_blob() -> bool:
     return bool(os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip())
 
 
+def use_supabase() -> bool:
+    """True when Supabase project URL + service-role key are set
+    (studio-consolidation Phase 5 — see
+    docs/planning/features/studio-consolidation-plan.md). Checked after
+    Vercel Blob (Vercel stays the recommended-on-Vercel default) and before
+    the generic S3-compatible object store.
+    """
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    return bool(url and service_role_key)
+
+
 def use_object_store() -> bool:
     """True when object-store bucket and credentials are set."""
     bucket = os.environ.get("OBJECT_STORE_BUCKET", "").strip()
@@ -135,6 +151,8 @@ def storage_backend() -> str:
     """Active persistence backend label (for diagnostics)."""
     if use_vercel_blob():
         return "vercel_blob"
+    if use_supabase():
+        return "supabase"
     if use_object_store():
         return "object_store"
     if use_turso():
@@ -148,6 +166,7 @@ class StorageMisconfiguredError(RuntimeError):
 
 STORAGE_MISCONFIGURED_DETAIL = (
     "Vercel requires durable storage. Set BLOB_READ_WRITE_TOKEN, "
+    "SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, "
     "OBJECT_STORE_BUCKET + OBJECT_STORE_ACCESS_KEY_ID + "
     "OBJECT_STORE_SECRET_ACCESS_KEY, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN."
 )
@@ -160,7 +179,7 @@ def is_vercel_runtime() -> bool:
 
 def is_durable_storage_configured() -> bool:
     """True when a shared store is configured (not isolate-local SQLite)."""
-    return use_vercel_blob() or use_object_store() or use_turso()
+    return use_vercel_blob() or use_supabase() or use_object_store() or use_turso()
 
 
 def storage_is_healthy() -> bool:
@@ -188,6 +207,8 @@ def _assert_storage_ready_for_sqlite() -> None:
 def _json_object_backend():
     if use_vercel_blob():
         return vercel_blob
+    if use_supabase():
+        return supabase_store
     if use_object_store():
         return object_store
     return None
@@ -205,9 +226,7 @@ def _bootstrap_schema(conn: _DbConnection) -> None:
 def _ensure_run_schema(conn: _DbConnection) -> None:
     columns = {row[1] for row in conn.execute("pragma table_info(run)").fetchall()}
     if "route_decisions_json" not in columns:
-        conn.execute(
-            "alter table run add column route_decisions_json text not null default '[]'"
-        )
+        conn.execute("alter table run add column route_decisions_json text not null default '[]'")
 
 
 def _open_sqlite(path: Path) -> sqlite3.Connection:
@@ -263,9 +282,7 @@ def get_graph(graph_id: str) -> GraphDefinition | None:
     if remote is not None:
         return remote.get_graph(graph_id)
     with _connect() as conn:
-        row = conn.execute(
-            "select definition from graph where id = ?", (graph_id,)
-        ).fetchone()
+        row = conn.execute("select definition from graph where id = ?", (graph_id,)).fetchone()
     if row is None:
         return None
     return GraphDefinition.model_validate(json.loads(row[0]))
@@ -276,9 +293,7 @@ def list_graphs() -> list[GraphDefinition]:
     if remote is not None:
         return remote.list_graphs()
     with _connect() as conn:
-        rows = conn.execute(
-            "select definition from graph order by updated_at desc"
-        ).fetchall()
+        rows = conn.execute("select definition from graph order by updated_at desc").fetchall()
     return [GraphDefinition.model_validate(json.loads(r[0])) for r in rows]
 
 
@@ -385,6 +400,22 @@ def get_run(run_id: str) -> RunSummary | None:
     if row is None:
         return None
     return _row_to_run_summary(row)
+
+
+def list_all_runs(*, limit: int = 200) -> list[RunSummary]:
+    """Cross-graph run history (studio-consolidation Phase 5 — see
+    docs/planning/features/studio-consolidation-plan.md). AGB had no
+    cross-graph run listing before this — Phase 4c's as-built notes flagged
+    it as "a candidate Phase 5+ backend addition." Composes `list_graphs()`
+    + `list_runs_for_graph()` rather than adding a fifth per-backend
+    function: same N+1-ish shape `list_runs_for_graph` itself already has
+    on the remote backends (list-then-filter), not a new inefficiency.
+    """
+    runs: list[RunSummary] = []
+    for graph in list_graphs():
+        runs.extend(list_runs_for_graph(graph.id, limit=limit))
+    runs.sort(key=lambda item: item.started_at or "", reverse=True)
+    return runs[:limit]
 
 
 def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:

@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.compiler import compile_graph
 from app import storage
+from app.compiler import compile_graph
 from app.main import app
 from app.models import GraphDefinition, GraphEdge, GraphNode, NodePosition, NodeType
 from app.runtime import (
@@ -27,28 +27,67 @@ client = TestClient(app)
 
 
 def _single_gate_graph(graph_id: str = "graph_gate") -> GraphDefinition:
-    input_node = GraphNode(id="input_1", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "question"})
-    gate = GraphNode(id="gate_1", type=NodeType.HUMAN_GATE, position=NodePosition(x=0, y=0), config={"content": "Approve?"})
-    output_node = GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={})
+    input_node = GraphNode(
+        id="input_1",
+        type=NodeType.INPUT,
+        position=NodePosition(x=0, y=0),
+        config={"variableName": "question"},
+    )
+    gate = GraphNode(
+        id="gate_1",
+        type=NodeType.HUMAN_GATE,
+        position=NodePosition(x=0, y=0),
+        config={"content": "Approve?"},
+    )
+    output_node = GraphNode(
+        id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}
+    )
     edges = [
         GraphEdge(id="e_input_gate", source="input_1", target="gate_1"),
         GraphEdge(id="e_gate_output", source="gate_1", target="output_1"),
     ]
-    return GraphDefinition(id=graph_id, name="Gate", entry_node_id="input_1", nodes=[input_node, gate, output_node], edges=edges)
+    return GraphDefinition(
+        id=graph_id,
+        name="Gate",
+        entry_node_id="input_1",
+        nodes=[input_node, gate, output_node],
+        edges=edges,
+    )
 
 
 def _two_gate_graph(graph_id: str = "graph_two_gates") -> GraphDefinition:
-    input_node = GraphNode(id="input_1", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "question"})
-    gate1 = GraphNode(id="gate_1", type=NodeType.HUMAN_GATE, position=NodePosition(x=0, y=0), config={"content": "First approval"})
-    gate2 = GraphNode(id="gate_2", type=NodeType.HUMAN_GATE, position=NodePosition(x=0, y=0), config={"content": "Second approval"})
-    output_node = GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={})
+    input_node = GraphNode(
+        id="input_1",
+        type=NodeType.INPUT,
+        position=NodePosition(x=0, y=0),
+        config={"variableName": "question"},
+    )
+    gate1 = GraphNode(
+        id="gate_1",
+        type=NodeType.HUMAN_GATE,
+        position=NodePosition(x=0, y=0),
+        config={"content": "First approval"},
+    )
+    gate2 = GraphNode(
+        id="gate_2",
+        type=NodeType.HUMAN_GATE,
+        position=NodePosition(x=0, y=0),
+        config={"content": "Second approval"},
+    )
+    output_node = GraphNode(
+        id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}
+    )
     edges = [
         GraphEdge(id="e_input_gate1", source="input_1", target="gate_1"),
         GraphEdge(id="e_gate1_gate2", source="gate_1", target="gate_2"),
         GraphEdge(id="e_gate2_output", source="gate_2", target="output_1"),
     ]
     return GraphDefinition(
-        id=graph_id, name="Two gates", entry_node_id="input_1", nodes=[input_node, gate1, gate2, output_node], edges=edges
+        id=graph_id,
+        name="Two gates",
+        entry_node_id="input_1",
+        nodes=[input_node, gate1, gate2, output_node],
+        edges=edges,
     )
 
 
@@ -159,7 +198,9 @@ async def test_resume_route_approve_and_reject(monkeypatch) -> None:
     compiled = compile_graph(graph, "cwf_gate_route")
     assert compiled.ok
     COMPILED_WORKFLOWS["cwf_gate_route"] = graph
-    run_id, _bus = await start_run_inline("cwf_gate_route", {"question": "via route"}, provider="stub")
+    run_id, _bus = await start_run_inline(
+        "cwf_gate_route", {"question": "via route"}, provider="stub"
+    )
     assert get_run_summary(run_id).status == "paused"
 
     response = client.post(f"/api/runs/{run_id}/resume", json={"approve": True})

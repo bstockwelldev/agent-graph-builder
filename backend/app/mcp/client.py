@@ -69,7 +69,9 @@ async def _handshake(client: httpx.AsyncClient, url: str) -> None:
 
 def _require_http_transport(server: McpServerConfig) -> None:
     if server.transport != "http":
-        raise McpError(f"unsupported MCP transport {server.transport!r}; only 'http' is implemented")
+        raise McpError(
+            f"unsupported MCP transport {server.transport!r}; only 'http' is implemented"
+        )
 
 
 async def list_mcp_tools(server: McpServerConfig) -> list[dict[str, Any]]:
@@ -90,6 +92,8 @@ async def call_mcp_tool(server: McpServerConfig, tool_name: str, arguments: dict
         _require_http_transport(server)
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             await _handshake(client, server.url)
-            return await _rpc(client, server.url, "tools/call", {"name": tool_name, "arguments": arguments})
+            return await _rpc(
+                client, server.url, "tools/call", {"name": tool_name, "arguments": arguments}
+            )
     except (httpx.HTTPError, McpError) as exc:
         return {"mcp": server.id, "error": str(exc)}

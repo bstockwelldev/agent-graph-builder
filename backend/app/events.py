@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -49,13 +49,15 @@ class RunEventBus:
         self._seq = 0
         self._collected: list[PlatformEvent] = []
 
-    def emit(self, event_type: EventType, payload: dict[str, Any], node_id: str | None = None) -> PlatformEvent:
+    def emit(
+        self, event_type: EventType, payload: dict[str, Any], node_id: str | None = None
+    ) -> PlatformEvent:
         self._seq += 1
         event = PlatformEvent(
             event_type=event_type,
             run_id=self.run_id,
             node_id=node_id,
-            occurred_at=datetime.now(timezone.utc).isoformat(),
+            occurred_at=datetime.now(UTC).isoformat(),
             sequence=self._seq,
             payload=payload,
         )
@@ -91,7 +93,7 @@ def get_bus(run_id: str) -> RunEventBus | None:
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def monotonic_ms() -> float:

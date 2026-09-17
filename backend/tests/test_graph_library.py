@@ -5,8 +5,11 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app import storage
-from app.graph_templates import build_blank_graph, build_graph_from_demo_template, create_graph_definition
+from app.graph_templates import (
+    build_blank_graph,
+    build_graph_from_demo_template,
+    create_graph_definition,
+)
 from app.main import app
 
 

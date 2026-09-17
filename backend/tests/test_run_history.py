@@ -7,7 +7,6 @@ import pytest
 from app import runtime, storage
 from app.demo_graph import build_demo_graph
 from app.models import RunSummary
-
 from tests.helpers import run_graph_and_wait
 
 

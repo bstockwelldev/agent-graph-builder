@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app import storage
-from app.demo_graph import build_demo_graph
 
 
 def test_resolve_db_path_uses_explicit_env(monkeypatch, tmp_path) -> None:

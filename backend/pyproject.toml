@@ -11,6 +11,7 @@ dependencies = [
     "langgraph>=0.2.45",
     "libsql>=0.1.4",
     "boto3>=1.35",
+    "python-multipart>=0.0.12",
 ]
 
 [project.optional-dependencies]
@@ -18,11 +19,27 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-httpx>=0.35",
+    "ruff>=0.8",
+]
+# Only needed when TELEMETRY_PROVIDER=langfuse (studio-consolidation Phase 5
+# — see docs/planning/features/studio-consolidation-plan.md); the default
+# noop provider never imports this. Pinned <3 for the trace()/.event() API
+# app/telemetry/langfuse_telemetry.py ports from micro-ui-agent-builder's JS
+# SDK usage — the 3.x client is OpenTelemetry-based with a different shape.
+telemetry = [
+    "langfuse>=2.60,<3",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
 
 [build-system]
 requires = ["hatchling"]

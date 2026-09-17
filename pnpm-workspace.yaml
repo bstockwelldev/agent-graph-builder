@@ -1,0 +1,60 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# apps/playground (React 18) and apps/studio (React 19) intentionally coexist
+# during the studio-consolidation program. lucide-react peer-depends only on
+# "react", not "@types/react", so pnpm has no per-variant signal for its
+# ambient JSX types and falls back to a single ambiguous hoisted symlink
+# (node_modules/.pnpm/node_modules/@types/react) shared by both React majors
+# — whichever version that symlink points to "wins" for every consumer,
+# breaking the other. Declaring the missing peer here lets pnpm resolve
+# @types/react per lucide-react variant, matching how it already scopes
+# "react" itself.
+packageExtensions:
+  lucide-react:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@floating-ui/react-dom":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@xyflow/react":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@dagrejs/dagre":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  # next itself has this same gap — its bundled styled-jsx type files do a
+  # bare `import ... from "react"`, and since every studio file transitively
+  # touches Next's own types, an unscoped next.js poisons the *entire*
+  # program's ambient React namespace, not just canvas-adjacent files.
+  # Discovered when adding @xyflow/react shifted pnpm's hoist-ambiguity
+  # tie-break away from 19.x and broke unrelated pages (e.g. plain Badge
+  # usage) that had never touched xyflow at all.
+  next:
+    peerDependencies:
+      "@types/react": "*"
+      "@types/react-dom": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+      "@types/react-dom":
+        optional: true
+  react-dom:
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true

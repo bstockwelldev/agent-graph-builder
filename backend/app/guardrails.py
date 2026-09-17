@@ -39,7 +39,9 @@ def check_guardrail(text: str, *, allow_urls: bool = False, max_chars: int = 128
     token count since this module has no tokenizer dependency.
     """
     if len(text) > max_chars:
-        raise GuardrailViolation(f"input exceeds the {max_chars}-character limit ({len(text)} chars)")
+        raise GuardrailViolation(
+            f"input exceeds the {max_chars}-character limit ({len(text)} chars)"
+        )
     if not allow_urls and _URL_PATTERN.search(text):
         raise GuardrailViolation("input contains a URL, which this guardrail does not allow")
     lowered = text.lower()

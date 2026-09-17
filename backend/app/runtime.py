@@ -18,12 +18,27 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from . import storage
 from .compiler import compile_graph as validate_and_diagnose
 from .events import RunEventBus, create_bus, now_iso
-from .models import CompileResult, GraphDefinition, NodeTrace, NodeType, RouteDecision, RunPauseState, RunSummary
+from .models import (
+    CompileResult,
+    GraphDefinition,
+    NodeTrace,
+    NodeType,
+    RouteDecision,
+    RunPauseState,
+    RunSummary,
+)
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .providers.base import get_chat_model, resolve_chat_provider
-from . import storage
+from .telemetry.provider import get_server_telemetry
+from .telemetry.types import (
+    ServerTelemetry,
+    TelemetryModelEvent,
+    TelemetryToolEvent,
+    TelemetryTraceContext,
+)
 
 
 def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -49,6 +64,10 @@ RUN_BUSES: dict[str, RunEventBus] = {}
 # it after a process restart is not possible until this gets a storage.py
 # backend (see docs/planning/features/studio-consolidation-plan.md).
 RUN_PAUSES: dict[str, RunPauseState] = {}
+# Telemetry trace per run (studio-consolidation Phase 5). Process-local like
+# the stores above; a resumed run starts a fresh trace, same accepted
+# simplification RUN_BUSES already has (see `_prepare_resume`).
+RUN_TELEMETRY: dict[str, tuple[ServerTelemetry, str]] = {}
 
 
 def get_run_summary(run_id: str) -> RunSummary | None:
@@ -111,7 +130,9 @@ def _build_langgraph(graph: GraphDefinition, ctx: ExecContext):
         builder.add_edge(edge.source, edge.target)
 
     for branching_id, targets in branching_targets.items():
-        builder.add_conditional_edges(branching_id, _make_route_decision_path_fn(branching_id), targets)
+        builder.add_conditional_edges(
+            branching_id, _make_route_decision_path_fn(branching_id), targets
+        )
 
     for node in graph.nodes:
         if node.type == NodeType.OUTPUT:
@@ -158,7 +179,9 @@ def _make_node_runner(node, ctx: ExecContext):
                 completed_at=now_iso(),
             )
             RUN_TRACES[ctx.run_id][node.id] = trace
-            ctx.bus.emit("node.started", {"nodeType": node.type.value, "replayed": True}, node_id=node.id)
+            ctx.bus.emit(
+                "node.started", {"nodeType": node.type.value, "replayed": True}, node_id=node.id
+            )
             ctx.bus.emit(
                 "node.completed", {"output": trace.output, "replayed": True}, node_id=node.id
             )
@@ -167,7 +190,9 @@ def _make_node_runner(node, ctx: ExecContext):
             return delta
 
         ctx.bus.emit("node.started", {"nodeType": node.type.value}, node_id=node.id)
-        trace = NodeTrace(node_id=node.id, node_type=node.type, status="running", started_at=now_iso())
+        trace = NodeTrace(
+            node_id=node.id, node_type=node.type, status="running", started_at=now_iso()
+        )
         RUN_TRACES[ctx.run_id][node.id] = trace
 
         try:
@@ -182,13 +207,17 @@ def _make_node_runner(node, ctx: ExecContext):
             trace.error = str(exc)
             trace.completed_at = now_iso()
             ctx.bus.emit("node.failed", {"error": str(exc)}, node_id=node.id)
+            _record_node_telemetry_error(ctx.run_id, node, exc)
             raise
 
         trace.status = "succeeded"
         trace.input = _jsonable(input_repr)
         trace.output = _jsonable(output)
         trace.completed_at = now_iso()
-        ctx.bus.emit("node.completed", {"input": trace.input, "output": trace.output}, node_id=node.id)
+        ctx.bus.emit(
+            "node.completed", {"input": trace.input, "output": trace.output}, node_id=node.id
+        )
+        _record_node_telemetry_success(ctx.run_id, node, trace.input)
 
         delta = dict(delta)
         delta["node_outputs"] = {**delta.get("node_outputs", {}), node.id: output}
@@ -196,6 +225,82 @@ def _make_node_runner(node, ctx: ExecContext):
         return delta
 
     return run_node
+
+
+_MODEL_NODE_TYPES = {NodeType.LLM, NodeType.TOOL_LOOP}
+_TOOL_NODE_TYPES = {NodeType.TOOL}
+
+
+def _record_node_telemetry_success(run_id: str, node, input_repr: Any) -> None:
+    """Records a model/tool telemetry event for a completed node
+    (studio-consolidation Phase 5). Recorded at the node-runner level, once
+    per node, rather than threaded through each `compute_*` executor in
+    nodes.py — a disclosed simplification vs. MUI's per-phase
+    (preflight/model_selection/generation_start/generation_finish) model
+    events, since AGB's `ChatModel.generate` doesn't expose that granularity
+    or token usage. `input_repr` is already the dict each executor returns
+    for node-trace `input` (see nodes.py's `NodeResult` docstring), so the
+    provider/model/toolName fields are read from the same data, not
+    recomputed.
+    """
+    entry = RUN_TELEMETRY.get(run_id)
+    if entry is None or not isinstance(input_repr, dict):
+        return
+    telemetry, trace_id = entry
+    if node.type in _MODEL_NODE_TYPES:
+        telemetry.record_model_event(
+            trace_id,
+            TelemetryModelEvent(
+                phase="generation_finish",
+                provider=input_repr.get("provider"),
+                model=input_repr.get("model"),
+                metadata={"nodeId": node.id},
+            ),
+        )
+    elif node.type in _TOOL_NODE_TYPES:
+        telemetry.record_tool_event(
+            trace_id,
+            TelemetryToolEvent(
+                phase="tool_call_finish",
+                tool_name=str(input_repr.get("toolName") or node.type.value),
+                metadata={"nodeId": node.id},
+            ),
+        )
+
+
+def _record_node_telemetry_error(run_id: str, node, error: BaseException) -> None:
+    entry = RUN_TELEMETRY.get(run_id)
+    if entry is None:
+        return
+    telemetry, trace_id = entry
+    telemetry.capture_error(trace_id, error, {"nodeId": node.id, "nodeType": node.type.value})
+
+
+def _start_telemetry_trace(run_id: str, graph_id: str) -> None:
+    telemetry = get_server_telemetry()
+    trace_id = f"trace_{uuid.uuid4().hex[:12]}"
+    context = TelemetryTraceContext(trace_id=trace_id, run_id=run_id, graph_id=graph_id)
+    telemetry.start_trace(context)
+    RUN_TELEMETRY[run_id] = (telemetry, trace_id)
+
+
+def _finish_telemetry_trace(
+    run_id: str, status: str, metadata: dict[str, Any] | None = None
+) -> None:
+    entry = RUN_TELEMETRY.pop(run_id, None)
+    if entry is None:
+        return
+    telemetry, trace_id = entry
+    telemetry.finish_trace(trace_id, status, metadata)  # type: ignore[arg-type]
+
+
+def _fail_telemetry_trace(run_id: str, error: BaseException) -> None:
+    entry = RUN_TELEMETRY.get(run_id)
+    if entry is None:
+        return
+    telemetry, trace_id = entry
+    telemetry.capture_error(trace_id, error)
+    _finish_telemetry_trace(run_id, "error", {"error": str(error)})
 
 
 def _merge_into_snapshot(snapshot: dict[str, Any], delta: dict[str, Any]) -> None:
@@ -209,7 +314,10 @@ def _merge_into_snapshot(snapshot: dict[str, Any], delta: dict[str, Any]) -> Non
     if "node_outputs" in delta:
         snapshot["node_outputs"] = {**snapshot.get("node_outputs", {}), **delta["node_outputs"]}
     if "route_decisions" in delta:
-        snapshot["route_decisions"] = [*snapshot.get("route_decisions", []), *delta["route_decisions"]]
+        snapshot["route_decisions"] = [
+            *snapshot.get("route_decisions", []),
+            *delta["route_decisions"],
+        ]
 
 
 def _jsonable(value: Any) -> Any:
@@ -226,7 +334,9 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
     bus = RUN_BUSES[run_id]
     was_paused = RUN_STORE[run_id].status == "paused"
     RUN_STORE[run_id].status = "running"
-    bus.emit("run.resumed" if was_paused else "run.started", {"graphId": graph.id, "input": run_input})
+    bus.emit(
+        "run.resumed" if was_paused else "run.started", {"graphId": graph.id, "input": run_input}
+    )
 
     initial_state: RunState = {
         "variables": dict(ctx.state_snapshot.get("variables", {})),
@@ -260,11 +370,15 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
             api_key=ctx.api_key,
         )
         bus.emit("run.paused", {"nodeId": exc.node_id})
+        _finish_telemetry_trace(run_id, "ok", {"paused": True, "nodeId": exc.node_id})
     except Exception as exc:  # noqa: BLE001 - reported via run status + SSE, not raised further
         RUN_STORE[run_id].status = "failed"
         RUN_STORE[run_id].error = str(exc)
         RUN_PAUSES.pop(run_id, None)
         bus.emit("run.failed", {"error": str(exc)})
+        _fail_telemetry_trace(run_id, exc)
+    else:
+        _finish_telemetry_trace(run_id, "ok")
     finally:
         RUN_STORE[run_id].completed_at = now_iso()
         RUN_STORE[run_id].events = bus.collected_events()
@@ -295,6 +409,7 @@ def _prepare_run(
 
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
+    _start_telemetry_trace(run_id, graph.id)
 
     def chat_model_factory(node_model: str | None):
         effective_model = model or node_model
@@ -305,7 +420,11 @@ def _prepare_run(
         graph=graph,
         bus=bus,
         chat_model_factory=chat_model_factory,
-        state_snapshot={"variables": {"__run_input__": run_input}, "node_outputs": {}, "route_decisions": []},
+        state_snapshot={
+            "variables": {"__run_input__": run_input},
+            "node_outputs": {},
+            "route_decisions": [],
+        },
         compiled_workflow_id=compiled_workflow_id,
         resolved_provider=resolved_provider.value,
         requested_model=model,
@@ -374,6 +493,7 @@ def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | No
     run_input = RUN_STORE[run_id].input if run_id in RUN_STORE else {}
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
+    _start_telemetry_trace(run_id, graph.id)
 
     def chat_model_factory(node_model: str | None):
         effective_model = pause.model or node_model

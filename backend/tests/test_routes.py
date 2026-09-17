@@ -7,7 +7,6 @@ import pytest
 from app import runtime
 from app.demo_graph import build_demo_graph
 from app.models import EdgeKind, GraphDefinition, GraphEdge
-
 from tests.helpers import run_graph_and_wait
 
 
@@ -82,7 +81,9 @@ def test_compile_rejects_router_without_default(demo_graph: GraphDefinition) -> 
     no_default = demo_graph.model_copy(
         update={
             "edges": [
-                e for e in demo_graph.edges if not (e.source == "router_1" and e.kind == EdgeKind.DEFAULT)
+                e
+                for e in demo_graph.edges
+                if not (e.source == "router_1" and e.kind == EdgeKind.DEFAULT)
             ]
         }
     )

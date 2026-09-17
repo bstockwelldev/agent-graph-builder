@@ -61,8 +61,8 @@ args=(compose up)
 [[ "$DETACHED" == true ]] && args+=(-d)
 
 echo ""
-echo "Agent Graph Builder (playground)"
-echo "  App:  http://localhost:5173"
+echo "Agent Graph Builder (studio)"
+echo "  App:  http://localhost:3000"
 echo "  API:  http://localhost:8000"
 echo ""
 

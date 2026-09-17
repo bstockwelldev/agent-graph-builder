@@ -1,4 +1,40 @@
-export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "google" | "azure";
+import type { z } from "zod";
+
+import type {
+  agentProfileSchema,
+  analyticsDailyPointSchema,
+  analyticsDashboardPayloadSchema,
+  analyticsGraphRowSchema,
+  analyticsTotalsSchema,
+  chatProviderSchema,
+  compileResultSchema,
+  diagnosticSchema,
+  edgeKindSchema,
+  graphDefinitionSchema,
+  graphEdgeSchema,
+  graphNodeSchema,
+  graphOrientationSchema,
+  llmProfileSchema,
+  mcpServerConfigSchema,
+  nodePositionSchema,
+  nodeTraceSchema,
+  nodeTypeSchema,
+  platformEventSchema,
+  promptTemplateSchema,
+  providerCredentialsSchema,
+  providerModelCatalogSchema,
+  providerModelOptionSchema,
+  routeDecisionSchema,
+  runSummarySchema,
+  toolDefinitionSchema,
+} from "./schemas.js";
+
+// Every type below is inferred from a Zod schema in ./schemas.ts — that file
+// is the single source of truth (studio-consolidation Phase 4f). Keeping the
+// type names here (rather than importing the schemas directly everywhere)
+// avoids a repo-wide rename across apps/studio and apps/playground.
+
+export type ChatProvider = z.infer<typeof chatProviderSchema>;
 
 /**
  * The six original POC node types plus six absorbed from
@@ -6,141 +42,28 @@ export type ChatProvider = "ollama" | "stub" | "openai_compat" | "groq" | "googl
  * program — see docs/planning/features/studio-consolidation-plan.md).
  * All twelve have runtime executors as of Phase 2 (backend/app/nodes.py).
  */
-export type NodeType =
-  | "input"
-  | "prompt"
-  | "llm"
-  | "tool"
-  | "router"
-  | "output"
-  | "guardrail"
-  | "rubric"
-  | "human_gate"
-  | "tool_loop"
-  | "code_exec"
-  | "branch";
-export type EdgeKind = "sequence" | "conditional" | "default";
-export type GraphOrientation = "auto" | "horizontal" | "vertical";
+export type NodeType = z.infer<typeof nodeTypeSchema>;
+export type EdgeKind = z.infer<typeof edgeKindSchema>;
+export type GraphOrientation = z.infer<typeof graphOrientationSchema>;
 
-export interface NodePosition {
-  x: number;
-  y: number;
-}
+export type NodePosition = z.infer<typeof nodePositionSchema>;
+export type GraphNode = z.infer<typeof graphNodeSchema>;
+export type GraphEdge = z.infer<typeof graphEdgeSchema>;
+export type GraphDefinition = z.infer<typeof graphDefinitionSchema>;
+export type Diagnostic = z.infer<typeof diagnosticSchema>;
+export type CompileResult = z.infer<typeof compileResultSchema>;
+export type RouteDecision = z.infer<typeof routeDecisionSchema>;
 
-export interface GraphNode {
-  id: string;
-  type: NodeType;
-  position: NodePosition;
-  config: Record<string, unknown>;
-}
+// "paused" was added for the `human_gate` node type (studio-consolidation
+// Phase 2): a run stopped at a human-approval checkpoint, resumable via
+// `AgentGraphClient.resumeRun` (POST /api/runs/{id}/resume).
+export type RunSummary = z.infer<typeof runSummarySchema>;
+export type NodeTrace = z.infer<typeof nodeTraceSchema>;
+export type PlatformEvent = z.infer<typeof platformEventSchema>;
 
-export interface GraphEdge {
-  id: string;
-  source: string;
-  target: string;
-  kind: EdgeKind;
-  condition?: string | null;
-}
-
-export interface GraphDefinition {
-  id: string;
-  name: string;
-  entry_node_id: string;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  orientation?: GraphOrientation;
-  updated_at?: string | null;
-}
-
-export interface Diagnostic {
-  severity: "error" | "warning";
-  code: string;
-  node_id?: string | null;
-  edge_id?: string | null;
-  message: string;
-  blocking: boolean;
-}
-
-export interface CompileResult {
-  graph_id: string;
-  compiled_workflow_id: string | null;
-  diagnostics: Diagnostic[];
-  ok: boolean;
-}
-
-export interface RouteDecision {
-  nodeId: string;
-  selectedEdgeId: string;
-  selectedTargetNodeId: string;
-}
-
-export interface RunSummary {
-  run_id: string;
-  graph_id: string;
-  // "paused" added for the `human_gate` node type (studio-consolidation
-  // Phase 2): a run stopped at a human-approval checkpoint, resumable via
-  // `AgentGraphClient.resumeRun` (POST /api/runs/{id}/resume).
-  status: "queued" | "running" | "succeeded" | "failed" | "paused";
-  result: unknown;
-  input?: Record<string, unknown>;
-  provider?: string | null;
-  error?: string | null;
-  started_at?: string | null;
-  completed_at?: string | null;
-  route_decisions?: RouteDecision[];
-  events?: PlatformEvent[];
-}
-
-export interface NodeTrace {
-  node_id: string;
-  node_type: NodeType;
-  status: "running" | "succeeded" | "failed" | "paused";
-  input: unknown;
-  output: unknown;
-  started_at: string;
-  completed_at?: string | null;
-  error?: string | null;
-}
-
-export interface PlatformEvent {
-  event_type:
-    | "run.started"
-    | "run.completed"
-    | "run.failed"
-    | "run.paused"
-    | "run.resumed"
-    | "node.started"
-    | "node.completed"
-    | "node.failed"
-    | "node.paused"
-    | "edge.selected";
-  run_id: string;
-  node_id?: string | null;
-  occurred_at: string;
-  sequence: number;
-  payload: Record<string, unknown>;
-}
-
-export interface ProviderModelOption {
-  id: string;
-  label: string;
-}
-
-export interface ProviderModelCatalog {
-  provider: ChatProvider;
-  models: ProviderModelOption[];
-  source: "live" | "fallback";
-  cached: boolean;
-  message: string;
-}
-
-export interface ProviderCredentials {
-  provider: ChatProvider | string;
-  requires_api_key: boolean;
-  label: string;
-  env_var: string;
-  configured: boolean;
-}
+export type ProviderModelOption = z.infer<typeof providerModelOptionSchema>;
+export type ProviderModelCatalog = z.infer<typeof providerModelCatalogSchema>;
+export type ProviderCredentials = z.infer<typeof providerCredentialsSchema>;
 
 /**
  * Stored resources (studio-consolidation Phase 3 — see
@@ -149,44 +72,20 @@ export interface ProviderCredentials {
  * matching this SDK's existing convention (`entry_node_id`, `run_id`, …)
  * rather than micro-ui-agent-builder's camelCase Zod schemas.
  */
-export interface PromptTemplate {
-  id: string;
-  name: string;
-  body: string;
-}
+export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 
-export interface ToolDefinition {
-  id: string;
-  description: string;
-  parameters_json: string;
-  requires_approval: boolean;
-  /** When set with mcp_tool_name, `tool` nodes calling this id dispatch to
-   * that MCP server + remote tool name instead of a builtin or mock echo. */
-  mcp_server_id?: string | null;
-  mcp_tool_name?: string | null;
-}
+export type ToolDefinition = z.infer<typeof toolDefinitionSchema>;
+export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
+export type AgentProfile = z.infer<typeof agentProfileSchema>;
+export type LlmProfile = z.infer<typeof llmProfileSchema>;
 
-export interface McpServerConfig {
-  id: string;
-  name: string;
-  url: string;
-  transport: "http" | "sse" | "stdio";
-  enabled: boolean;
-}
-
-export interface AgentProfile {
-  id: string;
-  name: string;
-  description?: string | null;
-  default_flow_id?: string | null;
-  system_instructions?: string | null;
-  optional_elements: string[];
-}
-
-export interface LlmProfile {
-  id: string;
-  name: string;
-  model: string;
-  model_provider?: string | null;
-  description?: string | null;
-}
+/**
+ * Run analytics / spend estimation (studio-consolidation Phase 5 — see
+ * docs/planning/features/studio-consolidation-plan.md and
+ * backend/app/analytics.py). `estimated_usd`/token counts are rough
+ * estimates, not billing truth.
+ */
+export type AnalyticsDailyPoint = z.infer<typeof analyticsDailyPointSchema>;
+export type AnalyticsGraphRow = z.infer<typeof analyticsGraphRowSchema>;
+export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
+export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayloadSchema>;

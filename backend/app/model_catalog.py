@@ -31,7 +31,9 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 _cache: dict[str, tuple[float, list[str], str, str]] = {}
 
 
-def _catalog_entry(provider: str, model_ids: list[str], *, source: str, message: str) -> dict[str, Any]:
+def _catalog_entry(
+    provider: str, model_ids: list[str], *, source: str, message: str
+) -> dict[str, Any]:
     return {
         "provider": provider,
         "models": [{"id": model_id, "label": model_id} for model_id in model_ids],
@@ -65,7 +67,9 @@ def _is_azure_chat_model(record: dict[str, Any]) -> bool:
 
 
 async def _fetch_ollama_model_ids() -> tuple[list[str], str]:
-    async with httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=REQUEST_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(
+        base_url=OLLAMA_BASE_URL, timeout=REQUEST_TIMEOUT_SECONDS
+    ) as client:
         response = await client.get("/api/tags")
         response.raise_for_status()
         data = response.json()
@@ -102,7 +106,9 @@ async def _fetch_azure_model_ids() -> tuple[list[str], str]:
     if not api_key or not endpoint:
         return [], "Missing Azure OpenAI credentials."
 
-    async with httpx.AsyncClient(base_url=endpoint.rstrip("/"), timeout=REQUEST_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(
+        base_url=endpoint.rstrip("/"), timeout=REQUEST_TIMEOUT_SECONDS
+    ) as client:
         response = await client.get(
             "/openai/models",
             params={"api-version": resolve_azure_api_version()},
@@ -154,7 +160,12 @@ async def _get_cached_live_model_ids(provider: str) -> tuple[list[str], str, str
         model_ids, source, message = await _fetch_live_model_ids(provider)
         if not model_ids:
             fallback = default_model_for_provider(provider)
-            return [fallback], "fallback", message or f"Using provider default model {fallback}.", False
+            return (
+                [fallback],
+                "fallback",
+                message or f"Using provider default model {fallback}.",
+                False,
+            )
         _cache[provider] = (now + CATALOG_TTL_SECONDS, model_ids, source, message)
         return model_ids, source, message, False
     except Exception as exc:  # noqa: BLE001 - catalog must not 500 on provider errors
@@ -212,7 +223,9 @@ def _rank_models(provider: str, live_models: list[str], graph_id: str | None) ->
 
 async def list_provider_models(provider: str, graph_id: str | None = None) -> dict[str, Any]:
     if provider == "google":
-        static_models = PROVIDER_PREFERRED_MODELS.get("google") or [default_model_for_provider("google")]
+        static_models = PROVIDER_PREFERRED_MODELS.get("google") or [
+            default_model_for_provider("google")
+        ]
         ranked = _rank_models("google", static_models, graph_id)
         return _catalog_entry(
             provider,
@@ -223,7 +236,9 @@ async def list_provider_models(provider: str, graph_id: str | None = None) -> di
 
     if provider not in CATALOG_PROVIDERS:
         fallback = default_model_for_provider(provider)
-        return _catalog_entry(provider, [fallback], source="fallback", message="Static fallback for this provider.")
+        return _catalog_entry(
+            provider, [fallback], source="fallback", message="Static fallback for this provider."
+        )
 
     live_models, source, message, cached = await _get_cached_live_model_ids(provider)
     ranked = _rank_models(provider, live_models, graph_id)

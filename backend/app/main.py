@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from . import runtime, storage
+from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .demo_graph import build_demo_graph
 from .env_config import (
     load_app_env,
@@ -22,14 +23,31 @@ from .env_config import (
     resolve_azure_endpoint,
     resolve_google_api_key,
     resolve_groq_api_key,
+    telemetry_health,
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
-from .models import CompileResult, CreateGraphRequest, GraphDefinition, NodeTrace, RunRequest, RunResumeRequest, RunSummary
+from .knowledge import (
+    KnowledgeUploadError,
+    delete_knowledge_document,
+    get_knowledge_entry,
+    summarize_entry,
+    upload_knowledge_document,
+)
 from .model_catalog import list_provider_models
+from .models import (
+    CompileResult,
+    CreateGraphRequest,
+    GraphDefinition,
+    NodeTrace,
+    RunRequest,
+    RunResumeRequest,
+    RunSummary,
+)
 from .provider_credentials import get_provider_credentials
 from .resource_models import RESOURCE_MODELS
 from .spa_cache import SpaCacheControlMiddleware
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -55,7 +73,9 @@ class DurableStorageMiddleware(BaseHTTPMiddleware):
 
 _cors_origins = [
     origin.strip()
-    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
+    for origin in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:5174"
+    ).split(",")
     if origin.strip()
 ]
 
@@ -71,16 +91,22 @@ app.add_middleware(
 
 
 if not os.environ.get("VERCEL"):
+
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:
         """API-only local dev: redirect to OpenAPI docs."""
         return RedirectResponse(url="/docs")
 
 
-
 @app.get("/api/health")
 def health_check() -> JSONResponse:
     payload = storage.storage_health()
+    # Telemetry readiness (studio-consolidation Phase 5) is diagnostic, not
+    # load-bearing: a misconfigured TELEMETRY_PROVIDER=langfuse degrades runs
+    # to untraced (see telemetry/provider.py's fail-open get_server_telemetry)
+    # rather than 503ing the whole API the way storage misconfiguration does,
+    # so it's nested here and never flips the top-level `ok`/status code.
+    payload["telemetry"] = telemetry_health()
     status_code = 200 if payload["ok"] else 503
     return JSONResponse(status_code=status_code, content=payload)
 
@@ -94,7 +120,7 @@ def list_graphs() -> list[GraphDefinition]:
 def create_graph(request: CreateGraphRequest) -> GraphDefinition:
     name = request.name.strip() or "Untitled graph"
     graph = create_graph_definition(name, request.template)
-    graph.updated_at = datetime.now(timezone.utc).isoformat()
+    graph.updated_at = datetime.now(UTC).isoformat()
     storage.save_graph(graph)
     return graph
 
@@ -111,7 +137,7 @@ def get_graph(graph_id: str) -> GraphDefinition:
 def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
     if graph.id != graph_id:
         raise HTTPException(status_code=400, detail="graph id mismatch between path and body")
-    graph.updated_at = datetime.now(timezone.utc).isoformat()
+    graph.updated_at = datetime.now(UTC).isoformat()
     storage.save_graph(graph)
     return graph
 
@@ -137,6 +163,48 @@ def compile_graph_endpoint(graph_id: str) -> CompileResult:
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return runtime.compile_workflow(graph)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge base / RAG (studio-consolidation Phase 5, see
+# docs/planning/features/studio-consolidation-plan.md and knowledge.py):
+# upload .txt/.md documents per graph, chunked + embedded on upload.
+# `compute_llm` (nodes.py) augments its system prompt automatically for any
+# graph with an uploaded knowledge base — there is no per-node opt-in, so
+# these routes are graph-scoped, not node-scoped.
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/graphs/{graph_id}/knowledge")
+def get_graph_knowledge(graph_id: str) -> dict[str, Any]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return {"graphId": graph_id, **summarize_entry(get_knowledge_entry(graph_id))}
+
+
+@app.post("/api/graphs/{graph_id}/knowledge")
+async def upload_graph_knowledge(
+    graph_id: str, file: UploadFile = File(...)  # noqa: B008 - FastAPI's own dependency idiom
+) -> dict[str, Any]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    content = await file.read()
+    try:
+        return await upload_knowledge_document(
+            graph_id, file.filename or "upload.txt", file.content_type or "", content
+        )
+    except KnowledgeUploadError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@app.delete("/api/graphs/{graph_id}/knowledge/{document_id}")
+def delete_graph_knowledge_document(graph_id: str, document_id: str) -> dict[str, Any]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    result = delete_knowledge_document(graph_id, document_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +263,9 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         storage.save_resource(kind, resource_id, payload)
         return payload
 
-    @app.delete(f"/api/{path}/{{resource_id}}", name=f"delete_{kind}", operation_id=f"delete_{kind}")
+    @app.delete(
+        f"/api/{path}/{{resource_id}}", name=f"delete_{kind}", operation_id=f"delete_{kind}"
+    )
     def delete_resource_route(resource_id: str) -> dict[str, bool]:
         if not storage.delete_resource(kind, resource_id):
             raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
@@ -213,13 +283,32 @@ def list_graph_runs(graph_id: str) -> list[RunSummary]:
     return storage.list_runs_for_graph(graph_id)
 
 
+@app.get("/api/runs")
+def list_all_runs() -> list[RunSummary]:
+    """Cross-graph run history (studio-consolidation Phase 5) — flagged as
+    a gap in Phase 4c's as-built notes ("/runs in the studio becomes
+    'pick a graph -> see its runs', not a single global run feed... a true
+    cross-graph GET /api/runs endpoint is a candidate Phase 5+ backend
+    addition"). Backs the analytics dashboard below; the studio UI itself
+    still uses the per-graph route for its Runs screen.
+    """
+    return storage.list_all_runs()
+
+
+@app.get("/api/analytics")
+def get_analytics() -> AnalyticsDashboardPayload:
+    return get_analytics_dashboard()
+
+
 @app.get("/api/providers/{provider}/ready")
 def provider_ready(provider: str) -> dict[str, bool | str]:
     if provider == "groq":
         ready = bool(resolve_groq_api_key())
         return {
             "ready": ready,
-            "message": "" if ready else "Missing GROQ_API_KEY. Set it in the backend environment or SHARED_ENV_FILE.",
+            "message": ""
+            if ready
+            else "Missing GROQ_API_KEY. Set it in the backend environment or SHARED_ENV_FILE.",
         }
     if provider == "google":
         ready = bool(resolve_google_api_key())
@@ -228,12 +317,17 @@ def provider_ready(provider: str) -> dict[str, bool | str]:
             "message": "" if ready else "Missing GOOGLE_GENAI_API_KEY or GOOGLE_API_KEY.",
         }
     if provider == "azure":
-        ready = bool(resolve_azure_api_key() and resolve_azure_endpoint() and resolve_azure_deployment_name())
+        ready = bool(
+            resolve_azure_api_key() and resolve_azure_endpoint() and resolve_azure_deployment_name()
+        )
         return {
             "ready": ready,
             "message": ""
             if ready
-            else "Missing AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, or AZURE_OPENAI_DEPLOYMENT_NAME.",
+            else (
+                "Missing AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, "
+                "or AZURE_OPENAI_DEPLOYMENT_NAME."
+            ),
         }
     return {"ready": True, "message": ""}
 
@@ -256,7 +350,13 @@ async def start_run(request: RunRequest) -> RunSummary:
 
     compile_result = runtime.compile_workflow(graph)
     if not compile_result.ok or compile_result.compiled_workflow_id is None:
-        raise HTTPException(status_code=422, detail={"message": "graph failed compilation", "diagnostics": [d.model_dump() for d in compile_result.diagnostics]})
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "graph failed compilation",
+                "diagnostics": [d.model_dump() for d in compile_result.diagnostics],
+            },
+        )
 
     start_kwargs = {
         "compiled_workflow_id": compile_result.compiled_workflow_id,
@@ -294,16 +394,24 @@ async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
     compiled workflow was lost to a process restart).
     """
     if runtime.get_run_pause_state(run_id) is None:
-        raise HTTPException(status_code=404, detail="run has no pending human_gate checkpoint to resume")
+        raise HTTPException(
+            status_code=404, detail="run has no pending human_gate checkpoint to resume"
+        )
 
     if not request.approve:
         runtime.reject_run(run_id, reason=request.reason)
     elif runtime.is_serverless_runtime():
         if await runtime.resume_run_inline(run_id) is None:
-            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+            raise HTTPException(
+                status_code=409,
+                detail="run's compiled workflow is no longer available; cannot resume",
+            )
     else:
         if runtime.resume_run(run_id) is None:
-            raise HTTPException(status_code=409, detail="run's compiled workflow is no longer available; cannot resume")
+            raise HTTPException(
+                status_code=409,
+                detail="run's compiled workflow is no longer available; cannot resume",
+            )
 
     summary = runtime.get_run_summary(run_id)
     if summary is None:
@@ -337,6 +445,8 @@ async def stream_run_events(run_id: str) -> StreamingResponse:
 if os.environ.get("VERCEL"):
     from pathlib import Path
 
-    _playground_dist = Path(__file__).resolve().parent.parent.parent / "apps" / "playground" / "dist"
+    _playground_dist = (
+        Path(__file__).resolve().parent.parent.parent / "apps" / "playground" / "dist"
+    )
     if _playground_dist.is_dir():
         app.frontend("/", directory=str(_playground_dist))
