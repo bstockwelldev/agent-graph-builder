@@ -61,8 +61,10 @@ import {
 import { useUndoStack } from "@/hooks/useUndoStack";
 import { useShellLayout } from "@/hooks/useShellLayout";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
-import { NodePalette } from "./NodePalette";
+import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
+import { NodeContextMenu } from "./NodeContextMenu";
+import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
@@ -487,20 +489,47 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [recordMutation, selectedEdgeId, selectedNodeId, setEdges, setNodes]);
 
   const addNode = useCallback(
-    (type: NodeType) => {
+    (type: NodeType, position?: { x: number; y: number }) => {
       recordMutation();
       const config = defaultConfig(type);
       const id = nextId(type);
       const node: Node<GraphNodeData> = {
         id,
         type,
-        position: { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
+        position: position ?? { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
         data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
       setNodes((current) => [...current, node]);
       setPaletteOpen(false);
     },
     [recordMutation, setNodes],
+  );
+
+  // Right-click context menu (studio-consolidation Phase 7 — new scope, no
+  // equivalent existed before). Mirrors pendingConnection's {x, y} pattern.
+  const [contextMenu, setContextMenu] = useState<
+    | { kind: "node"; nodeId: string; x: number; y: number }
+    | { kind: "edge"; edgeId: string; x: number; y: number }
+    | { kind: "pane"; x: number; y: number; flowX: number; flowY: number }
+    | null
+  >(null);
+
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      const source = nodes.find((node) => node.id === nodeId);
+      if (!source) return;
+      recordMutation();
+      const id = nextId(source.data.nodeType);
+      const duplicate: Node<GraphNodeData> = {
+        ...source,
+        id,
+        selected: false,
+        position: { x: source.position.x + 40, y: source.position.y + 40 },
+        data: { ...source.data },
+      };
+      setNodes((current) => [...current, duplicate]);
+    },
+    [nodes, recordMutation, setNodes],
   );
 
   useEffect(() => {
@@ -1073,6 +1102,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             setSelectedNodeId(null);
             setSelectedEdgeId(null);
           }}
+          onNodeContextMenu={(nodeId, x, y) => {
+            setSelectedNodeId(nodeId);
+            setSelectedEdgeId(null);
+            setContextMenu({ kind: "node", nodeId, x, y });
+          }}
+          onEdgeContextMenu={(edgeId, x, y) => {
+            setSelectedEdgeId(edgeId);
+            setSelectedNodeId(null);
+            setContextMenu({ kind: "edge", edgeId, x, y });
+          }}
+          onPaneContextMenu={(x, y, flowX, flowY) => {
+            setContextMenu({ kind: "pane", x, y, flowX, flowY });
+          }}
         />
       </div>
 
@@ -1083,6 +1125,34 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           targetLabel={pendingConnection.targetLabel}
           onConfirm={confirmPendingConnection}
           onCancel={() => setPendingConnection(null)}
+        />
+      )}
+
+      {contextMenu && (
+        <NodeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          title={
+            contextMenu.kind === "node"
+              ? "Node"
+              : contextMenu.kind === "edge"
+                ? "Edge"
+                : "Add node"
+          }
+          actions={
+            contextMenu.kind === "node"
+              ? [
+                  { label: "Duplicate node", onClick: () => duplicateNode(contextMenu.nodeId) },
+                  { label: "Delete node", onClick: deleteSelection, tone: "destructive" },
+                ]
+              : contextMenu.kind === "edge"
+                ? [{ label: "Delete edge", onClick: deleteSelection, tone: "destructive" }]
+                : NODE_TYPES_FOR_CONTEXT_MENU.map((type) => ({
+                    label: NODE_TYPE_TAXONOMY[type].title,
+                    onClick: () => addNode(type, { x: contextMenu.flowX, y: contextMenu.flowY }),
+                  }))
+          }
         />
       )}
     </div>
