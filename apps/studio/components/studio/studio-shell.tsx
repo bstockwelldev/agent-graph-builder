@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { client } from "@/lib/api-client";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
+import { CommandPalette } from "@/components/workbench/CommandPalette";
 
 /**
  * Single-segment graph canvas route: /graphs/:id (not /graphs, not
@@ -138,6 +139,7 @@ export function StudioShell({
       <WorkbenchDrawer panelId="llmProfiles" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
         <ResourceBrowserPanel resourceClient={client.llmProfiles} title="LLM Profiles" routeHref="/llm-profiles" />
       </WorkbenchDrawer>
+      <CommandPalette />
     </StudioNavProvider>
   );
 }
