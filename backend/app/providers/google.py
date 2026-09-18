@@ -27,16 +27,30 @@ class GoogleGenAIChatModel:
         self.model = model or PROVIDER_DEFAULT_MODELS["google"]
         self.api_key = resolve_google_api_key() if api_key is None else api_key
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
         if not self.api_key:
             raise ValueError(
                 "Missing Google GenAI API key. Set GOOGLE_GENAI_API_KEY or GOOGLE_API_KEY, "
                 "or load tabletop-studio/.env.local via BSTOCKWELL_DEV_ROOT or SHARED_ENV_FILE."
             )
 
-        body: dict = {
-            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-        }
+        # Gemini's `contents` array uses "model" where the rest of this
+        # codebase's history convention uses "assistant" -- map per turn.
+        contents: list[dict] = [
+            {
+                "role": "model" if turn["role"] == "assistant" else "user",
+                "parts": [{"text": turn["content"]}],
+            }
+            for turn in (history or [])
+        ]
+        contents.append({"role": "user", "parts": [{"text": user_prompt}]})
+        body: dict = {"contents": contents}
         if system_prompt:
             body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 

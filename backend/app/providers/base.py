@@ -38,7 +38,13 @@ class ChatModel(Protocol):
     provider_name: str
     model: str
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str: ...
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str: ...
 
 
 def resolve_chat_provider(explicit: str | None = None) -> ChatProvider:

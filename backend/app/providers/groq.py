@@ -20,10 +20,18 @@ class GroqChatModel:
             base_url=GROQ_BASE_URL,
         )
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
         if not self._inner.api_key:
             raise ValueError(
                 "Missing Groq API key. Set GROQ_API_KEY or load tabletop-studio/.env.local "
                 "via BSTOCKWELL_DEV_ROOT or SHARED_ENV_FILE."
             )
-        return await self._inner.generate(system_prompt=system_prompt, user_prompt=user_prompt)
+        return await self._inner.generate(
+            system_prompt=system_prompt, user_prompt=user_prompt, history=history
+        )
