@@ -3,6 +3,7 @@ import type { z } from "zod";
 import {
   agentProfileSchema,
   analyticsDashboardPayloadSchema,
+  chatSessionSchema,
   compileResultSchema,
   deletedSchema,
   graphDefinitionSchema,
@@ -20,6 +21,7 @@ import type {
   AgentProfile,
   AnalyticsDashboardPayload,
   ChatProvider,
+  ChatSession,
   CompileResult,
   GraphDefinition,
   LlmProfile,
@@ -192,6 +194,17 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     mcpServers: resourceClient<McpServerConfig>(baseUrl, "mcp-servers", mcpServerConfigSchema),
     agents: resourceClient<AgentProfile>(baseUrl, "agents", agentProfileSchema),
     llmProfiles: resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
+    // Direct model scratchpad (studio-consolidation Phase 8) — a
+    // ChatSession is a stored resource like the others above (free CRUD),
+    // plus one bespoke non-CRUD method for actually sending a message.
+    chatSessions: resourceClient<ChatSession>(baseUrl, "chat-sessions", chatSessionSchema),
+    sendChatMessage: (sessionId: string, content: string) =>
+      jsonFetch<ChatSession>(
+        baseUrl,
+        `/api/chat-sessions/${sessionId}/messages`,
+        { method: "POST", body: JSON.stringify({ content }) },
+        chatSessionSchema,
+      ),
   };
 }
 

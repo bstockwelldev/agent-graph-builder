@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 // is Phase 4c's old "Operate" group, renamed. Deployments/History/
 // Evaluations remain dropped — MUI's versions were placeholder screens or
 // superseded by AGB's real run history.
-const studioNavGroups = [
+export const studioNavGroups = [
   {
     label: "Agent Graphs",
     items: [{ href: "/graphs", label: "Graphs", icon: Workflow }],

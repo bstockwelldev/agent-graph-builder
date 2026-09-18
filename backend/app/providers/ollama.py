@@ -19,10 +19,18 @@ class OllamaChatModel:
     def __init__(self, model: str = "qwen2.5:3b") -> None:
         self.model = model
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": user_prompt})
 
         # A local Ollama instance can be slow under contention (e.g. another

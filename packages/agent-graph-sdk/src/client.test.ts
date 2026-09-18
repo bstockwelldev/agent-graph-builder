@@ -86,6 +86,52 @@ describe("createAgentGraphClient resource CRUD", () => {
     await expect(client.llmProfiles.get("missing")).rejects.toThrow(/failed \(404\)/);
   });
 
+  it("sendChatMessage POSTs the message content to /api/chat-sessions/{id}/messages", async () => {
+    const session = {
+      id: "chat1",
+      title: "Scratchpad",
+      provider: "stub",
+      model: "stub",
+      messages: [
+        { role: "user", content: "hi", created_at: "2026-01-01T00:00:00Z" },
+        { role: "assistant", content: "[stub answer] hi", created_at: "2026-01-01T00:00:01Z" },
+      ],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:01Z",
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(session));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.sendChatMessage("chat1", "hi");
+
+    expect(result).toEqual(session);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${baseUrl}/api/chat-sessions/chat1/messages`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ content: "hi" });
+  });
+
+  it("chatSessions.create POSTs to /api/chat-sessions", async () => {
+    const session = {
+      id: "chat2",
+      title: "New scratchpad",
+      provider: "stub",
+      model: "stub",
+      messages: [],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(session));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.chatSessions.create(session);
+
+    expect(result).toEqual(session);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${baseUrl}/api/chat-sessions`);
+    expect(init.method).toBe("POST");
+  });
+
   it("deleteGraph DELETEs /api/graphs/{id}", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ deleted: true }));
 
@@ -214,5 +260,22 @@ describe("createAgentGraphClient response validation", () => {
 
     const client = createAgentGraphClient({ baseUrl });
     await expect(client.llmProfiles.list()).rejects.toThrow(/unexpected shape/);
+  });
+
+  it("sendChatMessage rejects a ChatSession response with a non-array messages field", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        id: "chat1",
+        title: "Scratchpad",
+        provider: "stub",
+        model: "stub",
+        messages: "not-an-array",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+
+    const client = createAgentGraphClient({ baseUrl });
+    await expect(client.sendChatMessage("chat1", "hi")).rejects.toThrow(/unexpected shape/);
   });
 });

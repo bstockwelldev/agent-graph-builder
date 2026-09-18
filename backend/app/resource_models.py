@@ -11,6 +11,7 @@ with, unlike `RouteDecision`'s deliberate alias.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -61,6 +62,27 @@ class LlmProfile(BaseModel):
     description: str | None = None
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ChatSession(BaseModel):
+    """A direct model scratchpad (studio-consolidation Phase 8) -- bypasses
+    the graph engine entirely, chatting straight to a chosen provider/model.
+    Not a Run: no compile step, no node-by-node execution, no relation to any
+    graph_id."""
+
+    id: str
+    title: str
+    provider: str
+    model: str
+    messages: list[ChatMessage] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 # Resource kind -> model, used generically by main.py's CRUD routes and by
 # compiler.py's tool-binding check.
 RESOURCE_MODELS: dict[str, type[BaseModel]] = {
@@ -69,4 +91,5 @@ RESOURCE_MODELS: dict[str, type[BaseModel]] = {
     "mcp_servers": McpServerConfig,
     "agents": AgentProfile,
     "llm_profiles": LlmProfile,
+    "chat_sessions": ChatSession,
 }

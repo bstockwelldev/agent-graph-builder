@@ -18,20 +18,25 @@ export type WorkbenchPanelId =
 // Hotkey format: "mod+shift+<key>" ("mod" = Cmd on macOS, Ctrl elsewhere).
 // Bare letters are deliberately avoided — they'd fire while a user is doing
 // perfectly normal canvas/keyboard interaction outside a form field.
-export const WORKBENCH_PANELS: Record<WorkbenchPanelId, { title: string; hotkey: string | null }> = {
-  // Graph-editor-scoped panels (rendered by GraphEditor.tsx, only relevant
-  // on /graphs/[id]) — hotkeys omitted since they already have dedicated
-  // HUD buttons and a route-scoped home.
-  library: { title: "Switch graph", hotkey: null },
-  palette: { title: "Add node", hotkey: null },
-  run: { title: "Run", hotkey: null },
+//
+// `scope: "graph"` panels are rendered by GraphEditor.tsx and only make
+// sense on /graphs/[id] (they already have a dedicated HUD button there);
+// the command palette (part B) excludes them for that reason, rather than
+// listing a command that does nothing on every other route.
+export const WORKBENCH_PANELS: Record<
+  WorkbenchPanelId,
+  { title: string; hotkey: string | null; scope: "graph" | "global" }
+> = {
+  library: { title: "Switch graph", hotkey: null, scope: "graph" },
+  palette: { title: "Add node", hotkey: null, scope: "graph" },
+  run: { title: "Run", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
-  chat: { title: "Chat", hotkey: "mod+shift+c" },
-  agents: { title: "Agents", hotkey: null },
-  prompts: { title: "Prompts", hotkey: null },
-  tools: { title: "Tools", hotkey: null },
-  mcp: { title: "MCP", hotkey: null },
-  llmProfiles: { title: "LLM Profiles", hotkey: null },
+  chat: { title: "Chat", hotkey: "mod+shift+c", scope: "global" },
+  agents: { title: "Agents", hotkey: null, scope: "global" },
+  prompts: { title: "Prompts", hotkey: null, scope: "global" },
+  tools: { title: "Tools", hotkey: null, scope: "global" },
+  mcp: { title: "MCP", hotkey: null, scope: "global" },
+  llmProfiles: { title: "LLM Profiles", hotkey: null, scope: "global" },
 };
 
 /** Matches a KeyboardEvent against a "mod+shift+<key>"-style hotkey string. */

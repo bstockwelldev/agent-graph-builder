@@ -22,6 +22,10 @@ _RESOURCE_CASES = [
     ("mcp-servers", {"id": "mcp_1", "name": "Test server", "url": "https://mcp.example.com/rpc"}),
     ("agents", {"id": "agent_1", "name": "Support agent"}),
     ("llm-profiles", {"id": "llm_1", "name": "Fast model", "model": "qwen2.5:3b"}),
+    (
+        "chat-sessions",
+        {"id": "chat_1", "title": "Scratchpad", "provider": "stub", "model": "stub"},
+    ),
 ]
 
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { agentProfileSchema, graphDefinitionSchema, runSummarySchema } from "./schemas.js";
+import { agentProfileSchema, chatSessionSchema, graphDefinitionSchema, runSummarySchema } from "./schemas.js";
 
 // Studio-consolidation Phase 4f: direct schema-level coverage, independent
 // of the client's jsonFetch rejection-path tests in client.test.ts.
@@ -49,5 +49,33 @@ describe("agentProfileSchema", () => {
   it("rejects a missing optional_elements array", () => {
     const agent = { id: "a1", name: "Support agent" };
     expect(agentProfileSchema.safeParse(agent).success).toBe(false);
+  });
+});
+
+describe("chatSessionSchema", () => {
+  it("accepts a session with an empty message history", () => {
+    const session = {
+      id: "chat1",
+      title: "Scratchpad",
+      provider: "stub",
+      model: "stub",
+      messages: [],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    expect(chatSessionSchema.safeParse(session).success).toBe(true);
+  });
+
+  it("rejects a message with a role outside user/assistant", () => {
+    const session = {
+      id: "chat1",
+      title: "Scratchpad",
+      provider: "stub",
+      model: "stub",
+      messages: [{ role: "system", content: "hi", created_at: "2026-01-01T00:00:00Z" }],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    expect(chatSessionSchema.safeParse(session).success).toBe(false);
   });
 });
