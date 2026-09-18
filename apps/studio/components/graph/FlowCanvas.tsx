@@ -245,6 +245,16 @@ function FlowCanvasInner({
         nodesConnectable={authoringEnabled}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onNodeClick(node.id)}
+        onNodeDoubleClick={(_, node) => {
+          // Double-click/double-tap a node to zoom in on just it — the one
+          // canvas gesture with no existing binding (tap selects, drag
+          // pans, pinch/scroll zooms the whole graph already).
+          void reactFlow.fitView({
+            nodes: [{ id: node.id }],
+            padding: FIT_VIEW_PADDING,
+            duration: reducedMotion ? 0 : shell.motion.drawerMs,
+          });
+        }}
         onEdgeClick={(_, edge) => onEdgeClick(edge.id)}
         onEdgeMouseEnter={(_, edge) => {
           setHoveredEdgeId(edge.id);

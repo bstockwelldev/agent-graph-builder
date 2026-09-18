@@ -19,13 +19,20 @@ export function CanvasEdgeLegend({ visible }: { visible: boolean }) {
   );
 }
 
+// Anchored bottom-center, not bottom-left — ReactFlow's own `<Controls>`
+// (zoom in/out/fit-view) defaults to bottom-left at the same offset, and
+// the two collided directly (a reported overlap bug). Bottom-right is
+// `<MiniMap>`'s spot. Centering avoids both without hardcoding either's
+// pixel footprint.
 const legendStyle: CSSProperties = {
   position: "absolute",
-  left: spacing[3],
+  left: "50%",
+  transform: "translateX(-50%)",
   bottom: spacing[3],
   zIndex: 12,
   display: "flex",
   flexWrap: "wrap",
+  justifyContent: "center",
   gap: spacing[2],
   maxWidth: 420,
   padding: `${spacing[1]}px ${spacing[2]}px`,

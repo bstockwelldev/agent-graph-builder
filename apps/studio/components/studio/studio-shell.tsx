@@ -16,6 +16,7 @@ import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
 import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
 import { CommandPalette } from "@/components/workbench/CommandPalette";
+import { HelpOverlay } from "@/components/workbench/HelpOverlay";
 
 /**
  * Single-segment graph canvas route: /graphs/:id (not /graphs, not
@@ -148,6 +149,7 @@ export function StudioShell({
         <ResourceBrowserPanel resourceClient={client.llmProfiles} title="LLM Profiles" routeHref="/llm-profiles" />
       </WorkbenchDrawer>
       <CommandPalette />
+      <HelpOverlay />
     </StudioNavProvider>
   );
 }

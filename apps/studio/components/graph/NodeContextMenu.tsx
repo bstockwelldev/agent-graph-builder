@@ -1,6 +1,14 @@
 import { useEffect, useId, useRef, type CSSProperties } from "react";
 import { color, radius, shadow, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 
+// A quick action list, not primary navigation — a smaller target than
+// shell.touchTarget.min (44px, this app's node-handle standard) is
+// reasonable here, and it's what the `top` clamp formula below assumes:
+// widening this without updating that estimate is what caused the menu to
+// misjudge its own height and run off the bottom of the viewport for
+// longer lists (the empty-canvas "Add node" menu, 12 entries).
+const ITEM_HEIGHT = 32;
+
 // Right-click menu for the graph canvas (studio-consolidation Phase 7) —
 // modeled on ConnectKindMenu.tsx's floating-menu-at-cursor pattern (same
 // dismiss-on-outside-click/Escape behavior), generalized to a plain action
@@ -64,7 +72,7 @@ export function NodeContextMenu({
         style={{
           ...menuStyle,
           left: Math.min(x, window.innerWidth - 240),
-          top: Math.min(y, window.innerHeight - 32 * actions.length - 56),
+          top: Math.min(y, window.innerHeight - ITEM_HEIGHT * actions.length - 56),
         }}
       >
         <div id={titleId} style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>
@@ -107,11 +115,12 @@ const menuStyle: CSSProperties = {
 };
 
 const itemStyle: CSSProperties = {
-  display: "block",
+  display: "flex",
+  alignItems: "center",
   width: "100%",
   textAlign: "left",
-  minHeight: shell.touchTarget.min,
-  padding: `${spacing[1]}px ${spacing[2]}px`,
+  minHeight: ITEM_HEIGHT,
+  padding: `2px ${spacing[2]}px`,
   borderRadius: radius.md,
   border: "none",
   background: "transparent",
