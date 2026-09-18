@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "advanced-flow-builder",
+    "title": "Advanced Flow Builder (Canvas)",
+    "projectId": "4397125726045291654",
+    "screenId": "aab0d9e6ec59425eb3f5b00013481a04",
+    "screenshotPath": "screenshots/advanced-flow-builder.png",
+    "htmlPath": "html/advanced-flow-builder.html",
+    "htmlNote": null,
+    "fetchedAt": "2026-03-26T13:52:22.957Z"
+  },
+  {
+    "slug": "agents-studio",
+    "title": "Agents Studio & Editor",
+    "projectId": "4397125726045291654",
+    "screenId": "511eaac17bfc4336bf9f4fb1f6358ad4",
+    "screenshotPath": "screenshots/agents-studio.png",
+    "htmlPath": null,
+    "htmlNote": "Not downloaded in CI; run: node scripts/stitch-download-screen.mjs 4397125726045291654 511eaac17bfc4336bf9f4fb1f6358ad4 agents-studio \"Agents Studio & Editor\"",
+    "fetchedAt": "2026-03-25T00:00:00.000Z"
+  }
+]

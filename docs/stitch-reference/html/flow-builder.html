@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-surface": "#e5e2e1",
+                        "error-container": "#93000a",
+                        "on-primary-fixed": "#001f24",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-tertiary-fixed": "#251a00",
+                        "on-primary": "#00363d",
+                        "on-tertiary-container": "#6f5500",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#c3f5ff",
+                        "surface-dim": "#131313",
+                        "primary-fixed": "#9cf0ff",
+                        "secondary-container": "#5203d5",
+                        "on-tertiary": "#3e2e00",
+                        "on-secondary-container": "#c0acff",
+                        "surface": "#131313",
+                        "on-secondary-fixed-variant": "#4f00d0",
+                        "secondary-fixed": "#e8deff",
+                        "surface-container-highest": "#353534",
+                        "on-tertiary-fixed-variant": "#594400",
+                        "tertiary-container": "#fec931",
+                        "primary-fixed-dim": "#00daf3",
+                        "error": "#ffb4ab",
+                        "on-surface": "#e5e2e1",
+                        "on-error-container": "#ffdad6",
+                        "surface-tint": "#00daf3",
+                        "secondary": "#cdbdff",
+                        "outline": "#849396",
+                        "tertiary-fixed-dim": "#f3bf26",
+                        "tertiary": "#ffeac0",
+                        "on-primary-container": "#00626e",
+                        "surface-bright": "#3a3939",
+                        "on-error": "#690005",
+                        "surface-container": "#201f1f",
+                        "on-background": "#e5e2e1",
+                        "inverse-on-surface": "#313030",
+                        "inverse-primary": "#006875",
+                        "tertiary-fixed": "#ffdf96",
+                        "surface-variant": "#353534",
+                        "on-primary-fixed-variant": "#004f58",
+                        "on-secondary-fixed": "#20005f",
+                        "secondary-fixed-dim": "#cdbdff",
+                        "on-secondary": "#370096",
+                        "outline-variant": "#3b494c",
+                        "on-surface-variant": "#bac9cc",
+                        "primary-container": "#00e5ff",
+                        "background": "#131313"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .canvas-grid {
+            background-image: radial-gradient(circle, #3b494c 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+        .node-active-glow {
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+        }
+        .connector-active {
+            filter: drop-shadow(0 0 4px #00e5ff);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body overflow-hidden h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-[#131313] dark:bg-[#131313] font-['Inter'] antialiased tracking-tight docked full-width top-0 z-50 border-b border-[#3B494C]/15 flex justify-between items-center w-full px-6 h-16">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GENUI</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Dashboard</a>
+<a class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-bold" href="#">Builder</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Runner</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Console</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-on-surface-variant hover:bg-[#1C1B1B] transition-all duration-200 rounded-lg">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-[#1C1B1B] transition-all duration-200 rounded-lg">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant/30">
+<img alt="User Profile Avatar" data-alt="close-up portrait of a professional man with a friendly expression in high-key studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBg8nG2jXvtPZPTchxLmGpvIz82iRHejXeNuBKq-zfxF0U5F3fpOsXPxO-yCMAglbdal3UmSnSGf5El_4m8aLgDhVpaaNOP5T90w034eqLByhxcnpXv52MFWMgUROnibjr59ufH7wq90e3LNwyZZhf7J4m0VIfr39bJ2Iko2da9soGzev5GDDSI5b_oaTsPQZvSN2RI4-V7fhRQNq4VR7Oyu_ClX9s8mpEoybbYc821oQLpKetQreiu9xgY_VGHH1mf0x1Pl4GIodE"/>
+</div>
+</div>
+</header>
+<main class="flex-1 flex relative overflow-hidden">
+<!-- SideNavBar -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] font-['JetBrains_Mono'] text-xs uppercase tracking-widest docked left-0 h-full w-64 no-line tonal-shift flex flex-col h-screen py-4 space-y-2 z-40">
+<div class="px-4 mb-6">
+<div class="flex items-center gap-3 p-2">
+<div class="w-10 h-10 bg-surface-container-highest rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="hub">hub</span>
+</div>
+<div>
+<div class="text-lg font-bold text-[#E5E2E1] normal-case tracking-normal">Project Alpha</div>
+<div class="text-[10px] text-on-surface-variant normal-case tracking-normal opacity-60">AI Orchestrator</div>
+</div>
+</div>
+<button class="mt-4 w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-2 px-4 rounded-md font-bold text-xs flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                    New Node
+                </button>
+</div>
+<nav class="flex-1 px-2 space-y-1">
+<div class="bg-[#353534] text-[#00E5FF] rounded-r-lg border-l-4 border-[#00E5FF] flex items-center gap-3 px-3 py-2 cursor-pointer">
+<span class="material-symbols-outlined text-lg" data-icon="schema">schema</span>
+<span>Flow Categories</span>
+</div>
+<div class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 flex items-center gap-3 px-3 py-2 cursor-pointer">
+<span class="material-symbols-outlined text-lg" data-icon="folder_open">folder_open</span>
+<span>Project Files</span>
+</div>
+<div class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 flex items-center gap-3 px-3 py-2 cursor-pointer">
+<span class="material-symbols-outlined text-lg" data-icon="terminal">terminal</span>
+<span>Agent Logs</span>
+</div>
+<div class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 flex items-center gap-3 px-3 py-2 cursor-pointer">
+<span class="material-symbols-outlined text-lg" data-icon="Account_tree">account_tree</span>
+<span>Library</span>
+</div>
+</nav>
+<div class="px-2 mt-auto border-t border-outline-variant/10 pt-4">
+<div class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 flex items-center gap-3 px-3 py-2 cursor-pointer">
+<span class="material-symbols-outlined text-lg" data-icon="help">help</span>
+<span>Documentation</span>
+</div>
+<div class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 flex items-center gap-3 px-3 py-2 cursor-pointer">
+<span class="material-symbols-outlined text-lg" data-icon="contact_support">contact_support</span>
+<span>Support</span>
+</div>
+</div>
+</aside>
+<!-- Canvas Area -->
+<div class="flex-1 relative canvas-grid bg-surface overflow-hidden">
+<!-- Node Canvas Simulation -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none z-10">
+<path class="connector-active" d="M 320 200 C 400 200, 400 250, 480 250" fill="none" stroke="#00e5ff" stroke-width="2"></path>
+<path class="opacity-40" d="M 680 250 C 750 250, 750 150, 820 150" fill="none" stroke="#3b494c" stroke-width="2"></path>
+<path class="opacity-40" d="M 680 280 C 750 280, 750 400, 820 400" fill="none" stroke="#3b494c" stroke-width="2"></path>
+</svg>
+<!-- Floating Action Bar (Canvas Controls) -->
+<div class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#131313]/80 backdrop-blur-xl border-t border-[#3B494C]/15 shadow-[0_-4px_20px_rgba(0,229,255,0.05)] rounded-full flex justify-center items-center gap-8 py-2 px-8 z-50">
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all group">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Run Flow</span>
+</button>
+<div class="w-px h-6 bg-outline-variant/20"></div>
+<button class="text-[#00E5FF] font-bold bg-[#00E5FF]/10 rounded-xl px-4 py-1 flex flex-col items-center gap-1">
+<span class="material-symbols-outlined" data-icon="save">save</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Save</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all group">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Terminal</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all group">
+<span class="material-symbols-outlined" data-icon="query_stats">query_stats</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Metrics</span>
+</button>
+</div>
+<!-- Nodes -->
+<!-- Trigger Node -->
+<div class="absolute left-20 top-32 w-48 bg-surface-container-high rounded-lg p-3 border border-outline-variant/20 shadow-xl z-20">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary-fixed-dim"></div>
+<span class="text-[10px] font-mono font-bold text-primary-fixed-dim tracking-tight">TRIGGER</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-40" data-icon="bolt">bolt</span>
+</div>
+<div class="bg-surface-container-lowest p-2 rounded border border-outline-variant/10 mb-2">
+<div class="text-[11px] text-on-surface-variant font-mono">ON_API_REQUEST</div>
+</div>
+<div class="flex justify-end -mr-5 mt-2">
+<div class="w-3 h-3 rounded-full bg-primary-container border-2 border-surface-container-high"></div>
+</div>
+</div>
+<!-- Prompt Node -->
+<div class="absolute left-[30rem] top-48 w-64 bg-surface-container-highest rounded-lg p-3 border-2 border-primary-container node-active-glow z-30">
+<div class="flex justify-start -ml-5 -mt-1 absolute">
+<div class="w-3 h-3 rounded-full bg-primary-container border-2 border-surface-container-highest"></div>
+</div>
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+<span class="text-[10px] font-mono font-bold text-secondary tracking-tight">PROMPT TEMPLATE</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-40" data-icon="edit_note">edit_note</span>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded border border-outline-variant/15 mb-2 h-24 font-mono text-[10px] text-on-surface leading-relaxed overflow-hidden">
+<span class="text-secondary"># System:</span> You are a creative assistant. Analyze the input {{input_query}} and...
+                </div>
+<div class="flex justify-end -mr-5 mt-2">
+<div class="w-3 h-3 rounded-full bg-primary-container border-2 border-surface-container-highest"></div>
+</div>
+</div>
+<!-- Branching Node -->
+<div class="absolute left-[60rem] top-24 w-56 bg-surface-container-high rounded-lg p-3 border border-outline-variant/20 shadow-xl z-20">
+<div class="flex justify-start -ml-5 -mt-1 absolute">
+<div class="w-3 h-3 rounded-full bg-outline-variant border-2 border-surface-container-high"></div>
+</div>
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-tertiary-fixed-dim"></div>
+<span class="text-[10px] font-mono font-bold text-tertiary-fixed-dim tracking-tight">PROVIDER_ROUTING</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-40" data-icon="split_scene">split_scene</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center justify-between bg-surface-container-lowest p-2 rounded border border-outline-variant/10">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="cloud">cloud</span>
+<span class="text-[10px] font-mono">GPT-4o</span>
+</div>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest p-2 rounded border border-outline-variant/10">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-[10px] font-mono">CLAUDE-3</span>
+</div>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+</div>
+</div>
+</div>
+<!-- Canvas Controls Overlay -->
+<div class="absolute top-6 right-6 flex flex-col gap-2">
+<button class="bg-surface-container-high/80 backdrop-blur p-2 rounded border border-outline-variant/20 hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-lg" data-icon="add">add</span>
+</button>
+<button class="bg-surface-container-high/80 backdrop-blur p-2 rounded border border-outline-variant/20 hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-lg" data-icon="remove">remove</span>
+</button>
+<div class="h-px bg-outline-variant/20 mx-1 my-1"></div>
+<button class="bg-surface-container-high/80 backdrop-blur p-2 rounded border border-outline-variant/20 hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-lg" data-icon="center_focus_strong">center_focus_strong</span>
+</button>
+</div>
+</div>
+<!-- Properties Panel (Selected Node) -->
+<aside class="w-80 bg-surface-container-low border-l border-outline-variant/15 flex flex-col z-40 transform translate-x-0 transition-transform duration-300">
+<div class="p-6 border-b border-outline-variant/15">
+<div class="flex items-center justify-between mb-2">
+<h2 class="text-sm font-bold uppercase tracking-wider text-on-surface">Node Properties</h2>
+<span class="text-[10px] font-mono text-primary-fixed-dim bg-primary-fixed-dim/10 px-2 py-0.5 rounded">ID: PRM-092</span>
+</div>
+<p class="text-xs text-on-surface-variant font-medium">Prompt Template Configuration</p>
+</div>
+<div class="flex-1 overflow-y-auto p-6 space-y-8">
+<!-- Model Selection -->
+<div class="space-y-3">
+<label class="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-widest">Model Provider</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-md px-4 py-3 text-xs font-mono appearance-none focus:ring-1 focus:ring-primary-container focus:border-primary-container outline-none">
+<option>gpt-4o-latest</option>
+<option>claude-3-5-sonnet</option>
+<option>gemini-1.5-pro</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none opacity-40" data-icon="unfold_more">unfold_more</span>
+</div>
+</div>
+<!-- Parameters Grid -->
+<div class="space-y-6">
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-widest">Temperature</label>
+<span class="text-xs font-mono text-primary-fixed-dim">0.72</span>
+</div>
+<input class="w-full h-1 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary-container" max="1" min="0" step="0.01" type="range" value="0.72"/>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-widest">Max Tokens</label>
+<span class="text-xs font-mono text-on-surface">2,048</span>
+</div>
+<input class="w-full h-1 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary-container" max="4096" min="1" step="1" type="range" value="2048"/>
+</div>
+</div>
+<!-- Provider Parameters -->
+<div class="space-y-3 pt-4 border-t border-outline-variant/10">
+<label class="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-widest">Response Format</label>
+<div class="flex gap-2">
+<button class="flex-1 bg-surface-container-highest border border-primary-container text-primary-container text-[10px] font-bold py-2 rounded">JSON</button>
+<button class="flex-1 bg-surface-container-lowest border border-outline-variant/20 text-on-surface-variant text-[10px] font-bold py-2 rounded">TEXT</button>
+</div>
+</div>
+<!-- Active Indicator -->
+<div class="bg-surface-container-high p-4 rounded-lg border border-secondary/20 flex items-start gap-3">
+<span class="material-symbols-outlined text-secondary text-sm mt-0.5" data-icon="info" style="font-variation-settings: 'FILL' 1;">info</span>
+<p class="text-[10px] leading-relaxed text-on-surface-variant">This node is part of the <span class="text-secondary">Creative Stream</span> branch. Changes will affect 4 downstream nodes.</p>
+</div>
+</div>
+<div class="p-6 border-t border-outline-variant/15 flex gap-3 bg-surface-container-low/50 backdrop-blur">
+<button class="flex-1 bg-surface-container-highest hover:bg-surface-container-highest/80 text-on-surface text-xs font-bold py-3 rounded-md transition-all">Reset</button>
+<button class="flex-1 bg-gradient-to-r from-primary to-primary-container text-on-primary text-xs font-bold py-3 rounded-md hover:brightness-110 shadow-lg shadow-primary-container/10">Apply Changes</button>
+</div>
+</aside>
+</main>
+<!-- Canvas Legend / Status Footer -->
+<footer class="h-8 bg-surface-container-lowest border-t border-outline-variant/10 flex items-center px-4 justify-between text-[9px] font-mono uppercase tracking-widest text-on-surface-variant opacity-60">
+<div class="flex gap-6">
+<span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-primary-fixed-dim"></span> System Status: Online</span>
+<span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> 3 active nodes</span>
+</div>
+<div>
+            V0.8.4-BETA // NODE_ORCHESTRATOR
+        </div>
+</footer>
+</body></html>

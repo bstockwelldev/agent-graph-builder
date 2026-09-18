@@ -1,0 +1,13 @@
+{
+  "description": "Map Figma component names to apps/web implementations for Code Connect",
+  "mappings": [
+    { "figma": "Button/Primary", "code": "apps/web/components/ui/button.tsx", "variant": "default", "note": "Use btn-primary-gradient utility for Stitch gradient CTA" },
+    { "figma": "Button/Secondary", "code": "apps/web/components/ui/button.tsx", "variant": "secondary" },
+    { "figma": "Button/Ghost", "code": "apps/web/components/ui/button.tsx", "variant": "ghost" },
+    { "figma": "Input/Text", "code": "apps/web/components/ui/input.tsx", "note": "Ghost border: border-outline-variant/15 focus:border-primary" },
+    { "figma": "Card/Surface", "code": "apps/web/components/ui/card.tsx", "note": "bg-surface-container-high, no hairline dividers" },
+    { "figma": "Badge/Status", "code": "apps/web/components/ui/badge.tsx" },
+    { "figma": "Shell/Sidebar", "code": "apps/web/components/studio/studio-shell.tsx" },
+    { "figma": "Sheet/Modal", "code": "apps/web/components/ui/sheet.tsx", "note": "glass-panel utility" }
+  ]
+}

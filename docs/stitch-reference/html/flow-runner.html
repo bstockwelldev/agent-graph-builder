@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "inverse-surface": "#e5e2e1",
+              "error-container": "#93000a",
+              "on-primary-fixed": "#001f24",
+              "surface-container-lowest": "#0e0e0e",
+              "on-tertiary-fixed": "#251a00",
+              "on-primary": "#00363d",
+              "on-tertiary-container": "#6f5500",
+              "surface-container-high": "#2a2a2a",
+              "surface-container-low": "#1c1b1b",
+              "primary": "#c3f5ff",
+              "surface-dim": "#131313",
+              "primary-fixed": "#9cf0ff",
+              "secondary-container": "#5203d5",
+              "on-tertiary": "#3e2e00",
+              "on-secondary-container": "#c0acff",
+              "surface": "#131313",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "secondary-fixed": "#e8deff",
+              "surface-container-highest": "#353534",
+              "on-tertiary-fixed-variant": "#594400",
+              "tertiary-container": "#fec931",
+              "primary-fixed-dim": "#00daf3",
+              "error": "#ffb4ab",
+              "on-surface": "#e5e2e1",
+              "on-error-container": "#ffdad6",
+              "surface-tint": "#00daf3",
+              "secondary": "#cdbdff",
+              "outline": "#849396",
+              "tertiary-fixed-dim": "#f3bf26",
+              "tertiary": "#ffeac0",
+              "on-primary-container": "#00626e",
+              "surface-bright": "#3a3939",
+              "on-error": "#690005",
+              "surface-container": "#201f1f",
+              "on-background": "#e5e2e1",
+              "inverse-on-surface": "#313030",
+              "inverse-primary": "#006875",
+              "tertiary-fixed": "#ffdf96",
+              "surface-variant": "#353534",
+              "on-primary-fixed-variant": "#004f58",
+              "on-secondary-fixed": "#20005f",
+              "secondary-fixed-dim": "#cdbdff",
+              "on-secondary": "#370096",
+              "outline-variant": "#3b494c",
+              "on-surface-variant": "#bac9cc",
+              "primary-container": "#00e5ff",
+              "background": "#131313"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-panel {
+        background: rgba(14, 14, 14, 0.8);
+        backdrop-filter: blur(20px);
+      }
+      .pulse-soft {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
+      }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<nav class="bg-[#131313] dark:bg-[#131313] docked full-width top-0 z-50 border-b border-[#3B494C]/15 flex justify-between items-center w-full px-6 h-16 font-['Inter'] antialiased tracking-tight">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GENUI</span>
+<div class="hidden md:flex items-center gap-6">
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Dashboard</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Builder</a>
+<a class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-bold" href="#">Runner</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Console</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#E5E2E1]/70 hover:bg-[#1C1B1B] transition-all duration-200 rounded-lg">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-[#E5E2E1]/70 hover:bg-[#1C1B1B] transition-all duration-200 rounded-lg">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="User Profile Avatar" data-alt="minimalist 3d abstract avatar with neon blue and charcoal geometric patterns high resolution" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqpGEgyIaFZX9IJ4jzfTgYMBJgCRkNwsOlAhJN5Ko0TbvTmuXZGBoZ3B2loGn59rzsrQR8-3Hn9q37jPGMrKpRbQZ3MabsFImNQwp5Xbw-K5CdapRyUoso7g-Pa2-croIqLJgtHaUHav8wgmyocklODfmpWEBTujB9-lS6Q5LBadOF5qw32yI3Uj2kcVoZ-Pdawd3gDs5LXis9E-32CvP60x11pnNI65509FCb_Uvs006JdSt2Ytb5qdrPuQBMJWjpEVF1BW-iBv4"/>
+</div>
+</div>
+</nav>
+<main class="flex h-[calc(100vh-64px)] overflow-hidden">
+<!-- SideNavBar (Project Explorer) -->
+<aside class="hidden md:flex flex-col h-full w-64 bg-[#1C1B1B] dark:bg-[#1C1B1B] py-4 space-y-2 font-['JetBrains_Mono'] text-xs uppercase tracking-widest">
+<div class="px-6 mb-6 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-sm">schema</span>
+</div>
+<div>
+<h2 class="text-lg font-bold text-[#E5E2E1] normal-case tracking-normal">Project Alpha</h2>
+<p class="text-[10px] text-on-surface-variant opacity-60">AI Orchestrator</p>
+</div>
+</div>
+<div class="flex-1 space-y-1">
+<div class="px-3">
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">schema</span>
+<span>Flow Categories</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">folder_open</span>
+<span>Project Files</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 bg-[#353534] text-[#00E5FF] rounded-r-lg border-l-4 border-[#00E5FF]" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span>Agent Logs</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">account_tree</span>
+<span>Library</span>
+</a>
+</div>
+</div>
+<div class="mt-auto px-6 py-4 space-y-4">
+<button class="w-full py-2 bg-primary text-on-primary rounded-md font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+                    New Node
+                </button>
+<div class="pt-4 border-t border-outline-variant/10 space-y-1">
+<a class="flex items-center gap-3 text-[#E5E2E1]/50 hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">help</span>
+<span>Documentation</span>
+</a>
+<a class="flex items-center gap-3 text-[#E5E2E1]/50 hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">contact_support</span>
+<span>Support</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Runner Canvas -->
+<section class="flex-1 flex flex-col bg-surface relative overflow-hidden">
+<!-- Runner Control Bar -->
+<div class="h-14 bg-surface-container-low/50 backdrop-blur-md px-6 flex items-center justify-between border-b border-outline-variant/10">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full border border-primary/20">
+<span class="w-2 h-2 rounded-full bg-primary pulse-soft"></span>
+<span class="text-[10px] font-mono font-bold text-primary tracking-wider uppercase">Live Stream</span>
+</div>
+<span class="text-xs font-mono text-on-surface-variant">Flow ID: runner-alpha-92</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-4 py-1.5 rounded-md border border-outline-variant/30 text-xs font-bold hover:bg-surface-container-highest transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">cached</span>
+                        Regenerate
+                    </button>
+<button class="px-4 py-1.5 rounded-md bg-error-container text-on-error-container text-xs font-bold hover:brightness-125 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">stop</span>
+                        Stop Stream
+                    </button>
+</div>
+</div>
+<!-- Preview Area -->
+<div class="flex-1 p-6 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+<!-- AI Generated Dashboard Live View -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Bento Card 1: Main Metric -->
+<div class="col-span-12 md:col-span-8 h-96 bg-surface-container-low rounded-xl relative overflow-hidden border border-outline-variant/5">
+<div class="absolute inset-0 p-8 flex flex-col">
+<div class="flex justify-between items-start mb-12">
+<div>
+<p class="text-xs font-mono text-secondary mb-1">REAL-TIME DATA STREAM</p>
+<h3 class="text-3xl font-bold tracking-tight">Active Intelligence Nodes</h3>
+</div>
+<div class="px-3 py-1 bg-surface-container-highest rounded-md border border-outline-variant/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="text-[10px] font-bold">98.4% EFFICIENCY</span>
+</div>
+</div>
+<!-- Visual Data Representation -->
+<div class="flex-1 flex items-end gap-2">
+<div class="w-full h-32 bg-surface-container-highest/30 rounded-t-lg relative group">
+<div class="absolute bottom-0 w-full bg-primary/20 h-1/2 rounded-t-lg"></div>
+<div class="absolute bottom-0 w-full bg-primary/40 h-1/4 rounded-t-lg animate-pulse"></div>
+</div>
+<div class="w-full h-48 bg-surface-container-highest/30 rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary/20 h-3/4 rounded-t-lg"></div>
+</div>
+<div class="w-full h-40 bg-surface-container-highest/30 rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary/20 h-2/3 rounded-t-lg"></div>
+</div>
+<div class="w-full h-56 bg-surface-container-highest/30 rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary/20 h-4/5 rounded-t-lg"></div>
+<div class="absolute bottom-0 w-full bg-primary/60 h-1/3 rounded-t-lg animate-pulse"></div>
+</div>
+<div class="w-full h-36 bg-surface-container-highest/30 rounded-t-lg relative">
+<div class="absolute bottom-0 w-full bg-primary/20 h-1/2 rounded-t-lg"></div>
+</div>
+</div>
+</div>
+<!-- Backdrop Decoration -->
+<div class="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 blur-[100px] rounded-full"></div>
+</div>
+<!-- Bento Card 2: AI Status Feed -->
+<div class="col-span-12 md:col-span-4 h-96 bg-surface-container-low rounded-xl border border-outline-variant/5 p-6 flex flex-col">
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">Generation Status</span>
+<span class="material-symbols-outlined text-secondary text-sm">auto_awesome</span>
+</div>
+<div class="space-y-6 flex-1 overflow-hidden">
+<div class="space-y-2">
+<div class="flex justify-between items-center text-[10px] font-mono text-on-surface-variant">
+<span>LAYOUT OPTIMIZATION</span>
+<span class="text-primary">RUNNING</span>
+</div>
+<div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-2/3"></div>
+</div>
+</div>
+<div class="space-y-3 pt-4">
+<p class="text-xs leading-relaxed text-on-surface/80">
+<span class="text-primary font-bold mr-1">@system:</span> Applying structural constraints for mobile responsiveness.
+                                </p>
+<div class="space-y-2">
+<div class="h-3 w-3/4 bg-surface-container-highest/50 rounded animate-pulse"></div>
+<div class="h-3 w-1/2 bg-surface-container-highest/30 rounded animate-pulse"></div>
+</div>
+</div>
+<div class="mt-auto pt-6">
+<div class="p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+<p class="text-[10px] font-mono text-secondary mb-1">PROMPT INJECTION</p>
+<p class="text-xs italic text-on-surface-variant">"Synthesize dashboard architecture using dark-mode aesthetics..."</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Bento Card 3: Token Usage Map -->
+<div class="col-span-12 h-64 bg-surface-container-low rounded-xl border border-outline-variant/5 p-8 flex items-center justify-between overflow-hidden relative">
+<div class="relative z-10 w-1/2">
+<h4 class="text-2xl font-bold mb-2">Network Propagation</h4>
+<p class="text-on-surface-variant text-sm mb-6 max-w-sm">Observing real-time weight adjustments across distributed transformer blocks.</p>
+<div class="flex gap-4">
+<div class="flex flex-col">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Current Speed</span>
+<span class="text-xl font-bold">142 tk/s</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Active Agents</span>
+<span class="text-xl font-bold">12</span>
+</div>
+</div>
+</div>
+<div class="relative z-10 w-1/2 flex justify-end">
+<div class="grid grid-cols-6 gap-2">
+<!-- Random decorative dots representing node activity -->
+<div class="w-4 h-4 rounded-full bg-primary/20"></div>
+<div class="w-4 h-4 rounded-full bg-primary/40 animate-pulse"></div>
+<div class="w-4 h-4 rounded-full bg-primary/10"></div>
+<div class="w-4 h-4 rounded-full bg-primary animate-pulse"></div>
+<div class="w-4 h-4 rounded-full bg-primary/20"></div>
+<div class="w-4 h-4 rounded-full bg-primary/60"></div>
+<div class="w-4 h-4 rounded-full bg-primary/10"></div>
+<div class="w-4 h-4 rounded-full bg-primary/30"></div>
+<div class="w-4 h-4 rounded-full bg-primary animate-ping"></div>
+<div class="w-4 h-4 rounded-full bg-primary/20"></div>
+<div class="w-4 h-4 rounded-full bg-primary/10"></div>
+<div class="w-4 h-4 rounded-full bg-primary/50"></div>
+</div>
+</div>
+<div class="absolute inset-0 opacity-20 pointer-events-none">
+<img class="w-full h-full object-cover" data-alt="abstract digital connection network with glowing lines and points on a dark background technical high-tech look" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGRxJU-8z2ktcHxrqC7IqwWc8aNyOCp25Y76qIaeWqoMf_8UVLsT1ngLAl2WT8I_Td2XrbnyesA0rpeWWZcDYysNFr5WtZExNKHs5uKRQ099atvfWZ61_yjAKTfjZeKDAnrJ9uFF_0cbqUEadAjRKx_4jfgO7FTZDOUjM988shRvnh9xbdnxjImXzZQBwb5dv45xxVfdNJ_n-7tlmlX0Bfk9_wDhbG4oiMZmN7WkCGc2rnKidj4OO7sf_G_YfHzOgp_g4MUbiFUHg"/>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Provider Metrics Sidebar (Right) -->
+<aside class="w-80 bg-surface-container-lowest border-l border-outline-variant/10 p-6 flex flex-col gap-8">
+<div>
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-sm font-bold tracking-tight">Provider Metrics</h3>
+<button class="text-primary text-[10px] font-bold hover:underline">Switch Provider</button>
+</div>
+<div class="space-y-4">
+<!-- Provider Item 1 -->
+<div class="p-4 bg-surface-container-low rounded-lg border border-outline-variant/10 group hover:border-primary/30 transition-all">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-[#4F00D0] flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-[14px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+<span class="text-xs font-bold">Anthropic Claude 3.5</span>
+</div>
+<span class="text-[10px] font-mono text-primary font-bold">ACTIVE</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-[9px] font-mono text-on-surface-variant uppercase">Latency</p>
+<p class="text-sm font-mono font-bold">124ms</p>
+</div>
+<div>
+<p class="text-[9px] font-mono text-on-surface-variant uppercase">Cost / 1k</p>
+<p class="text-sm font-mono font-bold">$0.003</p>
+</div>
+</div>
+</div>
+<!-- Provider Item 2 -->
+<div class="p-4 bg-surface-container-low/40 rounded-lg border border-outline-variant/10 opacity-60">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded bg-[#00A67E] flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-[14px]">psychology</span>
+</div>
+<span class="text-xs font-bold">OpenAI GPT-4o</span>
+</div>
+<span class="text-[10px] font-mono text-on-surface-variant">STANDBY</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-[9px] font-mono text-on-surface-variant uppercase">Latency</p>
+<p class="text-sm font-mono font-bold">--</p>
+</div>
+<div>
+<p class="text-[9px] font-mono text-on-surface-variant uppercase">Cost / 1k</p>
+<p class="text-sm font-mono font-bold">$0.010</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Totals -->
+<div class="mt-auto p-5 bg-surface-container-high rounded-xl border border-primary/10">
+<p class="text-[10px] font-mono text-secondary mb-4 uppercase tracking-widest">Session Totals</p>
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<span class="text-xs text-on-surface-variant">Total Tokens</span>
+<span class="text-sm font-mono font-bold">42,891</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-xs text-on-surface-variant">Estimated Cost</span>
+<span class="text-sm font-mono font-bold text-primary">$0.42</span>
+</div>
+<div class="pt-4 mt-4 border-t border-outline-variant/20">
+<div class="flex justify-between items-center">
+<span class="text-xs font-bold">System Load</span>
+<span class="text-xs font-mono">14%</span>
+</div>
+<div class="h-1 bg-surface-container-lowest rounded-full mt-2">
+<div class="h-full bg-secondary w-1/6"></div>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full flex justify-center items-center gap-12 py-3 px-8 bg-[#131313]/80 backdrop-blur-xl border-t border-[#3B494C]/15 z-50 shadow-[0_-4px_20px_rgba(0,229,255,0.05)] font-['JetBrains_Mono'] text-[10px] uppercase">
+<a class="text-[#00E5FF] font-bold bg-[#00E5FF]/10 rounded-xl px-4 py-1 flex flex-col items-center gap-1" href="#">
+<span class="material-symbols-outlined">play_arrow</span>
+<span>Run Flow</span>
+</a>
+<a class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined">save</span>
+<span>Save</span>
+</a>
+<a class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span>Terminal</span>
+</a>
+<a class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined">query_stats</span>
+<span>Metrics</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Neural Architect | Execution Trace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error": "#ffb4ab",
+                        "surface": "#131313",
+                        "tertiary-fixed": "#ffdf96",
+                        "secondary-container": "#5203d5",
+                        "surface-bright": "#3a3939",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary-fixed-variant": "#4f00d0",
+                        "tertiary-container": "#fec931",
+                        "surface-variant": "#353534",
+                        "secondary-fixed-dim": "#cdbdff",
+                        "surface-container": "#201f1f",
+                        "inverse-primary": "#006875",
+                        "inverse-surface": "#e5e2e1",
+                        "outline-variant": "#3b494c",
+                        "background": "#131313",
+                        "on-surface-variant": "#bac9cc",
+                        "error-container": "#93000a",
+                        "inverse-on-surface": "#313030",
+                        "primary-fixed-dim": "#00daf3",
+                        "on-primary-fixed": "#001f24",
+                        "on-tertiary": "#3e2e00",
+                        "on-secondary-container": "#c0acff",
+                        "tertiary-fixed-dim": "#f3bf26",
+                        "on-surface": "#e5e2e1",
+                        "surface-container-highest": "#353534",
+                        "on-tertiary-container": "#6f5500",
+                        "surface-tint": "#00daf3",
+                        "on-tertiary-fixed-variant": "#594400",
+                        "on-secondary": "#370096",
+                        "surface-dim": "#131313",
+                        "surface-container-high": "#2a2a2a",
+                        "secondary-fixed": "#e8deff",
+                        "on-primary-container": "#00626e",
+                        "primary-container": "#00e5ff",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#9cf0ff",
+                        "tertiary": "#ffeac0",
+                        "on-tertiary-fixed": "#251a00",
+                        "surface-container-low": "#1c1b1b",
+                        "secondary": "#cdbdff",
+                        "outline": "#849396",
+                        "on-background": "#e5e2e1",
+                        "primary": "#c3f5ff",
+                        "on-error": "#690005",
+                        "on-secondary-fixed": "#20005f",
+                        "on-primary": "#00363d",
+                        "on-primary-fixed-variant": "#004f58"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(14, 14, 14, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #C3F5FF 0%, #00E5FF 100%);
+        }
+        .trace-line {
+            background: repeating-linear-gradient(to bottom, transparent, transparent 4px, rgba(59, 73, 76, 0.3) 4px, rgba(59, 73, 76, 0.3) 8px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="bg-[#131313] dark:bg-[#131313] fixed top-0 full-width z-50 flex justify-between items-center w-full px-6 py-3 h-16 bg-[#1C1B1B]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-[#E5E2E1] tracking-tighter font-['Inter']">Neural Architect</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#E5E2E1]/60 hover:text-[#E5E2E1] font-['Inter'] tracking-tight transition-colors duration-200" href="#">Models</a>
+<a class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-['Inter'] tracking-tight" href="#">Executions</a>
+<a class="text-[#E5E2E1]/60 hover:text-[#E5E2E1] font-['Inter'] tracking-tight transition-colors duration-200" href="#">Deployments</a>
+<a class="text-[#E5E2E1]/60 hover:text-[#E5E2E1] font-['Inter'] tracking-tight transition-colors duration-200" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="hover:bg-[#353534] p-2 transition-colors duration-200 text-[#00E5FF] active:scale-[0.98]">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="hover:bg-[#353534] p-2 transition-colors duration-200 text-[#00E5FF] active:scale-[0.98]">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant/15">
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="close-up portrait of a high-tech digital human avatar with neon blue circuitry patterns on skin" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDg5JwjZuoSCQ_gPdH1bxLzqzlq_ZjLliEdwE7l77hRp8_D6H2xcEvvFm6Bw0JHTtDup5p9lcnkZbSbWYN_avvT1lEc-So8_M4EPZWHmebfSj-NbRUIn9CWAXncbQQMK7RXA493wsevjtBSEB2QV47cAi-sDv2LFe_KrVaI3OBvYVtWTgoNtq5g4kFjCFMOTWZIOe6e-d-5HLynt96V8nkLbICGuSXCFxh8ehzoncHbx7cjpICXmYeuiryjkHS6Ya7Kh2vI6dAqJRU"/>
+</div>
+</div>
+</header>
+<div class="flex pt-16 min-h-screen">
+<!-- SideNavBar -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] border-r border-[#3B494C]/15 w-64 fixed left-0 h-[calc(100vh-4rem)] flex flex-col py-6 overflow-y-auto">
+<div class="px-6 mb-8">
+<h2 class="text-lg font-bold text-[#E5E2E1] font-['JetBrains_Mono']">Execution View</h2>
+<p class="text-xs text-on-surface-variant font-mono mt-1 opacity-60">ID: ax-992-01</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2.5 bg-[#353534] text-[#00E5FF] rounded-md mx-2 font-['JetBrains_Mono'] text-sm transition-transform duration-200 translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="AccountTree">account_tree</span>
+<span>Live Trace</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-[#E5E2E1]/50 hover:text-[#E5E2E1] hover:bg-[#353534]/50 rounded-md mx-2 font-['JetBrains_Mono'] text-sm transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="Hub">hub</span>
+<span>Logic Graph</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-[#E5E2E1]/50 hover:text-[#E5E2E1] hover:bg-[#353534]/50 rounded-md mx-2 font-['JetBrains_Mono'] text-sm transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="Speed">speed</span>
+<span>Latency</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-[#E5E2E1]/50 hover:text-[#E5E2E1] hover:bg-[#353534]/50 rounded-md mx-2 font-['JetBrains_Mono'] text-sm transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="Toll">toll</span>
+<span>Tokens</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-[#E5E2E1]/50 hover:text-[#E5E2E1] hover:bg-[#353534]/50 rounded-md mx-2 font-['JetBrains_Mono'] text-sm transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="Variable">variables</span>
+<span>Output</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<button class="w-full py-2.5 primary-gradient text-on-primary font-bold rounded-md text-sm shadow-[0_0_20px_rgba(0,229,255,0.2)] hover:brightness-110 active:scale-[0.98] transition-all">
+                    Export Trace
+                </button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 flex-1 grid grid-cols-12 gap-6 p-6">
+<!-- Logic Trace Column -->
+<section class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+<!-- Performance Header -->
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/5">
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Total Duration</span>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-2xl font-mono font-bold text-primary-fixed-dim">1.42</span>
+<span class="text-sm font-mono text-on-surface-variant">sec</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/5">
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Token Velocity</span>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-2xl font-mono font-bold text-secondary">842</span>
+<span class="text-sm font-mono text-on-surface-variant">t/s</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/5">
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Step Count</span>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-2xl font-mono font-bold text-tertiary-fixed-dim">04</span>
+<span class="text-sm font-mono text-on-surface-variant">nodes</span>
+</div>
+</div>
+</div>
+<!-- Live Trace View -->
+<div class="bg-surface-container rounded-xl flex-1 relative overflow-hidden border border-outline-variant/10">
+<div class="absolute top-4 left-6 flex items-center gap-2">
+<div class="h-2 w-2 rounded-full bg-primary-container animate-pulse shadow-[0_0_8px_#00E5FF]"></div>
+<span class="text-xs font-mono text-on-surface-variant/80">LIVE_TRACE_ACTIVE</span>
+</div>
+<div class="p-8 pt-12 flex flex-col gap-0 relative">
+<div class="absolute left-[47px] top-12 bottom-12 w-[2px] trace-line"></div>
+<!-- Step 1 -->
+<div class="relative flex gap-6 mb-8 group">
+<div class="relative z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container-highest border border-primary/30 text-primary-fixed-dim">
+<span class="material-symbols-outlined text-sm">bolt</span>
+</div>
+<div class="flex-1 bg-surface-container-low/50 hover:bg-surface-container-high p-4 rounded-lg border border-outline-variant/10 transition-colors">
+<div class="flex justify-between items-center mb-1">
+<h4 class="text-sm font-bold font-mono text-[#E5E2E1]">Trigger Received</h4>
+<span class="text-[10px] font-mono text-primary-fixed-dim">0ms</span>
+</div>
+<p class="text-xs text-on-surface-variant leading-relaxed">Webhook event initialized from user session `usr_721`. Execution context bound to high-availability cluster `us-east-1`.</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="relative flex gap-6 mb-8 group">
+<div class="relative z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container-highest border border-outline-variant/30 text-[#CDBDFF]">
+<span class="material-symbols-outlined text-sm">database</span>
+</div>
+<div class="flex-1 bg-surface-container-low/50 hover:bg-surface-container-high p-4 rounded-lg border border-outline-variant/10 transition-colors">
+<div class="flex justify-between items-center mb-1">
+<h4 class="text-sm font-bold font-mono text-[#E5E2E1]">Context Retrieved</h4>
+<span class="text-[10px] font-mono text-on-surface-variant">124ms</span>
+</div>
+<div class="flex flex-wrap gap-2 mt-2">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-[9px] font-mono text-on-surface-variant">vector_id: 9a22</span>
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-[9px] font-mono text-on-surface-variant">cosine_sim: 0.982</span>
+</div>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="relative flex gap-6 mb-8 group">
+<div class="relative z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container-highest border border-primary/60 text-primary shadow-[0_0_15px_rgba(0,229,255,0.1)]">
+<span class="material-symbols-outlined text-sm">psychology</span>
+</div>
+<div class="flex-1 bg-surface-container-low/50 hover:bg-surface-container-high p-4 rounded-lg border border-primary/20 transition-colors">
+<div class="flex justify-between items-center mb-1">
+<h4 class="text-sm font-bold font-mono text-primary">LLM Call to GPT-4o</h4>
+<span class="text-[10px] font-mono text-primary-fixed-dim">982ms</span>
+</div>
+<div class="mt-2 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-[75%] rounded-full shadow-[0_0_8px_#00E5FF]"></div>
+</div>
+<p class="text-[10px] font-mono text-on-surface-variant/60 mt-2">Streaming tokens... 1,024 received.</p>
+</div>
+</div>
+<!-- Step 4 -->
+<div class="relative flex gap-6 group">
+<div class="relative z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container-highest border border-outline-variant/30 text-tertiary-fixed-dim">
+<span class="material-symbols-outlined text-sm">data_object</span>
+</div>
+<div class="flex-1 bg-surface-container-low/50 hover:bg-surface-container-high p-4 rounded-lg border border-outline-variant/10 transition-colors">
+<div class="flex justify-between items-center mb-1">
+<h4 class="text-sm font-bold font-mono text-[#E5E2E1]">Output Formatted</h4>
+<span class="text-[10px] font-mono text-on-surface-variant">1420ms</span>
+</div>
+<p class="text-xs text-on-surface-variant">Payload schema validated against `v2.dashboard.json`. Readiness check: 100%.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Sidebar Statistics -->
+<aside class="col-span-12 lg:col-span-4 flex flex-col gap-6">
+<!-- GenUI Preview -->
+<div class="bg-surface-container rounded-xl border border-outline-variant/10 overflow-hidden flex flex-col">
+<div class="px-5 py-4 border-b border-outline-variant/10 flex justify-between items-center">
+<span class="text-xs font-bold tracking-tight uppercase text-on-surface">GenUI Output</span>
+<span class="material-symbols-outlined text-primary text-lg" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<div class="p-6 aspect-video bg-surface-container-lowest relative flex items-center justify-center group overflow-hidden">
+<div class="absolute inset-0 opacity-20 pointer-events-none">
+<img alt="Generated dashboard visualization" class="w-full h-full object-cover grayscale brightness-50" data-alt="sleek modern dark mode dashboard interface with neon cyan glowing charts and geometric grid patterns high fidelity" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC33UO-LQKvRpdKskmr_QGpCbzG9efGeZhUdt_I0bnVeVpDrcOxE76ZyR40ALt9aKSCAinWO-OM0FM4D2WXsEJTr8Qf2LQbTY5W565pW2pnE8El8E3dCl_AXGY2v8jkgLSdqhPCQUP1OyQvVcqEtMD0dDr-whslN2TVoqE-gvUUK2M1ksl_p31jabR4ahG6AmMBcE_K9R3vWED-bNFEdr-rMYEBa65cVDSiz9E2CCB37qb79WTBlnQDd49uMRONbZ3UCFulhGkvvlg"/>
+</div>
+<div class="relative z-10 glass-panel border border-white/5 p-4 rounded-lg w-full max-w-[80%] transform group-hover:scale-105 transition-transform duration-500">
+<div class="flex items-center gap-2 mb-3">
+<div class="h-2 w-8 bg-primary/40 rounded-full"></div>
+<div class="h-2 w-12 bg-outline-variant/40 rounded-full"></div>
+</div>
+<div class="space-y-2">
+<div class="h-3 w-full bg-surface-container-highest rounded"></div>
+<div class="h-3 w-[85%] bg-surface-container-highest rounded"></div>
+<div class="h-20 w-full bg-surface-container-highest rounded-md flex items-end gap-1 px-4 py-2">
+<div class="h-[40%] w-full bg-primary/20 rounded-t-sm"></div>
+<div class="h-[60%] w-full bg-primary/40 rounded-t-sm"></div>
+<div class="h-[90%] w-full bg-primary/60 rounded-t-sm"></div>
+<div class="h-[75%] w-full bg-primary/40 rounded-t-sm"></div>
+</div>
+</div>
+</div>
+<button class="absolute bottom-4 right-4 bg-surface-container-high/80 backdrop-blur px-3 py-1.5 rounded text-[10px] font-bold border border-white/5 flex items-center gap-1.5 hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm">fullscreen</span>
+                            PREVIEW
+                        </button>
+</div>
+</div>
+<!-- Run Analytics -->
+<div class="bg-surface-container rounded-xl border border-outline-variant/10 p-6 space-y-6">
+<div>
+<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant mb-4">Provider Health</h3>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_#00E5FF]"></div>
+<span class="text-xs font-mono">OpenAI / GPT-4o</span>
+</div>
+<span class="text-[10px] font-mono text-on-surface-variant">99.8% UP</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="h-1.5 w-1.5 rounded-full bg-secondary shadow-[0_0_6px_#CDBDFF]"></div>
+<span class="text-xs font-mono">Pinecone / V2</span>
+</div>
+<span class="text-[10px] font-mono text-on-surface-variant">100% UP</span>
+</div>
+</div>
+</div>
+<div class="pt-6 border-t border-outline-variant/10">
+<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant mb-4">Usage &amp; Cost</h3>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant mb-1">Total Tokens</span>
+<span class="text-lg font-mono font-bold text-on-surface">1,402</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant mb-1">Cost (Est)</span>
+<span class="text-lg font-mono font-bold text-primary-fixed-dim">$0.042</span>
+</div>
+</div>
+</div>
+<div class="pt-6 border-t border-outline-variant/10">
+<button class="w-full py-3 bg-surface-container-low border border-outline-variant/20 rounded-lg text-xs font-bold text-on-surface flex items-center justify-center gap-2 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-sm">settings_input_component</span>
+                            CONFIGURE PIPELINE
+                        </button>
+</div>
+</div>
+<!-- System Console -->
+<div class="flex-1 bg-surface-container-lowest rounded-xl border border-outline-variant/10 p-4 font-mono text-[10px] overflow-hidden min-h-[160px]">
+<div class="flex items-center justify-between mb-3 text-on-surface-variant/40">
+<span>SYSTEM_LOG</span>
+<span class="material-symbols-outlined text-sm">more_horiz</span>
+</div>
+<div class="space-y-1 text-on-surface-variant opacity-70">
+<p class="text-primary-fixed-dim">[SYS] Initializing trace: ax-992-01</p>
+<p>[SYS] Warming cache for user `usr_721`</p>
+<p>[LLM] Prompt token count: 378</p>
+<p>[LLM] Completion token count: 1024</p>
+<p class="text-tertiary-fixed-dim">[SYS] Execution finalized in 1420ms</p>
+<p class="animate-pulse">_</p>
+</div>
+</div>
+</aside>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "inverse-surface": "#e5e2e1",
+              "error-container": "#93000a",
+              "on-primary-fixed": "#001f24",
+              "surface-container-lowest": "#0e0e0e",
+              "on-tertiary-fixed": "#251a00",
+              "on-primary": "#00363d",
+              "on-tertiary-container": "#6f5500",
+              "surface-container-high": "#2a2a2a",
+              "surface-container-low": "#1c1b1b",
+              "primary": "#c3f5ff",
+              "surface-dim": "#131313",
+              "primary-fixed": "#9cf0ff",
+              "secondary-container": "#5203d5",
+              "on-tertiary": "#3e2e00",
+              "on-secondary-container": "#c0acff",
+              "surface": "#131313",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "secondary-fixed": "#e8deff",
+              "surface-container-highest": "#353534",
+              "on-tertiary-fixed-variant": "#594400",
+              "tertiary-container": "#fec931",
+              "primary-fixed-dim": "#00daf3",
+              "error": "#ffb4ab",
+              "on-surface": "#e5e2e1",
+              "on-error-container": "#ffdad6",
+              "surface-tint": "#00daf3",
+              "secondary": "#cdbdff",
+              "outline": "#849396",
+              "tertiary-fixed-dim": "#f3bf26",
+              "tertiary": "#ffeac0",
+              "on-primary-container": "#00626e",
+              "surface-bright": "#3a3939",
+              "on-error": "#690005",
+              "surface-container": "#201f1f",
+              "on-background": "#e5e2e1",
+              "inverse-on-surface": "#313030",
+              "inverse-primary": "#006875",
+              "tertiary-fixed": "#ffdf96",
+              "surface-variant": "#353534",
+              "on-primary-fixed-variant": "#004f58",
+              "on-secondary-fixed": "#20005f",
+              "secondary-fixed-dim": "#cdbdff",
+              "on-secondary": "#370096",
+              "outline-variant": "#3b494c",
+              "on-surface-variant": "#bac9cc",
+              "primary-container": "#00e5ff",
+              "background": "#131313"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3b494c; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00daf3; }
+        .glass-panel {
+            background: rgba(14, 14, 14, 0.8);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar Shell -->
+<header class="bg-[#131313] dark:bg-[#131313] font-['Inter'] antialiased tracking-tight docked full-width top-0 z-50 border-b border-[#3B494C]/15 flex justify-between items-center w-full px-6 h-16">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GENUI</span>
+<nav class="hidden md:flex items-center gap-6 h-full">
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Dashboard</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Builder</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Runner</a>
+<a class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-bold" href="#">Console</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#E5E2E1]/70 hover:bg-[#1C1B1B] rounded-lg transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-[#E5E2E1]/70 hover:bg-[#1C1B1B] rounded-lg transition-all">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/30">
+<img alt="User Profile Avatar" data-alt="close-up portrait of a professional software architect in a dimly lit high-tech environment with soft blue rim light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD65xuZxx9eowN8fb9U5HHZc7scxPpjYdj4EHZOTAIvoPMj8R9esG3KmSefp_drUjhlXo94EnZve-DmwPyECNYpmSJdj4ExrFyDKT9CIe2zuVOb5zlfwO_I5WEgQLATBE0tnh5paVPn6qDhPPbwWMavQ3fktLyou6YzAnOHsqTJgoxHHCUBZZxziozG5Wzi10Ukf_I_0-1guOVakp8RuYnZlCT0k7nkAdm9xrJ_inpngqB0yW1Ozbs3ltqUGi2HOFlnPm2l8oG4Wxg"/>
+</div>
+</div>
+</header>
+<div class="flex h-[calc(100vh-64px)] overflow-hidden">
+<!-- SideNavBar Shell -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] docked left-0 h-full w-64 no-line tonal-shift flex flex-col h-screen py-4 space-y-2 hidden md:flex">
+<div class="px-6 mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-primary-fixed-dim">
+<span class="material-symbols-outlined">developer_board</span>
+</div>
+<div>
+<div class="text-lg font-bold text-[#E5E2E1]">Project Alpha</div>
+<div class="font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest text-[#E5E2E1]/50">AI Orchestrator</div>
+</div>
+</div>
+</div>
+<div class="flex-1 px-3 space-y-1">
+<button class="w-full flex items-center gap-3 px-3 py-2.5 font-['JetBrains_Mono'] text-xs uppercase tracking-widest text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200">
+<span class="material-symbols-outlined">schema</span> Flow Categories
+                </button>
+<button class="w-full flex items-center gap-3 px-3 py-2.5 font-['JetBrains_Mono'] text-xs uppercase tracking-widest text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200">
+<span class="material-symbols-outlined">folder_open</span> Project Files
+                </button>
+<button class="w-full flex items-center gap-3 px-3 py-2.5 font-['JetBrains_Mono'] text-xs uppercase tracking-widest bg-[#353534] text-[#00E5FF] rounded-r-lg border-l-4 border-[#00E5FF]">
+<span class="material-symbols-outlined">terminal</span> Agent Logs
+                </button>
+<button class="w-full flex items-center gap-3 px-3 py-2.5 font-['JetBrains_Mono'] text-xs uppercase tracking-widest text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200">
+<span class="material-symbols-outlined">account_tree</span> Library
+                </button>
+</div>
+<div class="px-4 py-4">
+<button class="w-full py-2 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-md hover:brightness-110 transition-all text-sm uppercase tracking-wider">
+                    New Node
+                </button>
+</div>
+<div class="px-3 border-t border-outline-variant/10 pt-4 pb-20">
+<button class="w-full flex items-center gap-3 px-3 py-2 font-['JetBrains_Mono'] text-xs uppercase tracking-widest text-[#E5E2E1]/50 hover:text-[#E5E2E1]">
+<span class="material-symbols-outlined">help</span> Documentation
+                </button>
+<button class="w-full flex items-center gap-3 px-3 py-2 font-['JetBrains_Mono'] text-xs uppercase tracking-widest text-[#E5E2E1]/50 hover:text-[#E5E2E1]">
+<span class="material-symbols-outlined">contact_support</span> Support
+                </button>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="flex-1 flex flex-col bg-surface overflow-hidden">
+<!-- Header Readout -->
+<div class="px-6 py-4 flex items-center justify-between border-b border-outline-variant/10">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-sm font-bold uppercase tracking-widest text-on-surface-variant">Live Console</span>
+</div>
+<div class="h-4 w-px bg-outline-variant/20"></div>
+<span class="font-mono text-[11px] text-[#00E5FF]">SESSION_ID: 0xFA92...88</span>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1 bg-surface-container-highest text-xs font-mono border border-outline-variant/20 rounded hover:border-primary/40 transition-colors">CLEAR_LOGS</button>
+<button class="px-3 py-1 bg-surface-container-highest text-xs font-mono border border-outline-variant/20 rounded hover:border-primary/40 transition-colors">EXPORT_TRACE</button>
+</div>
+</div>
+<!-- Split Pane Layout -->
+<div class="flex-1 flex flex-col overflow-hidden">
+<!-- Pane 1: Agent Logs (Top) -->
+<div class="flex-1 overflow-y-auto p-6 space-y-3 font-mono text-[13px] leading-relaxed bg-[#0e0e0e]">
+<!-- Log Item -->
+<div class="flex gap-4 group">
+<span class="text-on-surface-variant/40 shrink-0 select-none">12:04:15</span>
+<span class="text-primary-fixed-dim shrink-0">[INFO]</span>
+<div class="flex-1">
+<span class="text-secondary">SYSTEM:</span> Initializing flow <span class="text-tertiary">"Neural_Orchestrator_v4"</span>. Resolving provider dependencies...
+                        </div>
+</div>
+<!-- Log Item -->
+<div class="flex gap-4 group">
+<span class="text-on-surface-variant/40 shrink-0 select-none">12:04:16</span>
+<span class="text-primary-fixed-dim shrink-0">[INFO]</span>
+<div class="flex-1">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface-variant mr-2">OPENAI</span>
+<span class="text-on-surface">POST /v1/chat/completions</span> <span class="text-on-surface-variant/60">... latency: 420ms</span>
+</div>
+</div>
+<!-- Thinking Process -->
+<div class="pl-4 border-l-2 border-primary/20 py-2 my-2 space-y-1">
+<div class="flex gap-2 items-center text-primary-fixed-dim/80 italic text-xs">
+<span class="material-symbols-outlined text-sm">psychology</span>
+<span>Agent Thought Process:</span>
+</div>
+<div class="text-on-surface-variant/70 italic text-xs leading-relaxed max-w-3xl">
+                            User requested data aggregation. First, I need to fetch the historical pricing from the SQL node, then pipe it into the summarizer. Validating schema for the summary agent...
+                        </div>
+</div>
+<!-- Log Item (Warning) -->
+<div class="flex gap-4 group">
+<span class="text-on-surface-variant/40 shrink-0 select-none">12:04:18</span>
+<span class="text-tertiary-fixed-dim shrink-0">[WARN]</span>
+<div class="flex-1 text-tertiary">
+                            Rate limit approaching for provider <span class="font-bold">Anthropic</span>. Switching to fallback node...
+                        </div>
+</div>
+<!-- Log Item (Error) -->
+<div class="flex gap-4 group bg-error-container/10 py-1 rounded">
+<span class="text-on-surface-variant/40 shrink-0 select-none">12:04:20</span>
+<span class="text-error shrink-0">[ERROR]</span>
+<div class="flex-1">
+<span class="text-error">ValidationError:</span> Node <span class="font-bold">"Data_Parser"</span> received null payload at index [2]. Trace ID: <span class="underline">err_9x882</span>
+</div>
+</div>
+<!-- Success Item -->
+<div class="flex gap-4 group">
+<span class="text-on-surface-variant/40 shrink-0 select-none">12:04:22</span>
+<span class="text-primary-fixed-dim shrink-0">[INFO]</span>
+<div class="flex-1">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high text-[10px] text-on-surface-variant mr-2">LOCAL_LLM</span>
+<span class="text-on-surface">Stream generated 204 tokens. Success.</span>
+</div>
+</div>
+<!-- More Logs Placeholder -->
+<div class="flex gap-4 group animate-pulse">
+<span class="text-on-surface-variant/40 shrink-0 select-none">12:04:25</span>
+<span class="text-primary-fixed-dim shrink-0">[INFO]</span>
+<div class="flex-1">
+<span class="text-on-surface">Listening for incoming events...</span>
+</div>
+</div>
+</div>
+<!-- Pane 2: CLI Terminal (Bottom) -->
+<div class="h-64 border-t border-outline-variant/20 bg-surface-container-lowest flex flex-col font-mono">
+<div class="px-4 py-2 flex items-center justify-between bg-surface-container-low text-[10px] uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+<div class="flex gap-4">
+<span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> LOCALHOST:8080</span>
+<span class="flex items-center gap-1.5 opacity-50"><span class="w-1.5 h-1.5 rounded-full bg-error"></span> AGENT_DISCONNECTED</span>
+</div>
+<div class="flex gap-4 items-center">
+<span>BASH</span>
+<span class="material-symbols-outlined text-sm">unfold_more</span>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 text-[13px] text-on-surface-variant leading-relaxed">
+<div class="mb-2 text-primary-fixed-dim opacity-70">GENUI CLI v1.2.4 (c) 2024 Neural Systems</div>
+<div class="flex gap-2 mb-1">
+<span class="text-primary-fixed-dim">$</span>
+<span>genui list-providers</span>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-4 max-w-md text-xs border border-outline-variant/10 p-2 rounded bg-surface">
+<span class="text-on-surface">openai_v4</span> <span class="text-primary-fixed-dim">ONLINE</span> <span class="text-on-surface-variant/40">US-EAST-1</span>
+<span class="text-on-surface">anthropic_v2</span> <span class="text-primary-fixed-dim">ONLINE</span> <span class="text-on-surface-variant/40">US-WEST-2</span>
+<span class="text-on-surface">llama3_local</span> <span class="text-tertiary-fixed-dim">IDLE</span> <span class="text-on-surface-variant/40">LOCALHOST</span>
+</div>
+<div class="flex gap-2">
+<span class="text-primary-fixed-dim">$</span>
+<div class="flex items-center gap-1">
+<span class="text-on-surface">genui run flow-0x33</span>
+<span class="w-2 h-4 bg-primary-container/80 animate-pulse"></span>
+</div>
+</div>
+</div>
+<!-- CLI Input Line -->
+<div class="px-4 py-3 bg-surface-container-high flex items-center gap-2 group">
+<span class="text-primary-fixed font-bold text-sm">$</span>
+<input class="bg-transparent border-none outline-none focus:ring-0 text-on-surface w-full font-mono text-sm placeholder:text-on-surface-variant/30" placeholder="Type a command (e.g. genui run flow-id)" type="text"/>
+<span class="text-[10px] text-on-surface-variant/30 hidden group-focus-within:block">PRESS ENTER TO EXECUTE</span>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BottomNavBar Shell (Mobile Only) -->
+<nav class="fixed bottom-0 w-full flex md:hidden justify-center items-center gap-12 py-3 px-8 bg-[#131313]/80 backdrop-blur-xl border-t border-[#3B494C]/15 shadow-[0_-4px_20px_rgba(0,229,255,0.05)] z-50">
+<a class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Run Flow</span>
+</a>
+<a class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined">save</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Save</span>
+</a>
+<a class="text-[#00E5FF] font-bold bg-[#00E5FF]/10 rounded-xl px-4 py-1 flex flex-col items-center gap-1" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Terminal</span>
+</a>
+<a class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined">query_stats</span>
+<span class="font-['JetBrains_Mono'] text-[10px] uppercase">Metrics</span>
+</a>
+</nav>
+</body></html>

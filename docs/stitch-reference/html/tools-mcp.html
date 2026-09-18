@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#1c1b1b",
+              "primary": "#c3f5ff",
+              "on-tertiary-container": "#6f5500",
+              "on-tertiary-fixed": "#251a00",
+              "on-primary": "#00363d",
+              "surface-container-high": "#2a2a2a",
+              "surface-container-lowest": "#0e0e0e",
+              "on-primary-fixed": "#001f24",
+              "inverse-surface": "#e5e2e1",
+              "error-container": "#93000a",
+              "surface-container-highest": "#353534",
+              "secondary-fixed": "#e8deff",
+              "primary-fixed-dim": "#00daf3",
+              "error": "#ffb4ab",
+              "tertiary-container": "#fec931",
+              "on-tertiary-fixed-variant": "#594400",
+              "surface": "#131313",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "on-tertiary": "#3e2e00",
+              "on-secondary-container": "#c0acff",
+              "surface-dim": "#131313",
+              "primary-fixed": "#9cf0ff",
+              "secondary-container": "#5203d5",
+              "surface-bright": "#3a3939",
+              "on-error": "#690005",
+              "tertiary-fixed-dim": "#f3bf26",
+              "outline": "#849396",
+              "on-primary-container": "#00626e",
+              "tertiary": "#ffeac0",
+              "surface-tint": "#00daf3",
+              "on-surface": "#e5e2e1",
+              "on-error-container": "#ffdad6",
+              "secondary": "#cdbdff",
+              "outline-variant": "#3b494c",
+              "on-surface-variant": "#bac9cc",
+              "on-secondary": "#370096",
+              "secondary-fixed-dim": "#cdbdff",
+              "background": "#131313",
+              "primary-container": "#00e5ff",
+              "tertiary-fixed": "#ffdf96",
+              "surface-variant": "#353534",
+              "on-secondary-fixed": "#20005f",
+              "on-primary-fixed-variant": "#004f58",
+              "inverse-primary": "#006875",
+              "on-background": "#e5e2e1",
+              "surface-container": "#201f1f",
+              "inverse-on-surface": "#313030"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-panel {
+        background: rgba(14, 14, 14, 0.8);
+        backdrop-filter: blur(20px);
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #3B494C;
+        border-radius: 10px;
+      }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<header class="bg-[#131313] dark:bg-[#131313] font-['Inter'] antialiased tracking-tight docked full-width top-0 z-50 border-b border-[#3B494C]/15 flex justify-between items-center h-16 px-6 w-full fixed">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GenUI Synthesis</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] hover:bg-[#1C1B1B] transition-colors duration-200" href="#">Docs</a>
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] hover:bg-[#1C1B1B] transition-colors duration-200" href="#">API</a>
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] hover:bg-[#1C1B1B] transition-colors duration-200" href="#">Status</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#E5E2E1]/40 text-sm">search</span>
+<input class="bg-surface-container-lowest border border-outline-variant/15 rounded-md pl-10 pr-4 py-1.5 text-sm w-64 focus:outline-none focus:border-primary/50 transition-all" placeholder="Registry search..." type="text"/>
+</div>
+<button class="text-[#E5E2E1]/60 hover:text-[#00E5FF] transition-colors active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-[#E5E2E1]/60 hover:text-[#00E5FF] transition-colors active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/30">
+<img alt="User Profile" data-alt="minimal geometric profile avatar with cyan and grey shapes on a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiWIXwYsw5oE8QTdAp2tBUl-H8AiJB99S2zOC39TRitERwKOwgZDg6AM1ev_2hIuKvu40Y-pkKokz39NkbQEkiVvgQYR2gW0Bf5eIebqhRDeJwu1wb3S3kg1g0MmHb01JwgZ1AuocF-dv56WK0vgDXYrw1Oknx3pnpYjHU5F6mHorc-e9sUic2ZI1KBEJV7nL1GB_z5DdufO6lj-W0rTmgw7YXylcjds0ypNLzTJsAa7LHsdUhyw_MVTL786x_8mszhB6ShOe6YrU"/>
+</div>
+</div>
+</header>
+<div class="flex h-screen pt-16">
+<!-- SideNavBar -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] font-['JetBrains_Mono'] text-sm tracking-tighter docked left-0 h-full w-64 border-r border-[#3B494C]/15 hidden md:flex flex-col py-4 gap-2 shrink-0 overflow-y-auto">
+<div class="px-6 mb-6">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container text-lg" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<div>
+<div class="text-[#E5E2E1] font-bold leading-tight uppercase tracking-widest text-[10px]">Synthesis Engine</div>
+<div class="text-[#E5E2E1]/40 text-[10px]">v2.4.0-stable</div>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 group active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-lg">rule</span>
+<span>Evaluations</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 bg-[#353534] text-[#00E5FF] border-l-4 border-[#00E5FF] font-bold transition-all duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-lg">terminal</span>
+<span>Tool Registry</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 group active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-lg">science</span>
+<span>Prompt Lab</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 group active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-lg">monitoring</span>
+<span>Analytics</span>
+</a>
+</nav>
+<div class="px-6 py-4">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-2 rounded-md font-bold text-xs uppercase tracking-widest hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(0,229,255,0.15)]">
+                    New Experiment
+                </button>
+</div>
+<div class="px-3 py-4 border-t border-outline-variant/10">
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 text-xs" href="#">
+<span class="material-symbols-outlined text-lg">help</span>
+<span>Support</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 text-xs" href="#">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+<span>Feedback</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 overflow-y-auto bg-surface p-6 lg:p-10 custom-scrollbar">
+<div class="max-w-7xl mx-auto">
+<div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-12">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-secondary font-mono text-[10px] tracking-widest uppercase">Registry Core</span>
+</div>
+<h1 class="text-4xl font-black text-on-surface tracking-tighter mb-2">Tool Registry</h1>
+<p class="text-on-surface-variant max-w-xl text-sm leading-relaxed">
+                            Orchestrate and calibrate model-accessible utilities. Configure existing connectors or architect custom protocols via the MCP workspace.
+                        </p>
+</div>
+<div class="flex gap-3">
+<button class="bg-surface-container-high border border-outline-variant/20 px-4 py-2 text-sm font-semibold rounded-md flex items-center gap-2 hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-[18px]">publish</span> Import
+                        </button>
+<button class="bg-primary-container text-on-primary px-6 py-2 text-sm font-bold rounded-md flex items-center gap-2 hover:brightness-110 transition-all shadow-[0_0_15px_rgba(0,229,255,0.1)]">
+<span class="material-symbols-outlined text-[18px]">add</span> Create Tool
+                        </button>
+</div>
+</div>
+<!-- Bento Grid Registry -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Search Header (Spans 2 columns on large) -->
+<div class="lg:col-span-2 bg-surface-container-low rounded-xl p-6 border border-outline-variant/5 flex flex-col justify-between">
+<div class="mb-4">
+<h3 class="text-lg font-bold text-primary tracking-tight mb-1">Active Connectors</h3>
+<p class="text-xs text-on-surface-variant font-mono">5 production-ready tools currently linked.</p>
+</div>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-highest rounded-full text-[10px] font-mono text-primary-fixed border border-primary/20">search_active</span>
+<span class="px-3 py-1 bg-surface-container-highest rounded-full text-[10px] font-mono text-secondary border border-secondary/20">python_runtime_v3</span>
+<span class="px-3 py-1 bg-surface-container-highest rounded-full text-[10px] font-mono text-tertiary-fixed-dim border border-tertiary/20">db_read_only</span>
+</div>
+</div>
+<!-- CTA Create MCP Card -->
+<div class="bg-gradient-to-br from-secondary-container/20 to-surface-container-low rounded-xl p-6 border border-secondary/10 flex flex-col justify-center items-center text-center group cursor-pointer hover:border-secondary/40 transition-all">
+<div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-secondary text-3xl">precision_manufacturing</span>
+</div>
+<h3 class="text-md font-bold mb-1">MCP Creator</h3>
+<p class="text-xs text-on-surface-variant px-4 leading-normal">Build custom Model Context Protocol definitions with real-time JSON validation.</p>
+</div>
+<!-- Tool Card: Google Search -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl overflow-hidden hover:border-primary/30 transition-all group">
+<div class="p-5 flex flex-col h-full">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">search</span>
+</div>
+<span class="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">Live</span>
+</div>
+<h3 class="text-md font-bold text-on-surface mb-1">Google Search</h3>
+<p class="text-xs text-on-surface-variant mb-6 line-clamp-2">Real-time web retrieval via Custom Search API with structured snippets.</p>
+<div class="mt-auto pt-4 border-t border-outline-variant/5 flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface-variant">latency: 240ms</span>
+<button class="text-primary text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Configure <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Tool Card: Python Executor -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl overflow-hidden hover:border-primary/30 transition-all group">
+<div class="p-5 flex flex-col h-full">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">code_blocks</span>
+</div>
+<span class="bg-secondary/10 text-secondary text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">Sandboxed</span>
+</div>
+<h3 class="text-md font-bold text-on-surface mb-1">Python Executor</h3>
+<p class="text-xs text-on-surface-variant mb-6 line-clamp-2">Isolated runtime for executing data analysis and computational logic.</p>
+<div class="mt-auto pt-4 border-t border-outline-variant/5 flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface-variant">python 3.11</span>
+<button class="text-primary text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Configure <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Tool Card: SQL Query -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl overflow-hidden hover:border-primary/30 transition-all group">
+<div class="p-5 flex flex-col h-full">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-tertiary-fixed-dim">
+<span class="material-symbols-outlined">database</span>
+</div>
+<span class="bg-tertiary-container/10 text-tertiary-fixed-dim text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">Read-Only</span>
+</div>
+<h3 class="text-md font-bold text-on-surface mb-1">SQL Query</h3>
+<p class="text-xs text-on-surface-variant mb-6 line-clamp-2">Secure access to relational databases with automatic schema introspection.</p>
+<div class="mt-auto pt-4 border-t border-outline-variant/5 flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface-variant">PostgreSQL/MySQL</span>
+<button class="text-primary text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Configure <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Tool Card: Slack -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl overflow-hidden hover:border-primary/30 transition-all group">
+<div class="p-5 flex flex-col h-full">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-error">
+<span class="material-symbols-outlined">chat</span>
+</div>
+<span class="bg-error-container/20 text-error text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">OAuth2</span>
+</div>
+<h3 class="text-md font-bold text-on-surface mb-1">Slack</h3>
+<p class="text-xs text-on-surface-variant mb-6 line-clamp-2">Interact with workspace channels, threads, and direct messages.</p>
+<div class="mt-auto pt-4 border-t border-outline-variant/5 flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface-variant">Auth Required</span>
+<button class="text-primary text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Configure <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Tool Card: Jira -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl overflow-hidden hover:border-primary/30 transition-all group">
+<div class="p-5 flex flex-col h-full">
+<div class="flex justify-between items-start mb-6">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-primary-fixed-dim">
+<span class="material-symbols-outlined">task</span>
+</div>
+<span class="bg-primary/10 text-primary-fixed-dim text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">Connected</span>
+</div>
+<h3 class="text-md font-bold text-on-surface mb-1">Jira</h3>
+<p class="text-xs text-on-surface-variant mb-6 line-clamp-2">Project management integration for creating issues and tracking sprints.</p>
+<div class="mt-auto pt-4 border-t border-outline-variant/5 flex justify-between items-center">
+<span class="text-[10px] font-mono text-on-surface-variant">v3.1.2</span>
+<button class="text-primary text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Configure <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Detail View / MCP Workspace -->
+<div class="mt-16 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl overflow-hidden flex flex-col lg:flex-row h-[700px]">
+<!-- Editor Sidebar (Config) -->
+<div class="w-full lg:w-1/3 border-r border-outline-variant/10 p-8 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+<div>
+<h2 class="text-xl font-black mb-1">MCP Configuration</h2>
+<p class="text-xs text-on-surface-variant">Model Context Protocol v1.0 Definition</p>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block text-[10px] font-mono uppercase tracking-widest text-on-surface-variant mb-2">Protocol Name</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/10 rounded px-4 py-2 text-sm focus:border-primary transition-all outline-none" type="text" value="GitHub Analytics Engine"/>
+</div>
+<div>
+<label class="block text-[10px] font-mono uppercase tracking-widest text-on-surface-variant mb-2">Endpoint URL</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/10 rounded px-4 py-2 text-sm focus:border-primary transition-all outline-none" placeholder="https://api.github.com/graphql" type="text"/>
+</div>
+<div>
+<label class="block text-[10px] font-mono uppercase tracking-widest text-on-surface-variant mb-2">API Secret (AES-256)</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border border-outline-variant/10 rounded px-4 py-2 text-sm focus:border-primary transition-all outline-none" type="password" value="••••••••••••••••"/>
+<span class="material-symbols-outlined absolute right-3 top-2 text-on-surface-variant cursor-pointer text-lg">visibility</span>
+</div>
+</div>
+</div>
+<div class="pt-6 border-t border-outline-variant/10">
+<h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-4">Method Registry</h4>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-2 bg-surface-container-highest/50 rounded border border-outline-variant/10">
+<span class="text-xs font-mono">fetch_repo_stats</span>
+<span class="material-symbols-outlined text-sm text-primary">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-highest/50 rounded border border-outline-variant/10">
+<span class="text-xs font-mono">list_contributors</span>
+<span class="material-symbols-outlined text-sm text-primary">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container-highest/20 rounded border border-dashed border-outline-variant/30 cursor-pointer hover:bg-surface-container-highest/40 transition-all">
+<span class="text-xs font-mono text-on-surface-variant italic">Add new method...</span>
+<span class="material-symbols-outlined text-sm text-on-surface-variant">add</span>
+</div>
+</div>
+</div>
+<div class="mt-auto">
+<button class="w-full bg-surface-container-highest border border-primary/30 text-primary py-3 rounded font-bold text-xs uppercase tracking-widest hover:bg-primary/5 transition-all">
+                                Deploy Protocol
+                            </button>
+</div>
+</div>
+<!-- Code Workspace -->
+<div class="flex-1 bg-surface-container-lowest p-0 flex flex-col">
+<div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant/10 bg-surface-container-low/30">
+<div class="flex items-center gap-4">
+<button class="text-xs font-mono text-primary flex items-center gap-2 border-b-2 border-primary pb-4 -mb-4">
+                                    definition.json
+                                </button>
+<button class="text-xs font-mono text-on-surface-variant flex items-center gap-2 hover:text-on-surface pb-4 -mb-4 transition-colors">
+                                    schema.mcp
+                                </button>
+</div>
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1.5 text-[10px] font-mono text-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+                                    Live Sync
+                                </span>
+<button class="bg-surface-container-highest p-1.5 rounded hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</div>
+<div class="flex-1 p-6 font-mono text-sm overflow-y-auto bg-[#0e0e0e] custom-scrollbar">
+<pre class="text-[#849396] leading-relaxed"><span class="text-secondary">{</span>
+  <span class="text-primary-fixed-dim">"mcp_version"</span>: <span class="text-tertiary-container">"1.0.4"</span>,
+  <span class="text-primary-fixed-dim">"tool_metadata"</span>: <span class="text-secondary">{</span>
+    <span class="text-primary-fixed-dim">"id"</span>: <span class="text-tertiary-container">"gh-analytics-001"</span>,
+    <span class="text-primary-fixed-dim">"description"</span>: <span class="text-tertiary-container">"Aggregation engine for GitHub OSS telemetry."</span>,
+    <span class="text-primary-fixed-dim">"auth_type"</span>: <span class="text-tertiary-container">"bearer_token"</span>
+  <span class="text-secondary">}</span>,
+  <span class="text-primary-fixed-dim">"methods"</span>: <span class="text-secondary">[</span>
+    <span class="text-secondary">{</span>
+      <span class="text-primary-fixed-dim">"name"</span>: <span class="text-tertiary-container">"fetch_repo_stats"</span>,
+      <span class="text-primary-fixed-dim">"parameters"</span>: <span class="text-secondary">{</span>
+        <span class="text-primary-fixed-dim">"owner"</span>: <span class="text-secondary">{</span> <span class="text-primary-fixed-dim">"type"</span>: <span class="text-tertiary-container">"string"</span>, <span class="text-primary-fixed-dim">"required"</span>: <span class="text-primary">true</span> <span class="text-secondary">}</span>,
+        <span class="text-primary-fixed-dim">"repo"</span>: <span class="text-secondary">{</span> <span class="text-primary-fixed-dim">"type"</span>: <span class="text-tertiary-container">"string"</span>, <span class="text-primary-fixed-dim">"required"</span>: <span class="text-primary">true</span> <span class="text-secondary">}</span>
+      <span class="text-secondary">}</span>,
+      <span class="text-primary-fixed-dim">"return"</span>: <span class="text-secondary">{</span> <span class="text-primary-fixed-dim">"type"</span>: <span class="text-tertiary-container">"object"</span> <span class="text-secondary">}</span>
+    <span class="text-secondary">}</span>
+  <span class="text-secondary">]</span>
+<span class="text-secondary">}</span>
+                            </pre>
+</div>
+<div class="h-24 bg-surface-container-low/50 border-t border-outline-variant/10 p-4 flex items-center justify-between">
+<div class="flex gap-4">
+<div class="flex flex-col">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Validation Status</span>
+<span class="text-xs font-bold text-primary flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">verified</span> Schema Valid</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Memory Usage</span>
+<span class="text-xs font-bold">12.4 MB</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="bg-surface-container-highest px-4 py-2 rounded text-xs font-bold hover:bg-surface-bright transition-colors">Preview API</button>
+<button class="bg-primary-container text-on-primary px-6 py-2 rounded text-xs font-black uppercase tracking-widest shadow-[0_0_15px_rgba(0,229,255,0.2)]">Test Connection</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

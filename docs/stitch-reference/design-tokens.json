@@ -1,0 +1,59 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/v1.0.0/schema.json",
+  "name": "Synthesis Dark",
+  "description": "Stitch design system assets/643c9dc5dbd34d5a8c938e8dfff5c9ce — Material-style roles for Figma Variables",
+  "color": {
+    "background": { "$type": "color", "$value": "#131313" },
+    "surface": { "$type": "color", "$value": "#131313" },
+    "surfaceDim": { "$type": "color", "$value": "#131313" },
+    "surfaceBright": { "$type": "color", "$value": "#3a3939" },
+    "surfaceContainer": { "$type": "color", "$value": "#201f1f" },
+    "surfaceContainerLow": { "$type": "color", "$value": "#1c1b1b" },
+    "surfaceContainerLowest": { "$type": "color", "$value": "#0e0e0e" },
+    "surfaceContainerHigh": { "$type": "color", "$value": "#2a2a2a" },
+    "surfaceContainerHighest": { "$type": "color", "$value": "#353534" },
+    "surfaceVariant": { "$type": "color", "$value": "#353534" },
+    "surfaceTint": { "$type": "color", "$value": "#00daf3" },
+    "onBackground": { "$type": "color", "$value": "#e5e2e1" },
+    "onSurface": { "$type": "color", "$value": "#e5e2e1" },
+    "onSurfaceVariant": { "$type": "color", "$value": "#bac9cc" },
+    "primary": { "$type": "color", "$value": "#c3f5ff" },
+    "primaryContainer": { "$type": "color", "$value": "#00e5ff" },
+    "onPrimary": { "$type": "color", "$value": "#00363d" },
+    "onPrimaryContainer": { "$type": "color", "$value": "#00626e" },
+    "primaryFixed": { "$type": "color", "$value": "#9cf0ff" },
+    "primaryFixedDim": { "$type": "color", "$value": "#00daf3" },
+    "secondary": { "$type": "color", "$value": "#cdbdff" },
+    "secondaryContainer": { "$type": "color", "$value": "#5203d5" },
+    "onSecondary": { "$type": "color", "$value": "#370096" },
+    "onSecondaryContainer": { "$type": "color", "$value": "#c0acff" },
+    "secondaryFixed": { "$type": "color", "$value": "#e8deff" },
+    "secondaryFixedDim": { "$type": "color", "$value": "#cdbdff" },
+    "tertiary": { "$type": "color", "$value": "#ffeac0" },
+    "tertiaryContainer": { "$type": "color", "$value": "#fec931" },
+    "onTertiary": { "$type": "color", "$value": "#3e2e00" },
+    "onTertiaryContainer": { "$type": "color", "$value": "#6f5500" },
+    "error": { "$type": "color", "$value": "#ffb4ab" },
+    "errorContainer": { "$type": "color", "$value": "#93000a" },
+    "onError": { "$type": "color", "$value": "#690005" },
+    "onErrorContainer": { "$type": "color", "$value": "#ffdad6" },
+    "outline": { "$type": "color", "$value": "#849396" },
+    "outlineVariant": { "$type": "color", "$value": "#3b494c" },
+    "inverseSurface": { "$type": "color", "$value": "#e5e2e1" },
+    "inverseOnSurface": { "$type": "color", "$value": "#313030" },
+    "inversePrimary": { "$type": "color", "$value": "#006875" }
+  },
+  "dimension": {
+    "pageGutter": { "$type": "dimension", "$value": "24px" },
+    "pageGutterSm": { "$type": "dimension", "$value": "20px" },
+    "radiusMd": { "$type": "dimension", "$value": "6px" },
+    "radiusRoundFour": { "$type": "dimension", "$value": "4px" }
+  },
+  "font": {
+    "familyUi": { "$type": "fontFamily", "$value": "Inter" },
+    "familyMono": { "$type": "fontFamily", "$value": "JetBrains Mono" }
+  },
+  "motion": {
+    "expressive": { "$type": "cubicBezier", "$value": [0.16, 1, 0.3, 1] }
+  }
+}

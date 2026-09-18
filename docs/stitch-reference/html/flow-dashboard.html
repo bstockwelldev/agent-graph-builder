@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "inverse-surface": "#e5e2e1",
+              "error-container": "#93000a",
+              "on-primary-fixed": "#001f24",
+              "surface-container-lowest": "#0e0e0e",
+              "on-tertiary-fixed": "#251a00",
+              "on-primary": "#00363d",
+              "on-tertiary-container": "#6f5500",
+              "surface-container-high": "#2a2a2a",
+              "surface-container-low": "#1c1b1b",
+              "primary": "#c3f5ff",
+              "surface-dim": "#131313",
+              "primary-fixed": "#9cf0ff",
+              "secondary-container": "#5203d5",
+              "on-tertiary": "#3e2e00",
+              "on-secondary-container": "#c0acff",
+              "surface": "#131313",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "secondary-fixed": "#e8deff",
+              "surface-container-highest": "#353534",
+              "on-tertiary-fixed-variant": "#594400",
+              "tertiary-container": "#fec931",
+              "primary-fixed-dim": "#00daf3",
+              "error": "#ffb4ab",
+              "on-surface": "#e5e2e1",
+              "on-error-container": "#ffdad6",
+              "surface-tint": "#00daf3",
+              "secondary": "#cdbdff",
+              "outline": "#849396",
+              "tertiary-fixed-dim": "#f3bf26",
+              "tertiary": "#ffeac0",
+              "on-primary-container": "#00626e",
+              "surface-bright": "#3a3939",
+              "on-error": "#690005",
+              "surface-container": "#201f1f",
+              "on-background": "#e5e2e1",
+              "inverse-on-surface": "#313030",
+              "inverse-primary": "#006875",
+              "tertiary-fixed": "#ffdf96",
+              "surface-variant": "#353534",
+              "on-primary-fixed-variant": "#004f58",
+              "on-secondary-fixed": "#20005f",
+              "secondary-fixed-dim": "#cdbdff",
+              "on-secondary": "#370096",
+              "outline-variant": "#3b494c",
+              "on-surface-variant": "#bac9cc",
+              "primary-container": "#00e5ff",
+              "background": "#131313"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(14, 14, 14, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .gradient-primary {
+            background: linear-gradient(135deg, #c3f5ff 0%, #00e5ff 100%);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container overflow-hidden h-screen flex">
+<!-- SideNavBar Shell -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] font-['JetBrains_Mono'] text-xs uppercase tracking-widest flex flex-col h-screen py-4 space-y-2 docked left-0 h-full w-64 no-line tonal-shift flat no shadows">
+<!-- Sidebar Header -->
+<div class="px-6 py-4 mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center text-primary-fixed-dim border border-outline-variant/20">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</div>
+<div>
+<h2 class="text-lg font-bold text-[#E5E2E1] normal-case tracking-normal">Project Alpha</h2>
+<p class="text-[10px] text-on-surface-variant tracking-widest opacity-70">AI Orchestrator</p>
+</div>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex-1 space-y-1">
+<a class="bg-[#353534] text-[#00E5FF] rounded-r-lg border-l-4 border-[#00E5FF] flex items-center gap-4 px-6 py-3 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="schema">schema</span>
+<span>Flow Categories</span>
+</a>
+<a class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] flex items-center gap-4 px-6 py-3 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span>Project Files</span>
+</a>
+<a class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] flex items-center gap-4 px-6 py-3 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span>Agent Logs</span>
+</a>
+<a class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] flex items-center gap-4 px-6 py-3 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="Account_tree">account_tree</span>
+<span>Library</span>
+</a>
+</nav>
+<!-- CTA Button -->
+<div class="px-4 py-6">
+<button class="w-full gradient-primary text-on-primary font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+<span class="normal-case tracking-tight">New Node</span>
+</button>
+</div>
+<!-- Footer Navigation -->
+<div class="pt-4 border-t border-outline-variant/10 space-y-1">
+<a class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] flex items-center gap-4 px-6 py-3 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Documentation</span>
+</a>
+<a class="text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] flex items-center gap-4 px-6 py-3 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 bg-surface">
+<!-- TopNavBar Shell -->
+<header class="bg-[#131313] dark:bg-[#131313] font-['Inter'] antialiased tracking-tight text-[#E5E2E1] border-b border-[#3B494C]/15 flex justify-between items-center w-full px-6 h-16 docked full-width top-0 z-50 flat no shadows">
+<div class="flex items-center gap-8">
+<h1 class="text-xl font-black tracking-tighter text-[#E5E2E1]">GENUI</h1>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-bold" href="#">Dashboard</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Builder</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Runner</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Console</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<input class="bg-surface-container-lowest border border-outline-variant/20 rounded-lg pl-10 pr-4 py-1.5 text-sm focus:outline-none focus:border-primary transition-all w-64" placeholder="Search flows..." type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" data-icon="search">search</span>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/30">
+<img alt="User Profile Avatar" data-alt="professional headshot of a software architect in a minimalist workspace with soft cinematic lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVoW-OVTWYgP9r8r_ZgZnu4xzBiWdR76Yy4uRoukAkhaCEvWhdMs11kVbYMC3ePydNePBKHexYLz0uNoJyQsYDTP4UMLReQcMzk4_qJoIu9CbQz6UluMaisEstrL37YnMKs2S3-_Kl2ADbt7QxaJM61j9iP9KYe37BTCbSYOaxRb99AshivuJTiVrUeVMUe5lKOxxsnMuM8BJd136ztCEvO4ODhj3QdtDlugEAV39VxxDp91SzBQFGd3OR6cMrDwKjsH_vmxU74Nk"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Canvas -->
+<div class="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8">
+<!-- Hero / System Health Section -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+<!-- Main Hero Panel -->
+<div class="lg:col-span-8 bg-surface-container-low rounded-xl p-8 border border-outline-variant/10 relative overflow-hidden group">
+<div class="relative z-10 flex flex-col h-full">
+<div class="flex items-center gap-2 text-primary-fixed-dim mb-4">
+<span class="material-symbols-outlined" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="text-xs font-bold tracking-[0.2em] uppercase">Status: Optimal</span>
+</div>
+<h2 class="text-4xl font-black text-on-surface tracking-tighter mb-4 leading-tight">Project Alpha:<br/>AI Orchestrator</h2>
+<p class="text-on-surface-variant max-w-md mb-8 leading-relaxed">System backbone operating at 99.9% efficiency across all neural nodes and provider pipelines.</p>
+<div class="mt-auto flex flex-wrap gap-4">
+<button class="gradient-primary text-on-primary font-bold px-6 py-3 rounded-lg flex items-center gap-2 hover:shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="rocket_launch">rocket_launch</span>
+                                Deploy New Flow
+                            </button>
+<button class="bg-surface-container-highest text-on-surface font-semibold px-6 py-3 rounded-lg border border-outline-variant/20 hover:bg-surface-bright transition-all">
+                                System Health Report
+                            </button>
+</div>
+</div>
+<!-- Decorative Background Element -->
+<div class="absolute -right-20 -bottom-20 w-80 h-80 bg-primary/5 rounded-full blur-[100px] pointer-events-none group-hover:bg-primary/10 transition-all duration-700"></div>
+</div>
+<!-- Provider Status Bento -->
+<div class="lg:col-span-4 grid grid-cols-1 gap-4">
+<div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Provider Health</span>
+<span class="flex h-2 w-2 rounded-full bg-primary-fixed-dim animate-pulse"></span>
+</div>
+<div class="space-y-3 mt-4">
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium">OpenAI GPT-4o</span>
+<span class="text-xs text-primary-fixed-dim font-mono">142ms</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-on-surface-variant">Anthropic Claude 3.5</span>
+<span class="text-xs text-primary-fixed-dim font-mono">189ms</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-on-surface-variant">Google Gemini Pro</span>
+<span class="text-xs text-primary-fixed-dim font-mono">210ms</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10 flex items-center justify-between">
+<div>
+<p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Active Flows</p>
+<h3 class="text-2xl font-black text-on-surface">24 <span class="text-sm font-medium text-on-surface-variant uppercase tracking-tighter">/ 32</span></h3>
+</div>
+<div class="w-12 h-12 rounded-full border-4 border-surface-container-highest border-t-primary-fixed-dim"></div>
+</div>
+</div>
+</section>
+<!-- Flow Management Section -->
+<section class="space-y-6">
+<div class="flex items-end justify-between">
+<div>
+<h3 class="text-xl font-bold text-on-surface tracking-tight">Existing GenUI Flows</h3>
+<p class="text-sm text-on-surface-variant">Manage and monitor your deployed intelligence nodes.</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 bg-surface-container-low rounded border border-outline-variant/10 text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined text-xl" data-icon="grid_view">grid_view</span>
+</button>
+<button class="p-2 hover:bg-surface-container-low rounded text-on-surface-variant">
+<span class="material-symbols-outlined text-xl" data-icon="view_list">view_list</span>
+</button>
+</div>
+</div>
+<!-- Grid of Flow Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Flow Card 1: Running -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-1 hover:border-primary-fixed-dim/30 hover:shadow-[0_0_30px_rgba(0,229,255,0.05)] transition-all group">
+<div class="bg-surface-container p-5 rounded-lg h-full flex flex-col">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary-fixed-dim">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Customer Support Brain</h4>
+<div class="flex gap-2 mt-1">
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase font-bold tracking-tighter">GPT-4o</span>
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase font-bold tracking-tighter">Vector-DB</span>
+</div>
+</div>
+</div>
+<span class="flex items-center gap-1.5 text-[10px] font-bold text-primary-fixed-dim uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-fixed-dim"></span>
+                                    Running
+                                </span>
+</div>
+<!-- Mini Sparkline Placeholder -->
+<div class="mb-6 h-12 flex items-end gap-1 px-1">
+<div class="w-full bg-primary/20 h-4 rounded-t-sm group-hover:h-6 transition-all duration-500"></div>
+<div class="w-full bg-primary/20 h-8 rounded-t-sm group-hover:h-10 transition-all duration-500 delay-75"></div>
+<div class="w-full bg-primary/20 h-6 rounded-t-sm group-hover:h-8 transition-all duration-500 delay-100"></div>
+<div class="w-full bg-primary/20 h-10 rounded-t-sm group-hover:h-12 transition-all duration-500 delay-150"></div>
+<div class="w-full bg-primary/20 h-7 rounded-t-sm group-hover:h-9 transition-all duration-500 delay-200"></div>
+<div class="w-full bg-primary/40 h-11 rounded-t-sm group-hover:bg-primary-fixed-dim transition-all duration-500 delay-300"></div>
+<div class="w-full bg-primary/40 h-9 rounded-t-sm group-hover:bg-primary-fixed-dim transition-all duration-500 delay-400"></div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/5 mt-auto">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px] font-bold">JD</div>
+<div class="w-6 h-6 rounded-full border border-surface bg-primary/20 flex items-center justify-center text-[10px] text-primary-fixed-dim font-bold">AS</div>
+</div>
+<div class="flex gap-2">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="play_arrow" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Flow Card 2: Paused -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-1 hover:border-outline-variant/30 transition-all group">
+<div class="bg-surface-container p-5 rounded-lg h-full flex flex-col">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Market Data Synthesizer</h4>
+<div class="flex gap-2 mt-1">
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase font-bold tracking-tighter">Claude 3.5</span>
+</div>
+</div>
+</div>
+<span class="flex items-center gap-1.5 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest bg-surface-container-highest px-2 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></span>
+                                    Paused
+                                </span>
+</div>
+<div class="mb-6 h-12 flex items-end gap-1 px-1 opacity-20">
+<div class="w-full bg-on-surface-variant h-4 rounded-t-sm"></div>
+<div class="w-full bg-on-surface-variant h-4 rounded-t-sm"></div>
+<div class="w-full bg-on-surface-variant h-4 rounded-t-sm"></div>
+<div class="w-full bg-on-surface-variant h-4 rounded-t-sm"></div>
+<div class="w-full bg-on-surface-variant h-4 rounded-t-sm"></div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/5 mt-auto">
+<span class="text-[10px] text-on-surface-variant font-mono">ID: MDS-482-X</span>
+<div class="flex gap-2">
+<button class="p-2 text-primary-fixed-dim hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-lg" data-icon="play_circle">play_circle</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="settings">settings</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Flow Card 3: Failed -->
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-1 hover:border-error/30 transition-all group">
+<div class="bg-surface-container p-5 rounded-lg h-full flex flex-col">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-error-container/20 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="error_outline">error_outline</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Real-time SEO Auditor</h4>
+<div class="flex gap-2 mt-1">
+<span class="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase font-bold tracking-tighter">Gemini Pro</span>
+</div>
+</div>
+</div>
+<span class="flex items-center gap-1.5 text-[10px] font-bold text-error uppercase tracking-widest bg-error-container/10 px-2 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                                    Failed
+                                </span>
+</div>
+<div class="mb-6 p-3 rounded bg-error-container/10 border border-error/10">
+<p class="text-[10px] text-error leading-tight flex items-center gap-2">
+<span class="material-symbols-outlined text-xs" data-icon="warning">warning</span>
+                                    Rate limit exceeded for provider endpoint.
+                                </p>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/5 mt-auto">
+<span class="text-[10px] text-on-surface-variant font-mono">Last active: 2m ago</span>
+<div class="flex gap-2">
+<button class="p-2 text-error hover:bg-error/10 rounded transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="refresh">refresh</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="terminal">terminal</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- BottomNavBar Shell (Mobile Only) -->
+<nav class="md:hidden bg-[#131313]/80 backdrop-blur-xl border-t border-[#3B494C]/15 fixed bottom-0 w-full flex justify-center items-center gap-12 py-3 px-8 z-50 shadow-[0_-4px_20px_rgba(0,229,255,0.05)] font-['JetBrains_Mono'] text-[10px] uppercase">
+<button class="text-[#00E5FF] font-bold bg-[#00E5FF]/10 rounded-xl px-4 py-1 flex flex-col items-center gap-1 active:scale-90 duration-150">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+<span>Run Flow</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] hover:bg-[#353534] transition-all">
+<span class="material-symbols-outlined" data-icon="save">save</span>
+<span>Save</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] hover:bg-[#353534] transition-all">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span>Terminal</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] hover:bg-[#353534] transition-all">
+<span class="material-symbols-outlined" data-icon="query_stats">query_stats</span>
+<span>Metrics</span>
+</button>
+</nav>
+</main>
+<!-- Floating Action Button Contextual (FAB) -->
+<div class="fixed right-8 bottom-8 z-[60] md:flex flex-col gap-4 hidden">
+<button class="w-14 h-14 rounded-full gradient-primary text-on-primary shadow-[0_8px_32px_rgba(0,229,255,0.3)] flex items-center justify-center group hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add" style="font-variation-settings: 'opsz' 48;">add</span>
+<!-- Tooltip -->
+<span class="absolute right-full mr-4 bg-surface-container-high text-on-surface text-xs font-bold py-2 px-4 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Create New Flow</span>
+</button>
+</div>
+</body></html>

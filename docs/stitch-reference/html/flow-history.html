@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GENUI | History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#ffdf96",
+              "surface-container-lowest": "#0e0e0e",
+              "outline": "#849396",
+              "on-tertiary": "#3e2e00",
+              "on-primary-fixed-variant": "#004f58",
+              "surface-container-high": "#2a2a2a",
+              "inverse-primary": "#006875",
+              "on-primary-container": "#00626e",
+              "tertiary-container": "#fec931",
+              "surface-tint": "#00daf3",
+              "surface-container-highest": "#353534",
+              "outline-variant": "#3b494c",
+              "on-background": "#e5e2e1",
+              "inverse-on-surface": "#313030",
+              "primary": "#c3f5ff",
+              "on-tertiary-fixed": "#251a00",
+              "surface-variant": "#353534",
+              "on-secondary": "#370096",
+              "secondary": "#cdbdff",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "tertiary-fixed-dim": "#f3bf26",
+              "on-primary": "#00363d",
+              "on-error-container": "#ffdad6",
+              "inverse-surface": "#e5e2e1",
+              "secondary-fixed": "#e8deff",
+              "on-surface": "#e5e2e1",
+              "surface": "#131313",
+              "tertiary": "#ffeac0",
+              "surface-container-low": "#1c1b1b",
+              "secondary-fixed-dim": "#cdbdff",
+              "on-tertiary-container": "#6f5500",
+              "secondary-container": "#5203d5",
+              "on-secondary-fixed": "#20005f",
+              "surface-container": "#201f1f",
+              "on-primary-fixed": "#001f24",
+              "surface-dim": "#131313",
+              "on-error": "#690005",
+              "error": "#ffb4ab",
+              "surface-bright": "#3a3939",
+              "on-tertiary-fixed-variant": "#594400",
+              "primary-container": "#00e5ff",
+              "on-surface-variant": "#bac9cc",
+              "error-container": "#93000a",
+              "primary-fixed": "#9cf0ff",
+              "background": "#131313",
+              "on-secondary-container": "#c0acff",
+              "primary-fixed-dim": "#00daf3"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(14, 14, 14, 0.8);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<header class="bg-[#131313] dark:bg-[#131313] font-['Inter'] antialiased tracking-tight docked full-width top-0 z-50 border-b border-[#3B494C]/15 flat no shadows flex justify-between items-center w-full px-6 h-16 fixed">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GENUI</span>
+<nav class="hidden md:flex gap-6">
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Dashboard</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Builder</a>
+<a class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors" href="#">Runner</a>
+<a class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-bold" href="#">Console</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-sm">search</span>
+<input class="bg-surface-container-lowest border border-outline-variant/15 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:ring-1 focus:ring-primary-container outline-none w-64" placeholder="Search flows..." type="text"/>
+</div>
+<button class="text-[#E5E2E1]/70 hover:bg-[#1C1B1B] p-2 rounded-full transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-[#E5E2E1]/70 hover:bg-[#1C1B1B] p-2 rounded-full transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary-container p-[1px]">
+<div class="h-full w-full rounded-full bg-surface-container-lowest flex items-center justify-center overflow-hidden">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-gWEdokplbuyPvXRL_bJWNZCcCS-9m5tl_88VA-przrcoKAbCq68T56tw88dvxVE7smVqgRuCxKxmmK4bbClybr33C7EpAIBAZRr7I9p2MAcrp8Elfq2WBLAZGEYZ41E9EE08zv1Gq5OMGPJtfyGwZbvdMLiVSNnAR8D4bFXwOOb8N1uSbQUb4FE3UygF-ZCN6r7TsVDsy5rKGC1n_bRUWY9_50e0V7tdL4SlwZIr8KWjQN8mBguLe8JNHk28_wcLUkDWCLcwOAs"/>
+</div>
+</div>
+</div>
+</header>
+<div class="flex pt-16 h-screen overflow-hidden">
+<!-- SideNavBar -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] font-['JetBrains_Mono'] text-xs uppercase tracking-widest docked left-0 h-full w-64 no-line tonal-shift flat no shadows flex flex-col h-screen py-4 space-y-2 hidden md:flex shrink-0">
+<div class="px-6 py-4 mb-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="memory">memory</span>
+</div>
+<div>
+<div class="text-lg font-bold text-[#E5E2E1] normal-case tracking-normal">Project Alpha</div>
+<div class="text-[10px] text-on-surface-variant/60 font-medium tracking-widest">AI Orchestrator</div>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-6 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary" data-icon="schema">schema</span>
+<span>Flow Categories</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 bg-[#353534] text-[#00E5FF] rounded-r-lg border-l-4 border-[#00E5FF] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span>Project Files</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary" data-icon="terminal">terminal</span>
+<span>Agent Logs</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary" data-icon="account_tree">account_tree</span>
+<span>Library</span>
+</a>
+</nav>
+<div class="px-6 py-4">
+<button class="w-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold py-3 rounded-md flex items-center justify-center gap-2 hover:brightness-110 transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm">add</span>
+<span>New Node</span>
+</button>
+</div>
+<div class="pt-4 border-t border-outline-variant/10">
+<a class="flex items-center gap-3 px-6 py-2 text-[#E5E2E1]/50 hover:text-[#E5E2E1] transition-colors" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="help">help</span>
+<span>Documentation</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 text-[#E5E2E1]/50 hover:text-[#E5E2E1] transition-colors" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="contact_support">contact_support</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto bg-surface relative">
+<div class="max-w-7xl mx-auto px-6 py-10">
+<!-- Page Header & Filters -->
+<div class="flex flex-col gap-8 mb-10">
+<div>
+<h1 class="text-3xl font-black tracking-tight text-on-surface mb-2">Execution History</h1>
+<p class="text-on-surface-variant font-mono text-sm uppercase tracking-wider">Historical performance metrics &amp; flow outputs</p>
+</div>
+<div class="flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<!-- Status Filter -->
+<div class="relative group">
+<button class="bg-surface-container-low border border-outline-variant/20 px-4 py-2 rounded-lg flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-all">
+<span class="material-symbols-outlined text-lg">filter_alt</span>
+                                    Status: All
+                                    <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+<!-- Provider Filter -->
+<div class="relative group">
+<button class="bg-surface-container-low border border-outline-variant/20 px-4 py-2 rounded-lg flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-all">
+<span class="material-symbols-outlined text-lg">memory</span>
+                                    Provider: All
+                                    <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+<button class="text-primary-container text-xs font-bold uppercase tracking-widest px-2 hover:underline">Clear Filters</button>
+</div>
+<div class="flex items-center gap-4 bg-surface-container-highest/30 rounded-full px-6 py-2 border border-outline-variant/10">
+<div class="text-center px-4">
+<div class="text-xs text-on-surface-variant/60 font-mono">TOTAL CALLS</div>
+<div class="text-lg font-bold">1,284</div>
+</div>
+<div class="w-[1px] h-8 bg-outline-variant/20"></div>
+<div class="text-center px-4">
+<div class="text-xs text-on-surface-variant/60 font-mono">AVG LATENCY</div>
+<div class="text-lg font-bold text-primary">1.4s</div>
+</div>
+<div class="w-[1px] h-8 bg-outline-variant/20"></div>
+<div class="text-center px-4">
+<div class="text-xs text-on-surface-variant/60 font-mono">EST. COST</div>
+<div class="text-lg font-bold text-secondary">$142.08</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Execution Table/List -->
+<div class="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high/50 text-on-surface-variant font-mono text-[10px] uppercase tracking-widest">
+<th class="px-6 py-4 font-bold">Flow Name</th>
+<th class="px-6 py-4 font-bold">Status</th>
+<th class="px-6 py-4 font-bold">Provider</th>
+<th class="px-6 py-4 font-bold">Latency</th>
+<th class="px-6 py-4 font-bold">Tokens</th>
+<th class="px-6 py-4 font-bold">Cost</th>
+<th class="px-6 py-4 font-bold">Timestamp</th>
+<th class="px-6 py-4 font-bold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-highest/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(0,229,255,0.4)]"></div>
+<span class="font-bold text-sm tracking-tight">Customer Sentiment Analysis</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary-container/10 text-primary-container">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                            Success
+                                        </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="text-on-surface-variant">GPT-4o</span>
+</div>
+</td>
+<td class="px-6 py-5 font-mono text-xs text-primary">1.2s</td>
+<td class="px-6 py-5 font-mono text-xs">842</td>
+<td class="px-6 py-5 font-mono text-xs">$0.024</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">2 mins ago</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-surface-container-highest hover:bg-primary-container hover:text-on-primary transition-all p-2 rounded-lg group/btn active:scale-90">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-highest/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-error shadow-[0_0_8px_rgba(255,180,171,0.4)]"></div>
+<span class="font-bold text-sm tracking-tight">Automated SEO Blog Post</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-error/10 text-error">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">cancel</span>
+                                            Failed
+                                        </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="text-on-surface-variant">Claude 3.5 Sonnet</span>
+</div>
+</td>
+<td class="px-6 py-5 font-mono text-xs text-on-surface-variant/40">—</td>
+<td class="px-6 py-5 font-mono text-xs text-on-surface-variant/40">0</td>
+<td class="px-6 py-5 font-mono text-xs text-on-surface-variant/40">$0.000</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">15 mins ago</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-surface-container-highest hover:bg-primary-container hover:text-on-primary transition-all p-2 rounded-lg active:scale-90">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-highest/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(0,229,255,0.4)]"></div>
+<span class="font-bold text-sm tracking-tight">Real-time Market Data Synthesizer</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary-container/10 text-primary-container">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                            Success
+                                        </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="text-on-surface-variant">GPT-4o</span>
+</div>
+</td>
+<td class="px-6 py-5 font-mono text-xs text-primary">3.8s</td>
+<td class="px-6 py-5 font-mono text-xs">15,402</td>
+<td class="px-6 py-5 font-mono text-xs">$0.462</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">1 hour ago</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-surface-container-highest hover:bg-primary-container hover:text-on-primary transition-all p-2 rounded-lg active:scale-90">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-highest/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-on-surface-variant/40"></div>
+<span class="font-bold text-sm tracking-tight text-on-surface-variant">Legal Document Summarizer</span>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-surface-container-highest text-on-surface-variant">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">stop_circle</span>
+                                            Stopped
+                                        </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="text-on-surface-variant">Claude 3.5 Sonnet</span>
+</div>
+</td>
+<td class="px-6 py-5 font-mono text-xs text-on-surface-variant/40">0.5s</td>
+<td class="px-6 py-5 font-mono text-xs">120</td>
+<td class="px-6 py-5 font-mono text-xs">$0.001</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">3 hours ago</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-surface-container-highest hover:bg-primary-container hover:text-on-primary transition-all p-2 rounded-lg active:scale-90">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="px-6 py-4 bg-surface-container-high/30 border-t border-outline-variant/10 flex items-center justify-between">
+<span class="text-xs text-on-surface-variant font-mono uppercase tracking-widest">Showing 1-10 of 2,492 entries</span>
+<div class="flex gap-2">
+<button class="p-2 border border-outline-variant/20 rounded-md hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="p-2 border border-outline-variant/20 rounded-md bg-surface-container-highest text-primary">
+<span class="text-xs font-bold font-mono">1</span>
+</button>
+<button class="p-2 border border-outline-variant/20 rounded-md hover:bg-surface-container-highest transition-colors">
+<span class="text-xs font-bold font-mono">2</span>
+</button>
+<button class="p-2 border border-outline-variant/20 rounded-md hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Bento Style Insight Cards -->
+<div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/10 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all"></div>
+<div class="flex flex-col h-full justify-between">
+<div class="mb-4">
+<span class="material-symbols-outlined text-primary mb-2" data-icon="monitoring">monitoring</span>
+<h3 class="text-lg font-bold">Execution Trend</h3>
+</div>
+<div class="h-16 w-full flex items-end gap-1 px-1">
+<div class="w-full bg-primary/20 h-[30%] rounded-t-sm"></div>
+<div class="w-full bg-primary/20 h-[50%] rounded-t-sm"></div>
+<div class="w-full bg-primary/20 h-[40%] rounded-t-sm"></div>
+<div class="w-full bg-primary/20 h-[70%] rounded-t-sm"></div>
+<div class="w-full bg-primary/20 h-[60%] rounded-t-sm"></div>
+<div class="w-full bg-primary-container h-[90%] rounded-t-sm"></div>
+<div class="w-full bg-primary/20 h-[50%] rounded-t-sm"></div>
+</div>
+<p class="text-[10px] font-mono text-on-surface-variant/60 mt-4">+12% INCREASE VS LAST WEEK</p>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/10 group">
+<span class="material-symbols-outlined text-secondary mb-2" data-icon="speed">speed</span>
+<h3 class="text-lg font-bold mb-4">Model Performance</h3>
+<div class="space-y-3">
+<div>
+<div class="flex justify-between text-[10px] font-mono mb-1">
+<span>GPT-4O</span>
+<span class="text-primary">98.2% SUCCESS</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 98%;"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-[10px] font-mono mb-1">
+<span>CLAUDE 3.5</span>
+<span class="text-primary">94.1% SUCCESS</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary/60 h-full" style="width: 94%;"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/10 relative overflow-hidden flex items-center justify-center text-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-10" data-alt="abstract neural network mesh background with deep blue and cyan glowing nodes on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC84IaWqjao4FmOg6a8e8Ispw7GYoU0l1IldqfzEkXc23urbIFyLYXtJY8066kpTyGBifAnMoU7w2pSr8peNXjQQca0EeCVQ7Hdv91mHdrJnZHbHnjWJ_bXvO-CvWOsuwL8KVjZFcGuJw0OTS__KLAXnjDMf2oj1o3P72W_eRma9jg4jpnesTc17gExHvlPzE4nBkcc_Fs_Q3KNuoT_ByEwUF_JTS0woSPQiff10EklygmhZ7vWyfix99kFB-uacqKo4zDzPLuH4hA"/>
+<div class="relative z-10">
+<h3 class="text-sm font-mono tracking-tighter mb-2">RUN NEW FLOW</h3>
+<button class="bg-on-surface text-surface py-2 px-6 rounded-full font-black text-xs hover:bg-primary transition-colors">INITIATE COMMAND</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BottomNavBar (Mobile only) -->
+<footer class="md:hidden bg-[#131313]/80 backdrop-blur-xl border-t border-[#3B494C]/15 shadow-[0_-4px_20px_rgba(0,229,255,0.05)] fixed bottom-0 w-full flex justify-center items-center gap-12 py-3 px-8 z-50">
+<div class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 font-['JetBrains_Mono'] text-[10px] uppercase">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+<span>Run Flow</span>
+</div>
+<div class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 font-['JetBrains_Mono'] text-[10px] uppercase">
+<span class="material-symbols-outlined" data-icon="save">save</span>
+<span>Save</span>
+</div>
+<div class="text-[#00E5FF] font-bold bg-[#00E5FF]/10 rounded-xl px-4 py-1 flex flex-col items-center gap-1 font-['JetBrains_Mono'] text-[10px] uppercase">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span>Terminal</span>
+</div>
+<div class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 font-['JetBrains_Mono'] text-[10px] uppercase">
+<span class="material-symbols-outlined" data-icon="query_stats">query_stats</span>
+<span>Metrics</span>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Analytics &amp; ROI Command Center | GenUI Synthesis</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#1c1b1b",
+              "primary": "#c3f5ff",
+              "on-tertiary-container": "#6f5500",
+              "on-tertiary-fixed": "#251a00",
+              "on-primary": "#00363d",
+              "surface-container-high": "#2a2a2a",
+              "surface-container-lowest": "#0e0e0e",
+              "on-primary-fixed": "#001f24",
+              "inverse-surface": "#e5e2e1",
+              "error-container": "#93000a",
+              "surface-container-highest": "#353534",
+              "secondary-fixed": "#e8deff",
+              "primary-fixed-dim": "#00daf3",
+              "error": "#ffb4ab",
+              "tertiary-container": "#fec931",
+              "on-tertiary-fixed-variant": "#594400",
+              "surface": "#131313",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "on-tertiary": "#3e2e00",
+              "on-secondary-container": "#c0acff",
+              "surface-dim": "#131313",
+              "primary-fixed": "#9cf0ff",
+              "secondary-container": "#5203d5",
+              "surface-bright": "#3a3939",
+              "on-error": "#690005",
+              "tertiary-fixed-dim": "#f3bf26",
+              "outline": "#849396",
+              "on-primary-container": "#00626e",
+              "tertiary": "#ffeac0",
+              "surface-tint": "#00daf3",
+              "on-surface": "#e5e2e1",
+              "on-error-container": "#ffdad6",
+              "secondary": "#cdbdff",
+              "outline-variant": "#3b494c",
+              "on-surface-variant": "#bac9cc",
+              "on-secondary": "#370096",
+              "secondary-fixed-dim": "#cdbdff",
+              "background": "#131313",
+              "primary-container": "#00e5ff",
+              "tertiary-fixed": "#ffdf96",
+              "surface-variant": "#353534",
+              "on-secondary-fixed": "#20005f",
+              "on-primary-fixed-variant": "#004f58",
+              "inverse-primary": "#006875",
+              "on-background": "#e5e2e1",
+              "surface-container": "#201f1f",
+              "inverse-on-surface": "#313030"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-panel {
+        background: rgba(14, 14, 14, 0.8);
+        backdrop-filter: blur(20px);
+      }
+      .gradient-cta {
+        background: linear-gradient(135deg, #c3f5ff 0%, #00e5ff 100%);
+      }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: #131313; }
+      ::-webkit-scrollbar-thumb { background: #3b494c; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container overflow-hidden h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-[#131313] dark:bg-[#131313] font-['Inter'] antialiased tracking-tight docked full-width top-0 z-50 border-b border-[#3B494C]/15 flex justify-between items-center h-16 px-6 w-full">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GenUI Synthesis</span>
+<div class="hidden md:flex gap-6 items-center">
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] transition-colors duration-200" href="#">Docs</a>
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] transition-colors duration-200" href="#">API</a>
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] transition-colors duration-200" href="#">Status</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<span class="material-symbols-outlined text-[#E5E2E1]/60 hover:text-[#00E5FF] cursor-pointer transition-colors duration-200">notifications</span>
+</div>
+<span class="material-symbols-outlined text-[#E5E2E1]/60 hover:text-[#00E5FF] cursor-pointer transition-colors duration-200">settings</span>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-[#3B494C]/30 bg-surface-container-high">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="high contrast digital avatar with neon accents and sharp vector features in a minimalist tech style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBY5nVImNUi62vLb0CQupg6rstOxpbpOpWWOJzMgp9_LjcBUHTq99h8FLjFUp66QGZWO_i8pPdJBrMtEehZ4cNZRLbRP57DSOcCln34ufmwy9JREwcfj9N0MO6X3LBiibTE9bxXXH91eosUaPxTIV0DZhwgSSv9lu1k0CDFMpg78XdqRkqOdZNps63xLKKBMRF44lP8OzuzthneqN014Z7z10NydT2rmcEZh_gkBLeptqp4UamqFWmE0y_HV0esW1ZfhDwGgRv8pVQ"/>
+</div>
+</div>
+</nav>
+<div class="flex flex-1 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] font-['JetBrains_Mono'] text-sm tracking-tighter docked left-0 h-screen w-64 border-r border-[#3B494C]/15 hidden md:flex flex-col h-full py-4 gap-2">
+<div class="px-6 mb-6">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-6 h-6 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container text-xs" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<span class="text-[#E5E2E1] font-bold">Synthesis Engine</span>
+</div>
+<span class="text-[#E5E2E1]/40 text-[10px] uppercase tracking-widest px-1">v2.4.0-stable</span>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 rounded group active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-[#00E5FF]">rule</span>
+<span>Evaluations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 rounded group active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-[#00E5FF]">terminal</span>
+<span>Tool Registry</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 rounded group active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl group-hover:text-[#00E5FF]">science</span>
+<span>Prompt Lab</span>
+</a>
+<a class="bg-[#353534] text-[#00E5FF] border-l-4 border-[#00E5FF] font-bold flex items-center gap-3 px-4 py-3 transition-all duration-200 rounded-r active:translate-x-1" href="#">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">monitoring</span>
+<span>Analytics</span>
+</a>
+</nav>
+<div class="px-3 space-y-4">
+<button class="w-full py-3 gradient-cta text-on-primary font-bold rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined text-sm">add</span>
+                    New Experiment
+                </button>
+<div class="border-t border-[#3B494C]/15 pt-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-[#E5E2E1]/50 hover:text-[#E5E2E1] transition-colors text-xs uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-lg">help</span>
+                        Support
+                    </a>
+<a class="flex items-center gap-3 px-4 py-2 text-[#E5E2E1]/50 hover:text-[#E5E2E1] transition-colors text-xs uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+                        Feedback
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 overflow-y-auto p-6 lg:p-10 space-y-8 bg-surface">
+<!-- Editorial Header -->
+<header class="flex flex-col md:flex-row justify-between items-end gap-6">
+<div>
+<h1 class="text-4xl font-extrabold tracking-tighter text-on-surface mb-2">Command Center</h1>
+<p class="text-on-surface-variant font-mono text-sm max-w-xl">Precision telemetry and ROI orchestration for large-scale AI deployment. Real-time inference cost modeling active.</p>
+</div>
+<div class="flex gap-2 bg-surface-container-lowest p-1 rounded-lg border border-outline-variant/10">
+<button class="px-4 py-2 bg-surface-container-highest text-primary-fixed-dim text-xs font-bold rounded">LIVE VIEW</button>
+<button class="px-4 py-2 text-on-surface-variant text-xs font-bold hover:text-on-surface">PAST 24H</button>
+<button class="px-4 py-2 text-on-surface-variant text-xs font-bold hover:text-on-surface">PAST 30D</button>
+</div>
+</header>
+<!-- Telemetry Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Total Tokens -->
+<div class="bg-surface-container-low p-6 rounded-xl border-l-2 border-primary group hover:bg-surface-container transition-colors duration-300">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-surface-variant font-mono text-xs uppercase tracking-widest">Token Velocity</span>
+<span class="material-symbols-outlined text-primary text-xl">toll</span>
+</div>
+<div class="text-3xl font-black text-on-surface mb-1">124.8M</div>
+<div class="flex items-center gap-1 text-primary-fixed-dim text-xs">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+<span>12.4% vs prev week</span>
+</div>
+</div>
+<!-- Active Users -->
+<div class="bg-surface-container-low p-6 rounded-xl border-l-2 border-secondary group hover:bg-surface-container transition-colors duration-300">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-surface-variant font-mono text-xs uppercase tracking-widest">Active Entities</span>
+<span class="material-symbols-outlined text-secondary text-xl">group</span>
+</div>
+<div class="text-3xl font-black text-on-surface mb-1">18,203</div>
+<div class="flex items-center gap-1 text-secondary text-xs">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+<span>5.2% vs prev week</span>
+</div>
+</div>
+<!-- Inference Cost -->
+<div class="bg-surface-container-low p-6 rounded-xl border-l-2 border-error group hover:bg-surface-container transition-colors duration-300">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-surface-variant font-mono text-xs uppercase tracking-widest">Compute Cost</span>
+<span class="material-symbols-outlined text-error text-xl">payments</span>
+</div>
+<div class="text-3xl font-black text-on-surface mb-1">$4,129.50</div>
+<div class="flex items-center gap-1 text-error text-xs">
+<span class="material-symbols-outlined text-xs">trending_down</span>
+<span>3.1% saved (cache hit)</span>
+</div>
+</div>
+<!-- ROI Logic -->
+<div class="bg-surface-container-low p-6 rounded-xl border-l-2 border-tertiary-container group hover:bg-surface-container transition-colors duration-300">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-surface-variant font-mono text-xs uppercase tracking-widest">Net ROI</span>
+<span class="material-symbols-outlined text-tertiary-container text-xl">rocket_launch</span>
+</div>
+<div class="text-3xl font-black text-on-surface mb-1">4.2x</div>
+<div class="flex items-center gap-1 text-tertiary-container text-xs">
+<span class="material-symbols-outlined text-xs">verified</span>
+<span>High Efficiency Zone</span>
+</div>
+</div>
+</div>
+<!-- Detailed Visualizations -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Time Series Charts -->
+<div class="lg:col-span-2 space-y-6">
+<section class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/10">
+<div class="flex justify-between items-center mb-8">
+<h3 class="font-bold text-lg flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-fixed-dim"></span>
+                                Cost &amp; Token Trajectory
+                            </h3>
+<div class="flex gap-4 font-mono text-[10px] text-on-surface-variant">
+<div class="flex items-center gap-1"><span class="w-2 h-2 bg-primary"></span> TOKENS</div>
+<div class="flex items-center gap-1"><span class="w-2 h-2 bg-secondary"></span> COST</div>
+</div>
+</div>
+<div class="h-64 flex items-end justify-between gap-1">
+<div class="flex flex-col flex-1 items-center gap-2">
+<div class="w-full bg-surface-container-high rounded-t-sm h-1/2 relative group">
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<span class="text-[10px] text-on-surface-variant font-mono">08:00</span>
+</div>
+<div class="flex flex-col flex-1 items-center gap-2">
+<div class="w-full bg-surface-container-high rounded-t-sm h-2/3 relative group"></div>
+<span class="text-[10px] text-on-surface-variant font-mono">10:00</span>
+</div>
+<div class="flex flex-col flex-1 items-center gap-2">
+<div class="w-full bg-surface-container-high rounded-t-sm h-1/3 relative group"></div>
+<span class="text-[10px] text-on-surface-variant font-mono">12:00</span>
+</div>
+<div class="flex flex-col flex-1 items-center gap-2">
+<div class="w-full bg-primary rounded-t-sm h-[80%] relative group"></div>
+<span class="text-[10px] text-on-surface-variant font-mono">14:00</span>
+</div>
+<div class="flex flex-col flex-1 items-center gap-2">
+<div class="w-full bg-surface-container-high rounded-t-sm h-3/4 relative group"></div>
+<span class="text-[10px] text-on-surface-variant font-mono">16:00</span>
+</div>
+<div class="flex flex-col flex-1 items-center gap-2">
+<div class="w-full bg-surface-container-high rounded-t-sm h-1/2 relative group"></div>
+<span class="text-[10px] text-on-surface-variant font-mono">18:00</span>
+</div>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-surface-container-low p-5 rounded-xl">
+<div class="text-[10px] text-on-surface-variant font-mono uppercase mb-2">Provider Stability</div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-sm font-bold">OpenAI</span>
+<span class="text-primary-fixed-dim text-xs">99.98%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[99%]"></div>
+</div>
+</div>
+<div class="bg-surface-container-low p-5 rounded-xl">
+<div class="text-[10px] text-on-surface-variant font-mono uppercase mb-2">Provider Stability</div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-sm font-bold">Anthropic</span>
+<span class="text-secondary text-xs">98.42%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[95%]"></div>
+</div>
+</div>
+<div class="bg-surface-container-low p-5 rounded-xl">
+<div class="text-[10px] text-on-surface-variant font-mono uppercase mb-2">Provider Stability</div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-sm font-bold">Gemini</span>
+<span class="text-tertiary-container text-xs">99.10%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary-container w-[98%]"></div>
+</div>
+</div>
+</section>
+</div>
+<!-- ROI Insights Card -->
+<div class="space-y-6">
+<div class="bg-surface-container-highest p-8 rounded-3xl relative overflow-hidden group border border-outline-variant/10">
+<!-- Decorative glow -->
+<div class="absolute -top-24 -right-24 w-48 h-48 bg-primary blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity"></div>
+<div class="relative z-10">
+<h3 class="text-2xl font-black tracking-tighter mb-6 leading-tight">Business Impact Analysis</h3>
+<div class="space-y-6">
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Time Reclaimed</span>
+<div class="text-2xl font-bold">1,402 hrs</div>
+<p class="text-xs text-on-surface-variant">Estimated operational efficiency gain across 4 departments.</p>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Revenue Attribution</span>
+<div class="text-2xl font-bold">$124,500</div>
+<p class="text-xs text-on-surface-variant">Conversions directly traced to Synthesis prompt agents.</p>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-mono text-on-surface-variant uppercase">Projected Annual ROI</span>
+<div class="text-3xl font-black text-primary-fixed-dim">512%</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-primary-container w-[70%]"></div>
+</div>
+</div>
+</div>
+<button class="w-full mt-8 py-3 bg-surface text-on-surface font-bold text-xs uppercase tracking-widest border border-outline-variant/30 hover:bg-surface-container-high transition-colors">
+                                Export PDF Narrative
+                            </button>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/5">
+<h4 class="text-sm font-bold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-secondary">auto_awesome</span>
+                            Synthesis AI Recommendation
+                        </h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                            Detected 14% redundant token usage in <span class="text-on-surface font-mono">Agent-4-Logic</span>. Implementing a <span class="text-secondary">vector cache layer</span> could reduce costs by $450/mo with zero impact on latency.
+                        </p>
+<button class="mt-4 text-[10px] font-bold text-primary hover:underline uppercase tracking-widest">Apply Fix</button>
+</div>
+</div>
+</div>
+<!-- Provider Performance Deep Dive -->
+<section class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/10">
+<div class="p-6 border-b border-outline-variant/10 flex justify-between items-center">
+<h3 class="font-bold">Provider Efficiency Matrix</h3>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-surface-container-highest text-[10px] font-mono rounded">P95 LATENCY</span>
+<span class="px-3 py-1 bg-surface-container-highest text-[10px] font-mono rounded">TTFT</span>
+</div>
+</div>
+<table class="w-full text-left font-mono text-xs">
+<thead>
+<tr class="text-on-surface-variant border-b border-outline-variant/5">
+<th class="p-4 font-medium uppercase tracking-widest">Model Endpoint</th>
+<th class="p-4 font-medium uppercase tracking-widest">Latency (ms)</th>
+<th class="p-4 font-medium uppercase tracking-widest">Accuracy (%)</th>
+<th class="p-4 font-medium uppercase tracking-widest">Cost/1k</th>
+<th class="p-4 font-medium uppercase tracking-widest text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<tr class="hover:bg-surface-container-high transition-colors group">
+<td class="p-4 font-bold text-on-surface">GPT-4-Turbo-Preview</td>
+<td class="p-4 text-primary-fixed-dim">412ms</td>
+<td class="p-4 text-on-surface-variant">98.2%</td>
+<td class="p-4 text-on-surface-variant">$0.010</td>
+<td class="p-4 text-right">
+<span class="bg-primary-fixed-dim/10 text-primary-fixed-dim px-2 py-0.5 rounded-sm text-[10px]">OPTIMAL</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-high transition-colors group">
+<td class="p-4 font-bold text-on-surface">Claude-3-Opus-Intelligent</td>
+<td class="p-4 text-secondary">890ms</td>
+<td class="p-4 text-on-surface-variant">99.1%</td>
+<td class="p-4 text-on-surface-variant">$0.015</td>
+<td class="p-4 text-right">
+<span class="bg-secondary/10 text-secondary px-2 py-0.5 rounded-sm text-[10px]">STABLE</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-high transition-colors group">
+<td class="p-4 font-bold text-on-surface">Gemini-1.5-Pro</td>
+<td class="p-4 text-tertiary-container">645ms</td>
+<td class="p-4 text-on-surface-variant">97.5%</td>
+<td class="p-4 text-on-surface-variant">$0.007</td>
+<td class="p-4 text-right">
+<span class="bg-tertiary-container/10 text-tertiary-container px-2 py-0.5 rounded-sm text-[10px]">DEGRADED</span>
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+</main>
+</div>
+<!-- Mobile Navigation Shell -->
+<div class="md:hidden bg-[#131313] border-t border-[#3B494C]/15 grid grid-cols-4 h-16 safe-area-bottom">
+<button class="flex flex-col items-center justify-center text-[#E5E2E1]/60">
+<span class="material-symbols-outlined">rule</span>
+<span class="text-[10px] mt-1">Eval</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#E5E2E1]/60">
+<span class="material-symbols-outlined">terminal</span>
+<span class="text-[10px] mt-1">Registry</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#E5E2E1]/60">
+<span class="material-symbols-outlined">science</span>
+<span class="text-[10px] mt-1">Lab</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#00E5FF]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">monitoring</span>
+<span class="text-[10px] mt-1">Stats</span>
+</button>
+</div>
+</body></html>

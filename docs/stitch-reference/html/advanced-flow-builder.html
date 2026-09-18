@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GENUI | Flow Builder</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary": "#ffeac0",
+              "secondary-fixed-dim": "#cdbdff",
+              "secondary-fixed": "#e8deff",
+              "primary-fixed-dim": "#00daf3",
+              "surface-container-low": "#1c1b1b",
+              "on-error": "#690005",
+              "background": "#131313",
+              "tertiary-fixed-dim": "#f3bf26",
+              "on-primary-fixed": "#001f24",
+              "tertiary-container": "#fec931",
+              "surface-tint": "#00daf3",
+              "on-secondary-container": "#c0acff",
+              "surface-container-highest": "#353534",
+              "secondary-container": "#5203d5",
+              "on-surface-variant": "#bac9cc",
+              "surface-variant": "#353534",
+              "primary-container": "#00e5ff",
+              "on-secondary": "#370096",
+              "surface-dim": "#131313",
+              "surface-container-lowest": "#0e0e0e",
+              "surface": "#131313",
+              "outline-variant": "#3b494c",
+              "inverse-primary": "#006875",
+              "on-tertiary": "#3e2e00",
+              "on-surface": "#e5e2e1",
+              "on-secondary-fixed": "#20005f",
+              "inverse-surface": "#e5e2e1",
+              "surface-container": "#201f1f",
+              "inverse-on-surface": "#313030",
+              "primary-fixed": "#9cf0ff",
+              "on-background": "#e5e2e1",
+              "error-container": "#93000a",
+              "surface-container-high": "#2a2a2a",
+              "on-primary-fixed-variant": "#004f58",
+              "error": "#ffb4ab",
+              "on-error-container": "#ffdad6",
+              "on-primary": "#00363d",
+              "on-tertiary-fixed-variant": "#594400",
+              "on-tertiary-container": "#6f5500",
+              "tertiary-fixed": "#ffdf96",
+              "on-secondary-fixed-variant": "#4f00d0",
+              "primary": "#c3f5ff",
+              "secondary": "#cdbdff",
+              "surface-bright": "#3a3939",
+              "outline": "#849396",
+              "on-primary-container": "#00626e",
+              "on-tertiary-fixed": "#251a00"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"],
+              "mono": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .canvas-grid {
+            background-image: radial-gradient(#3B494C 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .glass-panel {
+            background: rgba(14, 14, 14, 0.8);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<div class="flex h-screen overflow-hidden">
+<!-- SideNavBar (from JSON) -->
+<aside class="bg-[#1C1B1B] dark:bg-[#1C1B1B] font-['JetBrains_Mono'] text-xs uppercase tracking-widest flex flex-col h-screen py-4 space-y-2 docked left-0 h-full w-64 no-line tonal-shift flat no shadows">
+<div class="px-6 py-4 mb-2">
+<div class="text-lg font-bold text-[#E5E2E1]">Project Alpha</div>
+<div class="text-[10px] text-[#E5E2E1]/50 tracking-normal capitalize">AI Orchestrator</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<!-- Flows is Active -->
+<a class="flex items-center gap-3 px-4 py-3 bg-[#353534] text-[#00E5FF] rounded-r-lg border-l-4 border-[#00E5FF] transition-all" href="#">
+<span class="material-symbols-outlined">schema</span>
+<span>Flows</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">article</span>
+<span>Prompts</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">build</span>
+<span>Tools</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span>MCP</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">play_circle</span>
+<span>Run</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">history</span>
+<span>History</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/50 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">rocket_launch</span>
+<span>Deployments</span>
+</a>
+</nav>
+<div class="px-3 pt-4 pb-2 border-t border-outline-variant/10">
+<button class="w-full flex items-center justify-center gap-2 bg-primary-container text-on-primary-container py-2.5 rounded-xl font-bold text-sm tracking-normal hover:brightness-110 transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm">add</span>
+                    New Node
+                </button>
+</div>
+<footer class="px-3 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-[#E5E2E1]/40 hover:text-[#E5E2E1] transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">help</span>
+<span class="text-[10px]">Documentation</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-[#E5E2E1]/40 hover:text-[#E5E2E1] transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">contact_support</span>
+<span class="text-[10px]">Support</span>
+</a>
+</footer>
+</aside>
+<!-- Main Workspace Area -->
+<main class="flex-1 flex flex-col relative bg-surface overflow-hidden">
+<!-- TopAppBar (from JSON concepts) -->
+<header class="bg-[#131313] font-['Inter'] antialiased tracking-tight border-b border-[#3B494C]/15 z-50 flex justify-between items-center w-full px-6 h-16">
+<div class="flex items-center gap-8">
+<div class="text-xl font-black tracking-tighter text-[#E5E2E1]">GENUI</div>
+<div class="flex items-center gap-6">
+<button class="text-[#00E5FF] border-b-2 border-[#00E5FF] pb-1 font-bold text-sm">Dashboard</button>
+<button class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors text-sm">Builder</button>
+<button class="text-[#E5E2E1]/70 hover:text-[#E5E2E1] transition-colors text-sm">Runner</button>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<input class="bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-1.5 text-xs w-64 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Search components..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-1.5 text-sm text-on-surface-variant">search</span>
+</div>
+<button class="material-symbols-outlined text-[#E5E2E1]/70 hover:text-[#00E5FF] transition-colors">notifications</button>
+<button class="material-symbols-outlined text-[#E5E2E1]/70 hover:text-[#00E5FF] transition-colors">settings</button>
+<div class="h-8 w-8 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant/30">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="minimalist user avatar placeholder with deep shadow and high contrast lighting profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4qsOU7zorO1y1WsS3nKQ3McxRdG_PKoEsZjGSgVR80KZhiB57VMGbXvOIXvOhptKDfLJYlKKzpaCY5bOMMx20YG3xqTXw2dIIbPmFijElDkixhkQMQ529F0BxTZ12Y6cipj7Om9MT6ZiJBSeq-KTLgMlwBm5V7cKI9CRMp1SGDzY4hLsR3pgyxOIAAxdHBR61L3aTnCpRe8z-qeaemyQ5DdVpgnjxcLub9J6D5fGeZl--nrGddZDVd_6jB7MtUp1R6hqjMQ7jPLE"/>
+</div>
+</div>
+</header>
+<!-- Toolbar (Task Required) -->
+<div class="h-12 bg-surface-container-low flex items-center justify-between px-6 border-b border-outline-variant/10">
+<div class="flex items-center gap-4 text-xs font-mono">
+<button class="flex items-center gap-2 text-primary-fixed-dim hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">grid_view</span>
+                        View diagram
+                    </button>
+<div class="h-4 w-[1px] bg-outline-variant/30"></div>
+<button class="flex items-center gap-2 text-on-surface/60 hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-sm">folder</span>
+                        All flows
+                    </button>
+</div>
+<button class="flex items-center gap-2 bg-surface-container-highest/50 px-3 py-1.5 rounded text-[10px] uppercase tracking-widest text-on-surface/70 hover:bg-surface-container-highest transition-all active:scale-95">
+<span class="material-symbols-outlined text-xs">refresh</span>
+                    Refresh
+                </button>
+</div>
+<!-- Canvas Workspace -->
+<div class="flex-1 relative canvas-grid overflow-auto cursor-grab active:cursor-grabbing">
+<!-- Flow Diagram Nodes -->
+<!-- System Node -->
+<div class="absolute top-24 left-24 w-64 surface-container-highest glass-panel rounded-xl border border-primary/20 shadow-2xl p-4 group">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-fixed-dim animate-pulse"></span>
+<span class="text-xs font-mono font-bold tracking-tight text-primary">System</span>
+</div>
+<span class="material-symbols-outlined text-sm text-on-surface-variant">settings_system_daydream</span>
+</div>
+<div class="space-y-2">
+<div class="bg-surface-container-lowest/50 p-2 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] text-on-surface-variant font-mono uppercase">Trigger</div>
+<div class="text-xs font-medium">On Deployment Success</div>
+</div>
+</div>
+<div class="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-primary rounded-full border-4 border-surface shadow-lg cursor-crosshair"></div>
+<!-- Tooltip Meta -->
+<div class="absolute -top-10 left-0 bg-surface-container-lowest text-[10px] px-2 py-1 rounded border border-outline-variant/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Execution: <span class="text-primary-fixed-dim">342ms</span> | Status: <span class="text-green-400 uppercase">Active</span>
+</div>
+</div>
+<!-- LLM Node (Selected) -->
+<div class="absolute top-48 left-[45%] w-72 bg-surface-container-high rounded-xl border-2 border-primary shadow-[0_0_30px_rgba(0,229,255,0.15)] p-5 z-20 group">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#cdbdff]"></span>
+<span class="text-xs font-mono font-bold tracking-tight text-on-surface">LLM Process</span>
+</div>
+<span class="material-symbols-outlined text-sm text-secondary">psychology</span>
+</div>
+<div class="space-y-3">
+<div class="bg-surface-container-lowest p-3 rounded-lg border border-primary/10">
+<div class="text-[10px] text-secondary font-mono uppercase mb-1">Model</div>
+<div class="text-xs font-mono">gemini-2.5-flash-lite</div>
+</div>
+<div class="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] text-on-surface-variant font-mono uppercase mb-1">Instruction</div>
+<div class="text-xs italic text-on-surface/80 truncate">Analyze architectural patterns from current workspace nodes...</div>
+</div>
+</div>
+<!-- Input/Output Pins -->
+<div class="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-secondary rounded-full border-4 border-surface shadow-lg"></div>
+<div class="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-secondary rounded-full border-4 border-surface shadow-lg cursor-crosshair"></div>
+<!-- Selected Highlight Glow -->
+<div class="absolute inset-0 border border-primary/30 rounded-xl pointer-events-none"></div>
+</div>
+<!-- User Node -->
+<div class="absolute bottom-40 left-32 w-64 glass-panel rounded-xl border border-outline-variant/20 shadow-xl p-4 opacity-80 hover:opacity-100 transition-opacity">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary-container"></span>
+<span class="text-xs font-mono font-bold tracking-tight text-on-surface">User Input</span>
+</div>
+<span class="material-symbols-outlined text-sm text-on-surface-variant">person_search</span>
+</div>
+<div class="bg-surface-container-lowest/50 p-2 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] text-on-surface-variant font-mono uppercase">Query</div>
+<div class="text-xs font-medium">"Optimize node distribution"</div>
+</div>
+<div class="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-tertiary-container rounded-full border-4 border-surface shadow-lg"></div>
+</div>
+<!-- SVG Connections (Visual Representation) -->
+<svg class="absolute inset-0 pointer-events-none h-full w-full">
+<defs>
+<filter id="glow">
+<fegaussianblur result="coloredBlur" stddeviation="2"></fegaussianblur>
+<femerge>
+<femergenode in="coloredBlur"></femergenode>
+<femergenode in="SourceGraphic"></femergenode>
+</femerge>
+</filter>
+</defs>
+<!-- Connection Line 1 -->
+<path d="M 312 128 C 450 128, 450 240, 648 240" fill="none" filter="url(#glow)" opacity="0.4" stroke="#00E5FF" stroke-width="2"></path>
+<!-- Connection Line 2 -->
+<path d="M 344 600 C 500 600, 500 240, 648 240" fill="none" opacity="0.3" stroke="#CDDBFF" stroke-dasharray="4 4" stroke-width="2"></path>
+</svg>
+<!-- Footer Action (Task Required) -->
+<div class="absolute bottom-8 left-8 z-30">
+<button class="bg-primary text-on-primary px-6 py-3 rounded-full font-bold flex items-center gap-3 shadow-[0_10px_30px_rgba(0,218,243,0.3)] hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined">auto_fix</span>
+                        Save layout to studio
+                    </button>
+</div>
+</div>
+<!-- Details Panel (Configurable Details) -->
+<aside class="absolute right-0 top-0 h-full w-80 bg-surface-container-low border-l border-outline-variant/15 flex flex-col z-40 transform translate-x-0 transition-transform shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+<div class="p-6 border-b border-outline-variant/10">
+<div class="flex items-center justify-between mb-1">
+<h2 class="text-sm font-bold tracking-tight text-on-surface">Configuration</h2>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">close</button>
+</div>
+<p class="text-[10px] font-mono text-secondary">NODE_ID: LLM_PROCESS_ALPHA_1</p>
+</div>
+<div class="flex-1 overflow-y-auto p-6 space-y-6">
+<!-- Config Section 1 -->
+<div class="space-y-4">
+<label class="block">
+<span class="text-[10px] font-mono uppercase tracking-widest text-on-surface-variant">Model Provider</span>
+<select class="mt-2 w-full bg-surface-container-lowest border border-outline-variant/20 rounded-lg text-xs p-2 text-on-surface outline-none focus:border-primary transition-colors">
+<option>Google Gemini (Vertex AI)</option>
+<option>OpenAI GPT-4o</option>
+<option>Anthropic Claude 3.5</option>
+</select>
+</label>
+<label class="block">
+<span class="text-[10px] font-mono uppercase tracking-widest text-on-surface-variant">Prompt Template</span>
+<textarea class="mt-2 w-full bg-surface-container-lowest border border-outline-variant/20 rounded-lg text-[11px] font-mono p-3 text-on-surface/90 outline-none focus:border-primary transition-colors resize-none" rows="6">You are an expert architect. Analyze the flow defined in {{context}} and suggest structural optimizations for better latency. Output JSON format.</textarea>
+</label>
+</div>
+<!-- Sliders Section -->
+<div class="space-y-6 pt-4 border-t border-outline-variant/10">
+<div class="space-y-2">
+<div class="flex justify-between text-[10px] font-mono uppercase text-on-surface-variant">
+<span>Temperature</span>
+<span class="text-primary-fixed-dim">0.7</span>
+</div>
+<input class="w-full accent-primary bg-surface-container-highest h-1.5 rounded-full appearance-none" type="range"/>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-[10px] font-mono uppercase text-on-surface-variant">
+<span>Max Tokens</span>
+<span class="text-primary-fixed-dim">4096</span>
+</div>
+<input class="w-full accent-primary bg-surface-container-highest h-1.5 rounded-full appearance-none" type="range"/>
+</div>
+</div>
+<!-- Meta -->
+<div class="bg-surface-container-highest/30 p-4 rounded-xl space-y-2 border border-outline-variant/5">
+<div class="flex justify-between text-[10px] font-mono">
+<span class="text-on-surface-variant">Avg. Latency</span>
+<span class="text-on-surface">1.4s</span>
+</div>
+<div class="flex justify-between text-[10px] font-mono">
+<span class="text-on-surface-variant">Cost / 1k Runs</span>
+<span class="text-on-surface">$0.024</span>
+</div>
+</div>
+</div>
+<div class="p-6 bg-surface-container-lowest border-t border-outline-variant/10">
+<button class="w-full bg-on-surface text-background font-bold py-3 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all text-xs uppercase tracking-widest">
+                        Apply Changes
+                    </button>
+</div>
+</aside>
+</main>
+</div>
+<!-- BottomNavBar (from JSON) -->
+<nav class="fixed bottom-0 w-full flex justify-center items-center gap-12 py-3 px-8 bg-[#131313]/80 backdrop-blur-xl font-['JetBrains_Mono'] text-[10px] uppercase docked full-width bottom-0 z-50 border-t border-[#3B494C]/15 shadow-[0_-4px_20px_rgba(0,229,255,0.05)] md:flex hidden">
+<button class="text-[#00E5FF] font-bold bg-[#00E5FF]/10 rounded-xl px-4 py-1 flex flex-col items-center gap-1 transition-all active:scale-90">
+<span class="material-symbols-outlined">play_arrow</span>
+<span>Run Flow</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] hover:bg-[#353534] transition-all">
+<span class="material-symbols-outlined">save</span>
+<span>Save</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] hover:bg-[#353534] transition-all">
+<span class="material-symbols-outlined">terminal</span>
+<span>Terminal</span>
+</button>
+<button class="text-[#E5E2E1]/40 flex flex-col items-center gap-1 hover:text-[#00E5FF] hover:bg-[#353534] transition-all">
+<span class="material-symbols-outlined">query_stats</span>
+<span>Metrics</span>
+</button>
+</nav>
+</body></html>

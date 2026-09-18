@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Prompt Lab | GenUI Synthesis</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#c3f5ff",
+                        "on-tertiary-container": "#6f5500",
+                        "on-tertiary-fixed": "#251a00",
+                        "on-primary": "#00363d",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-primary-fixed": "#001f24",
+                        "inverse-surface": "#e5e2e1",
+                        "error-container": "#93000a",
+                        "surface-container-highest": "#353534",
+                        "secondary-fixed": "#e8deff",
+                        "primary-fixed-dim": "#00daf3",
+                        "error": "#ffb4ab",
+                        "tertiary-container": "#fec931",
+                        "on-tertiary-fixed-variant": "#594400",
+                        "surface": "#131313",
+                        "on-secondary-fixed-variant": "#4f00d0",
+                        "on-tertiary": "#3e2e00",
+                        "on-secondary-container": "#c0acff",
+                        "surface-dim": "#131313",
+                        "primary-fixed": "#9cf0ff",
+                        "secondary-container": "#5203d5",
+                        "surface-bright": "#3a3939",
+                        "on-error": "#690005",
+                        "tertiary-fixed-dim": "#f3bf26",
+                        "outline": "#849396",
+                        "on-primary-container": "#00626e",
+                        "tertiary": "#ffeac0",
+                        "surface-tint": "#00daf3",
+                        "on-surface": "#e5e2e1",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#cdbdff",
+                        "outline-variant": "#3b494c",
+                        "on-surface-variant": "#bac9cc",
+                        "on-secondary": "#370096",
+                        "secondary-fixed-dim": "#cdbdff",
+                        "background": "#131313",
+                        "primary-container": "#00e5ff",
+                        "tertiary-fixed": "#ffdf96",
+                        "surface-variant": "#353534",
+                        "on-secondary-fixed": "#20005f",
+                        "on-primary-fixed-variant": "#004f58",
+                        "inverse-primary": "#006875",
+                        "on-background": "#e5e2e1",
+                        "surface-container": "#201f1f",
+                        "inverse-on-surface": "#313030"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(14, 14, 14, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .gradient-cta {
+            background: linear-gradient(135deg, #c3f5ff 0%, #00e5ff 100%);
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<aside class="hidden md:flex flex-col h-screen w-64 bg-[#1C1B1B] border-r border-[#3B494C]/15 font-['JetBrains_Mono'] text-sm tracking-tighter shrink-0 z-50">
+<div class="p-6 flex flex-col gap-1">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-lg" style="font-variation-settings: 'FILL' 1;">architecture</span>
+</div>
+<div>
+<div class="text-[#E5E2E1] font-bold leading-tight">Synthesis Engine</div>
+<div class="text-[#E5E2E1]/40 text-[10px] uppercase tracking-widest">v2.4.0-stable</div>
+</div>
+</div>
+<button class="mb-6 w-full py-2.5 px-4 gradient-cta rounded-md text-on-primary font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+                    New Experiment
+                </button>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="rule">rule</span>
+                        Evaluations
+                    </a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+                        Tool Registry
+                    </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-[#353534] text-[#00E5FF] border-l-4 border-[#00E5FF] font-bold transition-all duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="science">science</span>
+                        Prompt Lab
+                    </a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+                        Analytics
+                    </a>
+</nav>
+</div>
+<div class="mt-auto p-6 flex flex-col gap-1 border-t border-[#3B494C]/15">
+<a class="flex items-center gap-3 px-4 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="help">help</span>
+                    Support
+                </a>
+<a class="flex items-center gap-3 px-4 py-2 text-[#E5E2E1]/70 hover:bg-[#353534]/50 hover:text-[#E5E2E1] transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="chat_bubble">chat_bubble</span>
+                    Feedback
+                </a>
+</div>
+</aside>
+<div class="flex flex-col flex-1 overflow-hidden">
+<!-- TopAppBar (Shared Component) -->
+<header class="bg-[#131313] h-16 px-6 w-full flex justify-between items-center border-b border-[#3B494C]/15 z-40 font-['Inter'] antialiased tracking-tight">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#E5E2E1]">GenUI Synthesis</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] transition-colors duration-200" href="#">Docs</a>
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] transition-colors duration-200" href="#">API</a>
+<a class="text-[#E5E2E1]/60 font-medium hover:text-[#E5E2E1] transition-colors duration-200" href="#">Status</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<input class="bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary rounded-lg text-xs py-2 pl-10 pr-4 w-64 text-on-surface-variant" placeholder="Global search..." type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#E5E2E1]/40">search</span>
+</div>
+<button class="p-2 text-[#E5E2E1]/60 hover:bg-[#1C1B1B] rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-[#E5E2E1]/60 hover:bg-[#1C1B1B] rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant/30 ml-2">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional male portrait with neutral background and soft studio lighting, sharp focus" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbgb9Xzfmu_G8rsyTwwS4H_we-HHiMzgkOox4rfJi0m45eZ9LnCbUg1ZxNofzhFhCMWTNixDUJSvkCHdg-LUtyFkjimdQ6KWZqXYS1s2POzV6AfeyYZKzSmXuSv2Oq--yJnTyIDbpF8nQzvSbsmqX7xAGwXR51CP5ZOcajs6GaoFForWAn7TErmRqwBT-KSJoayGv_KMoEZa6voXVPuuvXu7LOBQirwgvssb-NGkT0UzQwrEI0tRYhQuDTzABTlJCOjAdxZ2BUOys"/>
+</div>
+</div>
+</header>
+<!-- Main Workspace -->
+<main class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 hide-scrollbar">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h1 class="text-3xl font-extrabold tracking-tighter text-on-surface">Prompt Lab</h1>
+<p class="text-on-surface-variant text-sm font-mono mt-1">Comparing: <span class="text-primary">Optimized_Rag_v2</span> vs <span class="text-secondary">Baseline_v1</span></p>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-high hover:bg-surface-container-highest transition-colors rounded-md text-xs font-bold border border-outline-variant/20">
+<span class="material-symbols-outlined text-sm">history</span>
+                            Version History
+                        </button>
+<button class="flex items-center gap-2 px-5 py-2 gradient-cta text-on-primary rounded-md text-sm font-black active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+                            RUN EXPERIMENT
+                        </button>
+</div>
+</div>
+<!-- Comparison Workspace (Bento Grid Style) -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
+<!-- Variant A -->
+<div class="flex flex-col gap-4">
+<div class="bg-surface-container-low rounded-xl border border-outline-variant/10 flex flex-col overflow-hidden">
+<!-- Variant Header -->
+<div class="p-4 flex items-center justify-between border-b border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_10px_rgba(0,229,255,0.5)]"></div>
+<span class="text-xs font-bold uppercase tracking-widest text-on-surface/60">Variant Alpha</span>
+</div>
+<div class="flex items-center gap-2">
+<select class="bg-surface-container-highest border-none rounded text-xs py-1 px-3 font-mono text-primary-fixed-dim focus:ring-1 focus:ring-primary">
+<option>GPT-4o-Turbo</option>
+<option>Claude-3.5-Sonnet</option>
+<option>Llama-3-70b</option>
+</select>
+</div>
+</div>
+<!-- Prompt Editor -->
+<div class="p-4 flex-1">
+<label class="text-[10px] font-mono uppercase text-on-surface-variant mb-2 block tracking-widest">System Instruction</label>
+<textarea class="w-full h-40 bg-surface-container-lowest border border-outline-variant/10 focus:border-primary/50 focus:ring-0 rounded-lg p-4 font-mono text-sm text-on-surface/80 resize-none leading-relaxed" spellcheck="false">You are a technical research assistant specialized in distributed systems. 
+
+Strictly adhere to the provided schema when generating responses. Always prioritize latency-sensitive architectures when discussing trade-offs.</textarea>
+<div class="mt-4 flex items-center justify-between">
+<span class="text-[10px] font-mono text-on-surface-variant italic">245 tokens estimated</span>
+<div class="flex gap-2">
+<button class="p-1.5 hover:bg-surface-container-highest rounded text-on-surface/40"><span class="material-symbols-outlined text-lg">content_copy</span></button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded text-on-surface/40"><span class="material-symbols-outlined text-lg">save</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Result Metrics A -->
+<div class="grid grid-cols-4 gap-3">
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Score</div>
+<div class="text-xl font-bold text-primary">94.2<span class="text-[10px] text-on-surface-variant ml-1">/100</span></div>
+</div>
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Latency</div>
+<div class="text-xl font-bold text-on-surface">1.2s</div>
+</div>
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Tokens</div>
+<div class="text-xl font-bold text-on-surface">1.4k</div>
+</div>
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Cost</div>
+<div class="text-xl font-bold text-on-surface">$0.012</div>
+</div>
+</div>
+<!-- Analysis Card A -->
+<div class="bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-4 flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<h3 class="text-xs font-bold uppercase tracking-wider text-on-surface/70">Judge Synthesis</h3>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/10 text-primary text-[10px] font-bold">OPTIMIZED</span>
+</div>
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                                High coherence with system constraints. Latency is within P95 thresholds. Response quality shows 12% improvement in factual accuracy over baseline.
+                            </p>
+<div class="flex gap-4 mt-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-[10px] font-mono text-on-surface/50">Schema Match: 100%</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-[10px] font-mono text-on-surface/50">Tonal Alignment: High</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Variant B -->
+<div class="flex flex-col gap-4">
+<div class="bg-surface-container-low rounded-xl border border-outline-variant/10 flex flex-col overflow-hidden">
+<!-- Variant Header -->
+<div class="p-4 flex items-center justify-between border-b border-outline-variant/10">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_10px_rgba(205,189,255,0.5)]"></div>
+<span class="text-xs font-bold uppercase tracking-widest text-on-surface/60">Variant Bravo</span>
+</div>
+<div class="flex items-center gap-2">
+<select class="bg-surface-container-highest border-none rounded text-xs py-1 px-3 font-mono text-secondary-fixed-dim focus:ring-1 focus:ring-secondary">
+<option>Claude-3.5-Sonnet</option>
+<option>GPT-4o-Turbo</option>
+<option>Llama-3-70b</option>
+</select>
+</div>
+</div>
+<!-- Prompt Editor -->
+<div class="p-4 flex-1">
+<label class="text-[10px] font-mono uppercase text-on-surface-variant mb-2 block tracking-widest">System Instruction</label>
+<textarea class="w-full h-40 bg-surface-container-lowest border border-outline-variant/10 focus:border-secondary/50 focus:ring-0 rounded-lg p-4 font-mono text-sm text-on-surface/80 resize-none leading-relaxed" spellcheck="false">Act as an expert in cloud computing. Explain distributed systems concepts using easy-to-understand metaphors.
+
+Always include a brief summary at the end of each response.</textarea>
+<div class="mt-4 flex items-center justify-between">
+<span class="text-[10px] font-mono text-on-surface-variant italic">120 tokens estimated</span>
+<div class="flex gap-2">
+<button class="p-1.5 hover:bg-surface-container-highest rounded text-on-surface/40"><span class="material-symbols-outlined text-lg">content_copy</span></button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded text-on-surface/40"><span class="material-symbols-outlined text-lg">save</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Result Metrics B -->
+<div class="grid grid-cols-4 gap-3">
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Score</div>
+<div class="text-xl font-bold text-secondary">78.5<span class="text-[10px] text-on-surface-variant ml-1">/100</span></div>
+</div>
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Latency</div>
+<div class="text-xl font-bold text-on-surface">0.8s</div>
+</div>
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Tokens</div>
+<div class="text-xl font-bold text-on-surface">840</div>
+</div>
+<div class="bg-surface-container-high/40 p-3 rounded-lg border border-outline-variant/5">
+<div class="text-[10px] font-mono text-on-surface-variant uppercase mb-1">Cost</div>
+<div class="text-xl font-bold text-on-surface">$0.004</div>
+</div>
+</div>
+<!-- Analysis Card B -->
+<div class="bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-4 flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<h3 class="text-xs font-bold uppercase tracking-wider text-on-surface/70">Judge Synthesis</h3>
+<span class="px-2 py-0.5 rounded-full bg-error-container/20 text-error text-[10px] font-bold">REGRESSION</span>
+</div>
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                                Metaphors occasionally obscure technical precision. Failed to adhere to the required JSON schema output in 2/5 test cases. Faster but less reliable.
+                            </p>
+<div class="flex gap-4 mt-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">error</span>
+<span class="text-[10px] font-mono text-on-surface/50">Schema Match: 60%</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">info</span>
+<span class="text-[10px] font-mono text-on-surface/50">Tonal Alignment: Medium</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Test Data Input (Bottom Docked Style) -->
+<div class="mt-auto glass-panel border border-outline-variant/20 rounded-xl p-6 relative overflow-hidden">
+<!-- Decorative background element -->
+<div class="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 blur-[100px] rounded-full pointer-events-none"></div>
+<div class="flex items-center gap-4 mb-4">
+<span class="material-symbols-outlined text-primary text-xl">database</span>
+<h2 class="text-sm font-bold uppercase tracking-widest text-on-surface">Test Input Vector</h2>
+<div class="h-px flex-1 bg-outline-variant/20 ml-2"></div>
+<button class="text-[10px] font-mono text-primary flex items-center gap-1 hover:underline">
+<span class="material-symbols-outlined text-sm">upload_file</span>
+                            Import CSV/JSON
+                        </button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div class="flex flex-col gap-2">
+<label class="text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">User Query (Input)</label>
+<div class="p-3 bg-surface-container-highest/30 rounded border border-outline-variant/10 min-h-[80px] text-sm text-on-surface font-mono">
+                                "Explain the differences between eventual consistency and strong consistency in a globally distributed key-value store like DynamoDB or Spanner."
+                            </div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col gap-2">
+<label class="text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">Expected Result (Ground Truth)</label>
+<div class="p-3 bg-surface-container-highest/30 rounded border border-outline-variant/10 min-h-[80px] text-[10px] text-on-surface-variant/70 italic leading-snug">
+                                    "Response should define CAP theorem, latency trade-offs, and specific architectural implementations of read-replicas vs synchronous replication."
+                                </div>
+</div>
+<div class="flex flex-col justify-end gap-2">
+<div class="p-4 bg-primary/5 rounded border border-primary/20 flex flex-col gap-1">
+<div class="flex justify-between text-[10px] font-mono text-primary uppercase">
+<span>Confidence</span>
+<span>89%</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[89%] shadow-[0_0_8px_rgba(0,229,255,0.8)]"></div>
+</div>
+<p class="text-[9px] text-on-surface-variant mt-2">Similarity threshold matched for vector 'Dist_Sys_Core_V4'</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>
