@@ -206,6 +206,27 @@ export const llmProfileSchema = z.object({
 });
 
 /**
+ * A direct model scratchpad (studio-consolidation Phase 8) — bypasses the
+ * graph engine entirely, chatting straight to a chosen provider/model. Not
+ * a Run: no compile step, no relation to any graph_id.
+ */
+export const chatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+  created_at: z.string(),
+});
+
+export const chatSessionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  messages: z.array(chatMessageSchema),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/**
  * Run analytics / spend estimation (studio-consolidation Phase 5 — see
  * docs/planning/features/studio-consolidation-plan.md and backend's
  * analytics.py). `estimated_usd`/token counts are rough estimates, not

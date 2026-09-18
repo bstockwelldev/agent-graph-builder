@@ -6,7 +6,9 @@ import type {
   analyticsDashboardPayloadSchema,
   analyticsGraphRowSchema,
   analyticsTotalsSchema,
+  chatMessageSchema,
   chatProviderSchema,
+  chatSessionSchema,
   compileResultSchema,
   diagnosticSchema,
   edgeKindSchema,
@@ -78,6 +80,9 @@ export type ToolDefinition = z.infer<typeof toolDefinitionSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type LlmProfile = z.infer<typeof llmProfileSchema>;
+
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type ChatSession = z.infer<typeof chatSessionSchema>;
 
 /**
  * Run analytics / spend estimation (studio-consolidation Phase 5 — see
