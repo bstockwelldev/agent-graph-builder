@@ -927,7 +927,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           Phase 4e plan's disclosed fallback: cosmetic AI Elements reuse was
           evaluated and skipped in favor of this inline-styled accordion,
           which already has the run-status semantics AI Elements doesn't. */}
-      <WorkbenchDrawer panelId="run" side="right" dockedClassName="right-4 top-24 max-h-[80vh] w-96 overflow-hidden">
+      <WorkbenchDrawer panelId="run" side="right" dockedClassName="right-4 top-24 max-h-[80vh] w-96 overflow-y-auto">
         <RunPanel
           layout="rail"
           graphId={graphId}
