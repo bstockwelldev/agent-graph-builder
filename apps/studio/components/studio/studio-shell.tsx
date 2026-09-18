@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { client } from "@/lib/api-client";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
+import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
 import { CommandPalette } from "@/components/workbench/CommandPalette";
 
 /**
@@ -124,6 +125,13 @@ export function StudioShell({
           once here so they're reachable from every route, not just the
           graph canvas. List-only; "Open full page" links to the existing
           CRUD route for editing. */}
+      {/* `h-[70vh]`, not `max-h-*` — ChatPanel's inner `h-full` flex column
+          needs a definite ancestor height to resolve against for its own
+          internal scroll region to work (the exact ambiguity flagged in the
+          Phase 8 run-panel scrolling bug fix notes). */}
+      <WorkbenchDrawer panelId="chat" side="right" dockedClassName="right-4 top-20 flex h-[70vh] w-96 flex-col overflow-hidden">
+        <ChatPanel />
+      </WorkbenchDrawer>
       <WorkbenchDrawer panelId="agents" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
         <ResourceBrowserPanel resourceClient={client.agents} title="Agents" routeHref="/agents" />
       </WorkbenchDrawer>

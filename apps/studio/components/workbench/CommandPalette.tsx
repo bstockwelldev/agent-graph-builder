@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ChatSession } from "@bstockwelldev/agent-graph-sdk";
 import {
   CommandDialog,
   CommandEmpty,
@@ -11,6 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { studioNavGroups } from "@/components/studio/studio-nav";
+import { client } from "@/lib/api-client";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels";
@@ -20,6 +22,7 @@ import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels
 // away, on every page, not just wherever a button for it happens to live.
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
   const router = useRouter();
   const workbench = useWorkbench();
 
@@ -35,6 +38,26 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Fetch the session list each time the palette opens, so "recent
+  // sessions" reflects anything created/renamed since it was last open
+  // (studio-consolidation Phase 8 part E — this group was deferred out of
+  // part B because chat sessions didn't exist yet at that point).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    client
+      .chatSessions.list()
+      .then((sessions) => {
+        if (!cancelled) setRecentSessions(sessions.slice(-5).reverse());
+      })
+      .catch(() => {
+        if (!cancelled) setRecentSessions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const goToRoute = (href: string) => {
     setOpen(false);
     router.push(href);
@@ -43,6 +66,11 @@ export function CommandPalette() {
   const openPanel = (id: WorkbenchPanelId) => {
     setOpen(false);
     workbench.open(id);
+  };
+
+  const openChatSession = (sessionId: string) => {
+    setOpen(false);
+    workbench.open("chat", { chatSessionId: sessionId });
   };
 
   const globalPanels = (Object.entries(WORKBENCH_PANELS) as [WorkbenchPanelId, (typeof WORKBENCH_PANELS)[WorkbenchPanelId]][]).filter(
@@ -70,6 +98,19 @@ export function CommandPalette() {
             </CommandItem>
           ))}
         </CommandGroup>
+        {recentSessions.length > 0 && (
+          <CommandGroup heading="Recent sessions">
+            {recentSessions.map((session) => (
+              <CommandItem
+                key={session.id}
+                value={`session-${session.id}-${session.title}`}
+                onSelect={() => openChatSession(session.id)}
+              >
+                {session.title}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   );

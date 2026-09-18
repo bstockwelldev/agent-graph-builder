@@ -12,7 +12,11 @@ import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels
 // hosted here (a single instance) rather than duplicated per consumer.
 type WorkbenchContextValue = {
   activePanel: WorkbenchPanelId | null;
-  open: (panel: WorkbenchPanelId) => void;
+  /** Opaque payload set by the caller that opened the panel (e.g. the
+   * command palette's "recent sessions" entries pass `{ chatSessionId }`
+   * so ChatPanel can preselect that session) — cleared on `close`. */
+  panelContext: unknown;
+  open: (panel: WorkbenchPanelId, context?: unknown) => void;
   close: () => void;
   toggle: (panel: WorkbenchPanelId) => void;
   isCompact: boolean;
@@ -24,10 +28,17 @@ const WorkbenchContext = createContext<WorkbenchContextValue | null>(null);
 
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const [activePanel, setActivePanel] = useState<WorkbenchPanelId | null>(null);
+  const [panelContext, setPanelContext] = useState<unknown>(null);
   const shellLayout = useShellLayout();
 
-  const open = useCallback((panel: WorkbenchPanelId) => setActivePanel(panel), []);
-  const close = useCallback(() => setActivePanel(null), []);
+  const open = useCallback((panel: WorkbenchPanelId, context?: unknown) => {
+    setActivePanel(panel);
+    setPanelContext(context ?? null);
+  }, []);
+  const close = useCallback(() => {
+    setActivePanel(null);
+    setPanelContext(null);
+  }, []);
   const toggle = useCallback(
     (panel: WorkbenchPanelId) => setActivePanel((current) => (current === panel ? null : panel)),
     [],
@@ -51,6 +62,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const value = useMemo<WorkbenchContextValue>(
     () => ({
       activePanel,
+      panelContext,
       open,
       close,
       toggle,
@@ -58,7 +70,16 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       reducedMotion: shellLayout.reducedMotion,
       drawerPanelWidth: shellLayout.drawerPanelWidth,
     }),
-    [activePanel, open, close, toggle, shellLayout.isCompact, shellLayout.reducedMotion, shellLayout.drawerPanelWidth],
+    [
+      activePanel,
+      panelContext,
+      open,
+      close,
+      toggle,
+      shellLayout.isCompact,
+      shellLayout.reducedMotion,
+      shellLayout.drawerPanelWidth,
+    ],
   );
 
   return <WorkbenchContext.Provider value={value}>{children}</WorkbenchContext.Provider>;
