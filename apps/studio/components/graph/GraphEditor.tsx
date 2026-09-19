@@ -11,6 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { HelpCircle, Play, Plus } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -59,18 +60,29 @@ import {
   watchRunCompletion,
 } from "@/lib/watchRun";
 import { useUndoStack } from "@/hooks/useUndoStack";
+import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
+import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
-import { NodePalette } from "./NodePalette";
+import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
+import { NodeContextMenu } from "./NodeContextMenu";
+import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
+import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { shell } from "@/lib/graph-theme";
+
+/** True when the viewport is wide enough for docked (non-drawer) panels. */
+function isDesktopViewport(): boolean {
+  return typeof window === "undefined" || window.innerWidth >= shell.breakpoint.compact;
+}
 
 const nodeTypes = {
   input: GraphNodeView,
@@ -153,8 +165,17 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
   const [relayoutNonce, setRelayoutNonce] = useState(0);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const workbench = useWorkbench();
+  // Default the Run panel open on desktop, matching the old playground's
+  // persistently docked Run rail; computed once at mount, not tied to live
+  // resize, so a window resize doesn't fight a user's manual toggle
+  // (studio-consolidation Phase 7). Palette/library/run are now one
+  // mutually-exclusive `activePanel` (Phase 8) rather than three
+  // independent booleans — they previously rendered at the identical
+  // top-24/left-4 position when more than one was open, an unnoticed
+  // Phase 7 overlap bug this also fixes.
   const [runSummary, setRunSummary] = useState<RunSummary | null>(null);
   const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
   const [runHistoryLoading, setRunHistoryLoading] = useState(false);
@@ -215,6 +236,34 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   useEffect(() => {
     void refreshRunHistory();
   }, [refreshRunHistory]);
+
+  useEffect(() => {
+    if (isDesktopViewport() && workbench.activePanel === null) workbench.open("run");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once at mount only, guarded above
+  }, []);
+
+  const refreshLibraryGraphs = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      setLibraryGraphs(await client.listGraphs());
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, []);
+
+  const handleGraphSwitcherOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) void refreshLibraryGraphs();
+    },
+    [refreshLibraryGraphs],
+  );
+
+  const handleLibrarySelect = useCallback(
+    (selectedGraphId: string) => {
+      if (selectedGraphId !== graphId) router.push(`/graphs/${selectedGraphId}`);
+    },
+    [graphId, router],
+  );
 
   useEffect(() => closeStream, [closeStream]);
 
@@ -449,20 +498,47 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [recordMutation, selectedEdgeId, selectedNodeId, setEdges, setNodes]);
 
   const addNode = useCallback(
-    (type: NodeType) => {
+    (type: NodeType, position?: { x: number; y: number }) => {
       recordMutation();
       const config = defaultConfig(type);
       const id = nextId(type);
       const node: Node<GraphNodeData> = {
         id,
         type,
-        position: { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
+        position: position ?? { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
         data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
       setNodes((current) => [...current, node]);
-      setPaletteOpen(false);
+      if (workbench.activePanel === "palette") workbench.close();
     },
-    [recordMutation, setNodes],
+    [recordMutation, setNodes, workbench],
+  );
+
+  // Right-click context menu (studio-consolidation Phase 7 — new scope, no
+  // equivalent existed before). Mirrors pendingConnection's {x, y} pattern.
+  const [contextMenu, setContextMenu] = useState<
+    | { kind: "node"; nodeId: string; x: number; y: number }
+    | { kind: "edge"; edgeId: string; x: number; y: number }
+    | { kind: "pane"; x: number; y: number; flowX: number; flowY: number }
+    | null
+  >(null);
+
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      const source = nodes.find((node) => node.id === nodeId);
+      if (!source) return;
+      recordMutation();
+      const id = nextId(source.data.nodeType);
+      const duplicate: Node<GraphNodeData> = {
+        ...source,
+        id,
+        selected: false,
+        position: { x: source.position.x + 40, y: source.position.y + 40 },
+        data: { ...source.data },
+      };
+      setNodes((current) => [...current, duplicate]);
+    },
+    [nodes, recordMutation, setNodes],
   );
 
   useEffect(() => {
@@ -767,8 +843,72 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const showEmptyCoach = isCoachVisible(graphId, coachDismissed, nodes, edges);
   const authoringCoachStep = coachStep(nodes, edges);
 
+  // Shared between the desktop reserved-space column and the compact
+  // floating overlay below — computed once so the two render paths don't
+  // duplicate the NodeInspector/EdgeInspector branch.
+  const inspectorContent = selectedNode ? (
+    <NodeInspector
+      graphId={graphId}
+      node={{
+        id: selectedNode.id,
+        type: selectedNode.data.nodeType,
+        position: selectedNode.position,
+        config: selectedNode.data.config,
+      }}
+      issues={diagnosticsForNode(diagnostics, selectedNode.id)}
+      outgoingEdges={routerOutgoingEdges}
+      onConfigChange={(config) => {
+        recordMutation();
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === selectedNode.id
+              ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
+              : n,
+          ),
+        );
+      }}
+      onEdgeChange={patchEdgeById}
+      onDelete={deleteSelection}
+    />
+  ) : selectedEdge ? (
+    <EdgeInspector
+      edge={{
+        id: selectedEdge.id,
+        source: selectedEdge.source,
+        target: selectedEdge.target,
+        kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
+        condition: (selectedEdge.data?.condition as string | null) ?? null,
+      }}
+      issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
+      onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}
+      onDelete={deleteSelection}
+    />
+  ) : null;
+  const showInspector = workbench.activePanel !== "run" && Boolean(selectedNode || selectedEdge);
+
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      {/* Node palette — reserved-space docked column (fixing a real reported
+          bug): a floating panel has no relation to node positions, so it
+          could — and did — render on top of live canvas nodes near its
+          screen position, blocking clicks on them. Placed first in DOM
+          order so it occupies the left side of this flex row; FlowCanvas's
+          existing ResizeObserver-driven `paneSize` effect
+          (useCanvasOrientation + runFitView) re-fits the view to whatever
+          width remains once the canvas column resizes, no extra code
+          needed here. The graph switcher used to be a sibling docked panel
+          here too (GraphLibrary) — replaced by the inline
+          GraphSwitcherCombobox in the HUD below, since picking a different
+          graph doesn't need a whole reserved column, just a popover. */}
+      <WorkbenchDrawer panelId="palette" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
+        <NodePalette onAdd={addNode} authoringEnabled />
+      </WorkbenchDrawer>
+
+      {/* Canvas column — everything that used to float directly on the
+          canvas root now floats within this narrower column instead, so it
+          shrinks along with the canvas whenever a side panel reserves
+          space, rather than continuing to span the original full width. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Floating top HUD */}
       <div className="glass-panel ghost-border absolute left-4 right-4 top-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border p-3">
         <Button
@@ -778,6 +918,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           &larr; Graphs
         </Button>
+        {!workbench.isCompact && (
+          <GraphSwitcherCombobox
+            graphs={libraryGraphs}
+            activeGraphId={graphId}
+            activeGraphName={graphName}
+            loading={libraryLoading}
+            onSelect={handleLibrarySelect}
+            onOpenChange={handleGraphSwitcherOpenChange}
+          />
+        )}
         <Input
           value={graphName}
           onChange={(e) => setGraphName(e.target.value)}
@@ -794,6 +944,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           Validation: {validationLabel}
         </Badge>
+        {/* Orientation/Add node/Run/Help hidden on compact widths — the
+            latter three duplicate the bottom mobile action bar below, and
+            hiding them here is what stops the HUD from wrapping to 3-4 rows
+            and covering canvas nodes on narrow viewports (the same overlap
+            bug already fixed for the docked side panels, but on mobile it
+            was this HUD, not a side panel, causing it). */}
+        {!workbench.isCompact && (
         <div className="ml-auto flex items-center gap-2">
           <OrientationControl
             value={graphOrientation}
@@ -806,108 +963,32 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               setRelayoutNonce((v) => v + 1);
             }}
           />
-          <Button variant="outline" size="sm" onClick={() => setPaletteOpen((open) => !open)}>
-            {paletteOpen ? "Close palette" : "Add node"}
+          <Button variant="outline" size="sm" onClick={() => workbench.toggle("palette")}>
+            {workbench.activePanel === "palette" ? "Close palette" : "Add node"}
           </Button>
           <Button
-            variant={runPanelOpen ? "synth" : "outline"}
+            variant={workbench.activePanel === "run" ? "synth" : "outline"}
             size="sm"
-            onClick={() => setRunPanelOpen((open) => !open)}
+            onClick={() => workbench.toggle("run")}
           >
-            {runPanelOpen ? "Close run" : "Run"}
+            {workbench.activePanel === "run" ? "Close run" : "Run"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Shortcuts and gestures"
+            title="Shortcuts and gestures (?)"
+            onClick={() => workbench.toggle("help")}
+          >
+            <HelpCircle className="size-4" />
           </Button>
         </div>
+        )}
       </div>
 
       {saveError && (
         <div className="glass-panel ring-destructive/30 absolute left-4 top-20 z-20 max-w-sm rounded-lg p-3 ring-1">
           <p className="text-destructive text-xs">{saveError}</p>
-        </div>
-      )}
-
-      {/* Floating node palette */}
-      {paletteOpen && (
-        <div className="glass-panel ghost-border absolute left-4 top-24 z-20 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border">
-          <NodePalette onAdd={addNode} authoringEnabled />
-        </div>
-      )}
-
-      {/* Floating run panel — Execute (question/provider/Compile/Run) + Observe
-          (status/trace/events/history), restyled AGB's RunPanel.tsx per the
-          Phase 4e plan's disclosed fallback: cosmetic AI Elements reuse was
-          evaluated and skipped in favor of this inline-styled accordion,
-          which already has the run-status semantics AI Elements doesn't. */}
-      {runPanelOpen && (
-        <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[80vh] w-96 overflow-hidden rounded-2xl border">
-          <RunPanel
-            layout="rail"
-            graphId={graphId}
-            diagnostics={diagnostics}
-            diagnosticsSectionRef={diagnosticsSectionRef}
-            providerBlockMessage={providerBlockMessage}
-            inspectionRunId={inspectionRunId}
-            onExitInspection={exitInspection}
-            onCompile={handleCompile}
-            onRun={handleRun}
-            onDiagnosticClick={handleDiagnosticClick}
-            runSummary={runSummary}
-            runHistory={runHistory}
-            runHistoryLoading={runHistoryLoading}
-            compiling={compiling}
-            onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
-            events={events}
-            selectedTrace={selectedTrace}
-            selectedNodeId={selectedNodeId}
-            inspectLoadError={inspectLoadError}
-            onRetryInspect={() => {
-              const runId = lastInspectAttemptRef.current ?? inspectionRunId;
-              if (runId) void handleSelectHistoricalRun(runId);
-            }}
-          />
-        </div>
-      )}
-
-      {/* Floating inspector */}
-      {!runPanelOpen && (selectedNode || selectedEdge) && (
-        <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
-          {selectedNode ? (
-            <NodeInspector
-              graphId={graphId}
-              node={{
-                id: selectedNode.id,
-                type: selectedNode.data.nodeType,
-                position: selectedNode.position,
-                config: selectedNode.data.config,
-              }}
-              issues={diagnosticsForNode(diagnostics, selectedNode.id)}
-              outgoingEdges={routerOutgoingEdges}
-              onConfigChange={(config) => {
-                recordMutation();
-                setNodes((nds) =>
-                  nds.map((n) =>
-                    n.id === selectedNode.id
-                      ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
-                      : n,
-                  ),
-                );
-              }}
-              onEdgeChange={patchEdgeById}
-              onDelete={deleteSelection}
-            />
-          ) : selectedEdge ? (
-            <EdgeInspector
-              edge={{
-                id: selectedEdge.id,
-                source: selectedEdge.source,
-                target: selectedEdge.target,
-                kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
-                condition: (selectedEdge.data?.condition as string | null) ?? null,
-              }}
-              issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
-              onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}
-              onDelete={deleteSelection}
-            />
-          ) : null}
         </div>
       )}
 
@@ -953,17 +1034,30 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onNodeClick={(nodeId) => {
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
-            setPaletteOpen(false);
+            if (workbench.activePanel === "palette") workbench.close();
           }}
           onEdgeClick={(edgeId) => {
             setSelectedEdgeId(edgeId);
             setSelectedNodeId(null);
-            setPaletteOpen(false);
+            if (workbench.activePanel === "palette") workbench.close();
           }}
           onPaneClick={() => {
             setPendingConnection(null);
             setSelectedNodeId(null);
             setSelectedEdgeId(null);
+          }}
+          onNodeContextMenu={(nodeId, x, y) => {
+            setSelectedNodeId(nodeId);
+            setSelectedEdgeId(null);
+            setContextMenu({ kind: "node", nodeId, x, y });
+          }}
+          onEdgeContextMenu={(edgeId, x, y) => {
+            setSelectedEdgeId(edgeId);
+            setSelectedNodeId(null);
+            setContextMenu({ kind: "edge", edgeId, x, y });
+          }}
+          onPaneContextMenu={(x, y, flowX, flowY) => {
+            setContextMenu({ kind: "pane", x, y, flowX, flowY });
           }}
         />
       </div>
@@ -976,6 +1070,115 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onConfirm={confirmPendingConnection}
           onCancel={() => setPendingConnection(null)}
         />
+      )}
+
+      {contextMenu && (
+        <NodeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          title={
+            contextMenu.kind === "node"
+              ? "Node"
+              : contextMenu.kind === "edge"
+                ? "Edge"
+                : "Add node"
+          }
+          actions={
+            contextMenu.kind === "node"
+              ? [
+                  { label: "Duplicate node", onClick: () => duplicateNode(contextMenu.nodeId) },
+                  { label: "Delete node", onClick: deleteSelection, tone: "destructive" },
+                ]
+              : contextMenu.kind === "edge"
+                ? [{ label: "Delete edge", onClick: deleteSelection, tone: "destructive" }]
+                : NODE_TYPES_FOR_CONTEXT_MENU.map((type) => ({
+                    label: NODE_TYPE_TAXONOMY[type].title,
+                    onClick: () => addNode(type, { x: contextMenu.flowX, y: contextMenu.flowY }),
+                  }))
+          }
+        />
+      )}
+
+      {/* Bottom mobile action bar — the top HUD's buttons are reachable at
+          compact widths too (it wraps), but a thumb-reachable bottom bar is
+          the more usable mobile pattern for the four most-used actions.
+          Compact-only: at desktop widths these same actions already have
+          dedicated HUD buttons plus hotkeys/palette entries. */}
+      {workbench.isCompact && (
+        <div className="glass-panel ghost-border absolute inset-x-4 bottom-4 z-20 flex items-center justify-around rounded-2xl border p-2">
+          <GraphSwitcherCombobox
+            graphs={libraryGraphs}
+            activeGraphId={graphId}
+            loading={libraryLoading}
+            iconOnly
+            openDirection="up"
+            onSelect={handleLibrarySelect}
+            onOpenChange={handleGraphSwitcherOpenChange}
+          />
+          <Button
+            variant={workbench.activePanel === "palette" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Add node"
+            onClick={() => workbench.toggle("palette")}
+          >
+            <Plus className="size-4" />
+          </Button>
+          <Button
+            variant={workbench.activePanel === "run" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Run"
+            onClick={() => workbench.toggle("run")}
+          >
+            <Play className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label="Shortcuts and gestures" onClick={() => workbench.toggle("help")}>
+            <HelpCircle className="size-4" />
+          </Button>
+        </div>
+      )}
+      </div>
+
+      {/* Right reserved column — the run panel and the node/edge inspector
+          share this slot (already mutually exclusive via `showInspector`'s
+          `workbench.activePanel !== "run"` check), so at most one ever
+          occupies this column's width at a time. */}
+      <WorkbenchDrawer panelId="run" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <RunPanel
+          layout="rail"
+          graphId={graphId}
+          diagnostics={diagnostics}
+          diagnosticsSectionRef={diagnosticsSectionRef}
+          providerBlockMessage={providerBlockMessage}
+          inspectionRunId={inspectionRunId}
+          onExitInspection={exitInspection}
+          onCompile={handleCompile}
+          onRun={handleRun}
+          onDiagnosticClick={handleDiagnosticClick}
+          runSummary={runSummary}
+          runHistory={runHistory}
+          runHistoryLoading={runHistoryLoading}
+          compiling={compiling}
+          onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
+          events={events}
+          selectedTrace={selectedTrace}
+          selectedNodeId={selectedNodeId}
+          inspectLoadError={inspectLoadError}
+          onRetryInspect={() => {
+            const runId = lastInspectAttemptRef.current ?? inspectionRunId;
+            if (runId) void handleSelectHistoricalRun(runId);
+          }}
+        />
+      </WorkbenchDrawer>
+      {showInspector && !workbench.isCompact && (
+        <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">
+          {inspectorContent}
+        </div>
+      )}
+      {showInspector && workbench.isCompact && (
+        <div className="glass-panel ghost-border fixed right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
+          {inspectorContent}
+        </div>
       )}
     </div>
   );

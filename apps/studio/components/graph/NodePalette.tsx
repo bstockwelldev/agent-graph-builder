@@ -9,7 +9,7 @@ import { SectionHeader } from "./ui/SectionHeader";
 // All 12 types (studio-consolidation Phase 4d) — AGB's playground only ever
 // authored the original 6; the other 6 were fully executable server-side
 // since Phase 2 but had no UI path to create them until now.
-const NODE_TYPES: NodeType[] = [
+export const NODE_TYPES: NodeType[] = [
   "input",
   "prompt",
   "llm",

@@ -34,7 +34,13 @@ class AzureOpenAIChatModel:
         self.endpoint = (resolve_azure_endpoint() if endpoint is None else endpoint).rstrip("/")
         self.api_version = resolve_azure_api_version() if api_version is None else api_version
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
         if not self.api_key:
             raise ValueError(
                 "Missing Azure OpenAI API key. Set AZURE_OPENAI_API_KEY or load "
@@ -54,6 +60,8 @@ class AzureOpenAIChatModel:
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": user_prompt})
 
         async with httpx.AsyncClient(

@@ -6,7 +6,7 @@ import { StudioNav } from "./studio-nav";
 afterEach(() => cleanup());
 
 describe("StudioNav", () => {
-  it("renders the locked Build and Operate nav groups", () => {
+  it("renders the Agent Graphs, Agent Anatomy Management, and Observability & Analytics nav groups", () => {
     render(<StudioNav pathname="/graphs" />);
 
     for (const label of ["Graphs", "Agents", "Prompts", "Tools", "MCP", "LLM Profiles", "GenUI"]) {

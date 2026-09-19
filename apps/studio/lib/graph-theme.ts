@@ -135,6 +135,22 @@ export const shadow = {
   runningGlow: "0 0 10px rgba(216, 169, 44, 0.6)",
 } as const;
 
+/** #rrggbb -> "r, g, b" for building rgba() strings from a node-type accent hex. */
+function hexToRgbTriplet(hex: string): string {
+  const clean = hex.replace("#", "");
+  const value = Number.parseInt(clean, 16);
+  return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
+}
+
+/**
+ * Ambient per-type glow for graph node cards, layered under `shadow[2]`'s
+ * elevation -- mirrors micro-ui-agent-builder's step-flow-node.tsx card glow
+ * (studio-consolidation Phase 7 node-visual upgrade).
+ */
+export function nodeTypeGlow(accentHex: string): string {
+  return `0 0 28px rgba(${hexToRgbTriplet(accentHex)}, 0.22), ${shadow[2]}`;
+}
+
 // ---- Typography --------------------------------------------------------
 
 export const fontFamily = {
@@ -189,7 +205,9 @@ export const shell = {
     min: 44,
   },
   rail: {
-    library: 220,
+    /** Node palette (the one docked left-side rail left after the graph
+     * switcher became an inline combobox, no longer a reserved column). */
+    palette: 220,
     run: 340,
     inspector: 300,
   },

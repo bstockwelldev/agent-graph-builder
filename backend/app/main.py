@@ -45,7 +45,8 @@ from .models import (
     RunSummary,
 )
 from .provider_credentials import get_provider_credentials
-from .resource_models import RESOURCE_MODELS
+from .providers.base import get_chat_model
+from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
 from .spa_cache import SpaCacheControlMiddleware
 
 
@@ -226,6 +227,7 @@ _RESOURCE_ROUTE_PATHS: dict[str, str] = {
     "mcp_servers": "mcp-servers",
     "agents": "agents",
     "llm_profiles": "llm-profiles",
+    "chat_sessions": "chat-sessions",
 }
 
 
@@ -274,6 +276,39 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
 
 for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
     _register_resource_routes(_kind, _path, RESOURCE_MODELS[_kind])
+
+
+class ChatSessionMessageRequest(BaseModel):
+    content: str
+
+
+@app.post(
+    "/api/chat-sessions/{session_id}/messages",
+    name="send_chat_session_message",
+    operation_id="send_chat_session_message",
+)
+async def send_chat_session_message_route(
+    session_id: str, body: ChatSessionMessageRequest
+) -> dict[str, Any]:
+    """Not a CRUD operation, so it lives outside `_register_resource_routes`:
+    a direct model scratchpad (studio-consolidation Phase 8) -- bypasses the
+    graph engine entirely, no compile step, no relation to any graph_id."""
+    payload = storage.get_resource("chat_sessions", session_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"chat session {session_id!r} not found")
+    session = ChatSession.model_validate(payload)
+
+    history = [{"role": m.role, "content": m.content} for m in session.messages]
+    session.messages.append(ChatMessage(role="user", content=body.content))
+
+    chat_model = get_chat_model(model=session.model, provider=session.provider)
+    reply = await chat_model.generate(system_prompt=None, user_prompt=body.content, history=history)
+    session.messages.append(ChatMessage(role="assistant", content=reply))
+    session.updated_at = datetime.now(UTC)
+
+    updated_payload = session.model_dump(mode="json")
+    storage.save_resource("chat_sessions", session_id, updated_payload)
+    return updated_payload
 
 
 @app.get("/api/graphs/{graph_id}/runs")

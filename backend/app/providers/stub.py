@@ -45,7 +45,16 @@ class StubChatModel:
     def __init__(self, model: str = "stub") -> None:
         self.model = model
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
+        # No real conversational state to maintain -- the offline keyword
+        # classifier has no use for prior turns.
+        del history
         if _is_classifier_prompt(system_prompt, user_prompt):
             return "technical" if _is_technical_question(user_prompt) else "other"
         if (

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.env_config import (
@@ -86,6 +88,33 @@ async def test_google_posts_generate_content(httpx_mock) -> None:
     model = GoogleGenAIChatModel(model="gemini-2.5-flash", api_key="google-test")
     result = await model.generate(system_prompt="classify", user_prompt="database index")
     assert result == "technical"
+
+
+@pytest.mark.asyncio
+async def test_google_maps_assistant_history_role_to_model(httpx_mock) -> None:
+    httpx_mock.add_response(
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=google-test",
+        json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+    )
+
+    model = GoogleGenAIChatModel(model="gemini-2.5-flash", api_key="google-test")
+    await model.generate(
+        system_prompt=None,
+        user_prompt="and now?",
+        history=[
+            {"role": "user", "content": "first turn"},
+            {"role": "assistant", "content": "first reply"},
+        ],
+    )
+
+    request = httpx_mock.get_request()
+    assert request is not None
+    body = json.loads(request.read())
+    assert body["contents"] == [
+        {"role": "user", "parts": [{"text": "first turn"}]},
+        {"role": "model", "parts": [{"text": "first reply"}]},
+        {"role": "user", "parts": [{"text": "and now?"}]},
+    ]
 
 
 def test_factory_returns_groq_and_google() -> None:

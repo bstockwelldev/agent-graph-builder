@@ -11,6 +11,12 @@ import { StudioNavProvider } from "@/components/studio/studio-nav-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { client } from "@/lib/api-client";
+import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
+import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
+import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
+import { CommandPalette } from "@/components/workbench/CommandPalette";
+import { HelpOverlay } from "@/components/workbench/HelpOverlay";
 
 /**
  * Single-segment graph canvas route: /graphs/:id (not /graphs, not
@@ -47,7 +53,17 @@ export function StudioShell({
       <div
         className={cn(
           "bg-background text-foreground flex min-h-dvh",
-          isGraphsListPage && "h-dvh max-h-dvh min-h-0 overflow-hidden",
+          // `min-h-dvh` alone is a floor, not a ceiling — the shell root can
+          // grow taller than the viewport to fit content, which defeats
+          // every `h-full`/`flex-1`/`min-h-0`/`overflow-y-auto` pairing
+          // downstream (they all resolve against a height that's already
+          // grown past the viewport) and produces page-level scroll instead
+          // of the intended panel-internal scroll. The graphs list page
+          // already gets a hard clamp for this reason; the graph canvas
+          // route needs the identical clamp for the same reason — its
+          // docked run/palette panels and node/edge inspector all depend on
+          // a genuinely bounded ancestor height to scroll internally.
+          (isGraphsListPage || graphCanvas) && "h-dvh max-h-dvh min-h-0 overflow-hidden",
           className,
         )}
       >
@@ -57,7 +73,7 @@ export function StudioShell({
             className="bg-sidebar text-sidebar-foreground w-[17rem] border-sidebar-border gap-0 p-0"
             showCloseButton={false}
           >
-            <div className="flex min-h-dvh flex-col gap-6 px-4 py-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-6">
               <StudioNav pathname={safePathname} onNavigate={() => setMobileNavOpen(false)} />
               <StudioAuthSection />
             </div>
@@ -115,6 +131,35 @@ export function StudioShell({
           </main>
         </div>
       </div>
+
+      {/* App-wide workbench panels (studio-consolidation Phase 8) — mounted
+          once here so they're reachable from every route, not just the
+          graph canvas. List-only; "Open full page" links to the existing
+          CRUD route for editing. */}
+      {/* `h-[70vh]`, not `max-h-*` — ChatPanel's inner `h-full` flex column
+          needs a definite ancestor height to resolve against for its own
+          internal scroll region to work (the exact ambiguity flagged in the
+          Phase 8 run-panel scrolling bug fix notes). */}
+      <WorkbenchDrawer panelId="chat" side="right" dockedClassName="right-4 top-20 flex h-[70vh] w-96 flex-col overflow-hidden">
+        <ChatPanel />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="agents" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.agents} title="Agents" routeHref="/agents" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="prompts" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.prompts} title="Prompts" routeHref="/prompts" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="tools" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.tools} title="Tools" routeHref="/tools" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="mcp" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.mcpServers} title="MCP Servers" routeHref="/mcp" />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="llmProfiles" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+        <ResourceBrowserPanel resourceClient={client.llmProfiles} title="LLM Profiles" routeHref="/llm-profiles" />
+      </WorkbenchDrawer>
+      <CommandPalette />
+      <HelpOverlay />
     </StudioNavProvider>
   );
 }

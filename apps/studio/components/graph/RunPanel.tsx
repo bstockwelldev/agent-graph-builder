@@ -456,6 +456,11 @@ export function RunPanel({
                 <div style={typeScale.caption}>
                   {runSummary.run_id} — <b>{runSummary.status}</b>
                 </div>
+                {(runSummary.status === "queued" || runSummary.status === "running") && (
+                  <div style={{ marginTop: spacing[2] - 2 }} aria-busy="true" aria-label="Generating result">
+                    <SkeletonBlock lines={3} gap={spacing[1]} />
+                  </div>
+                )}
                 {runSummary.status === "succeeded" && <RunResultDisplay result={runSummary.result} />}
                 {runSummary.status === "failed" && runSummary.error && (
                   <div

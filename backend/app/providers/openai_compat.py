@@ -32,10 +32,18 @@ class OpenAICompatChatModel:
         self.api_key = OPENAI_COMPAT_API_KEY if api_key is None else api_key
         self.base_url = OPENAI_COMPAT_BASE_URL if base_url is None else base_url.rstrip("/")
 
-    async def generate(self, *, system_prompt: str | None, user_prompt: str) -> str:
+    async def generate(
+        self,
+        *,
+        system_prompt: str | None,
+        user_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": user_prompt})
 
         headers = {"Content-Type": "application/json"}

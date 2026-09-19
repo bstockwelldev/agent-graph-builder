@@ -235,4 +235,33 @@
   .graph-editor-canvas-glow-success {
     animation: graph-editor-canvas-success 1.1s ease-out forwards;
   }
+
+  /* Skeleton/shimmer loading placeholder (ported from apps/playground's
+     src/index.css — the .agb-skeleton class survived the studio port via
+     apps/studio/components/graph/ui/Skeleton.tsx but this CSS did not,
+     studio-consolidation Phase 7). */
+  @keyframes agb-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  .agb-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface-container) 25%,
+      var(--surface-container-high) 50%,
+      var(--surface-container) 75%
+    );
+    background-size: 200% 100%;
+    animation: agb-shimmer 1.5s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .agb-skeleton {
+      animation: none;
+      background: var(--surface-container);
+    }
+  }
 }

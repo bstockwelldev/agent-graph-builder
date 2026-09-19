@@ -17,7 +17,7 @@ import {
 import type { CSSProperties } from "react";
 import type { CompileIssue } from "@/lib/diagnostics";
 import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
-import { color, fontFamily, localType, nodeType as nodeTypeTokens, radius, shadow, shell, spacing, status as statusColor, text } from "@/lib/graph-theme";
+import { color, fontFamily, localType, nodeType as nodeTypeTokens, nodeTypeGlow, radius, shadow, shell, spacing, status as statusColor, text } from "@/lib/graph-theme";
 
 const ICONS: Record<NodeType, LucideIcon> = {
   input: LogIn,
@@ -62,13 +62,13 @@ function truncateCaption(caption: string, max = 42): string {
 function shapeStyles(type: NodeType): CSSProperties {
   switch (type) {
     case "output":
-      return { borderRadius: 999, padding: `${spacing[3]}px ${spacing[6]}px` };
+      return { borderRadius: 999, padding: `${spacing[4]}px ${spacing[8]}px` };
     case "router":
       return {
         borderRadius: radius.sm,
         clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
-        padding: `${spacing[6]}px ${spacing[4]}px`,
-        minWidth: 130,
+        padding: `${spacing[8]}px ${spacing[6]}px`,
+        minWidth: 220,
         textAlign: "center",
       };
     case "tool":
@@ -112,13 +112,14 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
           : tokens.border;
 
   const cardStyle: CSSProperties = {
+    padding: `${spacing[4]}px`,
     ...shapeStyles(nodeData.nodeType),
-    minWidth: nodeData.nodeType === "router" ? 130 : 150,
+    minWidth: nodeData.nodeType === "router" ? 220 : 256,
     background: tokens.bg,
     border: `2px solid ${borderColor}`,
     color: text.primary,
     opacity: inspectionDimmed ? 0.35 : 1,
-    boxShadow: nodeStatus === "running" ? shadow.runningGlow : shadow.none,
+    boxShadow: nodeStatus === "running" ? shadow.runningGlow : nodeTypeGlow(tokens.accent),
     fontFamily: fontFamily.ui,
     transition: "border-color 150ms, box-shadow 150ms",
     boxSizing: "border-box",
@@ -146,10 +147,10 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
             display: "flex",
             alignItems: "center",
             justifyContent: nodeData.nodeType === "router" ? "center" : undefined,
-            gap: spacing[1],
+            gap: spacing[2],
           }}
         >
-          <Icon size={12} strokeWidth={2} color={tokens.accent} aria-hidden="true" />
+          <Icon size={16} strokeWidth={2} color={tokens.accent} aria-hidden="true" />
           <span>{nodeData.nodeType}</span>
         </div>
         <div
@@ -164,6 +165,13 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
         </div>
         {nodeStatus !== "idle" && (
           <div style={{ ...localType.micro, marginTop: spacing[1], color: statusColor[nodeStatus] }}>{nodeStatus}</div>
+        )}
+        {nodeStatus === "running" && (
+          <div
+            className="agb-skeleton"
+            aria-hidden="true"
+            style={{ marginTop: spacing[1], height: 6, width: "70%", borderRadius: radius.sm }}
+          />
         )}
         {compileIssue && (
           <div

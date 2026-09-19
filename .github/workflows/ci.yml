@@ -19,20 +19,6 @@ jobs:
       - name: Run pytest
         run: uv run pytest
 
-  playground:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: pnpm
-      - name: Install, test, and build
-        run: pnpm install --frozen-lockfile && pnpm test && pnpm run build
-
   studio:
     runs-on: ubuntu-latest
     steps:
@@ -53,6 +39,6 @@ jobs:
       - name: Typecheck
         run: pnpm --filter @bstockwelldev/agent-graph-studio run typecheck
       - name: Test
-        run: pnpm run test:studio
+        run: pnpm run test
       - name: Build
-        run: pnpm run build:studio
+        run: pnpm run build

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.providers.base import ChatProvider, get_chat_model
@@ -50,6 +52,38 @@ async def test_openai_compat_omits_auth_when_no_api_key(httpx_mock) -> None:
     request = httpx_mock.get_request()
     assert request is not None
     assert "authorization" not in request.headers
+
+
+@pytest.mark.asyncio
+async def test_openai_compat_splices_history_between_system_and_final_user_turn(
+    httpx_mock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://api.example.com/v1/chat/completions",
+        json={"choices": [{"message": {"content": "ok"}}]},
+    )
+
+    model = OpenAICompatChatModel(
+        model="gpt-4o-mini", api_key="test-key", base_url="https://api.example.com/v1"
+    )
+    await model.generate(
+        system_prompt="You are helpful.",
+        user_prompt="and now?",
+        history=[
+            {"role": "user", "content": "first turn"},
+            {"role": "assistant", "content": "first reply"},
+        ],
+    )
+
+    request = httpx_mock.get_request()
+    assert request is not None
+    body = json.loads(request.read())
+    assert body["messages"] == [
+        {"role": "system", "content": "You are helpful."},
+        {"role": "user", "content": "first turn"},
+        {"role": "assistant", "content": "first reply"},
+        {"role": "user", "content": "and now?"},
+    ]
 
 
 def test_factory_returns_openai_compat_adapter() -> None:

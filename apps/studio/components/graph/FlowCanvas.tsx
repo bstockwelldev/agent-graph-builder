@@ -51,6 +51,9 @@ type FlowCanvasProps = {
   onNodeClick: (nodeId: string) => void;
   onEdgeClick: (edgeId: string) => void;
   onPaneClick: () => void;
+  onNodeContextMenu?: (nodeId: string, x: number, y: number) => void;
+  onEdgeContextMenu?: (edgeId: string, x: number, y: number) => void;
+  onPaneContextMenu?: (x: number, y: number, flowX: number, flowY: number) => void;
   liveAnnouncement: string;
   onLiveAnnouncement: (message: string) => void;
   onClearLiveAnnouncement: () => void;
@@ -79,6 +82,9 @@ function FlowCanvasInner({
   onNodeClick,
   onEdgeClick,
   onPaneClick,
+  onNodeContextMenu,
+  onEdgeContextMenu,
+  onPaneContextMenu,
   liveAnnouncement,
   onLiveAnnouncement,
   onClearLiveAnnouncement,
@@ -239,6 +245,16 @@ function FlowCanvasInner({
         nodesConnectable={authoringEnabled}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onNodeClick(node.id)}
+        onNodeDoubleClick={(_, node) => {
+          // Double-click/double-tap a node to zoom in on just it — the one
+          // canvas gesture with no existing binding (tap selects, drag
+          // pans, pinch/scroll zooms the whole graph already).
+          void reactFlow.fitView({
+            nodes: [{ id: node.id }],
+            padding: FIT_VIEW_PADDING,
+            duration: reducedMotion ? 0 : shell.motion.drawerMs,
+          });
+        }}
         onEdgeClick={(_, edge) => onEdgeClick(edge.id)}
         onEdgeMouseEnter={(_, edge) => {
           setHoveredEdgeId(edge.id);
@@ -247,6 +263,19 @@ function FlowCanvasInner({
           setHoveredEdgeId(null);
         }}
         onPaneClick={handlePaneClick}
+        onNodeContextMenu={(event, node) => {
+          event.preventDefault();
+          onNodeContextMenu?.(node.id, event.clientX, event.clientY);
+        }}
+        onEdgeContextMenu={(event, edge) => {
+          event.preventDefault();
+          onEdgeContextMenu?.(edge.id, event.clientX, event.clientY);
+        }}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          const flowPosition = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          onPaneContextMenu?.(event.clientX, event.clientY, flowPosition.x, flowPosition.y);
+        }}
         colorMode="dark"
         style={{ width: "100%", height: "100%", background: canvas.pane }}
       >
