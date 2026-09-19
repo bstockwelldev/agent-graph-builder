@@ -31,7 +31,7 @@ from .models import (
     RunSummary,
 )
 from .nodes import EXECUTORS, ExecContext, RunPaused
-from .ports import default_output_port, project_node_output
+from .ports import default_input_port, default_output_port, project_node_output, resolve_node_input
 from .providers.base import get_chat_model, resolve_chat_provider
 from .telemetry.provider import get_server_telemetry
 from .telemetry.types import (
@@ -231,13 +231,23 @@ def _make_node_runner(node, ctx: ExecContext):
         _record_node_telemetry_success(ctx.run_id, node, trace.input)
 
         delta = dict(delta)
-        # P0 graph foundation, Slice A: project onto the node's declared
-        # output port(s) instead of writing the raw executor value directly.
-        # `{}` for resolved_inputs — Slice A's projection doesn't read it;
-        # Slice B populates it for router/branch's passthrough/decision split.
+        # P0 graph foundation: project onto the node's declared output
+        # port(s) instead of writing the raw executor value directly.
+        # `resolved_inputs` re-resolves this node's own input port(s)
+        # against the pre-executor state — a cheap dict lookup, not a
+        # recomputation of executor side effects — so router/branch's
+        # `passthrough` projection (Slice B) can carry the routed message
+        # rather than the decision dict, without threading a second return
+        # value through every `nodes.py` executor.
+        input_port = default_input_port(node)
+        resolved_inputs = (
+            {input_port.id: resolve_node_input(node, input_port.id, state, ctx.graph)}
+            if input_port
+            else {}
+        )
         delta["node_outputs"] = {
             **delta.get("node_outputs", {}),
-            node.id: project_node_output(node, {}, output),
+            node.id: project_node_output(node, resolved_inputs, output),
         }
         _merge_into_snapshot(ctx.state_snapshot, delta)
         return delta

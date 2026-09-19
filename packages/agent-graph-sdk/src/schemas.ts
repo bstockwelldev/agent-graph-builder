@@ -116,8 +116,9 @@ export const diagnosticSchema = z.object({
   edge_id: z.string().nullish(),
   message: z.string(),
   blocking: z.boolean(),
-  // P0 graph foundation, Slice A: optional fields for Slice B's
-  // contract/capability diagnostics; nothing populates them yet.
+  // P0 graph foundation: optional fields populated by Slice B's contract
+  // pass (backend/app/contracts.py) — category/port_id on every contract
+  // diagnostic; target is reserved for Slice C/D's capability pass.
   category: z.enum(["structure", "contract", "policy", "capability"]).nullish(),
   port_id: z.string().nullish(),
   target: z.enum(["langgraph"]).nullish(),

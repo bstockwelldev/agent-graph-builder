@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentProfileSchema,
   chatSessionSchema,
+  diagnosticSchema,
   edgeTransformSchema,
   graphDefinitionSchema,
   graphEdgeSchema,
@@ -115,6 +116,61 @@ describe("graphNodeSchema / graphEdgeSchema (Slice A port/contract fields)", () 
 
   it("accepts an edge transform with only the required type field", () => {
     expect(edgeTransformSchema.safeParse({ type: "coerce" }).success).toBe(true);
+  });
+});
+
+// P0 graph foundation, Slice B (docs/planning/features/p0-graph-foundation-design-plan.md):
+// backend/app/contracts.py populates category/port_id on real diagnostics —
+// this locks the SDK's already-existing (Slice A) schema against the exact
+// shapes the contract pass now emits.
+describe("diagnosticSchema (Slice B contract diagnostics)", () => {
+  it("parses a blocking contract diagnostic with category and port_id", () => {
+    const diagnostic = {
+      severity: "error",
+      code: "EDGE_CONTRACT_KIND_INCOMPATIBLE",
+      node_id: "n2",
+      edge_id: "e1",
+      port_id: "input",
+      message: "incompatible port kinds",
+      blocking: true,
+      category: "contract",
+    };
+    expect(diagnosticSchema.safeParse(diagnostic).success).toBe(true);
+  });
+
+  it("parses a non-blocking inferred-mismatch warning", () => {
+    const diagnostic = {
+      severity: "warning",
+      code: "CONTRACT_KIND_INFERRED_MISMATCH",
+      node_id: "n2",
+      edge_id: "e1",
+      port_id: "input",
+      message: "inferred contract mismatch",
+      blocking: false,
+      category: "contract",
+    };
+    expect(diagnosticSchema.safeParse(diagnostic).success).toBe(true);
+  });
+
+  it("still parses a legacy structural diagnostic with none of the new fields", () => {
+    const diagnostic = {
+      severity: "error",
+      code: "GRAPH_MISSING_ENTRY_NODE",
+      message: "no entry node",
+      blocking: true,
+    };
+    expect(diagnosticSchema.safeParse(diagnostic).success).toBe(true);
+  });
+
+  it("rejects an unknown category value", () => {
+    const diagnostic = {
+      severity: "error",
+      code: "X",
+      message: "x",
+      blocking: true,
+      category: "not_a_category",
+    };
+    expect(diagnosticSchema.safeParse(diagnostic).success).toBe(false);
   });
 });
 

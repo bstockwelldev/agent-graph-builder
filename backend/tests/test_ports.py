@@ -1,4 +1,5 @@
-"""P0 graph foundation, Slice A: port catalog + resolution/projection layer."""
+"""P0 graph foundation: port catalog + resolution/projection layer
+(Slice A base, Slice B router/branch passthrough/decision wiring)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,8 @@ from app.models import GraphPort, NodeType, PortContract, PortKind
 from app.ports import (
     default_input_port,
     default_output_port,
+    find_input_port,
+    find_output_port,
     project_node_output,
     resolve_node_input,
 )
@@ -70,8 +73,15 @@ def test_output_node_has_no_output_port() -> None:
 def test_resolve_node_input_matches_old_get_upstream_output() -> None:
     graph = build_demo_graph()
     # Simulate every node having already produced a value, in the new
-    # port-keyed shape.
-    state = {"node_outputs": {n.id: {"output": f"value-from-{n.id}"} for n in graph.nodes}}
+    # port-keyed shape, under each node's own default output port id
+    # (router/branch's is "passthrough" since Slice B, not "output").
+    state = {
+        "node_outputs": {
+            n.id: {default_output_port(n).id: f"value-from-{n.id}"}
+            for n in graph.nodes
+            if default_output_port(n) is not None
+        }
+    }
     old_state = {"node_outputs": {n.id: f"value-from-{n.id}" for n in graph.nodes}}
 
     for node in graph.nodes:
@@ -90,7 +100,50 @@ def test_resolve_node_input_returns_empty_string_when_nothing_upstream_yet() -> 
     assert value == ""
 
 
-@pytest.mark.parametrize("node_type", list(NodeType))
+def test_resolve_node_input_honors_explicit_source_port() -> None:
+    """Slice B: an edge with an explicit source_port reads that named port
+    instead of the source's default — e.g. an audit consumer of a router's
+    decision object rather than its routed message."""
+    graph = build_demo_graph()
+    router_node = next(n for n in graph.nodes if n.type == NodeType.ROUTER)
+    downstream = next(e.target for e in graph.edges if e.source == router_node.id)
+    downstream_node = next(n for n in graph.nodes if n.id == downstream)
+    rewired = graph.model_copy(
+        update={
+            "edges": [
+                e.model_copy(update={"source_port": "decision"}) if e.target == downstream else e
+                for e in graph.edges
+            ]
+        }
+    )
+    state = {
+        "node_outputs": {
+            router_node.id: {"passthrough": "the message", "decision": {"classification": "x"}}
+        }
+    }
+    value = resolve_node_input(
+        downstream_node, default_input_port(downstream_node).id, state, rewired
+    )
+    assert value == {"classification": "x"}
+
+
+def test_find_input_and_output_port_by_id() -> None:
+    graph = build_demo_graph()
+    llm_node = next(n for n in graph.nodes if n.type == NodeType.LLM)
+    assert find_input_port(llm_node, "input") is not None
+    assert find_input_port(llm_node, "does_not_exist") is None
+    assert find_output_port(llm_node, "output") is not None
+    assert find_output_port(llm_node, "does_not_exist") is None
+
+    router_node = next(n for n in graph.nodes if n.type == NodeType.ROUTER)
+    assert find_output_port(router_node, "passthrough") is not None
+    assert find_output_port(router_node, "decision") is not None
+
+
+_ROUTER_LIKE = {NodeType.ROUTER, NodeType.BRANCH}
+
+
+@pytest.mark.parametrize("node_type", [t for t in NodeType if t not in _ROUTER_LIKE])
 def test_project_node_output_wraps_verbatim(node_type: NodeType) -> None:
     graph = build_demo_graph()
     node = next((n for n in graph.nodes if n.type == node_type), None)
@@ -111,14 +164,43 @@ def test_project_node_output_wraps_verbatim(node_type: NodeType) -> None:
         assert projected == {output_port.id: raw_output}
 
 
-def test_router_and_branch_output_is_still_single_key_in_slice_a() -> None:
-    """Guard test: Slice B splits router/branch output into passthrough +
-    decision ports. Until that lands, Slice A must keep projecting a single
-    key so it never claims a runtime guarantee it doesn't enforce."""
+@pytest.mark.parametrize("node_type", sorted(_ROUTER_LIKE, key=lambda t: t.value))
+def test_project_node_output_splits_router_like_into_passthrough_and_decision(
+    node_type: NodeType,
+) -> None:
+    """Slice B: router/branch split control (the classification/selection
+    dict) from data (the node's own resolved input, verbatim) onto two
+    named output ports — the fix for downstream nodes previously reading a
+    router's decision dict as if it were the routed message."""
+    graph = build_demo_graph()
+    node = next((n for n in graph.nodes if n.type == node_type), None)
+    if node is None:
+        from app.models import GraphNode, NodePosition
+
+        node = GraphNode(id="synthetic", type=node_type, position=NodePosition(x=0, y=0))
+    raw_output = {"classification": "technical", "rationale": "x"}
+    resolved_inputs = {"input": "the routed message"}
+
+    projected = project_node_output(node, resolved_inputs, raw_output)
+
+    assert projected == {"passthrough": "the routed message", "decision": raw_output}
+    # An edge with no explicit source_port must default to the routed
+    # message, not the decision dict.
+    assert default_output_port(node).id == "passthrough"
+
+
+def test_project_node_output_falls_back_to_single_port_for_custom_router_output_ports() -> None:
+    """An author-overridden output_ports list that doesn't use the
+    passthrough/decision ids gets Slice A's plain single-port wrap — Slice
+    B's dual projection only applies to the catalog's own port ids."""
     graph = build_demo_graph()
     router_node = next(n for n in graph.nodes if n.type == NodeType.ROUTER)
-    projected = project_node_output(
-        router_node, {}, {"classification": "technical", "rationale": "x"}
+    custom_port = GraphPort(
+        id="result", name="result", direction="output", contract=PortContract(kind=PortKind.MESSAGE)
     )
-    assert len(projected) == 1
-    assert set(projected) == {"output"}
+    overridden = router_node.model_copy(update={"output_ports": [custom_port]})
+    raw_output = {"classification": "technical"}
+
+    projected = project_node_output(overridden, {"input": "msg"}, raw_output)
+
+    assert projected == {"result": raw_output}
