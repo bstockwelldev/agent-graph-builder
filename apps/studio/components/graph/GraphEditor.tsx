@@ -11,6 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { HelpCircle, LayoutGrid, Play, Plus } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -840,8 +841,77 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const showEmptyCoach = isCoachVisible(graphId, coachDismissed, nodes, edges);
   const authoringCoachStep = coachStep(nodes, edges);
 
+  // Shared between the desktop reserved-space column and the compact
+  // floating overlay below — computed once so the two render paths don't
+  // duplicate the NodeInspector/EdgeInspector branch.
+  const inspectorContent = selectedNode ? (
+    <NodeInspector
+      graphId={graphId}
+      node={{
+        id: selectedNode.id,
+        type: selectedNode.data.nodeType,
+        position: selectedNode.position,
+        config: selectedNode.data.config,
+      }}
+      issues={diagnosticsForNode(diagnostics, selectedNode.id)}
+      outgoingEdges={routerOutgoingEdges}
+      onConfigChange={(config) => {
+        recordMutation();
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === selectedNode.id
+              ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
+              : n,
+          ),
+        );
+      }}
+      onEdgeChange={patchEdgeById}
+      onDelete={deleteSelection}
+    />
+  ) : selectedEdge ? (
+    <EdgeInspector
+      edge={{
+        id: selectedEdge.id,
+        source: selectedEdge.source,
+        target: selectedEdge.target,
+        kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
+        condition: (selectedEdge.data?.condition as string | null) ?? null,
+      }}
+      issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
+      onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}
+      onDelete={deleteSelection}
+    />
+  ) : null;
+  const showInspector = workbench.activePanel !== "run" && Boolean(selectedNode || selectedEdge);
+
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      {/* Graph library / switcher + node palette — reserved-space docked
+          columns (fixing a real reported bug): a floating panel has no
+          relation to node positions, so it could — and did — render on top
+          of live canvas nodes near its screen position, blocking clicks on
+          them. Placed first in DOM order so they occupy the left side of
+          this flex row; FlowCanvas's existing ResizeObserver-driven
+          `paneSize` effect (useCanvasOrientation + runFitView) re-fits the
+          view to whatever width remains once the canvas column resizes, no
+          extra code needed here. */}
+      <WorkbenchDrawer panelId="library" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
+        <GraphLibrary
+          graphs={libraryGraphs}
+          activeGraphId={graphId}
+          loading={libraryLoading}
+          onSelect={handleLibrarySelect}
+        />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="palette" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
+        <NodePalette onAdd={addNode} authoringEnabled />
+      </WorkbenchDrawer>
+
+      {/* Canvas column — everything that used to float directly on the
+          canvas root now floats within this narrower column instead, so it
+          shrinks along with the canvas whenever a side panel reserves
+          space, rather than continuing to span the original full width. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Floating top HUD */}
       <div className="glass-panel ghost-border absolute left-4 right-4 top-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border p-3">
         <Button
@@ -851,13 +921,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           &larr; Graphs
         </Button>
-        <Button
-          variant={workbench.activePanel === "library" ? "synth" : "outline"}
-          size="sm"
-          onClick={() => workbench.toggle("library")}
-        >
-          {workbench.activePanel === "library" ? "Close switcher" : "Switch graph"}
-        </Button>
+        {!workbench.isCompact && (
+          <Button
+            variant={workbench.activePanel === "library" ? "synth" : "outline"}
+            size="sm"
+            onClick={() => workbench.toggle("library")}
+          >
+            {workbench.activePanel === "library" ? "Close switcher" : "Switch graph"}
+          </Button>
+        )}
         <Input
           value={graphName}
           onChange={(e) => setGraphName(e.target.value)}
@@ -874,6 +946,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           Validation: {validationLabel}
         </Badge>
+        {/* Orientation/Add node/Run/Help hidden on compact widths — the
+            latter three duplicate the bottom mobile action bar below, and
+            hiding them here is what stops the HUD from wrapping to 3-4 rows
+            and covering canvas nodes on narrow viewports (the same overlap
+            bug already fixed for the docked side panels, but on mobile it
+            was this HUD, not a side panel, causing it). */}
+        {!workbench.isCompact && (
         <div className="ml-auto flex items-center gap-2">
           <OrientationControl
             value={graphOrientation}
@@ -896,106 +975,22 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           >
             {workbench.activePanel === "run" ? "Close run" : "Run"}
           </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Shortcuts and gestures"
+            title="Shortcuts and gestures (?)"
+            onClick={() => workbench.toggle("help")}
+          >
+            <HelpCircle className="size-4" />
+          </Button>
         </div>
+        )}
       </div>
 
       {saveError && (
         <div className="glass-panel ring-destructive/30 absolute left-4 top-20 z-20 max-w-sm rounded-lg p-3 ring-1">
           <p className="text-destructive text-xs">{saveError}</p>
-        </div>
-      )}
-
-      {/* Graph library / switcher — WorkbenchDrawer centralizes the
-          docked-on-desktop / drawer-at-compact-width decision that used to
-          be hand-written per panel (studio-consolidation Phase 8). */}
-      <WorkbenchDrawer panelId="library" side="left" dockedClassName="left-4 top-24 max-h-[70vh] w-72 overflow-y-auto">
-        <GraphLibrary
-          graphs={libraryGraphs}
-          activeGraphId={graphId}
-          loading={libraryLoading}
-          onSelect={handleLibrarySelect}
-        />
-      </WorkbenchDrawer>
-
-      {/* Floating node palette */}
-      <WorkbenchDrawer panelId="palette" side="left" dockedClassName="left-4 top-24 max-h-[70vh] w-72 overflow-y-auto">
-        <NodePalette onAdd={addNode} authoringEnabled />
-      </WorkbenchDrawer>
-
-      {/* Floating run panel — Execute (question/provider/Compile/Run) + Observe
-          (status/trace/events/history), restyled AGB's RunPanel.tsx per the
-          Phase 4e plan's disclosed fallback: cosmetic AI Elements reuse was
-          evaluated and skipped in favor of this inline-styled accordion,
-          which already has the run-status semantics AI Elements doesn't. */}
-      <WorkbenchDrawer panelId="run" side="right" dockedClassName="right-4 top-24 max-h-[80vh] w-96 overflow-y-auto">
-        <RunPanel
-          layout="rail"
-          graphId={graphId}
-          diagnostics={diagnostics}
-          diagnosticsSectionRef={diagnosticsSectionRef}
-          providerBlockMessage={providerBlockMessage}
-          inspectionRunId={inspectionRunId}
-          onExitInspection={exitInspection}
-          onCompile={handleCompile}
-          onRun={handleRun}
-          onDiagnosticClick={handleDiagnosticClick}
-          runSummary={runSummary}
-          runHistory={runHistory}
-          runHistoryLoading={runHistoryLoading}
-          compiling={compiling}
-          onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
-          events={events}
-          selectedTrace={selectedTrace}
-          selectedNodeId={selectedNodeId}
-          inspectLoadError={inspectLoadError}
-          onRetryInspect={() => {
-            const runId = lastInspectAttemptRef.current ?? inspectionRunId;
-            if (runId) void handleSelectHistoricalRun(runId);
-          }}
-        />
-      </WorkbenchDrawer>
-
-      {/* Floating inspector */}
-      {workbench.activePanel !== "run" && (selectedNode || selectedEdge) && (
-        <div className="glass-panel ghost-border absolute right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
-          {selectedNode ? (
-            <NodeInspector
-              graphId={graphId}
-              node={{
-                id: selectedNode.id,
-                type: selectedNode.data.nodeType,
-                position: selectedNode.position,
-                config: selectedNode.data.config,
-              }}
-              issues={diagnosticsForNode(diagnostics, selectedNode.id)}
-              outgoingEdges={routerOutgoingEdges}
-              onConfigChange={(config) => {
-                recordMutation();
-                setNodes((nds) =>
-                  nds.map((n) =>
-                    n.id === selectedNode.id
-                      ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
-                      : n,
-                  ),
-                );
-              }}
-              onEdgeChange={patchEdgeById}
-              onDelete={deleteSelection}
-            />
-          ) : selectedEdge ? (
-            <EdgeInspector
-              edge={{
-                id: selectedEdge.id,
-                source: selectedEdge.source,
-                target: selectedEdge.target,
-                kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
-                condition: (selectedEdge.data?.condition as string | null) ?? null,
-              }}
-              issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
-              onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}
-              onDelete={deleteSelection}
-            />
-          ) : null}
         </div>
       )}
 
@@ -1105,6 +1100,84 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                   }))
           }
         />
+      )}
+
+      {/* Bottom mobile action bar — the top HUD's buttons are reachable at
+          compact widths too (it wraps), but a thumb-reachable bottom bar is
+          the more usable mobile pattern for the four most-used actions.
+          Compact-only: at desktop widths these same actions already have
+          dedicated HUD buttons plus hotkeys/palette entries. */}
+      {workbench.isCompact && (
+        <div className="glass-panel ghost-border absolute inset-x-4 bottom-4 z-20 flex items-center justify-around rounded-2xl border p-2">
+          <Button
+            variant={workbench.activePanel === "library" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Switch graph"
+            onClick={() => workbench.toggle("library")}
+          >
+            <LayoutGrid className="size-4" />
+          </Button>
+          <Button
+            variant={workbench.activePanel === "palette" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Add node"
+            onClick={() => workbench.toggle("palette")}
+          >
+            <Plus className="size-4" />
+          </Button>
+          <Button
+            variant={workbench.activePanel === "run" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Run"
+            onClick={() => workbench.toggle("run")}
+          >
+            <Play className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label="Shortcuts and gestures" onClick={() => workbench.toggle("help")}>
+            <HelpCircle className="size-4" />
+          </Button>
+        </div>
+      )}
+      </div>
+
+      {/* Right reserved column — the run panel and the node/edge inspector
+          share this slot (already mutually exclusive via `showInspector`'s
+          `workbench.activePanel !== "run"` check), so at most one ever
+          occupies this column's width at a time. */}
+      <WorkbenchDrawer panelId="run" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <RunPanel
+          layout="rail"
+          graphId={graphId}
+          diagnostics={diagnostics}
+          diagnosticsSectionRef={diagnosticsSectionRef}
+          providerBlockMessage={providerBlockMessage}
+          inspectionRunId={inspectionRunId}
+          onExitInspection={exitInspection}
+          onCompile={handleCompile}
+          onRun={handleRun}
+          onDiagnosticClick={handleDiagnosticClick}
+          runSummary={runSummary}
+          runHistory={runHistory}
+          runHistoryLoading={runHistoryLoading}
+          compiling={compiling}
+          onSelectRun={(runId) => void handleSelectHistoricalRun(runId)}
+          events={events}
+          selectedTrace={selectedTrace}
+          selectedNodeId={selectedNodeId}
+          inspectLoadError={inspectLoadError}
+          onRetryInspect={() => {
+            const runId = lastInspectAttemptRef.current ?? inspectionRunId;
+            if (runId) void handleSelectHistoricalRun(runId);
+          }}
+        />
+      </WorkbenchDrawer>
+      {showInspector && !workbench.isCompact && (
+        <div className="glass-panel ghost-border h-full w-80 shrink-0 overflow-y-auto border-l">{inspectorContent}</div>
+      )}
+      {showInspector && workbench.isCompact && (
+        <div className="glass-panel ghost-border fixed right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
+          {inspectorContent}
+        </div>
       )}
     </div>
   );

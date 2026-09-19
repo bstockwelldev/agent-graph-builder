@@ -13,7 +13,8 @@ export type WorkbenchPanelId =
   | "prompts"
   | "tools"
   | "mcp"
-  | "llmProfiles";
+  | "llmProfiles"
+  | "help";
 
 // Hotkey format: "mod+shift+<key>" ("mod" = Cmd on macOS, Ctrl elsewhere).
 // Bare letters are deliberately avoided — they'd fire while a user is doing
@@ -37,6 +38,12 @@ export const WORKBENCH_PANELS: Record<
   tools: { title: "Tools", hotkey: null, scope: "global" },
   mcp: { title: "MCP", hotkey: null, scope: "global" },
   llmProfiles: { title: "LLM Profiles", hotkey: null, scope: "global" },
+  // Real hotkey is bare "?" — HelpOverlay.tsx manages that listener itself
+  // rather than going through matchesHotkey below (its shiftKey-must-match
+  // check doesn't fit a symbol that inherently requires Shift to type), so
+  // `hotkey` stays null here to avoid the generic loop silently no-op'ing
+  // on every "?" press. Still `scope: "global"` for the command palette entry.
+  help: { title: "Shortcuts & gestures", hotkey: null, scope: "global" },
 };
 
 /** Matches a KeyboardEvent against a "mod+shift+<key>"-style hotkey string. */
