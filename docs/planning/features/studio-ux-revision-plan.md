@@ -192,6 +192,16 @@ The attached plan recommended actively maintained release lines as of 2026-09-19
 
 **Repo contradiction:** the existing consolidation plan locked a Next.js 15 studio and this repo currently contains shadcn-style UI primitives rather than a MUI shell. The UX recommendations can still be applied, but component examples from the attachment should be translated into the existing studio stack unless a separate design-system migration is explicitly approved.
 
+**Verified current baseline (`apps/studio`, checked 2026-09-19):**
+
+| Dependency | Attachment recommends | Repo actually has |
+| --- | --- | --- |
+| Next.js | 16.x Active LTS | `15.5.14` (`apps/studio/package.json`) — one major behind, not yet a contradiction to fix, just a fact to plan an upgrade against. |
+| React | 19.x | `19.1.2` — already matches. |
+| Component system | MUI Core + MUI X DataGrid | `ui.shadcn.com` schema, `style: "base-nova"`, `@base-ui/react` primitives, Tailwind 4 with CSS variables (`apps/studio/components.json`) — no MUI dependency anywhere in the tree. Any component code from the attachment must be re-authored against `components/ui/*` (Button, Command, Dialog, DropdownMenu, Select, Sheet, Table, Tabs, …), not copy-pasted. |
+| Canvas | `@xyflow/react` current stable | Present and current; no contradiction. |
+| LangGraph | `@langchain/langgraph` (JS/npm) | **Real, unflagged contradiction.** The execution engine is Python `langgraph>=0.2.45` (`backend/pyproject.toml`, `backend/requirements.txt`), compiled and run server-side in `backend/app/runtime.py`. There is no JS LangGraph anywhere in this stack and none is planned — the studio is a Next.js *client* to a Python execution API, not a JS runtime host. Do not adopt `@langchain/langgraph`; keep LangGraph work scoped to the Python package and the adapter boundary in [p0-graph-foundation-design-plan.md](p0-graph-foundation-design-plan.md). |
+
 ## 12. Revision Sequence
 
 1. Collapse graph switcher into a rail + drawer.
@@ -211,5 +221,6 @@ The attached plan recommended actively maintained release lines as of 2026-09-19
 | --- | --- | --- |
 | Roadmap lists old playground shell polish as shipped but does not yet define the next Studio UX model. | The active product is now the studio, not the original playground layout. | Add Studio UX Revision as the next UX planning artifact. |
 | Consolidation plan says Phase 6 docs are pending. | README and AGENTS still describe playground-era behavior. | Update docs during Phase 6 to make studio the default surface. |
-| Attachment recommends MUI workbench components. | Current repo uses Next.js studio with local UI primitives. | Translate UX patterns into existing components before considering a component-system migration. |
+| Attachment recommends MUI workbench components. | `apps/studio` is shadcn (`style: base-nova`) + `@base-ui/react` + Tailwind 4 (`components.json`); no MUI dependency exists in the tree. | Translate UX patterns into existing components before considering a component-system migration. |
+| Attachment's dependency baseline names `@langchain/langgraph` (JS/npm). | The repo's LangGraph is the Python package (`backend/pyproject.toml`: `langgraph>=0.2.45`), compiled and run in `backend/app/runtime.py`; the studio is a Next.js client to that Python execution API, not a JS runtime host. | Do not adopt the JS package. Scope LangGraph updates to the Python version pin and the adapter boundary in `p0-graph-foundation-design-plan.md`. |
 | Existing validation and run panels are present but scoped mainly around compile/run. | The revised model requires fixture simulation, selected-node run, replay, and policy/contract views. | Roadmap these as reliability-studio capabilities, not toolbar polish. |
