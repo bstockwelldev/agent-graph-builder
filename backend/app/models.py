@@ -1,9 +1,15 @@
 """Canonical graph schema for the POC.
 
 This is a deliberately trimmed slice of the platform's canonical graph schema
-(EDD section 7): no ports/schemaRef objects, no entity version references, no
-weighted/parallel/approval edges. Enough to prove the graph-authoring and
-graph-driven-execution thesis.
+(EDD section 7): no entity version references, no weighted/parallel/approval
+edges. Enough to prove the graph-authoring and graph-driven-execution thesis.
+
+P0 graph foundation, Slice A (docs/planning/features/p0-graph-foundation-design-plan.md)
+adds `GraphPort`/`PortContract`/`EdgeTransform` as optional fields on `GraphNode`/
+`GraphEdge` — extending the existing wire shape rather than replacing it. Nothing
+yet resolves or enforces these at runtime; see backend/app/ports.py (Slice A's
+behavior-preserving default resolution/projection layer) and Slice B (contract
+validation, router/branch port wiring) for what actually reads them.
 """
 
 from __future__ import annotations
@@ -48,11 +54,62 @@ class NodePosition(BaseModel):
     y: float
 
 
+class PortKind(StrEnum):
+    """Built-in port contract vocabulary (P0 graph foundation, Slice A)."""
+
+    MESSAGE = "message"
+    STRUCTURED_JSON = "structured-json"
+    DOCUMENTS = "documents"
+    DECISION = "decision"
+    ARTIFACT = "artifact"
+    TOOL_RESULT = "tool-result"
+    APPROVAL = "approval"
+    ERROR = "error"
+
+
+class DataClassification(StrEnum):
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    CONFIDENTIAL = "confidential"
+    RESTRICTED = "restricted"
+
+
+class PortContract(BaseModel):
+    kind: PortKind
+    schema_: dict[str, Any] | None = Field(default=None, alias="schema")
+    required: bool = True
+    classification: DataClassification | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class GraphPort(BaseModel):
+    id: str
+    name: str
+    direction: Literal["input", "output"]
+    contract: PortContract
+
+
+class EdgeTransform(BaseModel):
+    """Declarative edge transform (P0 graph foundation, Slice A). Schema
+    only — no application logic exists yet; that lands with Slice B's
+    contract validation pass."""
+
+    type: Literal["select", "wrap", "format_message", "coerce"]
+    pointer: str | None = None
+    field: str | None = None
+    template: str | None = None
+    target_type: Literal["string", "number", "boolean"] | None = None
+
+
 class GraphNode(BaseModel):
     id: str
     type: NodeType
     position: NodePosition = NodePosition(x=0, y=0)
     config: dict[str, Any] = Field(default_factory=dict)
+    input_ports: list[GraphPort] | None = None
+    output_ports: list[GraphPort] | None = None
+    extensions: dict[str, Any] | None = None
 
 
 class GraphEdge(BaseModel):
@@ -63,6 +120,10 @@ class GraphEdge(BaseModel):
     # For conditional edges: matched against the nearest upstream router's
     # classification output using simple substring matching, e.g. "technical".
     condition: str | None = None
+    source_port: str | None = None
+    target_port: str | None = None
+    transform: EdgeTransform | None = None
+    extensions: dict[str, Any] | None = None
 
 
 class GraphDefinition(BaseModel):
@@ -82,6 +143,12 @@ class Diagnostic(BaseModel):
     edge_id: str | None = None
     message: str
     blocking: bool = False
+    # P0 graph foundation, Slice A: optional fields for Slice B's contract/
+    # capability diagnostics; nothing populates them yet.
+    category: Literal["structure", "contract", "policy", "capability"] | None = None
+    port_id: str | None = None
+    target: Literal["langgraph"] | None = None
+    remediation: str | None = None
 
 
 class CompileResult(BaseModel):
@@ -165,7 +232,12 @@ class RunPauseState(BaseModel):
     compiled_workflow_id: str
     paused_node_id: str
     variables: dict[str, Any] = Field(default_factory=dict)
-    node_outputs: dict[str, Any] = Field(default_factory=dict)
+    # P0 graph foundation, Slice A: port-keyed (dict[node_id, dict[port_id,
+    # value]]), matching runtime.py's RunState.node_outputs shape — must stay
+    # in lockstep with it, since this is populated straight from
+    # ctx.state_snapshot["node_outputs"] on pause and re-seeded into a
+    # resumed run's initial state.
+    node_outputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     route_decisions: list[dict[str, Any]] = Field(default_factory=list)
     provider: str | None = None
     model: str | None = None

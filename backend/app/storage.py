@@ -80,6 +80,33 @@ _SCHEMA_STATEMENTS = (
         primary key (kind, id)
     )
     """,
+    # P0 graph foundation, Slice A (docs/planning/features/p0-graph-foundation-design-plan.md):
+    # storage primitives for immutable graph releases. A dedicated
+    # release-index + release-payload pair, not an unbounded array on
+    # `graph`, so listing releases for a graph doesn't require loading every
+    # release body. No route or publish workflow writes to these yet.
+    """
+    create table if not exists graph_release_index (
+        graph_id text not null,
+        release_id text not null,
+        semantic_fingerprint text not null,
+        document_fingerprint text not null,
+        created_at text not null,
+        primary key (graph_id, release_id)
+    )
+    """,
+    """
+    create index if not exists idx_release_index_semantic
+    on graph_release_index (graph_id, semantic_fingerprint)
+    """,
+    """
+    create table if not exists graph_release_payload (
+        release_id text primary key,
+        graph_id text not null,
+        payload_json text not null,
+        created_at text not null
+    )
+    """,
 )
 
 
@@ -538,3 +565,96 @@ def delete_resource(kind: str, resource_id: str) -> bool:
             return False
         conn.execute("delete from resource where kind = ? and id = ?", (kind, resource_id))
     return True
+
+
+# ---------------------------------------------------------------------------
+# Immutable graph releases (P0 graph foundation, Slice A — see
+# docs/planning/features/p0-graph-foundation-design-plan.md). Storage
+# primitives only: nothing calls these yet, since no publish route exists
+# until Slice C. A dedicated release-index + release-payload pair (not an
+# unbounded array on `graph`) so listing a graph's releases doesn't require
+# loading every release body.
+# ---------------------------------------------------------------------------
+
+_RELEASE_PREFIX = "graph_releases/"
+_RELEASE_INDEX_PREFIX = "graph_release_index/"
+
+
+def _release_key(graph_id: str, release_id: str) -> str:
+    return f"{_RELEASE_PREFIX}{graph_id}/{release_id}.json"
+
+
+def _release_index_key(graph_id: str) -> str:
+    return f"{_RELEASE_INDEX_PREFIX}{graph_id}.json"
+
+
+def save_release(
+    release_id: str,
+    graph_id: str,
+    payload: dict[str, Any],
+    *,
+    semantic_fingerprint: str,
+    document_fingerprint: str,
+    created_at: str,
+) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_release_key(graph_id, release_id), payload)
+        index = get_release_index(graph_id)
+        index.append(
+            {
+                "release_id": release_id,
+                "semantic_fingerprint": semantic_fingerprint,
+                "document_fingerprint": document_fingerprint,
+                "created_at": created_at,
+            }
+        )
+        remote.put_json(_release_index_key(graph_id), {"releases": index})
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into graph_release_payload (release_id, graph_id, payload_json, created_at) "
+            "values (?, ?, ?, ?)",
+            (release_id, graph_id, json.dumps(payload), created_at),
+        )
+        conn.execute(
+            "insert into graph_release_index "
+            "(graph_id, release_id, semantic_fingerprint, document_fingerprint, created_at) "
+            "values (?, ?, ?, ?, ?)",
+            (graph_id, release_id, semantic_fingerprint, document_fingerprint, created_at),
+        )
+
+
+def get_release(release_id: str, graph_id: str) -> dict[str, Any] | None:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.get_json(_release_key(graph_id, release_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select payload_json from graph_release_payload where release_id = ?", (release_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return json.loads(row[0])
+
+
+def get_release_index(graph_id: str) -> list[dict[str, Any]]:
+    remote = _json_object_backend()
+    if remote is not None:
+        payload = remote.get_json(_release_index_key(graph_id))
+        return list(payload.get("releases", [])) if payload else []
+    with _connect() as conn:
+        rows = conn.execute(
+            "select release_id, semantic_fingerprint, document_fingerprint, created_at "
+            "from graph_release_index where graph_id = ? order by created_at",
+            (graph_id,),
+        ).fetchall()
+    return [
+        {
+            "release_id": row[0],
+            "semantic_fingerprint": row[1],
+            "document_fingerprint": row[2],
+            "created_at": row[3],
+        }
+        for row in rows
+    ]

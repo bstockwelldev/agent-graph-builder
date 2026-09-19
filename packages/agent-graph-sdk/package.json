@@ -24,6 +24,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@noble/hashes": "^1.8.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

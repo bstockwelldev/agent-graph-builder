@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { agentProfileSchema, chatSessionSchema, graphDefinitionSchema, runSummarySchema } from "./schemas.js";
+import {
+  agentProfileSchema,
+  chatSessionSchema,
+  edgeTransformSchema,
+  graphDefinitionSchema,
+  graphEdgeSchema,
+  graphNodeSchema,
+  graphPortSchema,
+  portContractSchema,
+  runSummarySchema,
+} from "./schemas.js";
 
 // Studio-consolidation Phase 4f: direct schema-level coverage, independent
 // of the client's jsonFetch rejection-path tests in client.test.ts.
@@ -49,6 +59,62 @@ describe("agentProfileSchema", () => {
   it("rejects a missing optional_elements array", () => {
     const agent = { id: "a1", name: "Support agent" };
     expect(agentProfileSchema.safeParse(agent).success).toBe(false);
+  });
+});
+
+// P0 graph foundation, Slice A (docs/planning/features/p0-graph-foundation-design-plan.md).
+describe("graphNodeSchema / graphEdgeSchema (Slice A port/contract fields)", () => {
+  it("still parses a legacy node/edge with none of the new fields present", () => {
+    const node = { id: "n1", type: "input", position: { x: 0, y: 0 }, config: {} };
+    const edge = { id: "e1", source: "n1", target: "n2", kind: "sequence" };
+    expect(graphNodeSchema.safeParse(node).success).toBe(true);
+    expect(graphEdgeSchema.safeParse(edge).success).toBe(true);
+  });
+
+  it("parses a node/edge with the new port/transform fields present", () => {
+    const node = {
+      id: "n1",
+      type: "llm",
+      position: { x: 0, y: 0 },
+      config: {},
+      input_ports: [{ id: "input", name: "input", direction: "input", contract: { kind: "message" } }],
+      output_ports: [{ id: "output", name: "output", direction: "output", contract: { kind: "message" } }],
+      extensions: { langgraph: {} },
+    };
+    const edge = {
+      id: "e1",
+      source: "n1",
+      target: "n2",
+      kind: "sequence",
+      source_port: "output",
+      target_port: "input",
+      transform: { type: "select", pointer: "/foo" },
+      extensions: {},
+    };
+    expect(graphNodeSchema.safeParse(node).success).toBe(true);
+    expect(graphEdgeSchema.safeParse(edge).success).toBe(true);
+  });
+
+  it("rejects a port contract with an unknown kind", () => {
+    const contract = { kind: "not_a_port_kind" };
+    expect(portContractSchema.safeParse(contract).success).toBe(false);
+  });
+
+  it("accepts a port contract with only the required kind field", () => {
+    expect(portContractSchema.safeParse({ kind: "message" }).success).toBe(true);
+  });
+
+  it("rejects a graph port with an invalid direction", () => {
+    const port = { id: "p1", name: "p1", direction: "sideways", contract: { kind: "message" } };
+    expect(graphPortSchema.safeParse(port).success).toBe(false);
+  });
+
+  it("rejects an edge transform with an unknown type", () => {
+    expect(edgeTransformSchema.safeParse({ type: "not_a_transform" }).success).toBe(false);
+  });
+
+  it("accepts an edge transform with only the required type field", () => {
+    expect(edgeTransformSchema.safeParse({ type: "coerce" }).success).toBe(true);
   });
 });
 
