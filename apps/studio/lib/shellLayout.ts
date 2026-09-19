@@ -1,7 +1,7 @@
 import { shell } from "./graph-theme";
 
 export function inspectorColumnFits(viewportWidth: number): boolean {
-  const chrome = shell.rail.library + shell.rail.run + shell.rail.inspector;
+  const chrome = shell.rail.palette + shell.rail.run + shell.rail.inspector;
   return viewportWidth - chrome >= shell.canvasMinWidth;
 }
 

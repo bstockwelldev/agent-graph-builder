@@ -53,7 +53,17 @@ export function StudioShell({
       <div
         className={cn(
           "bg-background text-foreground flex min-h-dvh",
-          isGraphsListPage && "h-dvh max-h-dvh min-h-0 overflow-hidden",
+          // `min-h-dvh` alone is a floor, not a ceiling — the shell root can
+          // grow taller than the viewport to fit content, which defeats
+          // every `h-full`/`flex-1`/`min-h-0`/`overflow-y-auto` pairing
+          // downstream (they all resolve against a height that's already
+          // grown past the viewport) and produces page-level scroll instead
+          // of the intended panel-internal scroll. The graphs list page
+          // already gets a hard clamp for this reason; the graph canvas
+          // route needs the identical clamp for the same reason — its
+          // docked run/palette panels and node/edge inspector all depend on
+          // a genuinely bounded ancestor height to scroll internally.
+          (isGraphsListPage || graphCanvas) && "h-dvh max-h-dvh min-h-0 overflow-hidden",
           className,
         )}
       >

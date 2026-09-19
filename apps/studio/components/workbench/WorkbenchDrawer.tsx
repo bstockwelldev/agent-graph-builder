@@ -65,8 +65,16 @@ export function WorkbenchDrawer({
   }
 
   if (mode === "docked-reserve") {
+    // `min-h-0` is load-bearing: as a flex item, `h-full` alone leaves
+    // `min-height: auto` (content-based), so a child's `overflow-y-auto`
+    // never actually engages — instead the panel grows to fit its content
+    // and stretches the whole flex row (including the canvas), which
+    // surfaced as page-level scroll instead of panel-internal scroll, and
+    // as the canvas viewport re-fitting to a moving pane size after a run.
     return (
-      <div className={`glass-panel ghost-border h-full shrink-0 ${className} ${dockedClassName}`}>{children}</div>
+      <div className={`glass-panel ghost-border h-full min-h-0 shrink-0 ${className} ${dockedClassName}`}>
+        {children}
+      </div>
     );
   }
 

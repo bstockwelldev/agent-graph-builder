@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { HelpCircle, LayoutGrid, Play, Plus } from "lucide-react";
+import { HelpCircle, Play, Plus } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -71,7 +71,7 @@ import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
-import { GraphLibrary } from "./GraphLibrary";
+import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -251,16 +251,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (workbench.activePanel === "library") void refreshLibraryGraphs();
-  }, [workbench.activePanel, refreshLibraryGraphs]);
+  const handleGraphSwitcherOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) void refreshLibraryGraphs();
+    },
+    [refreshLibraryGraphs],
+  );
 
   const handleLibrarySelect = useCallback(
     (selectedGraphId: string) => {
-      workbench.close();
       if (selectedGraphId !== graphId) router.push(`/graphs/${selectedGraphId}`);
     },
-    [graphId, router, workbench],
+    [graphId, router],
   );
 
   useEffect(() => closeStream, [closeStream]);
@@ -886,23 +888,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      {/* Graph library / switcher + node palette — reserved-space docked
-          columns (fixing a real reported bug): a floating panel has no
-          relation to node positions, so it could — and did — render on top
-          of live canvas nodes near its screen position, blocking clicks on
-          them. Placed first in DOM order so they occupy the left side of
-          this flex row; FlowCanvas's existing ResizeObserver-driven
-          `paneSize` effect (useCanvasOrientation + runFitView) re-fits the
-          view to whatever width remains once the canvas column resizes, no
-          extra code needed here. */}
-      <WorkbenchDrawer panelId="library" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
-        <GraphLibrary
-          graphs={libraryGraphs}
-          activeGraphId={graphId}
-          loading={libraryLoading}
-          onSelect={handleLibrarySelect}
-        />
-      </WorkbenchDrawer>
+      {/* Node palette — reserved-space docked column (fixing a real reported
+          bug): a floating panel has no relation to node positions, so it
+          could — and did — render on top of live canvas nodes near its
+          screen position, blocking clicks on them. Placed first in DOM
+          order so it occupies the left side of this flex row; FlowCanvas's
+          existing ResizeObserver-driven `paneSize` effect
+          (useCanvasOrientation + runFitView) re-fits the view to whatever
+          width remains once the canvas column resizes, no extra code
+          needed here. The graph switcher used to be a sibling docked panel
+          here too (GraphLibrary) — replaced by the inline
+          GraphSwitcherCombobox in the HUD below, since picking a different
+          graph doesn't need a whole reserved column, just a popover. */}
       <WorkbenchDrawer panelId="palette" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
         <NodePalette onAdd={addNode} authoringEnabled />
       </WorkbenchDrawer>
@@ -922,13 +919,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           &larr; Graphs
         </Button>
         {!workbench.isCompact && (
-          <Button
-            variant={workbench.activePanel === "library" ? "synth" : "outline"}
-            size="sm"
-            onClick={() => workbench.toggle("library")}
-          >
-            {workbench.activePanel === "library" ? "Close switcher" : "Switch graph"}
-          </Button>
+          <GraphSwitcherCombobox
+            graphs={libraryGraphs}
+            activeGraphId={graphId}
+            activeGraphName={graphName}
+            loading={libraryLoading}
+            onSelect={handleLibrarySelect}
+            onOpenChange={handleGraphSwitcherOpenChange}
+          />
         )}
         <Input
           value={graphName}
@@ -1109,14 +1107,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           dedicated HUD buttons plus hotkeys/palette entries. */}
       {workbench.isCompact && (
         <div className="glass-panel ghost-border absolute inset-x-4 bottom-4 z-20 flex items-center justify-around rounded-2xl border p-2">
-          <Button
-            variant={workbench.activePanel === "library" ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Switch graph"
-            onClick={() => workbench.toggle("library")}
-          >
-            <LayoutGrid className="size-4" />
-          </Button>
+          <GraphSwitcherCombobox
+            graphs={libraryGraphs}
+            activeGraphId={graphId}
+            loading={libraryLoading}
+            iconOnly
+            openDirection="up"
+            onSelect={handleLibrarySelect}
+            onOpenChange={handleGraphSwitcherOpenChange}
+          />
           <Button
             variant={workbench.activePanel === "palette" ? "synth" : "ghost"}
             size="icon-sm"
@@ -1172,7 +1171,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         />
       </WorkbenchDrawer>
       {showInspector && !workbench.isCompact && (
-        <div className="glass-panel ghost-border h-full w-80 shrink-0 overflow-y-auto border-l">{inspectorContent}</div>
+        <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">
+          {inspectorContent}
+        </div>
       )}
       {showInspector && workbench.isCompact && (
         <div className="glass-panel ghost-border fixed right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
