@@ -205,7 +205,9 @@ export const shell = {
     min: 44,
   },
   rail: {
-    library: 220,
+    /** Node palette (the one docked left-side rail left after the graph
+     * switcher became an inline combobox, no longer a reserved column). */
+    palette: 220,
     run: 340,
     inspector: 300,
   },

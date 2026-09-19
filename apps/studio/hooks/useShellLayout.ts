@@ -3,7 +3,7 @@ import { drawerPanelWidth, shouldUseInspectorDrawer } from "@/lib/shellLayout";
 import { shell } from "@/lib/graph-theme";
 
 export type ShellBreakpoint = "desktop" | "compact" | "phone";
-export type ShellDrawerName = "library" | "palette" | "run";
+export type ShellDrawerName = "palette" | "run";
 
 export function useShellLayout() {
   const [breakpoint, setBreakpoint] = useState<ShellBreakpoint>("desktop");

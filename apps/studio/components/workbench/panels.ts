@@ -5,7 +5,6 @@
 // entry, where one makes sense, is added at the call site (e.g.
 // NodeContextMenu's "Add node" actions already open the "palette" panel).
 export type WorkbenchPanelId =
-  | "library"
   | "palette"
   | "run"
   | "chat"
@@ -28,7 +27,6 @@ export const WORKBENCH_PANELS: Record<
   WorkbenchPanelId,
   { title: string; hotkey: string | null; scope: "graph" | "global" }
 > = {
-  library: { title: "Switch graph", hotkey: null, scope: "graph" },
   palette: { title: "Add node", hotkey: null, scope: "graph" },
   run: { title: "Run", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
