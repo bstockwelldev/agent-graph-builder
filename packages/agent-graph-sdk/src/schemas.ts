@@ -34,11 +34,57 @@ export const nodePositionSchema = z.object({
   y: z.number(),
 });
 
+/**
+ * P0 graph foundation, Slice A (docs/planning/features/p0-graph-foundation-design-plan.md).
+ * Optional additions to graphNodeSchema/graphEdgeSchema below — a legacy
+ * graph with none of these fields present must still parse. Nothing yet
+ * resolves or enforces these at runtime; see backend/app/ports.py.
+ */
+export const portKindSchema = z.enum([
+  "message",
+  "structured-json",
+  "documents",
+  "decision",
+  "artifact",
+  "tool-result",
+  "approval",
+  "error",
+]);
+
+export const dataClassificationSchema = z.enum(["public", "internal", "confidential", "restricted"]);
+
+export const portContractSchema = z.object({
+  kind: portKindSchema,
+  schema: z.record(z.string(), z.unknown()).optional(),
+  required: z.boolean().optional(),
+  classification: dataClassificationSchema.optional(),
+});
+
+export const graphPortSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  direction: z.enum(["input", "output"]),
+  contract: portContractSchema,
+});
+
+// Schema-only in Slice A — per-type fields (pointer/field/template/
+// target_type) are added as Slice B needs them for transform application.
+export const edgeTransformSchema = z.object({
+  type: z.enum(["select", "wrap", "format_message", "coerce"]),
+  pointer: z.string().optional(),
+  field: z.string().optional(),
+  template: z.string().optional(),
+  target_type: z.enum(["string", "number", "boolean"]).optional(),
+});
+
 export const graphNodeSchema = z.object({
   id: z.string(),
   type: nodeTypeSchema,
   position: nodePositionSchema,
   config: z.record(z.string(), z.unknown()),
+  input_ports: z.array(graphPortSchema).nullish(),
+  output_ports: z.array(graphPortSchema).nullish(),
+  extensions: z.record(z.string(), z.unknown()).nullish(),
 });
 
 export const graphEdgeSchema = z.object({
@@ -47,6 +93,10 @@ export const graphEdgeSchema = z.object({
   target: z.string(),
   kind: edgeKindSchema,
   condition: z.string().nullish(),
+  source_port: z.string().nullish(),
+  target_port: z.string().nullish(),
+  transform: edgeTransformSchema.nullish(),
+  extensions: z.record(z.string(), z.unknown()).nullish(),
 });
 
 export const graphDefinitionSchema = z.object({
@@ -66,6 +116,13 @@ export const diagnosticSchema = z.object({
   edge_id: z.string().nullish(),
   message: z.string(),
   blocking: z.boolean(),
+  // P0 graph foundation: optional fields populated by Slice B's contract
+  // pass (backend/app/contracts.py) — category/port_id on every contract
+  // diagnostic; target is reserved for Slice C/D's capability pass.
+  category: z.enum(["structure", "contract", "policy", "capability"]).nullish(),
+  port_id: z.string().nullish(),
+  target: z.enum(["langgraph"]).nullish(),
+  remediation: z.string().nullish(),
 });
 
 export const compileResultSchema = z.object({

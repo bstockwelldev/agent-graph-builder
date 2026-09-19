@@ -10,18 +10,23 @@ import type {
   chatProviderSchema,
   chatSessionSchema,
   compileResultSchema,
+  dataClassificationSchema,
   diagnosticSchema,
   edgeKindSchema,
+  edgeTransformSchema,
   graphDefinitionSchema,
   graphEdgeSchema,
   graphNodeSchema,
   graphOrientationSchema,
+  graphPortSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodePositionSchema,
   nodeTraceSchema,
   nodeTypeSchema,
   platformEventSchema,
+  portContractSchema,
+  portKindSchema,
   promptTemplateSchema,
   providerCredentialsSchema,
   providerModelCatalogSchema,
@@ -47,6 +52,17 @@ export type ChatProvider = z.infer<typeof chatProviderSchema>;
 export type NodeType = z.infer<typeof nodeTypeSchema>;
 export type EdgeKind = z.infer<typeof edgeKindSchema>;
 export type GraphOrientation = z.infer<typeof graphOrientationSchema>;
+
+/**
+ * P0 graph foundation, Slice A (docs/planning/features/p0-graph-foundation-design-plan.md).
+ * Optional on GraphNode/GraphEdge; nothing yet resolves or enforces these
+ * at runtime.
+ */
+export type PortKind = z.infer<typeof portKindSchema>;
+export type DataClassification = z.infer<typeof dataClassificationSchema>;
+export type PortContract = z.infer<typeof portContractSchema>;
+export type GraphPort = z.infer<typeof graphPortSchema>;
+export type EdgeTransform = z.infer<typeof edgeTransformSchema>;
 
 export type NodePosition = z.infer<typeof nodePositionSchema>;
 export type GraphNode = z.infer<typeof graphNodeSchema>;

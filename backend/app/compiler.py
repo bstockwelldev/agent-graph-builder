@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from . import storage
 from .builtin_tools import BUILTIN_TOOL_IDS
+from .contracts import validate_contracts
 from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
 from .node_configs import validate_node_config
 from .nodes import EXECUTORS
@@ -210,6 +211,14 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                     blocking=True,
                 )
             )
+
+    # Port/contract validation (P0 graph foundation, Slice B): port
+    # existence/direction, contract-kind compatibility, transform validity,
+    # required-input coverage, and unambiguous input binding. Structural
+    # diagnostics above (unknown source/target, cycles, etc.) already cover
+    # the cases contracts.py deliberately skips (e.g. edges into an unknown
+    # node), so there's no overlap.
+    diagnostics.extend(validate_contracts(graph))
 
     return diagnostics
 

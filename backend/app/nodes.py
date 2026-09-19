@@ -30,6 +30,7 @@ from .guardrails import check_guardrail
 from .knowledge import augment_system_with_knowledge
 from .mcp.client import call_mcp_tool
 from .models import EdgeKind, GraphDefinition, GraphNode
+from .ports import default_input_port, resolve_node_input
 from .providers.base import ChatModel
 from .resource_models import McpServerConfig, ToolDefinition
 from .rubric import analyze_prompt
@@ -116,12 +117,16 @@ def get_upstream_output(node: GraphNode, state: dict[str, Any], graph: GraphDefi
     A node can have multiple incoming edges (e.g. Output has one from each
     router branch), but only one branch executes per run, so we return the
     first source whose output is already recorded.
+
+    P0 graph foundation, Slice A: thin wrapper over `ports.resolve_node_input`
+    — this node's own default input port resolved against the new port-keyed
+    `state["node_outputs"]` shape. Kept as a wrapper, not deleted, so every
+    executor call site below is unchanged.
     """
-    candidate_sources = [e.source for e in graph.edges if e.target == node.id]
-    for source_id in candidate_sources:
-        if source_id in state["node_outputs"]:
-            return state["node_outputs"][source_id]
-    return ""
+    input_port = default_input_port(node)
+    if input_port is None:
+        return ""
+    return resolve_node_input(node, input_port.id, state, graph)
 
 
 async def compute_input(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:

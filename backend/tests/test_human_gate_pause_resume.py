@@ -106,7 +106,9 @@ async def test_human_gate_pauses_then_resumes_to_success() -> None:
     pause = get_run_pause_state(run_id)
     assert pause is not None
     assert pause.paused_node_id == "gate_1"
-    assert pause.node_outputs.get("input_1") == "hello"
+    # P0 graph foundation, Slice A: node_outputs is now port-keyed
+    # (dict[node_id, dict[port_id, value]]), was dict[node_id, value].
+    assert pause.node_outputs.get("input_1") == {"output": "hello"}
 
     traces = {t.node_id: t for t in get_run_node_traces(run_id)}
     assert traces["gate_1"].status == "paused"

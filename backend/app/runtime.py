@@ -31,6 +31,7 @@ from .models import (
     RunSummary,
 )
 from .nodes import EXECUTORS, ExecContext, RunPaused
+from .ports import default_input_port, default_output_port, project_node_output, resolve_node_input
 from .providers.base import get_chat_model, resolve_chat_provider
 from .telemetry.provider import get_server_telemetry
 from .telemetry.types import (
@@ -47,7 +48,10 @@ def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 class RunState(TypedDict, total=False):
     variables: Annotated[dict[str, Any], _merge_dicts]
-    node_outputs: Annotated[dict[str, Any], _merge_dicts]
+    # P0 graph foundation, Slice A: port-keyed (dict[node_id, dict[port_id,
+    # value]]), was dict[node_id, value]. See ports.py for the resolution/
+    # projection layer that reads/writes this shape.
+    node_outputs: Annotated[dict[str, dict[str, Any]], _merge_dicts]
     route_decisions: Annotated[list[dict[str, Any]], operator.add]
     result: Any
 
@@ -169,7 +173,14 @@ def _make_node_runner(node, ctx: ExecContext):
         # present in state["node_outputs"] *before* its own run_node call on
         # a resumed run; a fresh run always starts with an empty dict.
         if node.id in state.get("node_outputs", {}):
-            cached_output = state["node_outputs"][node.id]
+            cached_projected = state["node_outputs"][node.id]
+            # P0 graph foundation, Slice A: cached_projected is the
+            # port-keyed dict written by the original (pre-pause) run's
+            # project_node_output call, e.g. {"output": "hello"} — unwrap
+            # it back to the raw value for trace/event display, matching
+            # what the non-replayed path below shows via `_jsonable(output)`.
+            output_port = default_output_port(node)
+            cached_output = cached_projected.get(output_port.id) if output_port else None
             trace = NodeTrace(
                 node_id=node.id,
                 node_type=node.type,
@@ -185,7 +196,7 @@ def _make_node_runner(node, ctx: ExecContext):
             ctx.bus.emit(
                 "node.completed", {"output": trace.output, "replayed": True}, node_id=node.id
             )
-            delta: dict[str, Any] = {"node_outputs": {node.id: cached_output}}
+            delta: dict[str, Any] = {"node_outputs": {node.id: cached_projected}}
             _merge_into_snapshot(ctx.state_snapshot, delta)
             return delta
 
@@ -220,7 +231,24 @@ def _make_node_runner(node, ctx: ExecContext):
         _record_node_telemetry_success(ctx.run_id, node, trace.input)
 
         delta = dict(delta)
-        delta["node_outputs"] = {**delta.get("node_outputs", {}), node.id: output}
+        # P0 graph foundation: project onto the node's declared output
+        # port(s) instead of writing the raw executor value directly.
+        # `resolved_inputs` re-resolves this node's own input port(s)
+        # against the pre-executor state — a cheap dict lookup, not a
+        # recomputation of executor side effects — so router/branch's
+        # `passthrough` projection (Slice B) can carry the routed message
+        # rather than the decision dict, without threading a second return
+        # value through every `nodes.py` executor.
+        input_port = default_input_port(node)
+        resolved_inputs = (
+            {input_port.id: resolve_node_input(node, input_port.id, state, ctx.graph)}
+            if input_port
+            else {}
+        )
+        delta["node_outputs"] = {
+            **delta.get("node_outputs", {}),
+            node.id: project_node_output(node, resolved_inputs, output),
+        }
         _merge_into_snapshot(ctx.state_snapshot, delta)
         return delta
 
