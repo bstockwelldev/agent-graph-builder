@@ -166,6 +166,13 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
         {nodeStatus !== "idle" && (
           <div style={{ ...localType.micro, marginTop: spacing[1], color: statusColor[nodeStatus] }}>{nodeStatus}</div>
         )}
+        {nodeStatus === "running" && (
+          <div
+            className="agb-skeleton"
+            aria-hidden="true"
+            style={{ marginTop: spacing[1], height: 6, width: "70%", borderRadius: radius.sm }}
+          />
+        )}
         {compileIssue && (
           <div
             style={{
