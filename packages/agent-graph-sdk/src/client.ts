@@ -296,6 +296,19 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         { method: "POST", body: JSON.stringify(fixture) },
         simulateResultSchema,
       ),
+    // P1 rollout plan, Slice C ("Historical replay") — read-only
+    // re-execution of a past run's exact graph, every non-routing node's
+    // original output frozen. Same result shape as simulate — the run
+    // history UI can render either through one component. Deliberately
+    // named `replayRun`, not reusing the unrelated `"replayed"` trace-event
+    // flag human_gate resume already uses.
+    replayRun: (runId: string) =>
+      jsonFetch<SimulateResult>(
+        baseUrl,
+        `/api/runs/${runId}/replay`,
+        { method: "POST" },
+        simulateResultSchema,
+      ),
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.
     getRuntimeTargetCapabilities: (targetId: string) =>

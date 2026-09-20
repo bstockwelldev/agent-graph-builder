@@ -163,6 +163,15 @@ export function RunPanel({
   const [simulateError, setSimulateError] = useState<string | null>(null);
   const [simulateResult, setSimulateResult] = useState<SimulateResult | null>(null);
 
+  // P1 rollout plan, Slice C ("Historical replay") — fills the
+  // studio-ux-revision-plan.md "Replay run" slot. Shares SimulateResult's
+  // shape with the fixture section above (same run+traces response), but
+  // keeps its own state/result display so replaying a past run never
+  // overwrites an in-progress fixture simulation, or vice versa.
+  const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
+
   const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const summary = validationSummary(diagnostics);
@@ -283,6 +292,19 @@ export function RunPanel({
       setSimulating(false);
     }
   }, [fixtureInputText, fixtureNodeOutputsText, graphId]);
+
+  const handleReplay = useCallback(async (runId: string) => {
+    setReplayingRunId(runId);
+    setReplayError(null);
+    try {
+      const result = await client.replayRun(runId);
+      setReplayResult(result);
+    } catch (err) {
+      setReplayError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReplayingRunId(null);
+    }
+  }, []);
 
   return (
     <div style={containerStyle(layout)}>
@@ -635,35 +657,67 @@ export function RunPanel({
               runHistory.map((run) => {
                 const active = inspectionRunId ? run.run_id === inspectionRunId : runSummary?.run_id === run.run_id;
                 return (
-                  <button
-                    key={run.run_id}
-                    type="button"
-                    onClick={() => onSelectRun(run.run_id)}
-                    style={{
-                      ...historyButtonStyle,
-                      borderColor: active ? color.primary[600] : surface.borderStrong,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
-                      <span style={{ fontWeight: 600 }}>{run.status}</span>
-                      <span style={{ display: "flex", gap: spacing[1], opacity: 0.6 }}>
-                        {/* P0 graph foundation, Slice D: labels whether this
-                            run came from a published release (immune to
-                            later draft edits) or the draft as it stood at
-                            run time — design doc, "Run history: labels the
-                            release or draft snapshot used." */}
-                        {run.source === "release" && (
-                          <span title={run.graph_release_id ?? undefined}>release</span>
-                        )}
-                        {run.provider && <span>{run.provider}</span>}
-                      </span>
-                    </div>
-                    <div style={{ ...typeScale.caption, opacity: 0.75, textAlign: "left", marginTop: spacing[1] }}>
-                      {formatRunLabel(run)}
-                    </div>
-                  </button>
+                  <div key={run.run_id} style={{ marginBottom: spacing[2] }}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectRun(run.run_id)}
+                      style={{
+                        ...historyButtonStyle,
+                        marginBottom: 0,
+                        borderColor: active ? color.primary[600] : surface.borderStrong,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
+                        <span style={{ fontWeight: 600 }}>{run.status}</span>
+                        <span style={{ display: "flex", gap: spacing[1], opacity: 0.6 }}>
+                          {/* P0 graph foundation, Slice D: labels whether this
+                              run came from a published release (immune to
+                              later draft edits) or the draft as it stood at
+                              run time — design doc, "Run history: labels the
+                              release or draft snapshot used." */}
+                          {run.source === "release" && (
+                            <span title={run.graph_release_id ?? undefined}>release</span>
+                          )}
+                          {run.provider && <span>{run.provider}</span>}
+                        </span>
+                      </div>
+                      <div style={{ ...typeScale.caption, opacity: 0.75, textAlign: "left", marginTop: spacing[1] }}>
+                        {formatRunLabel(run)}
+                      </div>
+                    </button>
+                    {run.status === "succeeded" && (
+                      <Button
+                        variant="secondary"
+                        disabled={replayingRunId !== null}
+                        onClick={() => void handleReplay(run.run_id)}
+                        style={{ marginTop: spacing[1], minHeight: shell.touchTarget.min }}
+                      >
+                        {replayingRunId === run.run_id ? "Replaying…" : "Replay"}
+                      </Button>
+                    )}
+                  </div>
                 );
               })
+            )}
+            {replayError && (
+              <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
+                {replayError}
+              </div>
+            )}
+            {replayResult && (
+              <div style={{ marginTop: spacing[2] }}>
+                <div style={typeScale.caption}>
+                  Replay of node outputs, read-only — <b>{replayResult.run.status}</b>
+                </div>
+                {replayResult.traces.map((trace) => (
+                  <div
+                    key={trace.node_id}
+                    style={{ ...typeScale.caption, opacity: 0.75, marginTop: spacing[1], fontFamily: fontFamily.mono }}
+                  >
+                    {trace.node_id}: {JSON.stringify(trace.output)}
+                  </div>
+                ))}
+              </div>
             )}
           </CollapsibleSection>
         </div>

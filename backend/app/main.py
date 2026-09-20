@@ -63,6 +63,7 @@ from .releases import (
     list_releases,
     publish_release,
 )
+from .replay import ReplayBlocked, ReplayNotFound, replay_run
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
 from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
@@ -604,6 +605,25 @@ def get_run_graph_snapshot(run_id: str) -> RunGraphSnapshot:
     if payload is None:
         raise HTTPException(status_code=404, detail="run graph snapshot not found")
     return RunGraphSnapshot.model_validate(payload)
+
+
+@app.post("/api/runs/{run_id}/replay")
+async def replay_run_endpoint(run_id: str) -> SimulateResult:
+    """P1 rollout plan, Slice C ("Historical replay") — re-executes
+    `run_id`'s exact original graph read-only, with every non-routing
+    node's original output frozen. No live tool/LLM calls."""
+    try:
+        return await replay_run(run_id)
+    except ReplayNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ReplayBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "replay blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
 
 
 @app.post("/api/runs/{run_id}/resume")
