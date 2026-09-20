@@ -40,6 +40,7 @@ from .models import (
     CapabilityMatrix,
     CompileResult,
     CreateGraphRequest,
+    Fixture,
     GraphDefinition,
     GraphRelease,
     NodeTrace,
@@ -51,6 +52,7 @@ from .models import (
     RunRequest,
     RunResumeRequest,
     RunSummary,
+    SimulateResult,
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
@@ -62,6 +64,7 @@ from .releases import (
     publish_release,
 )
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
+from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
 
 
@@ -242,6 +245,46 @@ def compare_releases_endpoint(release_id: str, other_release_id: str) -> Release
         raise HTTPException(status_code=404, detail="other release not found")
 
     return compare_releases(from_release, to_release)
+
+
+@app.post("/api/graphs/{graph_id}/simulate")
+async def simulate_graph_endpoint(graph_id: str, fixture: Fixture) -> SimulateResult:
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    try:
+        return await simulate_graph(graph, fixture)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "simulation blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+
+
+@app.post("/api/graph-releases/{release_id}/simulate")
+async def simulate_release_endpoint(release_id: str, fixture: Fixture) -> SimulateResult:
+    graph_id = storage.get_release_graph_id(release_id)
+    release = get_release(release_id, graph_id) if graph_id is not None else None
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    try:
+        return await simulate_graph(
+            release.graph,
+            fixture,
+            release_resource_snapshots=release.resource_snapshots,
+            release_id=release.id,
+        )
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "simulation blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
 
 
 @app.post("/api/graph-releases/{release_id}/compile")

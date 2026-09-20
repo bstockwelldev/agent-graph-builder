@@ -357,3 +357,21 @@ class RunPauseState(BaseModel):
     provider: str | None = None
     model: str | None = None
     api_key: str | None = None
+
+
+# P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
+# stubbing"): declares a simulate request's graph input plus optional
+# per-node mocked/recorded outputs (raw executor-shaped values, not yet
+# port-projected — simulate.py projects them the same way a real run's node
+# runner would). Not persisted in this slice — the SDK/Studio pass one
+# inline per simulate call; a stored, reusable Fixture registry is a
+# natural but out-of-scope follow-on (see the P1 doc's parallel "reusable
+# entity registry" track).
+class Fixture(BaseModel):
+    input: dict[str, Any] = Field(default_factory=dict)
+    node_outputs: dict[str, Any] = Field(default_factory=dict)
+
+
+class SimulateResult(BaseModel):
+    run: RunSummary
+    traces: list[NodeTrace]

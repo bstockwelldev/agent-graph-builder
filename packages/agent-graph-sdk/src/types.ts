@@ -16,6 +16,7 @@ import type {
   diagnosticSchema,
   edgeKindSchema,
   edgeTransformSchema,
+  fixtureSchema,
   graphDefinitionSchema,
   graphEdgeSchema,
   graphNodeSchema,
@@ -41,6 +42,7 @@ import type {
   routeDecisionSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
+  simulateResultSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 
@@ -93,6 +95,10 @@ export type CapabilityMatrix = z.infer<typeof capabilityMatrixSchema>;
 // P1 rollout plan, Slice A ("Semantic release comparison").
 export type GraphElementChange = z.infer<typeof graphElementChangeSchema>;
 export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
+
+// P1 rollout plan, Slice B ("Fixture-based simulation and subgraph stubbing").
+export type Fixture = z.infer<typeof fixtureSchema>;
+export type SimulateResult = z.infer<typeof simulateResultSchema>;
 
 // "paused" was added for the `human_gate` node type (studio-consolidation
 // Phase 2): a run stopped at a human-approval checkpoint, resumable via

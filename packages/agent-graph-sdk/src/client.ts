@@ -21,6 +21,7 @@ import {
   releaseIndexEntrySchema,
   runGraphSnapshotSchema,
   runSummarySchema,
+  simulateResultSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 import type {
@@ -30,6 +31,7 @@ import type {
   ChatProvider,
   ChatSession,
   CompileResult,
+  Fixture,
   GraphDefinition,
   GraphRelease,
   LlmProfile,
@@ -44,6 +46,7 @@ import type {
   ReleaseIndexEntry,
   RunGraphSnapshot,
   RunSummary,
+  SimulateResult,
   ToolDefinition,
 } from "./types.js";
 
@@ -274,6 +277,24 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graph-releases/${releaseId}/compare/${otherReleaseId}`,
         undefined,
         releaseDiffSchema,
+      ),
+    // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
+    // stubbing") — runs the draft graph (or a published release) with no
+    // live tool/LLM calls: `fixture.node_outputs` stubs specific nodes,
+    // and the provider is always forced to "stub" server-side.
+    simulateGraph: (graphId: string, fixture: Fixture) =>
+      jsonFetch<SimulateResult>(
+        baseUrl,
+        `/api/graphs/${graphId}/simulate`,
+        { method: "POST", body: JSON.stringify(fixture) },
+        simulateResultSchema,
+      ),
+    simulateRelease: (releaseId: string, fixture: Fixture) =>
+      jsonFetch<SimulateResult>(
+        baseUrl,
+        `/api/graph-releases/${releaseId}/simulate`,
+        { method: "POST", body: JSON.stringify(fixture) },
+        simulateResultSchema,
       ),
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.

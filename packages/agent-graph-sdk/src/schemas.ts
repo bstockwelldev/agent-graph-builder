@@ -275,6 +275,22 @@ export const nodeTraceSchema = z.object({
   error: z.string().nullish(),
 });
 
+// P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
+// stubbing") — POST /api/graphs/{id}/simulate and
+// /api/graph-releases/{id}/simulate. See backend/app/simulate.py and
+// backend/app/models.py's Fixture/SimulateResult. `node_outputs` maps a
+// node id to the raw mocked/recorded value that node's executor would
+// otherwise have produced — not yet port-projected.
+export const fixtureSchema = z.object({
+  input: z.record(z.string(), z.unknown()),
+  node_outputs: z.record(z.string(), z.unknown()),
+});
+
+export const simulateResultSchema = z.object({
+  run: runSummarySchema,
+  traces: z.array(nodeTraceSchema),
+});
+
 export const providerModelOptionSchema = z.object({
   id: z.string(),
   label: z.string(),

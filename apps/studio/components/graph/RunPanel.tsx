@@ -1,5 +1,5 @@
 import type { CSSProperties, RefObject } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "@/lib/api-client";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
@@ -13,7 +13,14 @@ import {
   formatRunResult,
   resolveEventLogEvents,
 } from "@/lib/observePanel";
-import type { ChatProvider, Diagnostic, NodeTrace, PlatformEvent, RunSummary } from "@bstockwelldev/agent-graph-sdk";
+import type {
+  ChatProvider,
+  Diagnostic,
+  NodeTrace,
+  PlatformEvent,
+  RunSummary,
+  SimulateResult,
+} from "@bstockwelldev/agent-graph-sdk";
 import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
 import { useExclusiveCollapse } from "@/hooks/usePersistedCollapse";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
@@ -142,6 +149,20 @@ export function RunPanel({
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
+
+  // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
+  // stubbing") — fills the studio-ux-revision-plan.md Section 9 "Run with
+  // fixture" slot. Self-contained (own client call + state), matching how
+  // ReleasesPanel.tsx manages its own release calls rather than routing
+  // through GraphEditor.tsx's onCompile/onRun props — simulate never
+  // touches live run state (runSummary/runHistory), so there's nothing to
+  // lift.
+  const [fixtureInputText, setFixtureInputText] = useState('{"question": "How does a database index work?"}');
+  const [fixtureNodeOutputsText, setFixtureNodeOutputsText] = useState("{}");
+  const [simulating, setSimulating] = useState(false);
+  const [simulateError, setSimulateError] = useState<string | null>(null);
+  const [simulateResult, setSimulateResult] = useState<SimulateResult | null>(null);
+
   const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const summary = validationSummary(diagnostics);
@@ -246,6 +267,22 @@ export function RunPanel({
       cancelled = true;
     };
   }, [graphId, provider, showModelSelect]);
+
+  const handleSimulate = useCallback(async () => {
+    if (!graphId) return;
+    setSimulating(true);
+    setSimulateError(null);
+    try {
+      const input = JSON.parse(fixtureInputText || "{}") as Record<string, unknown>;
+      const node_outputs = JSON.parse(fixtureNodeOutputsText || "{}") as Record<string, unknown>;
+      const result = await client.simulateGraph(graphId, { input, node_outputs });
+      setSimulateResult(result);
+    } catch (err) {
+      setSimulateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSimulating(false);
+    }
+  }, [fixtureInputText, fixtureNodeOutputsText, graphId]);
 
   return (
     <div style={containerStyle(layout)}>
@@ -356,6 +393,57 @@ export function RunPanel({
               {running ? "Running…" : "Run"}
             </Button>
           </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection sectionId="run-simulate" title="Run with fixture" reducedMotion={reducedMotion}>
+          <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
+            Simulates against the saved graph with no live tool or model calls — always uses the offline stub
+            provider, plus any per-node outputs you stub below.
+          </div>
+          <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Input (JSON)</div>
+          <TextArea
+            rows={2}
+            style={{ minHeight: 48, resize: "vertical", fontFamily: fontFamily.mono }}
+            value={fixtureInputText}
+            onChange={(e) => setFixtureInputText(e.target.value)}
+            disabled={simulating}
+          />
+          <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[2], marginBottom: spacing[1] }}>
+            Node output overrides (JSON: node id → mocked value)
+          </div>
+          <TextArea
+            rows={2}
+            style={{ minHeight: 48, resize: "vertical", fontFamily: fontFamily.mono }}
+            value={fixtureNodeOutputsText}
+            onChange={(e) => setFixtureNodeOutputsText(e.target.value)}
+            placeholder='{"tool_lookup": "a recorded answer"}'
+            disabled={simulating}
+          />
+          <div style={{ marginTop: spacing[2] }}>
+            <Button variant="secondary" disabled={!graphId || simulating} onClick={() => void handleSimulate()} style={{ minHeight: shell.touchTarget.min }}>
+              {simulating ? "Simulating…" : "Simulate"}
+            </Button>
+          </div>
+          {simulateError && (
+            <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
+              {simulateError}
+            </div>
+          )}
+          {simulateResult && (
+            <div style={{ marginTop: spacing[2] }}>
+              <div style={typeScale.caption}>
+                {simulateResult.run.run_id} — <b>{simulateResult.run.status}</b>
+              </div>
+              {simulateResult.traces.map((trace) => (
+                <div
+                  key={trace.node_id}
+                  style={{ ...typeScale.caption, opacity: 0.75, marginTop: spacing[1], fontFamily: fontFamily.mono }}
+                >
+                  {trace.node_id}: {JSON.stringify(trace.output)}
+                </div>
+              ))}
+            </div>
+          )}
         </CollapsibleSection>
 
         <div ref={diagnosticsSectionRef} style={{ marginTop: spacing[2] }} tabIndex={-1} aria-live="polite" aria-label={`Graph validation: ${summary.label}`}>

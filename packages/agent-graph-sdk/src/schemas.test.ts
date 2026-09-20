@@ -10,11 +10,13 @@ import {
   graphEdgeSchema,
   graphNodeSchema,
   graphPortSchema,
+  fixtureSchema,
   graphReleaseSchema,
   portContractSchema,
   releaseDiffSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
+  simulateResultSchema,
 } from "./schemas.js";
 
 // Studio-consolidation Phase 4f: direct schema-level coverage, independent
@@ -323,6 +325,43 @@ describe("releaseDiffSchema", () => {
       resource_changes: [],
     };
     expect(releaseDiffSchema.safeParse(diff).success).toBe(false);
+  });
+});
+
+// P1 rollout plan, Slice B ("Fixture-based simulation and subgraph stubbing").
+describe("fixtureSchema / simulateResultSchema", () => {
+  it("accepts a fixture with empty input/node_outputs", () => {
+    expect(fixtureSchema.safeParse({ input: {}, node_outputs: {} }).success).toBe(true);
+  });
+
+  it("accepts a fixture with a mocked node output of any JSON shape", () => {
+    const fixture = {
+      input: { question: "hi" },
+      node_outputs: { tool_lookup: "a string", router_1: { decision: "technical" } },
+    };
+    expect(fixtureSchema.safeParse(fixture).success).toBe(true);
+  });
+
+  it("accepts a simulate result wrapping a run summary and node traces", () => {
+    const result = {
+      run: { run_id: "r1", graph_id: "g1", status: "succeeded", result: null },
+      traces: [
+        {
+          node_id: "tool_lookup",
+          node_type: "tool",
+          status: "succeeded",
+          input: {},
+          output: "stubbed",
+          started_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+    };
+    expect(simulateResultSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("rejects a simulate result missing traces", () => {
+    const result = { run: { run_id: "r1", graph_id: "g1", status: "succeeded", result: null } };
+    expect(simulateResultSchema.safeParse(result).success).toBe(false);
   });
 });
 
