@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from . import runtime, storage
+from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .demo_graph import build_demo_graph
 from .env_config import (
@@ -36,16 +37,22 @@ from .knowledge import (
 )
 from .model_catalog import list_provider_models
 from .models import (
+    CapabilityMatrix,
     CompileResult,
     CreateGraphRequest,
     GraphDefinition,
+    GraphRelease,
     NodeTrace,
+    PublishReleaseRequest,
+    PublishReleaseResponse,
+    ReleaseRunRequest,
     RunRequest,
     RunResumeRequest,
     RunSummary,
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
+from .releases import ReleasePublishBlocked, get_release, list_releases, publish_release
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
 from .spa_cache import SpaCacheControlMiddleware
 
@@ -167,6 +174,106 @@ def compile_graph_endpoint(graph_id: str) -> CompileResult:
 
 
 # ---------------------------------------------------------------------------
+# Releases (P0 graph foundation, Slice C — see
+# docs/planning/features/p0-graph-foundation-design-plan.md, "Releases and
+# fingerprinting"). Publishing snapshots the current draft as an immutable
+# `GraphRelease`; editing the draft afterward never changes a published
+# release or a run started from it. `/api/graph-releases/{release_id}/...`
+# is deliberately release_id-only (no graph_id in the path), so those two
+# routes resolve graph_id via `storage.get_release_graph_id` first.
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/graphs/{graph_id}/releases")
+def publish_release_endpoint(
+    graph_id: str, request: PublishReleaseRequest
+) -> PublishReleaseResponse:
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    try:
+        release, created = publish_release(
+            graph, release_notes=request.release_notes, author=request.author
+        )
+    except ReleasePublishBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "release blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+    return PublishReleaseResponse(release=release, created=created)
+
+
+@app.get("/api/graphs/{graph_id}/releases")
+def list_releases_endpoint(graph_id: str) -> list[dict[str, Any]]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list_releases(graph_id)
+
+
+@app.get("/api/graphs/{graph_id}/releases/{release_id}")
+def get_release_endpoint(graph_id: str, release_id: str) -> GraphRelease:
+    release = get_release(release_id, graph_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    return release
+
+
+@app.post("/api/graph-releases/{release_id}/compile")
+def compile_release_endpoint(release_id: str) -> CompileResult:
+    graph_id = storage.get_release_graph_id(release_id)
+    release = get_release(release_id, graph_id) if graph_id is not None else None
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    return runtime.compile_workflow(release.graph)
+
+
+@app.post("/api/graph-releases/{release_id}/runs")
+async def start_release_run(release_id: str, request: ReleaseRunRequest) -> RunSummary:
+    graph_id = storage.get_release_graph_id(release_id)
+    release = get_release(release_id, graph_id) if graph_id is not None else None
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+
+    compile_result = runtime.compile_workflow(release.graph)
+    if not compile_result.ok or compile_result.compiled_workflow_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "release failed compilation",
+                "diagnostics": [d.model_dump() for d in compile_result.diagnostics],
+            },
+        )
+
+    start_kwargs = {
+        "compiled_workflow_id": compile_result.compiled_workflow_id,
+        "run_input": request.input,
+        "provider": request.provider,
+        "model": request.model,
+        "api_key": request.api_key,
+        "release_resource_snapshots": release.resource_snapshots,
+    }
+    if runtime.is_serverless_runtime():
+        run_id, _bus = await runtime.start_run_inline(**start_kwargs)
+    else:
+        run_id, _bus = runtime.start_run(**start_kwargs)
+    summary = runtime.get_run_summary(run_id)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="run vanished after start")
+    return summary
+
+
+@app.get("/api/runtime-targets/{target_id}/capabilities")
+def runtime_target_capabilities(target_id: str) -> CapabilityMatrix:
+    adapter = get_adapter(target_id)
+    if adapter is None:
+        raise HTTPException(status_code=404, detail=f"unknown runtime target {target_id!r}")
+    return adapter.capabilities()
+
+
+# ---------------------------------------------------------------------------
 # Knowledge base / RAG (studio-consolidation Phase 5, see
 # docs/planning/features/studio-consolidation-plan.md and knowledge.py):
 # upload .txt/.md documents per graph, chunked + embedded on upload.
@@ -185,7 +292,8 @@ def get_graph_knowledge(graph_id: str) -> dict[str, Any]:
 
 @app.post("/api/graphs/{graph_id}/knowledge")
 async def upload_graph_knowledge(
-    graph_id: str, file: UploadFile = File(...)  # noqa: B008 - FastAPI's own dependency idiom
+    graph_id: str,
+    file: UploadFile = File(...),  # noqa: B008 - FastAPI's own dependency idiom
 ) -> dict[str, Any]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentProfileSchema,
+  capabilityMatrixSchema,
   chatSessionSchema,
   diagnosticSchema,
   edgeTransformSchema,
@@ -9,6 +10,7 @@ import {
   graphEdgeSchema,
   graphNodeSchema,
   graphPortSchema,
+  graphReleaseSchema,
   portContractSchema,
   runSummarySchema,
 } from "./schemas.js";
@@ -199,5 +201,77 @@ describe("chatSessionSchema", () => {
       updated_at: "2026-01-01T00:00:00Z",
     };
     expect(chatSessionSchema.safeParse(session).success).toBe(false);
+  });
+});
+
+// P0 graph foundation, Slice C (docs/planning/features/p0-graph-foundation-design-plan.md).
+describe("graphReleaseSchema", () => {
+  const graph = {
+    id: "g1",
+    name: "Demo",
+    entry_node_id: "n1",
+    nodes: [{ id: "n1", type: "input", position: { x: 0, y: 0 }, config: {} }],
+    edges: [],
+  };
+
+  it("accepts a well-formed release with empty resource_snapshots/diagnostics", () => {
+    const release = {
+      id: "rel_1",
+      graph_id: "g1",
+      graph,
+      document_fingerprint: "a".repeat(64),
+      semantic_fingerprint: "b".repeat(64),
+      resource_snapshots: {},
+      release_notes: null,
+      author: null,
+      created_at: "2026-01-01T00:00:00Z",
+      diagnostics: [],
+    };
+    expect(graphReleaseSchema.safeParse(release).success).toBe(true);
+  });
+
+  it("accepts populated resource_snapshots keyed '{kind}:{id}'", () => {
+    const release = {
+      id: "rel_1",
+      graph_id: "g1",
+      graph,
+      document_fingerprint: "a".repeat(64),
+      semantic_fingerprint: "b".repeat(64),
+      resource_snapshots: { "tools:custom_tool": { id: "custom_tool", description: "d" } },
+      created_at: "2026-01-01T00:00:00Z",
+      diagnostics: [],
+    };
+    expect(graphReleaseSchema.safeParse(release).success).toBe(true);
+  });
+
+  it("rejects a release missing semantic_fingerprint", () => {
+    const release = {
+      id: "rel_1",
+      graph_id: "g1",
+      graph,
+      document_fingerprint: "a".repeat(64),
+      resource_snapshots: {},
+      created_at: "2026-01-01T00:00:00Z",
+      diagnostics: [],
+    };
+    expect(graphReleaseSchema.safeParse(release).success).toBe(false);
+  });
+});
+
+describe("capabilityMatrixSchema", () => {
+  it("accepts the LangGraph P0 capability matrix shape", () => {
+    const matrix = {
+      target_id: "langgraph",
+      capabilities: [
+        { feature: "current_12_executors", supported: true, notes: "Uses existing executor registry." },
+        { feature: "target_specific_extension_nodes", supported: false, notes: null },
+      ],
+    };
+    expect(capabilityMatrixSchema.safeParse(matrix).success).toBe(true);
+  });
+
+  it("rejects a capability entry missing the required supported field", () => {
+    const matrix = { target_id: "langgraph", capabilities: [{ feature: "x" }] };
+    expect(capabilityMatrixSchema.safeParse(matrix).success).toBe(false);
   });
 });

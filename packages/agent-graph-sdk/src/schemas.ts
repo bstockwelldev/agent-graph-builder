@@ -132,6 +132,52 @@ export const compileResultSchema = z.object({
   ok: z.boolean(),
 });
 
+/**
+ * P0 graph foundation, Slice C (docs/planning/features/p0-graph-foundation-design-plan.md,
+ * "Releases and fingerprinting"). An immutable, content-addressed snapshot
+ * of a GraphDefinition — see backend/app/releases.py's publish_release.
+ * Never mutated after creation.
+ */
+export const graphReleaseSchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  graph: graphDefinitionSchema,
+  document_fingerprint: z.string(),
+  semantic_fingerprint: z.string(),
+  resource_snapshots: z.record(z.string(), z.record(z.string(), z.unknown())),
+  release_notes: z.string().nullish(),
+  author: z.string().nullish(),
+  created_at: z.string(),
+  diagnostics: z.array(diagnosticSchema),
+});
+
+export const publishReleaseResponseSchema = z.object({
+  release: graphReleaseSchema,
+  created: z.boolean(),
+});
+
+// GET /api/graphs/{id}/releases's compact per-entry shape (storage.py's
+// get_release_index) — not the full GraphRelease payload.
+export const releaseIndexEntrySchema = z.object({
+  release_id: z.string(),
+  semantic_fingerprint: z.string(),
+  document_fingerprint: z.string(),
+  created_at: z.string(),
+});
+
+// design doc, "LangGraph adapter boundary" — GET
+// /api/runtime-targets/{target_id}/capabilities.
+export const capabilityEntrySchema = z.object({
+  feature: z.string(),
+  supported: z.boolean(),
+  notes: z.string().nullish(),
+});
+
+export const capabilityMatrixSchema = z.object({
+  target_id: z.string(),
+  capabilities: z.array(capabilityEntrySchema),
+});
+
 export const routeDecisionSchema = z.object({
   nodeId: z.string(),
   selectedEdgeId: z.string(),
