@@ -191,6 +191,163 @@ describe("createAgentGraphClient resource CRUD", () => {
   });
 });
 
+// P0 graph foundation, Slice C (docs/planning/features/p0-graph-foundation-design-plan.md).
+describe("createAgentGraphClient releases", () => {
+  const baseUrl = "http://localhost:8000";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function jsonResponse(body: unknown, ok = true, status = 200) {
+    return {
+      ok,
+      status,
+      text: async () => JSON.stringify(body),
+      json: async () => body,
+    };
+  }
+
+  const graph = {
+    id: "g1",
+    name: "Demo",
+    entry_node_id: "n1",
+    nodes: [{ id: "n1", type: "input", position: { x: 0, y: 0 }, config: {} }],
+    edges: [],
+  };
+
+  const release = {
+    id: "rel_1",
+    graph_id: "g1",
+    graph,
+    document_fingerprint: "a".repeat(64),
+    semantic_fingerprint: "b".repeat(64),
+    resource_snapshots: {},
+    release_notes: null,
+    author: null,
+    created_at: "2026-01-01T00:00:00Z",
+    diagnostics: [],
+  };
+
+  it("publishRelease POSTs release_notes/author to /api/graphs/{id}/releases", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ release, created: true }));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.publishRelease("g1", "first release", "me");
+
+    expect(result).toEqual({ release, created: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${baseUrl}/api/graphs/g1/releases`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ release_notes: "first release", author: "me" });
+  });
+
+  it("listReleases fetches GET /api/graphs/{id}/releases", async () => {
+    const index = [
+      {
+        release_id: "rel_1",
+        semantic_fingerprint: "b".repeat(64),
+        document_fingerprint: "a".repeat(64),
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+    fetchMock.mockResolvedValueOnce(jsonResponse(index));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.listReleases("g1");
+
+    expect(result).toEqual(index);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/graphs/g1/releases`, expect.objectContaining({}));
+  });
+
+  it("getRelease fetches GET /api/graphs/{id}/releases/{release_id}", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(release));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.getRelease("g1", "rel_1");
+
+    expect(result).toEqual(release);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/api/graphs/g1/releases/rel_1`,
+      expect.objectContaining({}),
+    );
+  });
+
+  it("compileRelease POSTs to the release_id-only /api/graph-releases/{id}/compile route", async () => {
+    const compileResult = { graph_id: "g1", compiled_workflow_id: "cwf_1", diagnostics: [], ok: true };
+    fetchMock.mockResolvedValueOnce(jsonResponse(compileResult));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.compileRelease("rel_1");
+
+    expect(result).toEqual(compileResult);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${baseUrl}/api/graph-releases/rel_1/compile`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("startReleaseRun POSTs input/provider/model/api_key with no graph_id field", async () => {
+    const run = { run_id: "run1", graph_id: "g1", status: "succeeded" as const, result: null };
+    fetchMock.mockResolvedValueOnce(jsonResponse(run));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.startReleaseRun("rel_1", { question: "hi" }, "stub", "m1", "key1");
+
+    expect(result).toEqual(run);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${baseUrl}/api/graph-releases/rel_1/runs`);
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ input: { question: "hi" }, provider: "stub", model: "m1", api_key: "key1" });
+    expect(body.graph_id).toBeUndefined();
+  });
+
+  it("getRuntimeTargetCapabilities fetches GET /api/runtime-targets/{id}/capabilities", async () => {
+    const matrix = {
+      target_id: "langgraph",
+      capabilities: [{ feature: "current_12_executors", supported: true, notes: null }],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(matrix));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.getRuntimeTargetCapabilities("langgraph");
+
+    expect(result).toEqual(matrix);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/api/runtime-targets/langgraph/capabilities`,
+      expect.objectContaining({}),
+    );
+  });
+
+  it("getRunGraphSnapshot fetches GET /api/runs/{id}/snapshot", async () => {
+    const snapshot = {
+      run_id: "run_1",
+      graph_id: "g1",
+      source: "draft_snapshot" as const,
+      graph_fingerprint: "a".repeat(64),
+      release_id: null,
+      graph,
+      resource_snapshots: {},
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(snapshot));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.getRunGraphSnapshot("run_1");
+
+    expect(result).toEqual(snapshot);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/api/runs/run_1/snapshot`,
+      expect.objectContaining({}),
+    );
+  });
+});
+
 // Studio-consolidation Phase 4f: jsonFetch now parses every response through
 // a Zod schema instead of an unchecked `response.json() as T` cast. These
 // cases exercise that rejection path for the highest-traffic response types.

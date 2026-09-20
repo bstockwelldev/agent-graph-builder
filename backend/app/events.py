@@ -25,6 +25,15 @@ EventType = Literal[
     # the same run_id and emits run.resumed on it.
     "run.paused",
     "run.resumed",
+    # P0 graph foundation, Slice D (design doc, "Version-pinned runs and
+    # Studio UX"): emitted once, right after the run's RunGraphSnapshot is
+    # durably persisted, before compiling. The design doc also names
+    # run.compilation_started/completed and contract.validated/violation
+    # ("only as real state becomes available") — those aren't added here:
+    # compilation happens via a separate route with no run/bus context yet,
+    # so there's no real state to emit them from without a larger
+    # restructuring outside this slice's scope.
+    "run.snapshot_created",
     "node.started",
     "node.completed",
     "node.failed",

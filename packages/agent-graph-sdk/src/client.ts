@@ -3,10 +3,12 @@ import type { z } from "zod";
 import {
   agentProfileSchema,
   analyticsDashboardPayloadSchema,
+  capabilityMatrixSchema,
   chatSessionSchema,
   compileResultSchema,
   deletedSchema,
   graphDefinitionSchema,
+  graphReleaseSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
@@ -14,16 +16,21 @@ import {
   providerCredentialsSchema,
   providerModelCatalogSchema,
   providerReadySchema,
+  publishReleaseResponseSchema,
+  releaseIndexEntrySchema,
+  runGraphSnapshotSchema,
   runSummarySchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 import type {
   AgentProfile,
   AnalyticsDashboardPayload,
+  CapabilityMatrix,
   ChatProvider,
   ChatSession,
   CompileResult,
   GraphDefinition,
+  GraphRelease,
   LlmProfile,
   McpServerConfig,
   NodeTrace,
@@ -31,6 +38,9 @@ import type {
   ProviderCredentials,
   ProviderModelCatalog,
   PromptTemplate,
+  PublishReleaseResponse,
+  ReleaseIndexEntry,
+  RunGraphSnapshot,
   RunSummary,
   ToolDefinition,
 } from "./types.js";
@@ -146,6 +156,20 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     getRunNodeTraces: (runId: string) =>
       jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${runId}/nodes`, undefined, nodeTraceSchema.array()),
     /**
+     * P0 graph foundation, Slice D — the run's durable RunGraphSnapshot:
+     * the exact graph (and, for a draft-sourced run, resolved resource
+     * bindings) it started from, independent of any later draft edits.
+     * Historical run inspection should open this, not the current
+     * (possibly changed) `getGraph`.
+     */
+    getRunGraphSnapshot: (runId: string) =>
+      jsonFetch<RunGraphSnapshot>(
+        baseUrl,
+        `/api/runs/${runId}/snapshot`,
+        undefined,
+        runGraphSnapshotSchema,
+      ),
+    /**
      * Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
      * `approve` defaults to true; pass false to fail the run instead of
      * resuming it. 404s when there is nothing paused for this run id.
@@ -187,6 +211,66 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         "/api/analytics",
         undefined,
         analyticsDashboardPayloadSchema,
+      ),
+    // Releases (P0 graph foundation, Slice C — see
+    // docs/planning/features/p0-graph-foundation-design-plan.md, "Releases
+    // and fingerprinting"). Publishing snapshots the current draft as an
+    // immutable GraphRelease; editing the draft afterward never changes a
+    // published release or a run started from it.
+    publishRelease: (graphId: string, releaseNotes?: string, author?: string) =>
+      jsonFetch<PublishReleaseResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/releases`,
+        {
+          method: "POST",
+          body: JSON.stringify({ release_notes: releaseNotes, author }),
+        },
+        publishReleaseResponseSchema,
+      ),
+    listReleases: (graphId: string) =>
+      jsonFetch<ReleaseIndexEntry[]>(
+        baseUrl,
+        `/api/graphs/${graphId}/releases`,
+        undefined,
+        releaseIndexEntrySchema.array(),
+      ),
+    getRelease: (graphId: string, releaseId: string) =>
+      jsonFetch<GraphRelease>(
+        baseUrl,
+        `/api/graphs/${graphId}/releases/${releaseId}`,
+        undefined,
+        graphReleaseSchema,
+      ),
+    // release_id-only routes (no graph_id in the path) — the backend
+    // resolves the owning graph via storage.get_release_graph_id.
+    compileRelease: (releaseId: string) =>
+      jsonFetch<CompileResult>(
+        baseUrl,
+        `/api/graph-releases/${releaseId}/compile`,
+        { method: "POST" },
+        compileResultSchema,
+      ),
+    startReleaseRun: (
+      releaseId: string,
+      input: Record<string, unknown>,
+      provider?: ChatProvider,
+      model?: string,
+      apiKey?: string,
+    ) =>
+      jsonFetch<RunSummary>(
+        baseUrl,
+        `/api/graph-releases/${releaseId}/runs`,
+        { method: "POST", body: JSON.stringify({ input, provider, model, api_key: apiKey }) },
+        runSummarySchema,
+      ),
+    // design doc, "LangGraph adapter boundary" — shown in Studio only when
+    // a user encounters a capability diagnostic.
+    getRuntimeTargetCapabilities: (targetId: string) =>
+      jsonFetch<CapabilityMatrix>(
+        baseUrl,
+        `/api/runtime-targets/${targetId}/capabilities`,
+        undefined,
+        capabilityMatrixSchema,
       ),
     // Stored resources (studio-consolidation Phase 3).
     prompts: resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),

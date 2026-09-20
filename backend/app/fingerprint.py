@@ -124,4 +124,57 @@ def semantic_fingerprint(graph: GraphDefinition) -> str:
     return hashlib.sha256(_canonical_json(_semantic_payload(graph))).hexdigest()
 
 
-__all__ = ["document_fingerprint", "semantic_fingerprint"]
+def _release_document_payload(
+    graph: GraphDefinition,
+    resource_snapshots: dict[str, dict[str, Any]],
+    release_notes: str | None,
+    author: str | None,
+) -> dict[str, Any]:
+    return {
+        **_document_payload(graph),
+        "resource_snapshots": resource_snapshots,
+        "release_notes": release_notes,
+        "author": author,
+    }
+
+
+def _release_semantic_payload(
+    graph: GraphDefinition, resource_snapshots: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    # design doc, "Fingerprint": resource_snapshots is included in BOTH
+    # fingerprints, not only document_fingerprint — swapping a bound tool
+    # changes execution behavior even when a graph's own nodes/edges are
+    # byte-identical, so two releases with different tool bindings must not
+    # collide on semantic_fingerprint.
+    return {**_semantic_payload(graph), "resource_snapshots": resource_snapshots}
+
+
+def release_document_fingerprint(
+    graph: GraphDefinition,
+    resource_snapshots: dict[str, dict[str, Any]],
+    release_notes: str | None = None,
+    author: str | None = None,
+) -> str:
+    """SHA-256 over the full release payload — graph, resource_snapshots,
+    release_notes, and author. Identifies this literal release record."""
+    payload = _release_document_payload(graph, resource_snapshots, release_notes, author)
+    return hashlib.sha256(_canonical_json(payload)).hexdigest()
+
+
+def release_semantic_fingerprint(
+    graph: GraphDefinition, resource_snapshots: dict[str, dict[str, Any]]
+) -> str:
+    """SHA-256 over the execution-relevant release payload: the graph's
+    semantic_fingerprint content plus resource_snapshots. Identifies "what
+    will actually run" for a release, including its embedded resource
+    bindings. Publish is idempotent on this value (see releases.py)."""
+    payload = _release_semantic_payload(graph, resource_snapshots)
+    return hashlib.sha256(_canonical_json(payload)).hexdigest()
+
+
+__all__ = [
+    "document_fingerprint",
+    "semantic_fingerprint",
+    "release_document_fingerprint",
+    "release_semantic_fingerprint",
+]

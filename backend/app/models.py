@@ -158,6 +158,63 @@ class CompileResult(BaseModel):
     ok: bool
 
 
+# P0 graph foundation, Slice C (design doc, "LangGraph adapter boundary"):
+# the capability matrix a RuntimeAdapter exposes, one row per portable
+# feature. Exposed at GET /api/runtime-targets/{target_id}/capabilities;
+# Studio shows it only when a user encounters a capability diagnostic.
+class CapabilityEntry(BaseModel):
+    feature: str
+    supported: bool
+    notes: str | None = None
+
+
+class CapabilityMatrix(BaseModel):
+    target_id: str
+    capabilities: list[CapabilityEntry]
+
+
+# P0 graph foundation, Slice C
+# (docs/planning/features/p0-graph-foundation-design-plan.md, "Releases and
+# fingerprinting"): an immutable, content-addressed snapshot of a
+# GraphDefinition. `graph` is the full canonical graph at publish time;
+# `resource_snapshots` embeds every tool/mcp_servers/knowledge resource that
+# graph's nodes resolve live today, keyed "{kind}:{id}" — see
+# releases.py's resolve_resource_snapshots. Never mutated after creation;
+# republishing an unchanged graph returns the existing release instead
+# (idempotent on semantic_fingerprint — see releases.py's publish_release).
+class GraphRelease(BaseModel):
+    id: str
+    graph_id: str
+    graph: GraphDefinition
+    document_fingerprint: str
+    semantic_fingerprint: str
+    resource_snapshots: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    release_notes: str | None = None
+    author: str | None = None
+    created_at: str
+    # The validation report (structural + contract + resource-resolution
+    # diagnostics) that was clean at publish time — kept for audit, not
+    # re-checked on read.
+    diagnostics: list[Diagnostic] = Field(default_factory=list)
+
+
+class PublishReleaseRequest(BaseModel):
+    release_notes: str | None = None
+    author: str | None = None
+
+
+class PublishReleaseResponse(BaseModel):
+    release: GraphRelease
+    created: bool
+
+
+class ReleaseRunRequest(BaseModel):
+    input: dict[str, Any] = Field(default_factory=dict)
+    provider: Literal["ollama", "stub", "openai_compat", "groq", "google", "azure"] | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
 class RunRequest(BaseModel):
     graph_id: str
     input: dict[str, Any] = Field(default_factory=dict)
@@ -204,6 +261,40 @@ class RunSummary(BaseModel):
     completed_at: str | None = None
     route_decisions: list[RouteDecision] = Field(default_factory=list)
     events: list[PlatformEvent] = Field(default_factory=list)
+    # P0 graph foundation, Slice D (design doc, "Version-pinned runs and
+    # Studio UX" — GraphRunIdentity, extended directly onto the run rather
+    # than as a nested object). All optional so a run persisted before this
+    # slice still deserializes. `graph_fingerprint` is the plain
+    # `semantic_fingerprint` of the graph that ran — "what actually ran,"
+    # not the release's own `release_semantic_fingerprint` (which also
+    # covers resource_snapshots).
+    graph_release_id: str | None = None
+    graph_fingerprint: str | None = None
+    source: Literal["release", "draft_snapshot"] | None = None
+    runtime_target: Literal["langgraph"] | None = None
+    compiler_version: str | None = None
+
+
+# P0 graph foundation, Slice D (design doc, "Persistence and API" +
+# "Lifecycle"): durably persists the exact normalized graph (and, for a
+# draft-sourced run, its resolved resource bindings) a run started from,
+# independent of the mutable Draft or the run's own RunSummary/NodeTraces.
+# A release-sourced run gets a thin pointer (release_id + graph_fingerprint
+# — the GraphRelease itself is already immutable and durable); a
+# draft-sourced run embeds the full graph and bindings, since there is no
+# other durable record of that exact draft state once editing continues.
+# Written once per run_id, before compiling, and never deleted — including
+# when the owning graph is deleted (see storage.py's delete_graph, which
+# only ever touches the `graph` table/key).
+class RunGraphSnapshot(BaseModel):
+    run_id: str
+    graph_id: str
+    source: Literal["release", "draft_snapshot"]
+    graph_fingerprint: str
+    release_id: str | None = None
+    graph: GraphDefinition | None = None
+    resource_snapshots: dict[str, dict[str, Any]] | None = None
+    created_at: str
 
 
 class NodeTrace(BaseModel):

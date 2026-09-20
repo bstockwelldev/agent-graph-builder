@@ -6,6 +6,8 @@ import type {
   analyticsDashboardPayloadSchema,
   analyticsGraphRowSchema,
   analyticsTotalsSchema,
+  capabilityEntrySchema,
+  capabilityMatrixSchema,
   chatMessageSchema,
   chatProviderSchema,
   chatSessionSchema,
@@ -19,6 +21,7 @@ import type {
   graphNodeSchema,
   graphOrientationSchema,
   graphPortSchema,
+  graphReleaseSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodePositionSchema,
@@ -31,7 +34,10 @@ import type {
   providerCredentialsSchema,
   providerModelCatalogSchema,
   providerModelOptionSchema,
+  publishReleaseResponseSchema,
+  releaseIndexEntrySchema,
   routeDecisionSchema,
+  runGraphSnapshotSchema,
   runSummarySchema,
   toolDefinitionSchema,
 } from "./schemas.js";
@@ -72,12 +78,28 @@ export type Diagnostic = z.infer<typeof diagnosticSchema>;
 export type CompileResult = z.infer<typeof compileResultSchema>;
 export type RouteDecision = z.infer<typeof routeDecisionSchema>;
 
+/**
+ * P0 graph foundation, Slice C (docs/planning/features/p0-graph-foundation-design-plan.md,
+ * "Releases and fingerprinting" / "LangGraph adapter boundary").
+ */
+export type GraphRelease = z.infer<typeof graphReleaseSchema>;
+export type PublishReleaseResponse = z.infer<typeof publishReleaseResponseSchema>;
+export type ReleaseIndexEntry = z.infer<typeof releaseIndexEntrySchema>;
+export type CapabilityEntry = z.infer<typeof capabilityEntrySchema>;
+export type CapabilityMatrix = z.infer<typeof capabilityMatrixSchema>;
+
 // "paused" was added for the `human_gate` node type (studio-consolidation
 // Phase 2): a run stopped at a human-approval checkpoint, resumable via
 // `AgentGraphClient.resumeRun` (POST /api/runs/{id}/resume).
 export type RunSummary = z.infer<typeof runSummarySchema>;
 export type NodeTrace = z.infer<typeof nodeTraceSchema>;
 export type PlatformEvent = z.infer<typeof platformEventSchema>;
+
+/**
+ * P0 graph foundation, Slice D (docs/planning/features/p0-graph-foundation-design-plan.md,
+ * "Persistence and API" — GET /api/runs/{run_id}/snapshot).
+ */
+export type RunGraphSnapshot = z.infer<typeof runGraphSnapshotSchema>;
 
 export type ProviderModelOption = z.infer<typeof providerModelOptionSchema>;
 export type ProviderModelCatalog = z.infer<typeof providerModelCatalogSchema>;

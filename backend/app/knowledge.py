@@ -155,6 +155,14 @@ def get_knowledge_entry(graph_id: str) -> KnowledgeEntry | None:
     return KnowledgeEntry.model_validate(payload)
 
 
+# P0 graph foundation, Slice C: sentinel distinguishing "no resource_snapshot
+# argument given" (draft-sourced run — resolve live, the pre-Slice-C
+# behavior) from an explicit `None` (release-sourced run whose release has
+# no knowledge base — resolve nothing, never fall back to live storage). See
+# `augment_system_with_knowledge` and nodes.py's `_resolve_resource`.
+UNSET = object()
+
+
 def _embedding_model_for_entry(entry: KnowledgeEntry) -> ResolvedEmbeddingModel | None:
     current = resolve_embedding_model()
     if current is None:
@@ -164,15 +172,32 @@ def _embedding_model_for_entry(entry: KnowledgeEntry) -> ResolvedEmbeddingModel 
     return current
 
 
-async def augment_system_with_knowledge(system: str, graph_id: str, query: str) -> str:
+async def augment_system_with_knowledge(
+    system: str, graph_id: str, query: str, *, resource_snapshot: Any = UNSET
+) -> str:
     """When `graph_id` has an uploaded knowledge base, embeds `query` and
     appends top-K snippets above the score threshold to `system`. Degrades
     silently to the unmodified prompt on any failure (missing/mismatched
     embedding provider, embedding API error) — RAG is an enhancement, not a
     load-bearing part of the run; a run should not fail because a knowledge
     lookup did.
+
+    `resource_snapshot` (P0 graph foundation, Slice C): omitted (the
+    default `UNSET`) resolves the entry live from storage, unchanged from
+    before this parameter existed. Passed explicitly — even as `None` — it
+    is used as-is instead: a release-sourced run's already-resolved
+    snapshot (or `None` when that release has no knowledge base), never
+    falling back to a live lookup.
     """
-    entry = get_knowledge_entry(graph_id)
+    entry = (
+        get_knowledge_entry(graph_id)
+        if resource_snapshot is UNSET
+        else (
+            KnowledgeEntry.model_validate(resource_snapshot)
+            if resource_snapshot is not None
+            else None
+        )
+    )
     if entry is None or not entry.chunks:
         return system
     query = query.strip()

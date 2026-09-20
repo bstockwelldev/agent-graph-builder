@@ -109,6 +109,26 @@ class ExecContext:
     resolved_provider: str | None = None
     requested_model: str | None = None
     api_key: str | None = None
+    # P0 graph foundation, Slice C (see releases.py's resolve_resource_
+    # snapshots): set only for `source: "release"` runs, to the release's
+    # embedded `{"{kind}:{id}": payload}` map. `None` means a draft-sourced
+    # run — unchanged behavior, live `storage.get_resource` lookups. `_resolve_resource`
+    # below is the one place that reads this.
+    release_resource_snapshots: dict[str, dict[str, Any]] | None = None
+
+
+def _resolve_resource(ctx: ExecContext, kind: str, resource_id: str) -> dict[str, Any] | None:
+    """Resolves a stored resource (`tools`/`mcp_servers`/`knowledge`) through
+    a published release's embedded `resource_snapshots` when this run is
+    release-sourced, falling back to live `storage.get_resource` only for
+    draft-sourced runs — unchanged behavior there (design doc, "Resource
+    reproducibility"). A release-sourced run never falls back to live
+    storage even when the snapshot key is absent: that's what makes the
+    release's reproducibility guarantee real (publish already blocked on
+    `RELEASE_RESOURCE_UNRESOLVED` for anything that wouldn't resolve)."""
+    if ctx.release_resource_snapshots is not None:
+        return ctx.release_resource_snapshots.get(f"{kind}:{resource_id}")
+    return storage.get_resource(kind, resource_id)
 
 
 def get_upstream_output(node: GraphNode, state: dict[str, Any], graph: GraphDefinition) -> Any:
@@ -155,9 +175,16 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
     # RAG augmentation (studio-consolidation Phase 5): a no-op unless
     # ctx.graph has an uploaded knowledge base (see knowledge.py) — degrades
     # silently to the unmodified prompt on any failure, so a knowledge
-    # lookup issue never fails the run.
+    # lookup issue never fails the run. Slice C: a release-sourced run
+    # resolves its knowledge base through the release's embedded snapshot
+    # instead of live storage (see `_resolve_resource`).
+    knowledge_kwargs: dict[str, Any] = (
+        {"resource_snapshot": _resolve_resource(ctx, "knowledge", ctx.graph.id)}
+        if ctx.release_resource_snapshots is not None
+        else {}
+    )
     augmented_system_prompt = await augment_system_with_knowledge(
-        system_prompt or "", ctx.graph.id, str(upstream)
+        system_prompt or "", ctx.graph.id, str(upstream), **knowledge_kwargs
     )
     output = await chat_model.generate(
         system_prompt=augmented_system_prompt, user_prompt=str(upstream)
@@ -196,7 +223,7 @@ async def compute_tool(node: GraphNode, state: dict[str, Any], ctx: ExecContext)
             raise ValueError(f"calculator error: {exc}") from exc
         return {"toolName": tool_name, "expression": raw_input}, output, {}
 
-    resource = storage.get_resource("tools", tool_name)
+    resource = _resolve_resource(ctx, "tools", tool_name)
     if resource is None:
         raise ValueError(
             f"Unsupported tool: {tool_name!r} (not 'lookup_topic', a builtin, or a registered tool)"
@@ -204,7 +231,7 @@ async def compute_tool(node: GraphNode, state: dict[str, Any], ctx: ExecContext)
     tool_def = ToolDefinition.model_validate(resource)
 
     if tool_def.mcp_server_id and tool_def.mcp_tool_name:
-        server_resource = storage.get_resource("mcp_servers", tool_def.mcp_server_id)
+        server_resource = _resolve_resource(ctx, "mcp_servers", tool_def.mcp_server_id)
         if server_resource is None:
             raise ValueError(
                 f"tool {tool_name!r} references unknown MCP server {tool_def.mcp_server_id!r}"
