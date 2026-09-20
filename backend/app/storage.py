@@ -119,6 +119,34 @@ _SCHEMA_STATEMENTS = (
         created_at text not null
     )
     """,
+    # P1 rollout plan (docs/planning/features/p1-rollout-plan.md), parallel
+    # track "Versioned reusable entity registry": storage primitives for an
+    # immutable version/history table beside the mutable `resource` table
+    # above, same version-index + version-payload pair shape as
+    # graph_release_index/graph_release_payload.
+    """
+    create table if not exists resource_version_index (
+        kind text not null,
+        resource_id text not null,
+        version_id text not null,
+        fingerprint text not null,
+        created_at text not null,
+        primary key (kind, resource_id, version_id)
+    )
+    """,
+    """
+    create index if not exists idx_resource_version_index_fingerprint
+    on resource_version_index (kind, resource_id, fingerprint)
+    """,
+    """
+    create table if not exists resource_version_payload (
+        version_id text primary key,
+        kind text not null,
+        resource_id text not null,
+        payload_json text not null,
+        created_at text not null
+    )
+    """,
 )
 
 
@@ -795,3 +823,83 @@ def get_run_graph_snapshot(run_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return json.loads(row[0])
+
+
+# ---------------------------------------------------------------------------
+# Versioned reusable entity registry (P1 rollout plan, parallel track — see
+# docs/planning/features/p1-rollout-plan.md). An immutable version/history
+# table beside `resource` above, same version-index + version-payload pair
+# shape as graph_release_index/graph_release_payload: listing a resource's
+# versions doesn't require loading every version body. `save_resource`'s own
+# destructive-overwrite behavior on the `resource` table is unchanged — this
+# is a parallel audit trail, not a replacement for it.
+# ---------------------------------------------------------------------------
+
+_RESOURCE_VERSION_PREFIX = "resource_versions/"
+_RESOURCE_VERSION_INDEX_PREFIX = "resource_version_index/"
+
+
+def _resource_version_key(kind: str, resource_id: str, version_id: str) -> str:
+    return f"{_RESOURCE_VERSION_PREFIX}{kind}/{resource_id}/{version_id}.json"
+
+
+def _resource_version_index_key(kind: str, resource_id: str) -> str:
+    return f"{_RESOURCE_VERSION_INDEX_PREFIX}{kind}/{resource_id}.json"
+
+
+def save_resource_version(
+    kind: str,
+    resource_id: str,
+    version_id: str,
+    payload: dict[str, Any],
+    *,
+    fingerprint: str,
+    created_at: str,
+) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_resource_version_key(kind, resource_id, version_id), payload)
+        index = get_resource_version_index(kind, resource_id)
+        index.append(
+            {"version_id": version_id, "fingerprint": fingerprint, "created_at": created_at}
+        )
+        remote.put_json(_resource_version_index_key(kind, resource_id), {"versions": index})
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into resource_version_payload "
+            "(version_id, kind, resource_id, payload_json, created_at) values (?, ?, ?, ?, ?)",
+            (version_id, kind, resource_id, json.dumps(payload), created_at),
+        )
+        conn.execute(
+            "insert into resource_version_index "
+            "(kind, resource_id, version_id, fingerprint, created_at) values (?, ?, ?, ?, ?)",
+            (kind, resource_id, version_id, fingerprint, created_at),
+        )
+
+
+def get_resource_version(kind: str, resource_id: str, version_id: str) -> dict[str, Any] | None:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.get_json(_resource_version_key(kind, resource_id, version_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select payload_json from resource_version_payload where version_id = ?", (version_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return json.loads(row[0])
+
+
+def get_resource_version_index(kind: str, resource_id: str) -> list[dict[str, Any]]:
+    remote = _json_object_backend()
+    if remote is not None:
+        payload = remote.get_json(_resource_version_index_key(kind, resource_id))
+        return list(payload.get("versions", [])) if payload else []
+    with _connect() as conn:
+        rows = conn.execute(
+            "select version_id, fingerprint, created_at from resource_version_index "
+            "where kind = ? and resource_id = ? order by created_at",
+            (kind, resource_id),
+        ).fetchall()
+    return [{"version_id": row[0], "fingerprint": row[1], "created_at": row[2]} for row in rows]

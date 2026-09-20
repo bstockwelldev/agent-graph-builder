@@ -17,8 +17,11 @@ import {
   providerModelCatalogSchema,
   providerReadySchema,
   publishReleaseResponseSchema,
+  publishResourceVersionResponseSchema,
   releaseDiffSchema,
   releaseIndexEntrySchema,
+  resourceVersionIndexEntrySchema,
+  resourceVersionSchema,
   routingComparisonSchema,
   routingLabReportSchema,
   runGraphSnapshotSchema,
@@ -44,8 +47,11 @@ import type {
   ProviderModelCatalog,
   PromptTemplate,
   PublishReleaseResponse,
+  PublishResourceVersionResponse,
   ReleaseDiff,
   ReleaseIndexEntry,
+  ResourceVersion,
+  ResourceVersionIndexEntry,
   RoutingComparison,
   RoutingLabReport,
   RunGraphSnapshot,
@@ -105,6 +111,39 @@ function resourceClient<T extends { id: string }>(baseUrl: string, path: string,
       ),
     delete: (id: string) =>
       jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${id}`, { method: "DELETE" }, deletedSchema),
+  };
+}
+
+/**
+ * P1 rollout plan, parallel track ("Versioned reusable entity registry")
+ * — POST/GET /api/{path}/{resource_id}/versions[/{version_id}]. Attached
+ * to a resourceClient's return value as `.versions` for prompts, tools,
+ * mcp-servers, agents, and llm-profiles — never chat-sessions, which
+ * backend/app/resource_versions.py's VERSIONABLE_RESOURCE_KINDS excludes.
+ */
+function resourceVersionClient(baseUrl: string, path: string) {
+  return {
+    publish: (resourceId: string) =>
+      jsonFetch<PublishResourceVersionResponse>(
+        baseUrl,
+        `/api/${path}/${resourceId}/versions`,
+        { method: "POST" },
+        publishResourceVersionResponseSchema,
+      ),
+    list: (resourceId: string) =>
+      jsonFetch<ResourceVersionIndexEntry[]>(
+        baseUrl,
+        `/api/${path}/${resourceId}/versions`,
+        undefined,
+        resourceVersionIndexEntrySchema.array(),
+      ),
+    get: (resourceId: string, versionId: string) =>
+      jsonFetch<ResourceVersion>(
+        baseUrl,
+        `/api/${path}/${resourceId}/versions/${versionId}`,
+        undefined,
+        resourceVersionSchema,
+      ),
   };
 }
 
@@ -340,12 +379,29 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         undefined,
         capabilityMatrixSchema,
       ),
-    // Stored resources (studio-consolidation Phase 3).
-    prompts: resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),
-    tools: resourceClient<ToolDefinition>(baseUrl, "tools", toolDefinitionSchema),
-    mcpServers: resourceClient<McpServerConfig>(baseUrl, "mcp-servers", mcpServerConfigSchema),
-    agents: resourceClient<AgentProfile>(baseUrl, "agents", agentProfileSchema),
-    llmProfiles: resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
+    // Stored resources (studio-consolidation Phase 3). `.versions` (P1
+    // rollout plan, parallel track) is a reusable entity's immutable
+    // publish history alongside its mutable CRUD row.
+    prompts: {
+      ...resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),
+      versions: resourceVersionClient(baseUrl, "prompts"),
+    },
+    tools: {
+      ...resourceClient<ToolDefinition>(baseUrl, "tools", toolDefinitionSchema),
+      versions: resourceVersionClient(baseUrl, "tools"),
+    },
+    mcpServers: {
+      ...resourceClient<McpServerConfig>(baseUrl, "mcp-servers", mcpServerConfigSchema),
+      versions: resourceVersionClient(baseUrl, "mcp-servers"),
+    },
+    agents: {
+      ...resourceClient<AgentProfile>(baseUrl, "agents", agentProfileSchema),
+      versions: resourceVersionClient(baseUrl, "agents"),
+    },
+    llmProfiles: {
+      ...resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
+      versions: resourceVersionClient(baseUrl, "llm-profiles"),
+    },
     // Direct model scratchpad (studio-consolidation Phase 8) — a
     // ChatSession is a stored resource like the others above (free CRUD),
     // plus one bespoke non-CRUD method for actually sending a message.

@@ -46,8 +46,10 @@ from .models import (
     NodeTrace,
     PublishReleaseRequest,
     PublishReleaseResponse,
+    PublishResourceVersionResponse,
     ReleaseDiff,
     ReleaseRunRequest,
+    ResourceVersion,
     RoutingComparison,
     RoutingLabReport,
     RunGraphSnapshot,
@@ -68,6 +70,13 @@ from .releases import (
 )
 from .replay import ReplayBlocked, ReplayNotFound, replay_run
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
+from .resource_versions import (
+    VERSIONABLE_RESOURCE_KINDS,
+    ResourceNotFound,
+    get_resource_version,
+    list_resource_versions,
+    publish_resource_version,
+)
 from .routing_lab import compare_routing_reports, run_routing_dataset
 from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
@@ -499,6 +508,46 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
 
 for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
     _register_resource_routes(_kind, _path, RESOURCE_MODELS[_kind])
+
+
+# P1 rollout plan, parallel track ("Versioned reusable entity registry") —
+# generic version routes for every kind in resource_versions.py's
+# VERSIONABLE_RESOURCE_KINDS. chat_sessions (a runtime scratchpad, not a
+# reusable authored asset) never gets these routes.
+def _register_resource_version_routes(kind: str, path: str) -> None:
+    @app.post(
+        f"/api/{path}/{{resource_id}}/versions",
+        name=f"publish_{kind}_version",
+        operation_id=f"publish_{kind}_version",
+    )
+    def publish_version_route(resource_id: str) -> PublishResourceVersionResponse:
+        try:
+            return publish_resource_version(kind, resource_id)
+        except ResourceNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get(
+        f"/api/{path}/{{resource_id}}/versions",
+        name=f"list_{kind}_versions",
+        operation_id=f"list_{kind}_versions",
+    )
+    def list_versions_route(resource_id: str) -> list[dict[str, Any]]:
+        return list_resource_versions(kind, resource_id)
+
+    @app.get(
+        f"/api/{path}/{{resource_id}}/versions/{{version_id}}",
+        name=f"get_{kind}_version",
+        operation_id=f"get_{kind}_version",
+    )
+    def get_version_route(resource_id: str, version_id: str) -> ResourceVersion:
+        version = get_resource_version(kind, resource_id, version_id)
+        if version is None or version.resource_id != resource_id:
+            raise HTTPException(status_code=404, detail="resource version not found")
+        return version
+
+
+for _kind in VERSIONABLE_RESOURCE_KINDS:
+    _register_resource_version_routes(_kind, _RESOURCE_ROUTE_PATHS[_kind])
 
 
 class ChatSessionMessageRequest(BaseModel):

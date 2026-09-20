@@ -13,7 +13,10 @@ import {
   fixtureSchema,
   graphReleaseSchema,
   portContractSchema,
+  publishResourceVersionResponseSchema,
   releaseDiffSchema,
+  resourceVersionIndexEntrySchema,
+  resourceVersionSchema,
   routingComparisonSchema,
   routingLabReportSchema,
   runGraphSnapshotSchema,
@@ -368,6 +371,37 @@ describe("fixtureSchema / simulateResultSchema", () => {
 });
 
 // P1 rollout plan, Slice D ("Routing policy lab").
+// P1 rollout plan, parallel track ("Versioned reusable entity registry").
+describe("resourceVersionSchema / publishResourceVersionResponseSchema", () => {
+  const version = {
+    version_id: "rver_1",
+    kind: "prompts",
+    resource_id: "p1",
+    payload: { id: "p1", name: "Greeting", body: "Hi {name}" },
+    fingerprint: "a".repeat(64),
+    created_at: "2026-09-20T00:00:00Z",
+  };
+
+  it("accepts a well-formed resource version", () => {
+    expect(resourceVersionSchema.safeParse(version).success).toBe(true);
+  });
+
+  it("rejects a version missing fingerprint", () => {
+    const { fingerprint: _fingerprint, ...rest } = version;
+    expect(resourceVersionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("accepts a publish response wrapping a version and created flag", () => {
+    const response = { version, created: true };
+    expect(publishResourceVersionResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it("accepts a compact index entry", () => {
+    const entry = { version_id: "rver_1", fingerprint: "a".repeat(64), created_at: "2026-09-20T00:00:00Z" };
+    expect(resourceVersionIndexEntrySchema.safeParse(entry).success).toBe(true);
+  });
+});
+
 describe("routingLabReportSchema / routingComparisonSchema", () => {
   const report = {
     graph_id: "g1",

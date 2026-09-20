@@ -37,8 +37,11 @@ import type {
   providerModelCatalogSchema,
   providerModelOptionSchema,
   publishReleaseResponseSchema,
+  publishResourceVersionResponseSchema,
   releaseDiffSchema,
   releaseIndexEntrySchema,
+  resourceVersionIndexEntrySchema,
+  resourceVersionSchema,
   routeDecisionSchema,
   routeNodeDistributionDeltaSchema,
   routeNodeDistributionSchema,
@@ -146,6 +149,11 @@ export type ToolDefinition = z.infer<typeof toolDefinitionSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type LlmProfile = z.infer<typeof llmProfileSchema>;
+
+// P1 rollout plan, parallel track ("Versioned reusable entity registry").
+export type ResourceVersion = z.infer<typeof resourceVersionSchema>;
+export type PublishResourceVersionResponse = z.infer<typeof publishResourceVersionResponseSchema>;
+export type ResourceVersionIndexEntry = z.infer<typeof resourceVersionIndexEntrySchema>;
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatSession = z.infer<typeof chatSessionSchema>;

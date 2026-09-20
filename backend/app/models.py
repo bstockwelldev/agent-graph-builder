@@ -431,3 +431,22 @@ class RoutingComparison(BaseModel):
     baseline: RoutingLabReport
     candidate: RoutingLabReport
     distribution_deltas: list[RouteNodeDistributionDelta] = Field(default_factory=list)
+
+
+# P1 rollout plan, parallel track ("Versioned reusable entity registry") —
+# an immutable snapshot of a stored resource's payload at publish time.
+# Deliberately narrower than a full entity registry: no branching, no
+# approvals, no "current version" pointer distinct from `resource`'s own
+# CRUD row — see resource_versions.py's module docstring.
+class ResourceVersion(BaseModel):
+    version_id: str
+    kind: str
+    resource_id: str
+    payload: dict[str, Any]
+    fingerprint: str
+    created_at: str
+
+
+class PublishResourceVersionResponse(BaseModel):
+    version: ResourceVersion
+    created: bool
