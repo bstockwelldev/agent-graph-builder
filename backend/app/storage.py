@@ -578,6 +578,7 @@ def delete_resource(kind: str, resource_id: str) -> bool:
 
 _RELEASE_PREFIX = "graph_releases/"
 _RELEASE_INDEX_PREFIX = "graph_release_index/"
+_RELEASE_OWNER_PREFIX = "graph_release_owner/"
 
 
 def _release_key(graph_id: str, release_id: str) -> str:
@@ -586,6 +587,10 @@ def _release_key(graph_id: str, release_id: str) -> str:
 
 def _release_index_key(graph_id: str) -> str:
     return f"{_RELEASE_INDEX_PREFIX}{graph_id}.json"
+
+
+def _release_owner_key(release_id: str) -> str:
+    return f"{_RELEASE_OWNER_PREFIX}{release_id}.json"
 
 
 def save_release(
@@ -600,6 +605,14 @@ def save_release(
     remote = _json_object_backend()
     if remote is not None:
         remote.put_json(_release_key(graph_id, release_id), payload)
+        # design doc's REST API is `/api/graph-releases/{release_id}/...`,
+        # deliberately release_id-only (no graph_id in the path) — the
+        # object-store backends key release bodies by graph_id too
+        # (`graph_releases/{graph_id}/{release_id}.json`), so a release_id
+        # alone can't be turned back into a key without this reverse
+        # pointer. The SQL path needs no such pointer: graph_id is already a
+        # column on the graph_release_payload row (see get_release_graph_id).
+        remote.put_json(_release_owner_key(release_id), {"graph_id": graph_id})
         index = get_release_index(graph_id)
         index.append(
             {
@@ -658,3 +671,18 @@ def get_release_index(graph_id: str) -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def get_release_graph_id(release_id: str) -> str | None:
+    """Reverse lookup: which graph a release_id belongs to, with no graph_id
+    given — what `/api/graph-releases/{release_id}/...` routes need before
+    they can call `get_release(release_id, graph_id)`."""
+    remote = _json_object_backend()
+    if remote is not None:
+        payload = remote.get_json(_release_owner_key(release_id))
+        return payload.get("graph_id") if payload else None
+    with _connect() as conn:
+        row = conn.execute(
+            "select graph_id from graph_release_payload where release_id = ?", (release_id,)
+        ).fetchone()
+    return row[0] if row else None

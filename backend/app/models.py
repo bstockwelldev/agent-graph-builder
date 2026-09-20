@@ -158,6 +158,63 @@ class CompileResult(BaseModel):
     ok: bool
 
 
+# P0 graph foundation, Slice C (design doc, "LangGraph adapter boundary"):
+# the capability matrix a RuntimeAdapter exposes, one row per portable
+# feature. Exposed at GET /api/runtime-targets/{target_id}/capabilities;
+# Studio shows it only when a user encounters a capability diagnostic.
+class CapabilityEntry(BaseModel):
+    feature: str
+    supported: bool
+    notes: str | None = None
+
+
+class CapabilityMatrix(BaseModel):
+    target_id: str
+    capabilities: list[CapabilityEntry]
+
+
+# P0 graph foundation, Slice C
+# (docs/planning/features/p0-graph-foundation-design-plan.md, "Releases and
+# fingerprinting"): an immutable, content-addressed snapshot of a
+# GraphDefinition. `graph` is the full canonical graph at publish time;
+# `resource_snapshots` embeds every tool/mcp_servers/knowledge resource that
+# graph's nodes resolve live today, keyed "{kind}:{id}" — see
+# releases.py's resolve_resource_snapshots. Never mutated after creation;
+# republishing an unchanged graph returns the existing release instead
+# (idempotent on semantic_fingerprint — see releases.py's publish_release).
+class GraphRelease(BaseModel):
+    id: str
+    graph_id: str
+    graph: GraphDefinition
+    document_fingerprint: str
+    semantic_fingerprint: str
+    resource_snapshots: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    release_notes: str | None = None
+    author: str | None = None
+    created_at: str
+    # The validation report (structural + contract + resource-resolution
+    # diagnostics) that was clean at publish time — kept for audit, not
+    # re-checked on read.
+    diagnostics: list[Diagnostic] = Field(default_factory=list)
+
+
+class PublishReleaseRequest(BaseModel):
+    release_notes: str | None = None
+    author: str | None = None
+
+
+class PublishReleaseResponse(BaseModel):
+    release: GraphRelease
+    created: bool
+
+
+class ReleaseRunRequest(BaseModel):
+    input: dict[str, Any] = Field(default_factory=dict)
+    provider: Literal["ollama", "stub", "openai_compat", "groq", "google", "azure"] | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
 class RunRequest(BaseModel):
     graph_id: str
     input: dict[str, Any] = Field(default_factory=dict)

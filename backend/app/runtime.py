@@ -420,6 +420,7 @@ def _prepare_run(
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[ExecContext, Any, dict[str, Any]]:
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
@@ -457,6 +458,7 @@ def _prepare_run(
         resolved_provider=resolved_provider.value,
         requested_model=model,
         api_key=api_key,
+        release_resource_snapshots=release_resource_snapshots,
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
@@ -468,11 +470,17 @@ def start_run(
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[str, RunEventBus]:
     """Creates run bookkeeping and returns immediately; caller schedules `_execute`.
 
     Use this on long-lived processes (local Docker). Serverless must use
     `start_run_inline` so execution finishes before the isolate freezes.
+
+    `release_resource_snapshots` (P0 graph foundation, Slice C): pass a
+    published release's embedded resource snapshots to make this a
+    release-sourced run — `None` (the default) is an ordinary draft-sourced
+    run, unchanged from before this parameter existed.
     """
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
@@ -480,6 +488,7 @@ def start_run(
         provider=provider,
         model=model,
         api_key=api_key,
+        release_resource_snapshots=release_resource_snapshots,
     )
     asyncio.create_task(_execute(ctx, compiled_app, run_input))
     return ctx.run_id, ctx.bus
@@ -491,14 +500,17 @@ async def start_run_inline(
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[str, RunEventBus]:
-    """Create the run and await execution in this request (Vercel / serverless)."""
+    """Create the run and await execution in this request (Vercel / serverless).
+    See `start_run` for `release_resource_snapshots`."""
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
         run_input,
         provider=provider,
         model=model,
         api_key=api_key,
+        release_resource_snapshots=release_resource_snapshots,
     )
     await _execute(ctx, compiled_app, run_input)
     return ctx.run_id, ctx.bus
