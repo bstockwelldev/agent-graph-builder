@@ -17,6 +17,7 @@ import {
   providerModelCatalogSchema,
   providerReadySchema,
   publishReleaseResponseSchema,
+  releaseDiffSchema,
   releaseIndexEntrySchema,
   runGraphSnapshotSchema,
   runSummarySchema,
@@ -39,6 +40,7 @@ import type {
   ProviderModelCatalog,
   PromptTemplate,
   PublishReleaseResponse,
+  ReleaseDiff,
   ReleaseIndexEntry,
   RunGraphSnapshot,
   RunSummary,
@@ -262,6 +264,16 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graph-releases/${releaseId}/runs`,
         { method: "POST", body: JSON.stringify({ input, provider, model, api_key: apiKey }) },
         runSummarySchema,
+      ),
+    // P1 rollout plan, Slice A ("Semantic release comparison") — a
+    // categorized behavior-level diff between two releases (node config,
+    // edge/router, port/contract, and resource_snapshots deltas).
+    compareReleases: (releaseId: string, otherReleaseId: string) =>
+      jsonFetch<ReleaseDiff>(
+        baseUrl,
+        `/api/graph-releases/${releaseId}/compare/${otherReleaseId}`,
+        undefined,
+        releaseDiffSchema,
       ),
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.

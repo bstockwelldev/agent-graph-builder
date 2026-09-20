@@ -178,6 +178,27 @@ export const capabilityMatrixSchema = z.object({
   capabilities: z.array(capabilityEntrySchema),
 });
 
+// P1 rollout plan, Slice A ("Semantic release comparison") — GET
+// /api/graph-releases/{id}/compare/{other_id}. See
+// backend/app/fingerprint.py's diff_graphs and backend/app/models.py's
+// GraphElementChange/ReleaseDiff.
+export const graphElementChangeSchema = z.object({
+  id: z.string(),
+  change: z.enum(["added", "removed", "modified"]),
+  fields: z.record(z.string(), z.record(z.string(), z.unknown())),
+});
+
+export const releaseDiffSchema = z.object({
+  from_release_id: z.string(),
+  to_release_id: z.string(),
+  from_semantic_fingerprint: z.string(),
+  to_semantic_fingerprint: z.string(),
+  identical: z.boolean(),
+  node_changes: z.array(graphElementChangeSchema),
+  edge_changes: z.array(graphElementChangeSchema),
+  resource_changes: z.array(graphElementChangeSchema),
+});
+
 export const routeDecisionSchema = z.object({
   nodeId: z.string(),
   selectedEdgeId: z.string(),

@@ -45,6 +45,7 @@ from .models import (
     NodeTrace,
     PublishReleaseRequest,
     PublishReleaseResponse,
+    ReleaseDiff,
     ReleaseRunRequest,
     RunGraphSnapshot,
     RunRequest,
@@ -53,7 +54,13 @@ from .models import (
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
-from .releases import ReleasePublishBlocked, get_release, list_releases, publish_release
+from .releases import (
+    ReleasePublishBlocked,
+    compare_releases,
+    get_release,
+    list_releases,
+    publish_release,
+)
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
 from .spa_cache import SpaCacheControlMiddleware
 
@@ -220,6 +227,21 @@ def get_release_endpoint(graph_id: str, release_id: str) -> GraphRelease:
     if release is None:
         raise HTTPException(status_code=404, detail="release not found")
     return release
+
+
+@app.get("/api/graph-releases/{release_id}/compare/{other_release_id}")
+def compare_releases_endpoint(release_id: str, other_release_id: str) -> ReleaseDiff:
+    from_graph_id = storage.get_release_graph_id(release_id)
+    from_release = get_release(release_id, from_graph_id) if from_graph_id is not None else None
+    if from_release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+
+    to_graph_id = storage.get_release_graph_id(other_release_id)
+    to_release = get_release(other_release_id, to_graph_id) if to_graph_id is not None else None
+    if to_release is None:
+        raise HTTPException(status_code=404, detail="other release not found")
+
+    return compare_releases(from_release, to_release)
 
 
 @app.post("/api/graph-releases/{release_id}/compile")

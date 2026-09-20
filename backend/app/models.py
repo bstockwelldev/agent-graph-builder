@@ -198,6 +198,30 @@ class GraphRelease(BaseModel):
     diagnostics: list[Diagnostic] = Field(default_factory=list)
 
 
+# P1 rollout plan, Slice A ("Semantic release comparison") — a single
+# node/edge/resource-snapshot delta between two releases' semantic payloads.
+# `fields` is only populated when `change == "modified"`: field name ->
+# {"from": ..., "to": ...}. Comparing behavior, not raw JSON, per the P0
+# doc's "semantic diffs should explain behavior changes" framing — canvas
+# position is already excluded, since this reuses fingerprint.py's semantic
+# (not document) payload builders.
+class GraphElementChange(BaseModel):
+    id: str
+    change: Literal["added", "removed", "modified"]
+    fields: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class ReleaseDiff(BaseModel):
+    from_release_id: str
+    to_release_id: str
+    from_semantic_fingerprint: str
+    to_semantic_fingerprint: str
+    identical: bool
+    node_changes: list[GraphElementChange] = Field(default_factory=list)
+    edge_changes: list[GraphElementChange] = Field(default_factory=list)
+    resource_changes: list[GraphElementChange] = Field(default_factory=list)
+
+
 class PublishReleaseRequest(BaseModel):
     release_notes: str | None = None
     author: str | None = None

@@ -172,9 +172,70 @@ def release_semantic_fingerprint(
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 
+def _node_payload_by_id(graph: GraphDefinition) -> dict[str, dict[str, Any]]:
+    return {node["id"]: node for node in _semantic_payload(graph)["nodes"]}
+
+
+def _edge_payload_by_id(graph: GraphDefinition) -> dict[str, dict[str, Any]]:
+    return {edge["id"]: edge for edge in _semantic_payload(graph)["edges"]}
+
+
+def _diff_by_id(
+    before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Categorizes each id present in either side as added, removed, or
+    (when present on both sides but with differing field values) modified,
+    with modified entries carrying a per-field {"from": ..., "to": ...}
+    breakdown. `id` itself is never reported as a changed field — it's the
+    key these two dicts are already matched on."""
+    changes: list[dict[str, Any]] = []
+    for element_id in sorted(set(before) | set(after)):
+        if element_id not in before:
+            changes.append({"id": element_id, "change": "added", "fields": {}})
+            continue
+        if element_id not in after:
+            changes.append({"id": element_id, "change": "removed", "fields": {}})
+            continue
+        before_fields = before[element_id]
+        after_fields = after[element_id]
+        fields = {
+            key: {"from": before_fields.get(key), "to": after_fields.get(key)}
+            for key in sorted(set(before_fields) | set(after_fields))
+            if key != "id" and before_fields.get(key) != after_fields.get(key)
+        }
+        if fields:
+            changes.append({"id": element_id, "change": "modified", "fields": fields})
+    return changes
+
+
+def diff_graphs(
+    graph_a: GraphDefinition,
+    graph_b: GraphDefinition,
+    resource_snapshots_a: dict[str, dict[str, Any]] | None = None,
+    resource_snapshots_b: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Categorized behavior-level deltas between two graphs (P1 rollout
+    plan, Slice A: "semantic release comparison"). Node and edge deltas are
+    computed over `_semantic_payload`'s shape, so node config, edge/router
+    config, and port/contract changes are all captured as field-level
+    diffs, and canvas-position-only edits never appear. `resource_snapshots`
+    deltas are computed the same way when both sides are given — each
+    snapshot's payload is itself a flat-ish dict, so the same per-field
+    diff applies. Returns raw dicts matching `GraphElementChange`'s shape
+    (not the Pydantic model itself, which lives in `models.py` — callers
+    that need the model validate these dicts into it, e.g.
+    `releases.compare_releases`)."""
+    return {
+        "node_changes": _diff_by_id(_node_payload_by_id(graph_a), _node_payload_by_id(graph_b)),
+        "edge_changes": _diff_by_id(_edge_payload_by_id(graph_a), _edge_payload_by_id(graph_b)),
+        "resource_changes": _diff_by_id(resource_snapshots_a or {}, resource_snapshots_b or {}),
+    }
+
+
 __all__ = [
     "document_fingerprint",
     "semantic_fingerprint",
     "release_document_fingerprint",
     "release_semantic_fingerprint",
+    "diff_graphs",
 ]

@@ -19,6 +19,7 @@ import type {
   graphDefinitionSchema,
   graphEdgeSchema,
   graphNodeSchema,
+  graphElementChangeSchema,
   graphOrientationSchema,
   graphPortSchema,
   graphReleaseSchema,
@@ -35,6 +36,7 @@ import type {
   providerModelCatalogSchema,
   providerModelOptionSchema,
   publishReleaseResponseSchema,
+  releaseDiffSchema,
   releaseIndexEntrySchema,
   routeDecisionSchema,
   runGraphSnapshotSchema,
@@ -87,6 +89,10 @@ export type PublishReleaseResponse = z.infer<typeof publishReleaseResponseSchema
 export type ReleaseIndexEntry = z.infer<typeof releaseIndexEntrySchema>;
 export type CapabilityEntry = z.infer<typeof capabilityEntrySchema>;
 export type CapabilityMatrix = z.infer<typeof capabilityMatrixSchema>;
+
+// P1 rollout plan, Slice A ("Semantic release comparison").
+export type GraphElementChange = z.infer<typeof graphElementChangeSchema>;
+export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 
 // "paused" was added for the `human_gate` node type (studio-consolidation
 // Phase 2): a run stopped at a human-approval checkpoint, resumable via

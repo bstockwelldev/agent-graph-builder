@@ -12,6 +12,7 @@ import {
   graphPortSchema,
   graphReleaseSchema,
   portContractSchema,
+  releaseDiffSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
 } from "./schemas.js";
@@ -274,6 +275,54 @@ describe("capabilityMatrixSchema", () => {
   it("rejects a capability entry missing the required supported field", () => {
     const matrix = { target_id: "langgraph", capabilities: [{ feature: "x" }] };
     expect(capabilityMatrixSchema.safeParse(matrix).success).toBe(false);
+  });
+});
+
+// P1 rollout plan, Slice A ("Semantic release comparison").
+describe("releaseDiffSchema", () => {
+  it("accepts an identical-releases diff with no changes", () => {
+    const diff = {
+      from_release_id: "rel_1",
+      to_release_id: "rel_1",
+      from_semantic_fingerprint: "a".repeat(64),
+      to_semantic_fingerprint: "a".repeat(64),
+      identical: true,
+      node_changes: [],
+      edge_changes: [],
+      resource_changes: [],
+    };
+    expect(releaseDiffSchema.safeParse(diff).success).toBe(true);
+  });
+
+  it("accepts added/removed/modified element changes", () => {
+    const diff = {
+      from_release_id: "rel_1",
+      to_release_id: "rel_2",
+      from_semantic_fingerprint: "a".repeat(64),
+      to_semantic_fingerprint: "b".repeat(64),
+      identical: false,
+      node_changes: [
+        { id: "n1", change: "modified", fields: { config: { from: {}, to: { extra: "x" } } } },
+        { id: "n2", change: "added", fields: {} },
+      ],
+      edge_changes: [{ id: "e1", change: "removed", fields: {} }],
+      resource_changes: [],
+    };
+    expect(releaseDiffSchema.safeParse(diff).success).toBe(true);
+  });
+
+  it("rejects an unknown change discriminant", () => {
+    const diff = {
+      from_release_id: "rel_1",
+      to_release_id: "rel_2",
+      from_semantic_fingerprint: "a".repeat(64),
+      to_semantic_fingerprint: "b".repeat(64),
+      identical: false,
+      node_changes: [{ id: "n1", change: "renamed", fields: {} }],
+      edge_changes: [],
+      resource_changes: [],
+    };
+    expect(releaseDiffSchema.safeParse(diff).success).toBe(false);
   });
 });
 
