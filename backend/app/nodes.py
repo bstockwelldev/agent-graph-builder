@@ -191,7 +191,12 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
         else {}
     )
     augmented_system_prompt = await augment_system_with_knowledge(
-        system_prompt or "", ctx.graph.id, str(upstream), **knowledge_kwargs
+        system_prompt or "",
+        ctx.graph.id,
+        str(upstream),
+        run_id=ctx.run_id,
+        node_id=node.id,
+        **knowledge_kwargs,
     )
     output = await chat_model.generate(
         system_prompt=augmented_system_prompt, user_prompt=str(upstream)

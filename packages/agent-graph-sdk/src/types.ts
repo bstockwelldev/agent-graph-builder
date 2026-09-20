@@ -24,6 +24,7 @@ import type {
   graphOrientationSchema,
   graphPortSchema,
   graphReleaseSchema,
+  knowledgeLineageEntrySchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodePositionSchema,
@@ -172,3 +173,6 @@ export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayload
 
 // P2, "Cross-cutting policy overlays" (backend/app/policies.py).
 export type PolicyException = z.infer<typeof policyExceptionSchema>;
+
+// P2, "Retrieval/document lineage graph" (backend/app/knowledge.py).
+export type KnowledgeLineageEntry = z.infer<typeof knowledgeLineageEntrySchema>;

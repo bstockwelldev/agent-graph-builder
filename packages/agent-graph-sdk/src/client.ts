@@ -9,6 +9,7 @@ import {
   deletedSchema,
   graphDefinitionSchema,
   graphReleaseSchema,
+  knowledgeLineageEntrySchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
@@ -40,6 +41,7 @@ import type {
   Fixture,
   GraphDefinition,
   GraphRelease,
+  KnowledgeLineageEntry,
   LlmProfile,
   McpServerConfig,
   NodeTrace,
@@ -412,6 +414,18 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         { method: "DELETE" },
         deletedSchema,
       ),
+    // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py) —
+    // every recorded retrieval for this graph's knowledge base, optionally
+    // filtered to one document: "which runs/nodes used this document."
+    getKnowledgeLineage: (graphId: string, documentId?: string) => {
+      const query = documentId ? `?document_id=${encodeURIComponent(documentId)}` : "";
+      return jsonFetch<KnowledgeLineageEntry[]>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge/lineage${query}`,
+        undefined,
+        knowledgeLineageEntrySchema.array(),
+      );
+    },
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.
     getRuntimeTargetCapabilities: (targetId: string) =>

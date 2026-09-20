@@ -529,3 +529,22 @@ export const createPolicyExceptionRequestSchema = z.object({
   reason: z.string().nullish(),
   expires_at: z.string(),
 });
+
+/**
+ * P2, "Retrieval/document lineage graph" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/knowledge.py). One durable record of a knowledge chunk
+ * actually retrieved and used to augment an `llm` node's system prompt
+ * during a run — "which runs/nodes used this document."
+ */
+export const knowledgeLineageEntrySchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  document_id: z.string(),
+  document_name: z.string(),
+  chunk_id: z.string(),
+  run_id: z.string(),
+  node_id: z.string(),
+  score: z.number(),
+  created_at: z.string(),
+});
