@@ -7,6 +7,7 @@
 export type WorkbenchPanelId =
   | "palette"
   | "run"
+  | "releases"
   | "chat"
   | "agents"
   | "prompts"
@@ -29,6 +30,9 @@ export const WORKBENCH_PANELS: Record<
 > = {
   palette: { title: "Add node", hotkey: null, scope: "graph" },
   run: { title: "Run", hotkey: null, scope: "graph" },
+  // P0 graph foundation, Slice C/D Studio UI: publish immutable releases
+  // and browse release history for the current graph.
+  releases: { title: "Releases", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
   chat: { title: "Chat", hotkey: "mod+shift+c", scope: "global" },
   agents: { title: "Agents", hotkey: null, scope: "global" },

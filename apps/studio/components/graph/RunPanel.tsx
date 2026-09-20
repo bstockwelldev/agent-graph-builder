@@ -558,7 +558,17 @@ export function RunPanel({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
                       <span style={{ fontWeight: 600 }}>{run.status}</span>
-                      {run.provider && <span style={{ opacity: 0.6 }}>{run.provider}</span>}
+                      <span style={{ display: "flex", gap: spacing[1], opacity: 0.6 }}>
+                        {/* P0 graph foundation, Slice D: labels whether this
+                            run came from a published release (immune to
+                            later draft edits) or the draft as it stood at
+                            run time — design doc, "Run history: labels the
+                            release or draft snapshot used." */}
+                        {run.source === "release" && (
+                          <span title={run.graph_release_id ?? undefined}>release</span>
+                        )}
+                        {run.provider && <span>{run.provider}</span>}
+                      </span>
                     </div>
                     <div style={{ ...typeScale.caption, opacity: 0.75, textAlign: "left", marginTop: spacing[1] }}>
                       {formatRunLabel(run)}
