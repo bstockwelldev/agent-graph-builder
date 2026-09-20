@@ -19,6 +19,8 @@ import {
   publishReleaseResponseSchema,
   releaseDiffSchema,
   releaseIndexEntrySchema,
+  routingComparisonSchema,
+  routingLabReportSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
   simulateResultSchema,
@@ -44,6 +46,8 @@ import type {
   PublishReleaseResponse,
   ReleaseDiff,
   ReleaseIndexEntry,
+  RoutingComparison,
+  RoutingLabReport,
   RunGraphSnapshot,
   RunSummary,
   SimulateResult,
@@ -308,6 +312,24 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/runs/${runId}/replay`,
         { method: "POST" },
         simulateResultSchema,
+      ),
+    // P1 rollout plan, Slice D ("Routing policy lab") — runs a graph once
+    // per fixture in `dataset` (via simulate, so no live tool/LLM call for
+    // any node a fixture stubs) and aggregates the resulting route
+    // decisions into a per-router/branch-node distribution.
+    runRoutingDataset: (graphId: string, dataset: Fixture[]) =>
+      jsonFetch<RoutingLabReport>(
+        baseUrl,
+        `/api/graphs/${graphId}/routing-lab/run`,
+        { method: "POST", body: JSON.stringify({ dataset }) },
+        routingLabReportSchema,
+      ),
+    compareRoutingDatasets: (graphId: string, otherGraphId: string, dataset: Fixture[]) =>
+      jsonFetch<RoutingComparison>(
+        baseUrl,
+        `/api/graphs/${graphId}/routing-lab/compare/${otherGraphId}`,
+        { method: "POST", body: JSON.stringify({ dataset }) },
+        routingComparisonSchema,
       ),
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.

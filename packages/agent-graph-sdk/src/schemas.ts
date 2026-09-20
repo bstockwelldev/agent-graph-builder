@@ -291,6 +291,55 @@ export const simulateResultSchema = z.object({
   traces: z.array(nodeTraceSchema),
 });
 
+// P1 rollout plan, Slice D ("Routing policy lab") — POST
+// /api/graphs/{id}/routing-lab/run and /routing-lab/compare/{other_id}.
+// See backend/app/routing_lab.py and backend/app/models.py's
+// RoutingLabReport/RoutingComparison family.
+export const routeTargetCountSchema = z.object({
+  target_node_id: z.string(),
+  count: z.number(),
+});
+
+export const routeNodeDistributionSchema = z.object({
+  node_id: z.string(),
+  total: z.number(),
+  targets: z.array(routeTargetCountSchema),
+});
+
+export const routingDatasetRunResultSchema = z.object({
+  fixture_index: z.number(),
+  run_id: z.string(),
+  status: z.string(),
+  route_decisions: z.array(routeDecisionSchema),
+  estimated_usd: z.number(),
+  duration_ms: z.number().nullish(),
+});
+
+export const routingLabReportSchema = z.object({
+  graph_id: z.string(),
+  dataset_size: z.number(),
+  distributions: z.array(routeNodeDistributionSchema),
+  total_estimated_usd: z.number(),
+  runs: z.array(routingDatasetRunResultSchema),
+});
+
+export const routeTargetCountDeltaSchema = z.object({
+  target_node_id: z.string(),
+  baseline_count: z.number(),
+  candidate_count: z.number(),
+});
+
+export const routeNodeDistributionDeltaSchema = z.object({
+  node_id: z.string(),
+  targets: z.array(routeTargetCountDeltaSchema),
+});
+
+export const routingComparisonSchema = z.object({
+  baseline: routingLabReportSchema,
+  candidate: routingLabReportSchema,
+  distribution_deltas: z.array(routeNodeDistributionDeltaSchema),
+});
+
 export const providerModelOptionSchema = z.object({
   id: z.string(),
   label: z.string(),

@@ -48,9 +48,12 @@ from .models import (
     PublishReleaseResponse,
     ReleaseDiff,
     ReleaseRunRequest,
+    RoutingComparison,
+    RoutingLabReport,
     RunGraphSnapshot,
     RunRequest,
     RunResumeRequest,
+    RunRoutingDatasetRequest,
     RunSummary,
     SimulateResult,
 )
@@ -65,6 +68,7 @@ from .releases import (
 )
 from .replay import ReplayBlocked, ReplayNotFound, replay_run
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
+from .routing_lab import compare_routing_reports, run_routing_dataset
 from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
 
@@ -286,6 +290,49 @@ async def simulate_release_endpoint(release_id: str, fixture: Fixture) -> Simula
                 "diagnostics": [d.model_dump() for d in exc.diagnostics],
             },
         ) from exc
+
+
+@app.post("/api/graphs/{graph_id}/routing-lab/run")
+async def run_routing_dataset_endpoint(
+    graph_id: str, request: RunRoutingDatasetRequest
+) -> RoutingLabReport:
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    try:
+        return await run_routing_dataset(graph, request.dataset)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "routing dataset run blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+
+
+@app.post("/api/graphs/{graph_id}/routing-lab/compare/{other_graph_id}")
+async def compare_routing_datasets_endpoint(
+    graph_id: str, other_graph_id: str, request: RunRoutingDatasetRequest
+) -> RoutingComparison:
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    other_graph = storage.get_graph(other_graph_id)
+    if other_graph is None:
+        raise HTTPException(status_code=404, detail="other graph not found")
+    try:
+        baseline = await run_routing_dataset(graph, request.dataset)
+        candidate = await run_routing_dataset(other_graph, request.dataset)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "routing dataset run blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+    return compare_routing_reports(baseline, candidate)
 
 
 @app.post("/api/graph-releases/{release_id}/compile")

@@ -40,6 +40,13 @@ import type {
   releaseDiffSchema,
   releaseIndexEntrySchema,
   routeDecisionSchema,
+  routeNodeDistributionDeltaSchema,
+  routeNodeDistributionSchema,
+  routeTargetCountDeltaSchema,
+  routeTargetCountSchema,
+  routingComparisonSchema,
+  routingDatasetRunResultSchema,
+  routingLabReportSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
   simulateResultSchema,
@@ -99,6 +106,15 @@ export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph stubbing").
 export type Fixture = z.infer<typeof fixtureSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
+
+// P1 rollout plan, Slice D ("Routing policy lab").
+export type RouteTargetCount = z.infer<typeof routeTargetCountSchema>;
+export type RouteNodeDistribution = z.infer<typeof routeNodeDistributionSchema>;
+export type RoutingDatasetRunResult = z.infer<typeof routingDatasetRunResultSchema>;
+export type RoutingLabReport = z.infer<typeof routingLabReportSchema>;
+export type RouteTargetCountDelta = z.infer<typeof routeTargetCountDeltaSchema>;
+export type RouteNodeDistributionDelta = z.infer<typeof routeNodeDistributionDeltaSchema>;
+export type RoutingComparison = z.infer<typeof routingComparisonSchema>;
 
 // "paused" was added for the `human_gate` node type (studio-consolidation
 // Phase 2): a run stopped at a human-approval checkpoint, resumable via

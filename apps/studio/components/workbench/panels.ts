@@ -8,6 +8,7 @@ export type WorkbenchPanelId =
   | "palette"
   | "run"
   | "releases"
+  | "routingLab"
   | "chat"
   | "agents"
   | "prompts"
@@ -33,6 +34,10 @@ export const WORKBENCH_PANELS: Record<
   // P0 graph foundation, Slice C/D Studio UI: publish immutable releases
   // and browse release history for the current graph.
   releases: { title: "Releases", hotkey: null, scope: "graph" },
+  // P1 rollout plan, Slice D Studio UI: run a fixture dataset against the
+  // current graph (or a comparison graph) and see the resulting
+  // route-decision distribution.
+  routingLab: { title: "Routing lab", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
   chat: { title: "Chat", hotkey: "mod+shift+c", scope: "global" },
   agents: { title: "Agents", hotkey: null, scope: "global" },

@@ -375,3 +375,59 @@ class Fixture(BaseModel):
 class SimulateResult(BaseModel):
     run: RunSummary
     traces: list[NodeTrace]
+
+
+# P1 rollout plan, Slice D ("Routing policy lab") — runs a graph against a
+# fixture dataset (each entry a `Fixture`, reused from Slice B) and
+# aggregates the resulting `route_decisions` into a per-router/branch-node
+# distribution: how many dataset runs selected each outgoing target.
+# Comparing two such reports (e.g. before/after an edge condition change)
+# is `graph-native-control-plane-plan.md` Section 4's "compare routing
+# versions over fixture datasets."
+class RouteTargetCount(BaseModel):
+    target_node_id: str
+    count: int
+
+
+class RouteNodeDistribution(BaseModel):
+    node_id: str
+    total: int
+    targets: list[RouteTargetCount] = Field(default_factory=list)
+
+
+class RoutingDatasetRunResult(BaseModel):
+    fixture_index: int
+    run_id: str
+    status: str
+    route_decisions: list[RouteDecision] = Field(default_factory=list)
+    estimated_usd: float
+    duration_ms: int | None = None
+
+
+class RoutingLabReport(BaseModel):
+    graph_id: str
+    dataset_size: int
+    distributions: list[RouteNodeDistribution] = Field(default_factory=list)
+    total_estimated_usd: float
+    runs: list[RoutingDatasetRunResult] = Field(default_factory=list)
+
+
+class RunRoutingDatasetRequest(BaseModel):
+    dataset: list[Fixture] = Field(default_factory=list)
+
+
+class RouteTargetCountDelta(BaseModel):
+    target_node_id: str
+    baseline_count: int
+    candidate_count: int
+
+
+class RouteNodeDistributionDelta(BaseModel):
+    node_id: str
+    targets: list[RouteTargetCountDelta] = Field(default_factory=list)
+
+
+class RoutingComparison(BaseModel):
+    baseline: RoutingLabReport
+    candidate: RoutingLabReport
+    distribution_deltas: list[RouteNodeDistributionDelta] = Field(default_factory=list)

@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { HelpCircle, Play, Plus, Tag } from "lucide-react";
+import { GitBranch, HelpCircle, Play, Plus, Tag } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -72,6 +72,7 @@ import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
+import { RoutingLabPanel } from "./RoutingLabPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
@@ -888,6 +889,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const showInspector =
     workbench.activePanel !== "run" &&
     workbench.activePanel !== "releases" &&
+    workbench.activePanel !== "routingLab" &&
     Boolean(selectedNode || selectedEdge);
 
   return (
@@ -983,6 +985,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             onClick={() => workbench.toggle("releases")}
           >
             {workbench.activePanel === "releases" ? "Close releases" : "Releases"}
+          </Button>
+          <Button
+            variant={workbench.activePanel === "routingLab" ? "synth" : "outline"}
+            size="sm"
+            onClick={() => workbench.toggle("routingLab")}
+          >
+            {workbench.activePanel === "routingLab" ? "Close routing lab" : "Routing lab"}
           </Button>
           <Button
             variant="ghost"
@@ -1151,6 +1160,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           >
             <Tag className="size-4" />
           </Button>
+          <Button
+            variant={workbench.activePanel === "routingLab" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Routing lab"
+            onClick={() => workbench.toggle("routingLab")}
+          >
+            <GitBranch className="size-4" />
+          </Button>
           <Button variant="ghost" size="icon-sm" aria-label="Shortcuts and gestures" onClick={() => workbench.toggle("help")}>
             <HelpCircle className="size-4" />
           </Button>
@@ -1191,6 +1208,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="routingLab" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <RoutingLabPanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
       {showInspector && !workbench.isCompact && (
         <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">

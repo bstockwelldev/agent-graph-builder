@@ -14,6 +14,8 @@ import {
   graphReleaseSchema,
   portContractSchema,
   releaseDiffSchema,
+  routingComparisonSchema,
+  routingLabReportSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
   simulateResultSchema,
@@ -362,6 +364,73 @@ describe("fixtureSchema / simulateResultSchema", () => {
   it("rejects a simulate result missing traces", () => {
     const result = { run: { run_id: "r1", graph_id: "g1", status: "succeeded", result: null } };
     expect(simulateResultSchema.safeParse(result).success).toBe(false);
+  });
+});
+
+// P1 rollout plan, Slice D ("Routing policy lab").
+describe("routingLabReportSchema / routingComparisonSchema", () => {
+  const report = {
+    graph_id: "g1",
+    dataset_size: 2,
+    distributions: [
+      {
+        node_id: "router_1",
+        total: 2,
+        targets: [
+          { target_node_id: "tool_lookup", count: 1 },
+          { target_node_id: "prompt_answer", count: 1 },
+        ],
+      },
+    ],
+    total_estimated_usd: 0,
+    runs: [
+      {
+        fixture_index: 0,
+        run_id: "r1",
+        status: "succeeded",
+        route_decisions: [
+          { nodeId: "router_1", selectedEdgeId: "e1", selectedTargetNodeId: "tool_lookup" },
+        ],
+        estimated_usd: 0,
+        duration_ms: 12,
+      },
+      {
+        fixture_index: 1,
+        run_id: "r2",
+        status: "succeeded",
+        route_decisions: [
+          { nodeId: "router_1", selectedEdgeId: "e2", selectedTargetNodeId: "prompt_answer" },
+        ],
+        estimated_usd: 0,
+        duration_ms: null,
+      },
+    ],
+  };
+
+  it("accepts a well-formed routing lab report", () => {
+    expect(routingLabReportSchema.safeParse(report).success).toBe(true);
+  });
+
+  it("rejects a report missing dataset_size", () => {
+    const { dataset_size: _dataset_size, ...rest } = report;
+    expect(routingLabReportSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("accepts a routing comparison wrapping two reports and deltas", () => {
+    const comparison = {
+      baseline: report,
+      candidate: report,
+      distribution_deltas: [
+        {
+          node_id: "router_1",
+          targets: [
+            { target_node_id: "tool_lookup", baseline_count: 1, candidate_count: 0 },
+            { target_node_id: "prompt_answer", baseline_count: 1, candidate_count: 2 },
+          ],
+        },
+      ],
+    };
+    expect(routingComparisonSchema.safeParse(comparison).success).toBe(true);
   });
 });
 
