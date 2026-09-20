@@ -21,18 +21,21 @@ from langgraph.graph import END, START, StateGraph
 from . import storage
 from .compiler import compile_graph as validate_and_diagnose
 from .events import RunEventBus, create_bus, now_iso
+from .fingerprint import semantic_fingerprint
 from .models import (
     CompileResult,
     GraphDefinition,
     NodeTrace,
     NodeType,
     RouteDecision,
+    RunGraphSnapshot,
     RunPauseState,
     RunSummary,
 )
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .ports import default_input_port, default_output_port, project_node_output, resolve_node_input
 from .providers.base import get_chat_model, resolve_chat_provider
+from .releases import resolve_resource_snapshots
 from .telemetry.provider import get_server_telemetry
 from .telemetry.types import (
     ServerTelemetry,
@@ -44,6 +47,14 @@ from .telemetry.types import (
 
 def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return {**a, **b}
+
+
+# P0 graph foundation, Slice D (GraphRunIdentity.compiler_version): a static
+# P0 baseline — there is no compiler versioning scheme yet (only one target,
+# `LangGraphAdapter`, exists). Bump this only when compile_workflow's
+# behavior changes in a way that would make an old RunGraphSnapshot's
+# recorded compile outcome stop being reproducible.
+COMPILER_VERSION = "langgraph-p0.1"
 
 
 class RunState(TypedDict, total=False):
@@ -414,6 +425,47 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
         bus.close()
 
 
+def _persist_run_graph_snapshot(
+    run_id: str,
+    graph: GraphDefinition,
+    *,
+    source: str,
+    graph_fingerprint: str,
+    release_id: str | None,
+) -> None:
+    """Durably persists this run's RunGraphSnapshot before compiling (design
+    doc, "Lifecycle"). A release-sourced run gets a thin pointer only — the
+    GraphRelease already durably stores the graph and its resource
+    bindings, so embedding them again here would just duplicate storage. A
+    draft-sourced run embeds the full graph plus a resolve_resource_snapshots
+    call of its own: there is no other durable, immutable record of exactly
+    what this draft looked like and resolved once editing continues.
+    """
+    if source == "release":
+        snapshot = RunGraphSnapshot(
+            run_id=run_id,
+            graph_id=graph.id,
+            source="release",
+            graph_fingerprint=graph_fingerprint,
+            release_id=release_id,
+            created_at=now_iso(),
+        )
+    else:
+        draft_resource_snapshots, _diagnostics = resolve_resource_snapshots(graph)
+        snapshot = RunGraphSnapshot(
+            run_id=run_id,
+            graph_id=graph.id,
+            source="draft_snapshot",
+            graph_fingerprint=graph_fingerprint,
+            graph=graph,
+            resource_snapshots=draft_resource_snapshots,
+            created_at=now_iso(),
+        )
+    storage.save_run_graph_snapshot(
+        run_id, graph.id, snapshot.model_dump(mode="json"), created_at=snapshot.created_at
+    )
+
+
 def _prepare_run(
     compiled_workflow_id: str,
     run_input: dict[str, Any],
@@ -421,10 +473,16 @@ def _prepare_run(
     model: str | None = None,
     api_key: str | None = None,
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
+    release_id: str | None = None,
 ) -> tuple[ExecContext, Any, dict[str, Any]]:
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     resolved_provider = resolve_chat_provider(provider)
+
+    # P0 graph foundation, Slice D: every run's identity and durable graph
+    # snapshot, computed once here rather than per call site.
+    source = "release" if release_resource_snapshots is not None else "draft_snapshot"
+    graph_fp = semantic_fingerprint(graph)
 
     RUN_STORE[run_id] = RunSummary(
         run_id=run_id,
@@ -433,12 +491,22 @@ def _prepare_run(
         input=run_input,
         provider=resolved_provider.value,
         started_at=now_iso(),
+        graph_release_id=release_id,
+        graph_fingerprint=graph_fp,
+        source=source,
+        runtime_target="langgraph",
+        compiler_version=COMPILER_VERSION,
     )
     RUN_TRACES[run_id] = {}
 
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
     _start_telemetry_trace(run_id, graph.id)
+
+    _persist_run_graph_snapshot(
+        run_id, graph, source=source, graph_fingerprint=graph_fp, release_id=release_id
+    )
+    bus.emit("run.snapshot_created", {"source": source, "graphFingerprint": graph_fp})
 
     def chat_model_factory(node_model: str | None):
         effective_model = model or node_model
@@ -471,6 +539,7 @@ def start_run(
     model: str | None = None,
     api_key: str | None = None,
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
+    release_id: str | None = None,
 ) -> tuple[str, RunEventBus]:
     """Creates run bookkeeping and returns immediately; caller schedules `_execute`.
 
@@ -480,7 +549,9 @@ def start_run(
     `release_resource_snapshots` (P0 graph foundation, Slice C): pass a
     published release's embedded resource snapshots to make this a
     release-sourced run — `None` (the default) is an ordinary draft-sourced
-    run, unchanged from before this parameter existed.
+    run, unchanged from before this parameter existed. `release_id` (Slice
+    D): that release's id, recorded on the run's identity and
+    RunGraphSnapshot — pass both together or neither.
     """
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
@@ -489,6 +560,7 @@ def start_run(
         model=model,
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
+        release_id=release_id,
     )
     asyncio.create_task(_execute(ctx, compiled_app, run_input))
     return ctx.run_id, ctx.bus
@@ -501,9 +573,10 @@ async def start_run_inline(
     model: str | None = None,
     api_key: str | None = None,
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
+    release_id: str | None = None,
 ) -> tuple[str, RunEventBus]:
     """Create the run and await execution in this request (Vercel / serverless).
-    See `start_run` for `release_resource_snapshots`."""
+    See `start_run` for `release_resource_snapshots`/`release_id`."""
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
         run_input,
@@ -511,6 +584,7 @@ async def start_run_inline(
         model=model,
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
+        release_id=release_id,
     )
     await _execute(ctx, compiled_app, run_input)
     return ctx.run_id, ctx.bus

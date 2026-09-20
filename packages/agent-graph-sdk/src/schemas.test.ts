@@ -12,6 +12,7 @@ import {
   graphPortSchema,
   graphReleaseSchema,
   portContractSchema,
+  runGraphSnapshotSchema,
   runSummarySchema,
 } from "./schemas.js";
 
@@ -273,5 +274,79 @@ describe("capabilityMatrixSchema", () => {
   it("rejects a capability entry missing the required supported field", () => {
     const matrix = { target_id: "langgraph", capabilities: [{ feature: "x" }] };
     expect(capabilityMatrixSchema.safeParse(matrix).success).toBe(false);
+  });
+});
+
+// P0 graph foundation, Slice D (docs/planning/features/p0-graph-foundation-design-plan.md).
+describe("runSummarySchema (Slice D run identity fields)", () => {
+  it("still parses a legacy run with none of the new identity fields", () => {
+    const run = { run_id: "r1", graph_id: "g1", status: "succeeded", result: null };
+    expect(runSummarySchema.safeParse(run).success).toBe(true);
+  });
+
+  it("accepts a run with the full GraphRunIdentity fields populated", () => {
+    const run = {
+      run_id: "r1",
+      graph_id: "g1",
+      status: "succeeded",
+      result: null,
+      graph_release_id: "rel_1",
+      graph_fingerprint: "a".repeat(64),
+      source: "release",
+      runtime_target: "langgraph",
+      compiler_version: "langgraph-p0.1",
+    };
+    expect(runSummarySchema.safeParse(run).success).toBe(true);
+  });
+
+  it("rejects an unknown source value", () => {
+    const run = { run_id: "r1", graph_id: "g1", status: "succeeded", result: null, source: "made_up" };
+    expect(runSummarySchema.safeParse(run).success).toBe(false);
+  });
+});
+
+describe("runGraphSnapshotSchema", () => {
+  const graph = {
+    id: "g1",
+    name: "Demo",
+    entry_node_id: "n1",
+    nodes: [{ id: "n1", type: "input", position: { x: 0, y: 0 }, config: {} }],
+    edges: [],
+  };
+
+  it("accepts a draft-sourced snapshot with an embedded graph and resource_snapshots", () => {
+    const snapshot = {
+      run_id: "run_1",
+      graph_id: "g1",
+      source: "draft_snapshot",
+      graph_fingerprint: "a".repeat(64),
+      release_id: null,
+      graph,
+      resource_snapshots: {},
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    expect(runGraphSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
+  it("accepts a release-sourced snapshot with graph/resource_snapshots omitted", () => {
+    const snapshot = {
+      run_id: "run_1",
+      graph_id: "g1",
+      source: "release",
+      graph_fingerprint: "a".repeat(64),
+      release_id: "rel_1",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    expect(runGraphSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
+  it("rejects a snapshot missing the required graph_fingerprint", () => {
+    const snapshot = {
+      run_id: "run_1",
+      graph_id: "g1",
+      source: "draft_snapshot",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    expect(runGraphSnapshotSchema.safeParse(snapshot).success).toBe(false);
   });
 });

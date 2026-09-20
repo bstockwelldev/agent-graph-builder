@@ -37,6 +37,7 @@ import type {
   publishReleaseResponseSchema,
   releaseIndexEntrySchema,
   routeDecisionSchema,
+  runGraphSnapshotSchema,
   runSummarySchema,
   toolDefinitionSchema,
 } from "./schemas.js";
@@ -93,6 +94,12 @@ export type CapabilityMatrix = z.infer<typeof capabilityMatrixSchema>;
 export type RunSummary = z.infer<typeof runSummarySchema>;
 export type NodeTrace = z.infer<typeof nodeTraceSchema>;
 export type PlatformEvent = z.infer<typeof platformEventSchema>;
+
+/**
+ * P0 graph foundation, Slice D (docs/planning/features/p0-graph-foundation-design-plan.md,
+ * "Persistence and API" — GET /api/runs/{run_id}/snapshot).
+ */
+export type RunGraphSnapshot = z.infer<typeof runGraphSnapshotSchema>;
 
 export type ProviderModelOption = z.infer<typeof providerModelOptionSchema>;
 export type ProviderModelCatalog = z.infer<typeof providerModelCatalogSchema>;

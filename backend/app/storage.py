@@ -107,6 +107,18 @@ _SCHEMA_STATEMENTS = (
         created_at text not null
     )
     """,
+    # P0 graph foundation, Slice D (docs/planning/features/p0-graph-foundation-design-plan.md,
+    # "Persistence and API"): one durable RunGraphSnapshot per run_id,
+    # never deleted — including when the owning graph is deleted (delete_graph
+    # only ever touches the `graph` table/key, never this one).
+    """
+    create table if not exists run_graph_snapshot (
+        run_id text primary key,
+        graph_id text not null,
+        payload_json text not null,
+        created_at text not null
+    )
+    """,
 )
 
 
@@ -686,3 +698,47 @@ def get_release_graph_id(release_id: str) -> str | None:
             "select graph_id from graph_release_payload where release_id = ?", (release_id,)
         ).fetchone()
     return row[0] if row else None
+
+
+# ---------------------------------------------------------------------------
+# Run graph snapshots (P0 graph foundation, Slice D — see
+# docs/planning/features/p0-graph-foundation-design-plan.md, "Persistence
+# and API"). One durable record per run_id, written once at run creation,
+# never updated or deleted — including by delete_graph (below), which only
+# ever touches the `graph` table/key.
+# ---------------------------------------------------------------------------
+
+_RUN_GRAPH_SNAPSHOT_PREFIX = "run_graph_snapshots/"
+
+
+def _run_graph_snapshot_key(run_id: str) -> str:
+    return f"{_RUN_GRAPH_SNAPSHOT_PREFIX}{run_id}.json"
+
+
+def save_run_graph_snapshot(
+    run_id: str, graph_id: str, payload: dict[str, Any], *, created_at: str
+) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_run_graph_snapshot_key(run_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into run_graph_snapshot (run_id, graph_id, payload_json, created_at) "
+            "values (?, ?, ?, ?) "
+            "on conflict(run_id) do update set payload_json = excluded.payload_json",
+            (run_id, graph_id, json.dumps(payload), created_at),
+        )
+
+
+def get_run_graph_snapshot(run_id: str) -> dict[str, Any] | None:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.get_json(_run_graph_snapshot_key(run_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select payload_json from run_graph_snapshot where run_id = ?", (run_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return json.loads(row[0])

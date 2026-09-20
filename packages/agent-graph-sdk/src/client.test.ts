@@ -323,6 +323,29 @@ describe("createAgentGraphClient releases", () => {
       expect.objectContaining({}),
     );
   });
+
+  it("getRunGraphSnapshot fetches GET /api/runs/{id}/snapshot", async () => {
+    const snapshot = {
+      run_id: "run_1",
+      graph_id: "g1",
+      source: "draft_snapshot" as const,
+      graph_fingerprint: "a".repeat(64),
+      release_id: null,
+      graph,
+      resource_snapshots: {},
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(snapshot));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.getRunGraphSnapshot("run_1");
+
+    expect(result).toEqual(snapshot);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/api/runs/run_1/snapshot`,
+      expect.objectContaining({}),
+    );
+  });
 });
 
 // Studio-consolidation Phase 4f: jsonFetch now parses every response through
