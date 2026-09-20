@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { HelpCircle, Play, Plus } from "lucide-react";
+import { HelpCircle, Play, Plus, Tag } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -71,6 +71,7 @@ import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
+import { ReleasesPanel } from "./ReleasesPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
 import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
 import { Button } from "@/components/ui/button";
@@ -884,7 +885,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDelete={deleteSelection}
     />
   ) : null;
-  const showInspector = workbench.activePanel !== "run" && Boolean(selectedNode || selectedEdge);
+  const showInspector =
+    workbench.activePanel !== "run" &&
+    workbench.activePanel !== "releases" &&
+    Boolean(selectedNode || selectedEdge);
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -972,6 +976,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             onClick={() => workbench.toggle("run")}
           >
             {workbench.activePanel === "run" ? "Close run" : "Run"}
+          </Button>
+          <Button
+            variant={workbench.activePanel === "releases" ? "synth" : "outline"}
+            size="sm"
+            onClick={() => workbench.toggle("releases")}
+          >
+            {workbench.activePanel === "releases" ? "Close releases" : "Releases"}
           </Button>
           <Button
             variant="ghost"
@@ -1102,7 +1113,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
       {/* Bottom mobile action bar — the top HUD's buttons are reachable at
           compact widths too (it wraps), but a thumb-reachable bottom bar is
-          the more usable mobile pattern for the four most-used actions.
+          the more usable mobile pattern for the most-used actions.
           Compact-only: at desktop widths these same actions already have
           dedicated HUD buttons plus hotkeys/palette entries. */}
       {workbench.isCompact && (
@@ -1132,6 +1143,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           >
             <Play className="size-4" />
           </Button>
+          <Button
+            variant={workbench.activePanel === "releases" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Releases"
+            onClick={() => workbench.toggle("releases")}
+          >
+            <Tag className="size-4" />
+          </Button>
           <Button variant="ghost" size="icon-sm" aria-label="Shortcuts and gestures" onClick={() => workbench.toggle("help")}>
             <HelpCircle className="size-4" />
           </Button>
@@ -1139,10 +1158,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       )}
       </div>
 
-      {/* Right reserved column — the run panel and the node/edge inspector
-          share this slot (already mutually exclusive via `showInspector`'s
-          `workbench.activePanel !== "run"` check), so at most one ever
-          occupies this column's width at a time. */}
+      {/* Right reserved column — the run panel, the releases panel, and the
+          node/edge inspector share this slot (already mutually exclusive
+          via `showInspector`'s `workbench.activePanel` checks), so at most
+          one ever occupies this column's width at a time. */}
       <WorkbenchDrawer panelId="run" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <RunPanel
           layout="rail"
@@ -1169,6 +1188,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             if (runId) void handleSelectHistoricalRun(runId);
           }}
         />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} />
       </WorkbenchDrawer>
       {showInspector && !workbench.isCompact && (
         <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">

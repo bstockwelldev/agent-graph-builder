@@ -266,6 +266,23 @@ def _ensure_run_schema(conn: _DbConnection) -> None:
     columns = {row[1] for row in conn.execute("pragma table_info(run)").fetchall()}
     if "route_decisions_json" not in columns:
         conn.execute("alter table run add column route_decisions_json text not null default '[]'")
+    # P0 graph foundation, Slice D (GraphRunIdentity fields on RunSummary):
+    # added post-hoc, same migration pattern as route_decisions_json above
+    # — nullable so existing rows don't need backfilling. The
+    # vercel_blob.py/object_store.py/supabase_store.py backends need no
+    # equivalent migration: they round-trip the whole RunSummary via
+    # model_dump()/model_validate(), so new optional fields are already
+    # handled there for free — only this hand-unpacked SQL path needed it.
+    identity_columns = (
+        "graph_release_id",
+        "graph_fingerprint",
+        "source",
+        "runtime_target",
+        "compiler_version",
+    )
+    for column in identity_columns:
+        if column not in columns:
+            conn.execute(f"alter table run add column {column} text")
 
 
 def _open_sqlite(path: Path) -> sqlite3.Connection:
@@ -337,6 +354,7 @@ def list_graphs() -> list[GraphDefinition]:
 
 
 def _row_to_run_summary(row: tuple) -> RunSummary:
+    graph_release_id = graph_fingerprint = source = runtime_target = compiler_version = None
     if len(row) == 9:
         (
             run_id,
@@ -350,6 +368,19 @@ def _row_to_run_summary(row: tuple) -> RunSummary:
             completed_at,
         ) = row
         route_decisions_json = "[]"
+    elif len(row) == 10:
+        (
+            run_id,
+            graph_id,
+            status,
+            input_json,
+            provider,
+            result_json,
+            error,
+            started_at,
+            completed_at,
+            route_decisions_json,
+        ) = row
     else:
         (
             run_id,
@@ -362,6 +393,11 @@ def _row_to_run_summary(row: tuple) -> RunSummary:
             started_at,
             completed_at,
             route_decisions_json,
+            graph_release_id,
+            graph_fingerprint,
+            source,
+            runtime_target,
+            compiler_version,
         ) = row
     result = json.loads(result_json) if result_json else None
     route_decisions_raw = json.loads(route_decisions_json or "[]")
@@ -377,6 +413,11 @@ def _row_to_run_summary(row: tuple) -> RunSummary:
         started_at=started_at,
         completed_at=completed_at,
         route_decisions=route_decisions,
+        graph_release_id=graph_release_id,
+        graph_fingerprint=graph_fingerprint,
+        source=source,  # type: ignore[arg-type]
+        runtime_target=runtime_target,  # type: ignore[arg-type]
+        compiler_version=compiler_version,
     )
 
 
@@ -394,8 +435,9 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
             """
             insert into run (
                 run_id, graph_id, status, input_json, provider,
-                result_json, error, started_at, completed_at, route_decisions_json
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                result_json, error, started_at, completed_at, route_decisions_json,
+                graph_release_id, graph_fingerprint, source, runtime_target, compiler_version
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(run_id) do update set
                 status = excluded.status,
                 result_json = excluded.result_json,
@@ -414,6 +456,15 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
                 summary.started_at or "",
                 summary.completed_at or "",
                 route_decisions_json,
+                # P0 graph foundation, Slice D: identity fields, set once at
+                # run creation and never updated (omitted from the
+                # on-conflict clause above) — a run's identity doesn't
+                # change over its lifetime, only its status/result do.
+                summary.graph_release_id,
+                summary.graph_fingerprint,
+                summary.source,
+                summary.runtime_target,
+                summary.compiler_version,
             ),
         )
         conn.execute("delete from run_node_trace where run_id = ?", (summary.run_id,))
@@ -431,7 +482,8 @@ def get_run(run_id: str) -> RunSummary | None:
         row = conn.execute(
             """
             select run_id, graph_id, status, input_json, provider,
-                   result_json, error, started_at, completed_at, route_decisions_json
+                   result_json, error, started_at, completed_at, route_decisions_json,
+                   graph_release_id, graph_fingerprint, source, runtime_target, compiler_version
             from run where run_id = ?
             """,
             (run_id,),
@@ -465,7 +517,8 @@ def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
         rows = conn.execute(
             """
             select run_id, graph_id, status, input_json, provider,
-                   result_json, error, started_at, completed_at, route_decisions_json
+                   result_json, error, started_at, completed_at, route_decisions_json,
+                   graph_release_id, graph_fingerprint, source, runtime_target, compiler_version
             from run
             where graph_id = ?
             order by started_at desc

@@ -55,6 +55,49 @@ async def test_draft_sourced_run_persists_a_full_snapshot() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_identity_fields_survive_the_sqlite_storage_round_trip() -> None:
+    """Regression test: `_row_to_run_summary`'s hand-unpacked SQL row must
+    include the Slice D identity columns. `RUN_STORE[run_id]` (in-memory)
+    always had them — a completed run's `_execute` finally-block persists
+    to SQLite via `storage.save_run_snapshot`, and a caller reading it back
+    from a fresh process (or, as here, straight from `storage.get_run`/
+    `list_runs_for_graph` rather than the in-memory dict) previously got
+    `None` for every one of them, even for a release-sourced run. Caught by
+    manually exercising the Studio run-history UI, not by any earlier
+    automated test — every prior Slice D test only ever asserted against
+    `runtime.RUN_STORE[run_id]`, never forcing an actual storage round
+    trip."""
+    graph = build_demo_graph()
+    storage.save_graph(graph)
+    release, _created = publish_release(graph)
+    compile_result = runtime.compile_workflow(release.graph)
+    assert compile_result.ok
+
+    run_id, bus = runtime.start_run(
+        compile_result.compiled_workflow_id,
+        {"question": "hi"},
+        provider="stub",
+        release_resource_snapshots=release.resource_snapshots,
+        release_id=release.id,
+    )
+    async for _ in bus.stream():
+        pass
+
+    reread = storage.get_run(run_id)
+    assert reread is not None
+    assert reread.source == "release"
+    assert reread.graph_release_id == release.id
+    assert reread.graph_fingerprint == semantic_fingerprint(graph)
+    assert reread.runtime_target == "langgraph"
+    assert reread.compiler_version
+
+    listed = storage.list_runs_for_graph(graph.id)
+    reread_from_list = next(r for r in listed if r.run_id == run_id)
+    assert reread_from_list.source == "release"
+    assert reread_from_list.graph_release_id == release.id
+
+
+@pytest.mark.asyncio
 async def test_release_sourced_run_persists_a_thin_pointer_only() -> None:
     graph = build_demo_graph()
     storage.save_graph(graph)
