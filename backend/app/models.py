@@ -450,3 +450,26 @@ class ResourceVersion(BaseModel):
 class PublishResourceVersionResponse(BaseModel):
     version: ResourceVersion
     created: bool
+
+
+# P2, "Cross-cutting policy overlays" (docs/planning/roadmap.md's Strategic
+# Roadmap Addendum): a named, time-boxed waiver for one policy diagnostic
+# code on one graph — optionally scoped to a single node — so a compile or
+# publish gate a policy would otherwise block can proceed deliberately,
+# with the waiver itself expiring rather than becoming a silent permanent
+# exemption. See policies.py.
+class PolicyException(BaseModel):
+    id: str
+    graph_id: str
+    policy_code: str
+    node_id: str | None = None
+    reason: str | None = None
+    created_at: str
+    expires_at: str
+
+
+class CreatePolicyExceptionRequest(BaseModel):
+    policy_code: str
+    node_id: str | None = None
+    reason: str | None = None
+    expires_at: str

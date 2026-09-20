@@ -30,6 +30,7 @@ import type {
   nodeTraceSchema,
   nodeTypeSchema,
   platformEventSchema,
+  policyExceptionSchema,
   portContractSchema,
   portKindSchema,
   promptTemplateSchema,
@@ -168,3 +169,6 @@ export type AnalyticsDailyPoint = z.infer<typeof analyticsDailyPointSchema>;
 export type AnalyticsGraphRow = z.infer<typeof analyticsGraphRowSchema>;
 export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
 export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayloadSchema>;
+
+// P2, "Cross-cutting policy overlays" (backend/app/policies.py).
+export type PolicyException = z.infer<typeof policyExceptionSchema>;

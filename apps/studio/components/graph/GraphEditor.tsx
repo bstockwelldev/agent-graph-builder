@@ -387,6 +387,22 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     };
   }, [semanticFingerprint, buildGraphDefinition]);
 
+  // P2, "Cross-cutting policy overlays" — waiving a diagnostic from
+  // RunPanel doesn't change the graph, so the debounced effect above (keyed
+  // on semanticFingerprint) won't re-fire on its own; this re-validates
+  // immediately so the waived diagnostic's blocking:false takes effect.
+  const refreshDiagnostics = useCallback(() => {
+    try {
+      const graph = buildGraphDefinition();
+      client
+        .validateGraph(graph)
+        .then((result) => setDiagnostics(result.diagnostics))
+        .catch((err: unknown) => console.error("Diagnostics refresh failed:", err));
+    } catch {
+      // Graph not ready yet.
+    }
+  }, [buildGraphDefinition]);
+
   const applyDiagnosticsToCanvas = useCallback(
     (nextDiagnostics: Diagnostic[]) => {
       const fingerprint = `${graphId}:${fingerprintIssueMaps(nextDiagnostics)}`;
@@ -1191,6 +1207,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onCompile={handleCompile}
           onRun={handleRun}
           onDiagnosticClick={handleDiagnosticClick}
+          onPolicyExceptionCreated={refreshDiagnostics}
           runSummary={runSummary}
           runHistory={runHistory}
           runHistoryLoading={runHistoryLoading}

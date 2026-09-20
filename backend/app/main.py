@@ -40,10 +40,12 @@ from .models import (
     CapabilityMatrix,
     CompileResult,
     CreateGraphRequest,
+    CreatePolicyExceptionRequest,
     Fixture,
     GraphDefinition,
     GraphRelease,
     NodeTrace,
+    PolicyException,
     PublishReleaseRequest,
     PublishReleaseResponse,
     PublishResourceVersionResponse,
@@ -58,6 +60,11 @@ from .models import (
     RunRoutingDatasetRequest,
     RunSummary,
     SimulateResult,
+)
+from .policies import (
+    create_policy_exception,
+    delete_policy_exception,
+    list_graph_policy_exceptions,
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
@@ -342,6 +349,37 @@ async def compare_routing_datasets_endpoint(
             },
         ) from exc
     return compare_routing_reports(baseline, candidate)
+
+
+@app.post("/api/graphs/{graph_id}/policy-exceptions")
+def create_policy_exception_endpoint(
+    graph_id: str, request: CreatePolicyExceptionRequest
+) -> PolicyException:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return create_policy_exception(
+        graph_id,
+        policy_code=request.policy_code,
+        node_id=request.node_id,
+        reason=request.reason,
+        expires_at=request.expires_at,
+    )
+
+
+@app.get("/api/graphs/{graph_id}/policy-exceptions")
+def list_policy_exceptions_endpoint(graph_id: str) -> list[PolicyException]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list_graph_policy_exceptions(graph_id)
+
+
+@app.delete("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
+def delete_policy_exception_endpoint(graph_id: str, exception_id: str) -> dict[str, bool]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    if not delete_policy_exception(graph_id, exception_id):
+        raise HTTPException(status_code=404, detail="policy exception not found")
+    return {"deleted": True}
 
 
 @app.post("/api/graph-releases/{release_id}/compile")

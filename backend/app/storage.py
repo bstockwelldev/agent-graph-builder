@@ -147,6 +147,24 @@ _SCHEMA_STATEMENTS = (
         created_at text not null
     )
     """,
+    # P2, "Cross-cutting policy overlays": time-boxed waivers for a policy
+    # diagnostic code, scoped to a graph (and optionally one node). See
+    # policies.py.
+    """
+    create table if not exists policy_exception (
+        id text primary key,
+        graph_id text not null,
+        policy_code text not null,
+        node_id text,
+        reason text,
+        created_at text not null,
+        expires_at text not null
+    )
+    """,
+    """
+    create index if not exists idx_policy_exception_graph
+    on policy_exception (graph_id, policy_code)
+    """,
 )
 
 
@@ -903,3 +921,88 @@ def get_resource_version_index(kind: str, resource_id: str) -> list[dict[str, An
             (kind, resource_id),
         ).fetchall()
     return [{"version_id": row[0], "fingerprint": row[1], "created_at": row[2]} for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Policy exceptions (P2, "Cross-cutting policy overlays" — see
+# docs/planning/roadmap.md's Strategic Roadmap Addendum and policies.py).
+# Every route that touches one is graph-scoped (`/api/graphs/{graph_id}/
+# policy-exceptions/...`), so — unlike graph releases' deliberately
+# release_id-only routes — there's no need for a separate owner reverse
+# index here.
+# ---------------------------------------------------------------------------
+
+_POLICY_EXCEPTION_PREFIX = "policy_exceptions/"
+
+
+def _policy_exception_key(graph_id: str, exception_id: str) -> str:
+    return f"{_POLICY_EXCEPTION_PREFIX}{graph_id}/{exception_id}.json"
+
+
+def save_policy_exception(graph_id: str, exception_id: str, payload: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_policy_exception_key(graph_id, exception_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into policy_exception "
+            "(id, graph_id, policy_code, node_id, reason, created_at, expires_at) "
+            "values (?, ?, ?, ?, ?, ?, ?)",
+            (
+                exception_id,
+                graph_id,
+                payload["policy_code"],
+                payload.get("node_id"),
+                payload.get("reason"),
+                payload["created_at"],
+                payload["expires_at"],
+            ),
+        )
+
+
+def list_policy_exceptions(graph_id: str) -> list[dict[str, Any]]:
+    remote = _json_object_backend()
+    if remote is not None:
+        items: list[dict[str, Any]] = []
+        for key in remote.list_keys(f"{_POLICY_EXCEPTION_PREFIX}{graph_id}/"):
+            payload = remote.get_json(key)
+            if payload is not None:
+                items.append(payload)
+        items.sort(key=lambda item: item.get("created_at", ""))
+        return items
+    with _connect() as conn:
+        rows = conn.execute(
+            "select id, graph_id, policy_code, node_id, reason, created_at, expires_at "
+            "from policy_exception where graph_id = ? order by created_at",
+            (graph_id,),
+        ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "graph_id": row[1],
+            "policy_code": row[2],
+            "node_id": row[3],
+            "reason": row[4],
+            "created_at": row[5],
+            "expires_at": row[6],
+        }
+        for row in rows
+    ]
+
+
+def delete_policy_exception(graph_id: str, exception_id: str) -> bool:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.delete_json(_policy_exception_key(graph_id, exception_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select 1 from policy_exception where id = ? and graph_id = ?",
+            (exception_id, graph_id),
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute(
+            "delete from policy_exception where id = ? and graph_id = ?", (exception_id, graph_id)
+        )
+    return True
