@@ -18,6 +18,7 @@ import {
   providerReadySchema,
   publishReleaseResponseSchema,
   releaseIndexEntrySchema,
+  runGraphSnapshotSchema,
   runSummarySchema,
   toolDefinitionSchema,
 } from "./schemas.js";
@@ -39,6 +40,7 @@ import type {
   PromptTemplate,
   PublishReleaseResponse,
   ReleaseIndexEntry,
+  RunGraphSnapshot,
   RunSummary,
   ToolDefinition,
 } from "./types.js";
@@ -153,6 +155,20 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       ),
     getRunNodeTraces: (runId: string) =>
       jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${runId}/nodes`, undefined, nodeTraceSchema.array()),
+    /**
+     * P0 graph foundation, Slice D — the run's durable RunGraphSnapshot:
+     * the exact graph (and, for a draft-sourced run, resolved resource
+     * bindings) it started from, independent of any later draft edits.
+     * Historical run inspection should open this, not the current
+     * (possibly changed) `getGraph`.
+     */
+    getRunGraphSnapshot: (runId: string) =>
+      jsonFetch<RunGraphSnapshot>(
+        baseUrl,
+        `/api/runs/${runId}/snapshot`,
+        undefined,
+        runGraphSnapshotSchema,
+      ),
     /**
      * Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
      * `approve` defaults to true; pass false to fail the run instead of

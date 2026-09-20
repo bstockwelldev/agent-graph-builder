@@ -46,6 +46,7 @@ from .models import (
     PublishReleaseRequest,
     PublishReleaseResponse,
     ReleaseRunRequest,
+    RunGraphSnapshot,
     RunRequest,
     RunResumeRequest,
     RunSummary,
@@ -254,6 +255,7 @@ async def start_release_run(release_id: str, request: ReleaseRunRequest) -> RunS
         "model": request.model,
         "api_key": request.api_key,
         "release_resource_snapshots": release.resource_snapshots,
+        "release_id": release.id,
     }
     if runtime.is_serverless_runtime():
         run_id, _bus = await runtime.start_run_inline(**start_kwargs)
@@ -524,6 +526,19 @@ def get_run(run_id: str) -> RunSummary:
     if summary is None:
         raise HTTPException(status_code=404, detail="run not found")
     return summary
+
+
+@app.get("/api/runs/{run_id}/snapshot")
+def get_run_graph_snapshot(run_id: str) -> RunGraphSnapshot:
+    """P0 graph foundation, Slice D: the run's durable RunGraphSnapshot —
+    the exact graph (and, for a draft-sourced run, resolved resource
+    bindings) it started from, independent of any later draft edits.
+    Historical run inspection opens this, not the current (possibly
+    changed) `GET /api/graphs/{id}`."""
+    payload = storage.get_run_graph_snapshot(run_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="run graph snapshot not found")
+    return RunGraphSnapshot.model_validate(payload)
 
 
 @app.post("/api/runs/{run_id}/resume")
