@@ -5,8 +5,16 @@ import type { GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 
 export type LayoutRankDir = "LR" | "TB";
 
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 72;
+// Must safely cover the largest rendered node card
+// (components/graph/nodes/GraphNodeView.tsx's cardStyle: minWidth 256, and
+// height that grows with category/title/summary/status/compile-issue rows,
+// up to ~140px). Dagre only guarantees non-overlap against the box size it
+// was given here -- these previously undershot the real card (180x72),
+// so ranksep/nodesep computed a gap too small for the actual rendered
+// cards, and adjacent nodes visually overlapped on every layout run,
+// including the very first one on page load.
+const NODE_WIDTH = 280;
+const NODE_HEIGHT = 160;
 const NARROW_PANE_WIDTH = 420;
 
 export function computeEffectiveRankDir(
