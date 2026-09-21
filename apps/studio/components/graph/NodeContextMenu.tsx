@@ -29,18 +29,37 @@ export function NodeContextMenu({
   title,
   actions,
   onClose,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder = "Search…",
+  emptyMessage = "No matches.",
 }: {
   x: number;
   y: number;
   title: string;
   actions: NodeContextMenuAction[];
   onClose: () => void;
+  /** Phase 10 Slice C follow-up, "searchable node launcher": when set
+   * (with onSearchChange), renders a filter input above the action list.
+   * `actions` is expected to already be filtered by the caller — this
+   * component doesn't filter its own list, it just renders the box. */
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
+  /** Shown instead of the (empty) action list when search matches none. */
+  emptyMessage?: string;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
+  const searchable = onSearchChange !== undefined;
 
   useEffect(() => {
-    menuRef.current?.focus();
+    if (searchable) {
+      searchInputRef.current?.focus();
+    } else {
+      menuRef.current?.focus();
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -49,7 +68,9 @@ export function NodeContextMenu({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, searchable]);
+
+  const estimatedHeight = ITEM_HEIGHT * Math.max(actions.length, 1) + (searchable ? ITEM_HEIGHT + spacing[2] : 0);
 
   return (
     <>
@@ -74,12 +95,27 @@ export function NodeContextMenu({
         style={{
           ...menuStyle,
           left: Math.min(x, window.innerWidth - 240),
-          top: Math.min(y, window.innerHeight - ITEM_HEIGHT * actions.length - 56),
+          top: Math.min(y, window.innerHeight - estimatedHeight - 56),
         }}
       >
         <div id={titleId} style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>
           {title}
         </div>
+        {searchable && (
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchValue}
+            onChange={(event) => onSearchChange?.(event.target.value)}
+            placeholder={searchPlaceholder}
+            style={searchInputStyle}
+          />
+        )}
+        {searchable && actions.length === 0 && (
+          <div style={{ ...typeScale.caption, opacity: 0.6, padding: `${spacing[1]}px ${spacing[2]}px` }}>
+            {emptyMessage}
+          </div>
+        )}
         {actions.map((action) => (
           <button
             key={action.label}
@@ -115,6 +151,18 @@ const menuStyle: CSSProperties = {
   background: surface.panel,
   boxShadow: shadow[4],
   outline: "none",
+};
+
+const searchInputStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  marginBottom: spacing[1],
+  padding: `4px ${spacing[2]}px`,
+  borderRadius: radius.md,
+  border: `1px solid ${surface.borderStrong}`,
+  background: surface.raised,
+  color: text.primary,
+  ...typeScale.caption,
 };
 
 const itemStyle: CSSProperties = {
