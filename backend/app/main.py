@@ -32,6 +32,7 @@ from .knowledge import (
     KnowledgeUploadError,
     delete_knowledge_document,
     get_knowledge_entry,
+    list_knowledge_lineage,
     summarize_entry,
     upload_knowledge_document,
 )
@@ -40,19 +41,32 @@ from .models import (
     CapabilityMatrix,
     CompileResult,
     CreateGraphRequest,
+    CreatePolicyExceptionRequest,
     Fixture,
     GraphDefinition,
     GraphRelease,
+    KnowledgeLineageEntry,
     NodeTrace,
+    PolicyException,
     PublishReleaseRequest,
     PublishReleaseResponse,
+    PublishResourceVersionResponse,
     ReleaseDiff,
     ReleaseRunRequest,
+    ResourceVersion,
+    RoutingComparison,
+    RoutingLabReport,
     RunGraphSnapshot,
     RunRequest,
     RunResumeRequest,
+    RunRoutingDatasetRequest,
     RunSummary,
     SimulateResult,
+)
+from .policies import (
+    create_policy_exception,
+    delete_policy_exception,
+    list_graph_policy_exceptions,
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
@@ -65,6 +79,14 @@ from .releases import (
 )
 from .replay import ReplayBlocked, ReplayNotFound, replay_run
 from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
+from .resource_versions import (
+    VERSIONABLE_RESOURCE_KINDS,
+    ResourceNotFound,
+    get_resource_version,
+    list_resource_versions,
+    publish_resource_version,
+)
+from .routing_lab import compare_routing_reports, run_routing_dataset
 from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
 
@@ -288,6 +310,80 @@ async def simulate_release_endpoint(release_id: str, fixture: Fixture) -> Simula
         ) from exc
 
 
+@app.post("/api/graphs/{graph_id}/routing-lab/run")
+async def run_routing_dataset_endpoint(
+    graph_id: str, request: RunRoutingDatasetRequest
+) -> RoutingLabReport:
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    try:
+        return await run_routing_dataset(graph, request.dataset)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "routing dataset run blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+
+
+@app.post("/api/graphs/{graph_id}/routing-lab/compare/{other_graph_id}")
+async def compare_routing_datasets_endpoint(
+    graph_id: str, other_graph_id: str, request: RunRoutingDatasetRequest
+) -> RoutingComparison:
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    other_graph = storage.get_graph(other_graph_id)
+    if other_graph is None:
+        raise HTTPException(status_code=404, detail="other graph not found")
+    try:
+        baseline = await run_routing_dataset(graph, request.dataset)
+        candidate = await run_routing_dataset(other_graph, request.dataset)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "routing dataset run blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+    return compare_routing_reports(baseline, candidate)
+
+
+@app.post("/api/graphs/{graph_id}/policy-exceptions")
+def create_policy_exception_endpoint(
+    graph_id: str, request: CreatePolicyExceptionRequest
+) -> PolicyException:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return create_policy_exception(
+        graph_id,
+        policy_code=request.policy_code,
+        node_id=request.node_id,
+        reason=request.reason,
+        expires_at=request.expires_at,
+    )
+
+
+@app.get("/api/graphs/{graph_id}/policy-exceptions")
+def list_policy_exceptions_endpoint(graph_id: str) -> list[PolicyException]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list_graph_policy_exceptions(graph_id)
+
+
+@app.delete("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
+def delete_policy_exception_endpoint(graph_id: str, exception_id: str) -> dict[str, bool]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    if not delete_policy_exception(graph_id, exception_id):
+        raise HTTPException(status_code=404, detail="policy exception not found")
+    return {"deleted": True}
+
+
 @app.post("/api/graph-releases/{release_id}/compile")
 def compile_release_endpoint(release_id: str) -> CompileResult:
     graph_id = storage.get_release_graph_id(release_id)
@@ -384,6 +480,20 @@ def delete_graph_knowledge_document(graph_id: str, document_id: str) -> dict[str
     return result
 
 
+# P2, "Retrieval/document lineage graph" (docs/planning/roadmap.md's
+# Strategic Roadmap Addendum): every recorded retrieval for this graph's
+# knowledge base, optionally filtered to one document — "which runs/nodes
+# actually used this document." See knowledge.py's `augment_system_with_
+# knowledge`, which records these at retrieval time.
+@app.get("/api/graphs/{graph_id}/knowledge/lineage")
+def get_graph_knowledge_lineage(
+    graph_id: str, document_id: str | None = None
+) -> list[KnowledgeLineageEntry]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list_knowledge_lineage(graph_id, document_id)
+
+
 # ---------------------------------------------------------------------------
 # Resource CRUD (studio-consolidation Phase 3, see
 # docs/planning/features/studio-consolidation-plan.md and
@@ -452,6 +562,46 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
 
 for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
     _register_resource_routes(_kind, _path, RESOURCE_MODELS[_kind])
+
+
+# P1 rollout plan, parallel track ("Versioned reusable entity registry") —
+# generic version routes for every kind in resource_versions.py's
+# VERSIONABLE_RESOURCE_KINDS. chat_sessions (a runtime scratchpad, not a
+# reusable authored asset) never gets these routes.
+def _register_resource_version_routes(kind: str, path: str) -> None:
+    @app.post(
+        f"/api/{path}/{{resource_id}}/versions",
+        name=f"publish_{kind}_version",
+        operation_id=f"publish_{kind}_version",
+    )
+    def publish_version_route(resource_id: str) -> PublishResourceVersionResponse:
+        try:
+            return publish_resource_version(kind, resource_id)
+        except ResourceNotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get(
+        f"/api/{path}/{{resource_id}}/versions",
+        name=f"list_{kind}_versions",
+        operation_id=f"list_{kind}_versions",
+    )
+    def list_versions_route(resource_id: str) -> list[dict[str, Any]]:
+        return list_resource_versions(kind, resource_id)
+
+    @app.get(
+        f"/api/{path}/{{resource_id}}/versions/{{version_id}}",
+        name=f"get_{kind}_version",
+        operation_id=f"get_{kind}_version",
+    )
+    def get_version_route(resource_id: str, version_id: str) -> ResourceVersion:
+        version = get_resource_version(kind, resource_id, version_id)
+        if version is None or version.resource_id != resource_id:
+            raise HTTPException(status_code=404, detail="resource version not found")
+        return version
+
+
+for _kind in VERSIONABLE_RESOURCE_KINDS:
+    _register_resource_version_routes(_kind, _RESOURCE_ROUTE_PATHS[_kind])
 
 
 class ChatSessionMessageRequest(BaseModel):

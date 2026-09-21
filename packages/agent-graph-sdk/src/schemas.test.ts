@@ -13,7 +13,12 @@ import {
   fixtureSchema,
   graphReleaseSchema,
   portContractSchema,
+  publishResourceVersionResponseSchema,
   releaseDiffSchema,
+  resourceVersionIndexEntrySchema,
+  resourceVersionSchema,
+  routingComparisonSchema,
+  routingLabReportSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
   simulateResultSchema,
@@ -362,6 +367,104 @@ describe("fixtureSchema / simulateResultSchema", () => {
   it("rejects a simulate result missing traces", () => {
     const result = { run: { run_id: "r1", graph_id: "g1", status: "succeeded", result: null } };
     expect(simulateResultSchema.safeParse(result).success).toBe(false);
+  });
+});
+
+// P1 rollout plan, Slice D ("Routing policy lab").
+// P1 rollout plan, parallel track ("Versioned reusable entity registry").
+describe("resourceVersionSchema / publishResourceVersionResponseSchema", () => {
+  const version = {
+    version_id: "rver_1",
+    kind: "prompts",
+    resource_id: "p1",
+    payload: { id: "p1", name: "Greeting", body: "Hi {name}" },
+    fingerprint: "a".repeat(64),
+    created_at: "2026-09-20T00:00:00Z",
+  };
+
+  it("accepts a well-formed resource version", () => {
+    expect(resourceVersionSchema.safeParse(version).success).toBe(true);
+  });
+
+  it("rejects a version missing fingerprint", () => {
+    const { fingerprint: _fingerprint, ...rest } = version;
+    expect(resourceVersionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("accepts a publish response wrapping a version and created flag", () => {
+    const response = { version, created: true };
+    expect(publishResourceVersionResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it("accepts a compact index entry", () => {
+    const entry = { version_id: "rver_1", fingerprint: "a".repeat(64), created_at: "2026-09-20T00:00:00Z" };
+    expect(resourceVersionIndexEntrySchema.safeParse(entry).success).toBe(true);
+  });
+});
+
+describe("routingLabReportSchema / routingComparisonSchema", () => {
+  const report = {
+    graph_id: "g1",
+    dataset_size: 2,
+    distributions: [
+      {
+        node_id: "router_1",
+        total: 2,
+        targets: [
+          { target_node_id: "tool_lookup", count: 1 },
+          { target_node_id: "prompt_answer", count: 1 },
+        ],
+      },
+    ],
+    total_estimated_usd: 0,
+    runs: [
+      {
+        fixture_index: 0,
+        run_id: "r1",
+        status: "succeeded",
+        route_decisions: [
+          { nodeId: "router_1", selectedEdgeId: "e1", selectedTargetNodeId: "tool_lookup" },
+        ],
+        estimated_usd: 0,
+        duration_ms: 12,
+      },
+      {
+        fixture_index: 1,
+        run_id: "r2",
+        status: "succeeded",
+        route_decisions: [
+          { nodeId: "router_1", selectedEdgeId: "e2", selectedTargetNodeId: "prompt_answer" },
+        ],
+        estimated_usd: 0,
+        duration_ms: null,
+      },
+    ],
+  };
+
+  it("accepts a well-formed routing lab report", () => {
+    expect(routingLabReportSchema.safeParse(report).success).toBe(true);
+  });
+
+  it("rejects a report missing dataset_size", () => {
+    const { dataset_size: _dataset_size, ...rest } = report;
+    expect(routingLabReportSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("accepts a routing comparison wrapping two reports and deltas", () => {
+    const comparison = {
+      baseline: report,
+      candidate: report,
+      distribution_deltas: [
+        {
+          node_id: "router_1",
+          targets: [
+            { target_node_id: "tool_lookup", baseline_count: 1, candidate_count: 0 },
+            { target_node_id: "prompt_answer", baseline_count: 1, candidate_count: 2 },
+          ],
+        },
+      ],
+    };
+    expect(routingComparisonSchema.safeParse(comparison).success).toBe(true);
   });
 });
 

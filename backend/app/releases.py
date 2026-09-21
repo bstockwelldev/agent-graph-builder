@@ -19,6 +19,7 @@ from .compiler import validate_graph
 from .events import now_iso
 from .fingerprint import diff_graphs, release_document_fingerprint, release_semantic_fingerprint
 from .models import Diagnostic, GraphDefinition, GraphRelease, NodeType, ReleaseDiff
+from .policies import evaluate_release_governance
 from .resource_models import ToolDefinition
 
 # The original POC demo tool — like the two builtins, it's code, not a
@@ -117,7 +118,12 @@ def publish_release(
     """
     diagnostics = validate_graph(graph)
     resource_snapshots, resource_diagnostics = resolve_resource_snapshots(graph)
-    diagnostics = [*diagnostics, *resource_diagnostics]
+    # P2, "Cross-cutting policy overlays": the deploy gate. validate_graph
+    # above already ran the compile-gate policies (security/reliability/
+    # cost, via compiler.py); this is the one governance check that only
+    # makes sense at publish time, since a draft has no release_notes/author.
+    governance_diagnostics = evaluate_release_governance(graph.id, release_notes, author)
+    diagnostics = [*diagnostics, *resource_diagnostics, *governance_diagnostics]
     if any(d.blocking for d in diagnostics):
         raise ReleasePublishBlocked(diagnostics)
 
