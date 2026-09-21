@@ -18,6 +18,7 @@ import type {
   Diagnostic,
   NodeTrace,
   PlatformEvent,
+  RunGraphSnapshot,
   RunSummary,
   SimulateResult,
 } from "@bstockwelldev/agent-graph-sdk";
@@ -90,6 +91,66 @@ function RunResultDisplay({ result }: { result: unknown }) {
       }}
     >
       {formatted.text}
+    </div>
+  );
+}
+
+// Phase 10 Slice A — inline replacement for the standalone
+// `/runs/[graphId]` page's SnapshotDialog: same fields (source, fingerprint,
+// release id, node/edge counts, embedded resource count, captured-at), just
+// rendered in the HUD instead of a route the user has to leave the canvas
+// to reach.
+function RunSnapshotDisplay({ snapshot, error }: { snapshot: RunGraphSnapshot | null; error: string | null }) {
+  if (error) {
+    return (
+      <div role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[1] }}>
+        {error}
+      </div>
+    );
+  }
+  if (!snapshot) return null;
+  return (
+    <div
+      style={{
+        ...typeScale.caption,
+        marginTop: spacing[1],
+        padding: spacing[2],
+        borderRadius: radius.lg,
+        border: `1px solid ${surface.border}`,
+        background: surface.raised,
+        lineHeight: "18px",
+      }}
+    >
+      <div style={{ fontWeight: 600 }}>{snapshot.source === "release" ? "Release" : "Draft snapshot"}</div>
+      <div style={{ opacity: 0.75, fontFamily: fontFamily.mono, wordBreak: "break-all" }}>
+        fingerprint: {snapshot.graph_fingerprint}
+      </div>
+      {snapshot.release_id && (
+        <div style={{ opacity: 0.75, fontFamily: fontFamily.mono, wordBreak: "break-all" }}>
+          release: {snapshot.release_id}
+        </div>
+      )}
+      {snapshot.graph ? (
+        <div style={{ marginTop: spacing[1] - 2 }}>
+          <div>{snapshot.graph.name}</div>
+          <div style={{ opacity: 0.75 }}>
+            {snapshot.graph.nodes.length} nodes · {snapshot.graph.edges.length} edges
+          </div>
+        </div>
+      ) : (
+        <div style={{ opacity: 0.75, marginTop: spacing[1] - 2 }}>
+          Release-sourced — the full graph and its resolved resource bindings are stored on the release itself,
+          not duplicated here.
+        </div>
+      )}
+      {snapshot.resource_snapshots && (
+        <div style={{ opacity: 0.75 }}>
+          Resources embedded: {Object.keys(snapshot.resource_snapshots).length}
+        </div>
+      )}
+      <div style={{ opacity: 0.75, marginTop: spacing[1] - 2 }}>
+        Captured: {new Date(snapshot.created_at).toLocaleString()}
+      </div>
     </div>
   );
 }
@@ -176,6 +237,17 @@ export function RunPanel({
   const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
   const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
+
+  // Phase 10 Slice A ("Studio shell UX remediation" — see
+  // docs/planning/features/studio-shell-ux-gap-analysis.md): closes the
+  // one real capability gap the standalone `/runs/[graphId]` page had over
+  // this panel's own run history — viewing a run's pinned RunGraphSnapshot
+  // (design doc, "Run history: labels the release or draft snapshot used;
+  // opening it presents the exact snapshot in read-only inspection mode").
+  const [snapshotRunId, setSnapshotRunId] = useState<string | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<RunGraphSnapshot | null>(null);
 
   // P2, "Cross-cutting policy overlays" — waives a blocking `category:
   // "policy"` diagnostic with a fixed 30-day exception. Self-contained,
@@ -340,6 +412,25 @@ export function RunPanel({
       setReplayingRunId(null);
     }
   }, []);
+
+  const handleViewSnapshot = useCallback(async (runId: string) => {
+    if (snapshotRunId === runId) {
+      setSnapshotRunId(null);
+      return;
+    }
+    setSnapshotRunId(runId);
+    setSnapshotLoading(true);
+    setSnapshotError(null);
+    setSnapshot(null);
+    try {
+      const loaded = await client.getRunGraphSnapshot(runId);
+      setSnapshot(loaded);
+    } catch (err) {
+      setSnapshotError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }, [snapshotRunId]);
 
   return (
     <div style={containerStyle(layout)}>
@@ -742,15 +833,32 @@ export function RunPanel({
                         {formatRunLabel(run)}
                       </div>
                     </button>
-                    {run.status === "succeeded" && (
+                    <div style={{ display: "flex", gap: spacing[1], marginTop: spacing[1] }}>
+                      {run.status === "succeeded" && (
+                        <Button
+                          variant="secondary"
+                          disabled={replayingRunId !== null}
+                          onClick={() => void handleReplay(run.run_id)}
+                          style={{ minHeight: shell.touchTarget.min }}
+                        >
+                          {replayingRunId === run.run_id ? "Replaying…" : "Replay"}
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
-                        disabled={replayingRunId !== null}
-                        onClick={() => void handleReplay(run.run_id)}
-                        style={{ marginTop: spacing[1], minHeight: shell.touchTarget.min }}
+                        disabled={snapshotLoading && snapshotRunId === run.run_id}
+                        onClick={() => void handleViewSnapshot(run.run_id)}
+                        style={{ minHeight: shell.touchTarget.min }}
                       >
-                        {replayingRunId === run.run_id ? "Replaying…" : "Replay"}
+                        {snapshotRunId === run.run_id
+                          ? snapshotLoading
+                            ? "Loading…"
+                            : "Hide snapshot"
+                          : "View snapshot"}
                       </Button>
+                    </div>
+                    {snapshotRunId === run.run_id && (
+                      <RunSnapshotDisplay snapshot={snapshot} error={snapshotError} />
                     )}
                   </div>
                 );
