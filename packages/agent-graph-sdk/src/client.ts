@@ -9,7 +9,10 @@ import {
   deletedSchema,
   graphDefinitionSchema,
   graphReleaseSchema,
+  knowledgeDeleteResponseSchema,
   knowledgeLineageEntrySchema,
+  knowledgeSummarySchema,
+  knowledgeUploadResponseSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
@@ -41,7 +44,10 @@ import type {
   Fixture,
   GraphDefinition,
   GraphRelease,
+  KnowledgeDeleteResponse,
   KnowledgeLineageEntry,
+  KnowledgeSummary,
+  KnowledgeUploadResponse,
   LlmProfile,
   McpServerConfig,
   NodeTrace,
@@ -427,6 +433,29 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
         { method: "DELETE" },
         deletedSchema,
+      ),
+    // Knowledge base (studio-consolidation Phase 5, backend/app/knowledge.py):
+    // per-graph .txt/.md documents, chunked + embedded on upload. The upload
+    // sends `headers: {}` so `jsonFetch`'s JSON Content-Type default doesn't
+    // apply — the browser must set the multipart boundary itself.
+    getKnowledge: (graphId: string) =>
+      jsonFetch<KnowledgeSummary>(baseUrl, `/api/graphs/${graphId}/knowledge`, undefined, knowledgeSummarySchema),
+    uploadKnowledgeDocument: (graphId: string, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return jsonFetch<KnowledgeUploadResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge`,
+        { method: "POST", body: form, headers: {} },
+        knowledgeUploadResponseSchema,
+      );
+    },
+    deleteKnowledgeDocument: (graphId: string, documentId: string) =>
+      jsonFetch<KnowledgeDeleteResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge/${documentId}`,
+        { method: "DELETE" },
+        knowledgeDeleteResponseSchema,
       ),
     // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py) —
     // every recorded retrieval for this graph's knowledge base, optionally

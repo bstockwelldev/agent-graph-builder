@@ -470,3 +470,90 @@ describe("createAgentGraphClient response validation", () => {
     await expect(client.sendChatMessage("chat1", "hi")).rejects.toThrow(/unexpected shape/);
   });
 });
+
+// Knowledge base client (backend/app/knowledge.py) — get/upload/delete had
+// no client methods before the Studio knowledge panel.
+describe("createAgentGraphClient knowledge base", () => {
+  const baseUrl = "http://localhost:8000";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function jsonResponse(body: unknown, ok = true, status = 200) {
+    return {
+      ok,
+      status,
+      text: async () => JSON.stringify(body),
+      json: async () => body,
+    };
+  }
+
+  const doc = {
+    id: "d1",
+    name: "notes.md",
+    mime_type: "text/markdown",
+    uploaded_at: "2026-01-01T00:00:00Z",
+    char_count: 120,
+  };
+  const summary = { documents: [doc], chunkCount: 2, embeddingProvider: "openai", embeddingModelId: "m" };
+
+  it("getKnowledge fetches GET /api/graphs/{id}/knowledge", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ graphId: "g1", ...summary }));
+
+    const result = await createAgentGraphClient({ baseUrl }).getKnowledge("g1");
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${baseUrl}/api/graphs/g1/knowledge`);
+    expect(result.documents).toHaveLength(1);
+  });
+
+  it("getKnowledge accepts the empty-state shape (null embedding fields)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ graphId: "g1", documents: [], chunkCount: 0, embeddingProvider: null, embeddingModelId: null }),
+    );
+
+    const result = await createAgentGraphClient({ baseUrl }).getKnowledge("g1");
+
+    expect(result.embeddingProvider).toBeNull();
+  });
+
+  it("uploadKnowledgeDocument POSTs multipart form data without a JSON content type", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, documentId: "d1", addedChunkCount: 2, ...summary }));
+    const file = new File(["hello"], "notes.md", { type: "text/markdown" });
+
+    const result = await createAgentGraphClient({ baseUrl }).uploadKnowledgeDocument("g1", file);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${baseUrl}/api/graphs/g1/knowledge`);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("file")).toBeInstanceOf(File);
+    expect(init.headers).toEqual({});
+    expect(result.addedChunkCount).toBe(2);
+  });
+
+  it("deleteKnowledgeDocument sends DELETE and validates the summary response", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, documents: [], chunkCount: 0, embeddingProvider: null, embeddingModelId: null }),
+    );
+
+    const result = await createAgentGraphClient({ baseUrl }).deleteKnowledgeDocument("g1", "d1");
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${baseUrl}/api/graphs/g1/knowledge/d1`);
+    expect(init.method).toBe("DELETE");
+    expect(result.documents).toEqual([]);
+  });
+
+  it("getKnowledge rejects a response missing the documents array", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ graphId: "g1", chunkCount: 0 }));
+
+    await expect(createAgentGraphClient({ baseUrl }).getKnowledge("g1")).rejects.toThrow(/unexpected shape/);
+  });
+});

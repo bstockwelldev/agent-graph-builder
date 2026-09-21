@@ -548,3 +548,46 @@ export const knowledgeLineageEntrySchema = z.object({
   score: z.number(),
   created_at: z.string(),
 });
+
+/**
+ * Studio-consolidation Phase 5 knowledge base (backend/app/knowledge.py):
+ * one uploaded .txt/.md document. Field names are the backend's own
+ * `KnowledgeDocument.model_dump()` (snake_case), unlike the camelCase
+ * envelope `summarize_entry` wraps them in.
+ */
+export const knowledgeDocumentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mime_type: z.string(),
+  uploaded_at: z.string(),
+  char_count: z.number(),
+});
+
+// `summarize_entry`'s camelCase shape. The embedding fields are null when
+// the graph has no knowledge base yet (or its last document was deleted).
+const knowledgeSummaryFields = {
+  documents: z.array(knowledgeDocumentSchema),
+  chunkCount: z.number(),
+  embeddingProvider: z.string().nullable(),
+  embeddingModelId: z.string().nullable(),
+};
+
+// GET /api/graphs/{id}/knowledge
+export const knowledgeSummarySchema = z.object({
+  graphId: z.string(),
+  ...knowledgeSummaryFields,
+});
+
+// POST /api/graphs/{id}/knowledge (multipart upload)
+export const knowledgeUploadResponseSchema = z.object({
+  ok: z.boolean(),
+  documentId: z.string(),
+  addedChunkCount: z.number(),
+  ...knowledgeSummaryFields,
+});
+
+// DELETE /api/graphs/{id}/knowledge/{document_id}
+export const knowledgeDeleteResponseSchema = z.object({
+  ok: z.boolean(),
+  ...knowledgeSummaryFields,
+});

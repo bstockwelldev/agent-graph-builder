@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Focus, GitBranch, HelpCircle, Play, Plus, Tag } from "lucide-react";
+import { BookOpen, Focus, GitBranch, HelpCircle, Play, Plus, Tag } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -75,6 +75,7 @@ import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
+import { KnowledgePanel } from "./KnowledgePanel";
 import { ReleasesPanel } from "./ReleasesPanel";
 import { RoutingLabPanel } from "./RoutingLabPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
@@ -91,9 +92,9 @@ function isDesktopViewport(): boolean {
 }
 
 // The node/edge inspector (and, when nothing is selected, the workflow
-// summary) shares its HUD slot with these three panels (see
+// summary) shares its HUD slot with these four panels (see
 // showSelectionDock below), gating the dock's own render.
-const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab"]);
+const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge"]);
 
 // Phase 10 Slice A follow-up (docs/planning/features/studio-shell-ux-gap-analysis.md):
 // selecting a node/edge on canvas already closed "palette" (so the add-node
@@ -1123,6 +1124,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             {workbench.activePanel === "routingLab" ? "Close routing lab" : "Routing lab"}
           </Button>
           <Button
+            variant={workbench.activePanel === "knowledge" ? "synth" : "outline"}
+            size="sm"
+            onClick={() => workbench.toggle("knowledge")}
+          >
+            {workbench.activePanel === "knowledge" ? "Close knowledge" : "Knowledge"}
+          </Button>
+          <Button
             variant={focusMode ? "synth" : "outline"}
             size="sm"
             title="Dim nodes unrelated to the current selection"
@@ -1321,6 +1329,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             <GitBranch className="size-4" />
           </Button>
           <Button
+            variant={workbench.activePanel === "knowledge" ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Knowledge"
+            onClick={() => workbench.toggle("knowledge")}
+          >
+            <BookOpen className="size-4" />
+          </Button>
+          <Button
             variant={focusMode ? "synth" : "ghost"}
             size="icon-sm"
             aria-label="Focus mode"
@@ -1376,6 +1392,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="routingLab" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <RoutingLabPanel layout="rail" graphId={graphId} />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="knowledge" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <KnowledgePanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
       {showSelectionDock && !workbench.isCompact && (
         <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">
