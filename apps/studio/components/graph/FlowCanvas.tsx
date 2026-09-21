@@ -13,7 +13,18 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import { useCanvasOrientation } from "@/hooks/useCanvasOrientation";
 import { layoutNodesWithDagre } from "@/layout/dagreLayout";
 import { applyEdgePointerAffordance } from "@/lib/diagnostics";
@@ -51,6 +62,12 @@ type FlowCanvasProps = {
   onNodeClick: (nodeId: string) => void;
   onEdgeClick: (edgeId: string) => void;
   onPaneClick: () => void;
+  /** Phase 10 Slice C follow-up, "double-click + searchable node
+   * launcher" — React Flow has no built-in pane-double-click event
+   * (only onNodeDoubleClick, already used to zoom into a node), so
+   * FlowCanvasInner detects it manually from consecutive onPaneClick
+   * calls. */
+  onPaneDoubleClick?: (x: number, y: number, flowX: number, flowY: number) => void;
   onNodeContextMenu?: (nodeId: string, x: number, y: number) => void;
   onEdgeContextMenu?: (edgeId: string, x: number, y: number) => void;
   onPaneContextMenu?: (x: number, y: number, flowX: number, flowY: number) => void;
@@ -82,6 +99,7 @@ function FlowCanvasInner({
   onNodeClick,
   onEdgeClick,
   onPaneClick,
+  onPaneDoubleClick,
   onNodeContextMenu,
   onEdgeContextMenu,
   onPaneContextMenu,
@@ -203,9 +221,34 @@ function FlowCanvasInner({
     };
   }, [graphId, nodes.length, paneSize.height, paneSize.width, runFitView]);
 
-  const handlePaneClick = useCallback(() => {
-    onPaneClick();
-  }, [onPaneClick]);
+  // Phase 10 Slice C follow-up: manual double-click detection since
+  // React Flow doesn't expose a pane-double-click event of its own.
+  const lastPaneClickRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const DOUBLE_CLICK_WINDOW_MS = 400;
+  const DOUBLE_CLICK_MAX_DRIFT_PX = 8;
+
+  const handlePaneClick = useCallback(
+    (event: ReactMouseEvent) => {
+      const now = Date.now();
+      const last = lastPaneClickRef.current;
+      const isDoubleClick =
+        last !== null &&
+        now - last.time < DOUBLE_CLICK_WINDOW_MS &&
+        Math.abs(event.clientX - last.x) < DOUBLE_CLICK_MAX_DRIFT_PX &&
+        Math.abs(event.clientY - last.y) < DOUBLE_CLICK_MAX_DRIFT_PX;
+
+      if (isDoubleClick && onPaneDoubleClick) {
+        lastPaneClickRef.current = null;
+        const flowPosition = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+        onPaneDoubleClick(event.clientX, event.clientY, flowPosition.x, flowPosition.y);
+        return;
+      }
+
+      lastPaneClickRef.current = { time: now, x: event.clientX, y: event.clientY };
+      onPaneClick();
+    },
+    [onPaneClick, onPaneDoubleClick, reactFlow],
+  );
 
   return (
     <div ref={paneRef} style={{ position: "absolute", inset: 0 }}>

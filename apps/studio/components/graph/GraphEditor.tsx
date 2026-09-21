@@ -560,8 +560,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     | { kind: "node"; nodeId: string; x: number; y: number }
     | { kind: "edge"; edgeId: string; x: number; y: number }
     | { kind: "pane"; x: number; y: number; flowX: number; flowY: number }
+    // Phase 10 Slice C follow-up, "double-click + searchable node
+    // launcher" — same {x, y, flowX, flowY} shape as "pane" (right-click),
+    // but rendered with a search box; see nodeLauncherQuery below.
+    | { kind: "launcher"; x: number; y: number; flowX: number; flowY: number }
     | null
   >(null);
+  const [nodeLauncherQuery, setNodeLauncherQuery] = useState("");
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
@@ -1168,6 +1173,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             setSelectedNodeId(null);
             setSelectedEdgeId(null);
           }}
+          onPaneDoubleClick={(x, y, flowX, flowY) => {
+            setNodeLauncherQuery("");
+            setContextMenu({ kind: "launcher", x, y, flowX, flowY });
+          }}
           onNodeContextMenu={(nodeId, x, y) => {
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
@@ -1206,6 +1215,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 ? "Edge"
                 : "Add node"
           }
+          {...(contextMenu.kind === "launcher"
+            ? {
+                searchValue: nodeLauncherQuery,
+                onSearchChange: setNodeLauncherQuery,
+                searchPlaceholder: "Search node types…",
+              }
+            : {})}
           actions={
             contextMenu.kind === "node"
               ? [
@@ -1214,7 +1230,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 ]
               : contextMenu.kind === "edge"
                 ? [{ label: "Delete edge", onClick: deleteSelection, tone: "destructive" }]
-                : NODE_TYPES_FOR_CONTEXT_MENU.map((type) => ({
+                : NODE_TYPES_FOR_CONTEXT_MENU.filter(
+                    (type) =>
+                      contextMenu.kind !== "launcher" ||
+                      NODE_TYPE_TAXONOMY[type].title.toLowerCase().includes(nodeLauncherQuery.toLowerCase()),
+                  ).map((type) => ({
                     label: NODE_TYPE_TAXONOMY[type].title,
                     onClick: () => addNode(type, { x: contextMenu.flowX, y: contextMenu.flowY }),
                   }))
