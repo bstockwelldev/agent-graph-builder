@@ -16,6 +16,7 @@ from .contracts import validate_contracts
 from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
 from .node_configs import validate_node_config
 from .nodes import EXECUTORS
+from .policies import evaluate_graph_policies
 
 # Tool ids valid without a stored registry entry (studio-consolidation
 # Phase 3): the original POC demo tool, plus the two builtins.
@@ -219,6 +220,11 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
     # the cases contracts.py deliberately skips (e.g. edges into an unknown
     # node), so there's no overlap.
     diagnostics.extend(validate_contracts(graph))
+
+    # Cross-cutting policy overlays (P2, docs/planning/roadmap.md's
+    # Strategic Roadmap Addendum): security, reliability, and cost checks,
+    # with active policy exceptions already applied. See policies.py.
+    diagnostics.extend(evaluate_graph_policies(graph))
 
     return diagnostics
 

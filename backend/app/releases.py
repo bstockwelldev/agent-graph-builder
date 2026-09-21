@@ -17,8 +17,9 @@ from . import storage
 from .builtin_tools import BUILTIN_TOOL_IDS
 from .compiler import validate_graph
 from .events import now_iso
-from .fingerprint import release_document_fingerprint, release_semantic_fingerprint
-from .models import Diagnostic, GraphDefinition, GraphRelease, NodeType
+from .fingerprint import diff_graphs, release_document_fingerprint, release_semantic_fingerprint
+from .models import Diagnostic, GraphDefinition, GraphRelease, NodeType, ReleaseDiff
+from .policies import evaluate_release_governance
 from .resource_models import ToolDefinition
 
 # The original POC demo tool — like the two builtins, it's code, not a
@@ -117,7 +118,12 @@ def publish_release(
     """
     diagnostics = validate_graph(graph)
     resource_snapshots, resource_diagnostics = resolve_resource_snapshots(graph)
-    diagnostics = [*diagnostics, *resource_diagnostics]
+    # P2, "Cross-cutting policy overlays": the deploy gate. validate_graph
+    # above already ran the compile-gate policies (security/reliability/
+    # cost, via compiler.py); this is the one governance check that only
+    # makes sense at publish time, since a draft has no release_notes/author.
+    governance_diagnostics = evaluate_release_governance(graph.id, release_notes, author)
+    diagnostics = [*diagnostics, *resource_diagnostics, *governance_diagnostics]
     if any(d.blocking for d in diagnostics):
         raise ReleasePublishBlocked(diagnostics)
 
@@ -166,10 +172,35 @@ def list_releases(graph_id: str) -> list[dict[str, Any]]:
     return storage.get_release_index(graph_id)
 
 
+def compare_releases(from_release: GraphRelease, to_release: GraphRelease) -> ReleaseDiff:
+    """P1 rollout plan, Slice A: a categorized behavior-level diff between
+    two releases — node config, edge/router, and port/contract deltas from
+    `fingerprint.diff_graphs`, plus resource_snapshots deltas. `identical`
+    is true exactly when the two releases' `semantic_fingerprint` match,
+    the same equality `publish_release` already uses for idempotency."""
+    deltas = diff_graphs(
+        from_release.graph,
+        to_release.graph,
+        from_release.resource_snapshots,
+        to_release.resource_snapshots,
+    )
+    return ReleaseDiff(
+        from_release_id=from_release.id,
+        to_release_id=to_release.id,
+        from_semantic_fingerprint=from_release.semantic_fingerprint,
+        to_semantic_fingerprint=to_release.semantic_fingerprint,
+        identical=from_release.semantic_fingerprint == to_release.semantic_fingerprint,
+        node_changes=deltas["node_changes"],
+        edge_changes=deltas["edge_changes"],
+        resource_changes=deltas["resource_changes"],
+    )
+
+
 __all__ = [
     "ReleasePublishBlocked",
     "resolve_resource_snapshots",
     "publish_release",
     "get_release",
     "list_releases",
+    "compare_releases",
 ]

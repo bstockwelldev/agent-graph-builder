@@ -201,11 +201,20 @@ def _make_node_runner(node, ctx: ExecContext):
                 completed_at=now_iso(),
             )
             RUN_TRACES[ctx.run_id][node.id] = trace
+            # P1 rollout plan, Slice B: this early-return branch also serves
+            # a fixture-stubbed node (pre-seeded the same way a human_gate
+            # resume pre-seeds node_outputs) — distinguish it with a
+            # "fixture" flag rather than "replayed", since it never actually
+            # executed before in this run.
+            is_fixture = (
+                ctx.fixture_node_outputs is not None and node.id in ctx.fixture_node_outputs
+            )
+            flag_key = "fixture" if is_fixture else "replayed"
             ctx.bus.emit(
-                "node.started", {"nodeType": node.type.value, "replayed": True}, node_id=node.id
+                "node.started", {"nodeType": node.type.value, flag_key: True}, node_id=node.id
             )
             ctx.bus.emit(
-                "node.completed", {"output": trace.output, "replayed": True}, node_id=node.id
+                "node.completed", {"output": trace.output, flag_key: True}, node_id=node.id
             )
             delta: dict[str, Any] = {"node_outputs": {node.id: cached_projected}}
             _merge_into_snapshot(ctx.state_snapshot, delta)
@@ -466,6 +475,28 @@ def _persist_run_graph_snapshot(
     )
 
 
+def _project_fixture_node_outputs(
+    graph: GraphDefinition, fixture_node_outputs: dict[str, Any] | None
+) -> dict[str, dict[str, Any]]:
+    """P1 rollout plan, Slice B: projects each fixture-declared raw node
+    output onto that node's output port(s) — the same shape
+    `_make_node_runner` writes for a real executor result — so pre-seeding
+    `RunState.node_outputs` with these values makes the resume-replay
+    early-return branch treat them exactly like a cached prior result.
+    Unknown node ids are silently dropped; `simulate.py` validates fixture
+    targets against the graph before calling here."""
+    if not fixture_node_outputs:
+        return {}
+    nodes_by_id = {n.id: n for n in graph.nodes}
+    seeded: dict[str, dict[str, Any]] = {}
+    for node_id, raw_output in fixture_node_outputs.items():
+        node = nodes_by_id.get(node_id)
+        if node is None:
+            continue
+        seeded[node_id] = project_node_output(node, {}, raw_output)
+    return seeded
+
+
 def _prepare_run(
     compiled_workflow_id: str,
     run_input: dict[str, Any],
@@ -474,6 +505,7 @@ def _prepare_run(
     api_key: str | None = None,
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
     release_id: str | None = None,
+    fixture_node_outputs: dict[str, Any] | None = None,
 ) -> tuple[ExecContext, Any, dict[str, Any]]:
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
@@ -512,6 +544,8 @@ def _prepare_run(
         effective_model = model or node_model
         return get_chat_model(effective_model, provider=resolved_provider.value, api_key=api_key)
 
+    seeded_node_outputs = _project_fixture_node_outputs(graph, fixture_node_outputs)
+
     ctx = ExecContext(
         run_id=run_id,
         graph=graph,
@@ -519,7 +553,7 @@ def _prepare_run(
         chat_model_factory=chat_model_factory,
         state_snapshot={
             "variables": {"__run_input__": run_input},
-            "node_outputs": {},
+            "node_outputs": seeded_node_outputs,
             "route_decisions": [],
         },
         compiled_workflow_id=compiled_workflow_id,
@@ -527,6 +561,7 @@ def _prepare_run(
         requested_model=model,
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
+        fixture_node_outputs=frozenset(seeded_node_outputs) or None,
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
@@ -540,6 +575,7 @@ def start_run(
     api_key: str | None = None,
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
     release_id: str | None = None,
+    fixture_node_outputs: dict[str, Any] | None = None,
 ) -> tuple[str, RunEventBus]:
     """Creates run bookkeeping and returns immediately; caller schedules `_execute`.
 
@@ -551,7 +587,10 @@ def start_run(
     release-sourced run — `None` (the default) is an ordinary draft-sourced
     run, unchanged from before this parameter existed. `release_id` (Slice
     D): that release's id, recorded on the run's identity and
-    RunGraphSnapshot — pass both together or neither.
+    RunGraphSnapshot — pass both together or neither. `fixture_node_outputs`
+    (P1 rollout plan, Slice B): `{node_id: raw_output}` — those nodes skip
+    their live executor entirely and use the given value instead. See
+    `simulate.py`, the only caller that passes this.
     """
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
@@ -561,6 +600,7 @@ def start_run(
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
         release_id=release_id,
+        fixture_node_outputs=fixture_node_outputs,
     )
     asyncio.create_task(_execute(ctx, compiled_app, run_input))
     return ctx.run_id, ctx.bus
@@ -574,9 +614,11 @@ async def start_run_inline(
     api_key: str | None = None,
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
     release_id: str | None = None,
+    fixture_node_outputs: dict[str, Any] | None = None,
 ) -> tuple[str, RunEventBus]:
     """Create the run and await execution in this request (Vercel / serverless).
-    See `start_run` for `release_resource_snapshots`/`release_id`."""
+    See `start_run` for `release_resource_snapshots`/`release_id`/
+    `fixture_node_outputs`."""
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
         run_input,
@@ -585,6 +627,7 @@ async def start_run_inline(
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
         release_id=release_id,
+        fixture_node_outputs=fixture_node_outputs,
     )
     await _execute(ctx, compiled_app, run_input)
     return ctx.run_id, ctx.bus

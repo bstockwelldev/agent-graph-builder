@@ -178,6 +178,27 @@ export const capabilityMatrixSchema = z.object({
   capabilities: z.array(capabilityEntrySchema),
 });
 
+// P1 rollout plan, Slice A ("Semantic release comparison") — GET
+// /api/graph-releases/{id}/compare/{other_id}. See
+// backend/app/fingerprint.py's diff_graphs and backend/app/models.py's
+// GraphElementChange/ReleaseDiff.
+export const graphElementChangeSchema = z.object({
+  id: z.string(),
+  change: z.enum(["added", "removed", "modified"]),
+  fields: z.record(z.string(), z.record(z.string(), z.unknown())),
+});
+
+export const releaseDiffSchema = z.object({
+  from_release_id: z.string(),
+  to_release_id: z.string(),
+  from_semantic_fingerprint: z.string(),
+  to_semantic_fingerprint: z.string(),
+  identical: z.boolean(),
+  node_changes: z.array(graphElementChangeSchema),
+  edge_changes: z.array(graphElementChangeSchema),
+  resource_changes: z.array(graphElementChangeSchema),
+});
+
 export const routeDecisionSchema = z.object({
   nodeId: z.string(),
   selectedEdgeId: z.string(),
@@ -252,6 +273,71 @@ export const nodeTraceSchema = z.object({
   started_at: z.string(),
   completed_at: z.string().nullish(),
   error: z.string().nullish(),
+});
+
+// P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
+// stubbing") — POST /api/graphs/{id}/simulate and
+// /api/graph-releases/{id}/simulate. See backend/app/simulate.py and
+// backend/app/models.py's Fixture/SimulateResult. `node_outputs` maps a
+// node id to the raw mocked/recorded value that node's executor would
+// otherwise have produced — not yet port-projected.
+export const fixtureSchema = z.object({
+  input: z.record(z.string(), z.unknown()),
+  node_outputs: z.record(z.string(), z.unknown()),
+});
+
+export const simulateResultSchema = z.object({
+  run: runSummarySchema,
+  traces: z.array(nodeTraceSchema),
+});
+
+// P1 rollout plan, Slice D ("Routing policy lab") — POST
+// /api/graphs/{id}/routing-lab/run and /routing-lab/compare/{other_id}.
+// See backend/app/routing_lab.py and backend/app/models.py's
+// RoutingLabReport/RoutingComparison family.
+export const routeTargetCountSchema = z.object({
+  target_node_id: z.string(),
+  count: z.number(),
+});
+
+export const routeNodeDistributionSchema = z.object({
+  node_id: z.string(),
+  total: z.number(),
+  targets: z.array(routeTargetCountSchema),
+});
+
+export const routingDatasetRunResultSchema = z.object({
+  fixture_index: z.number(),
+  run_id: z.string(),
+  status: z.string(),
+  route_decisions: z.array(routeDecisionSchema),
+  estimated_usd: z.number(),
+  duration_ms: z.number().nullish(),
+});
+
+export const routingLabReportSchema = z.object({
+  graph_id: z.string(),
+  dataset_size: z.number(),
+  distributions: z.array(routeNodeDistributionSchema),
+  total_estimated_usd: z.number(),
+  runs: z.array(routingDatasetRunResultSchema),
+});
+
+export const routeTargetCountDeltaSchema = z.object({
+  target_node_id: z.string(),
+  baseline_count: z.number(),
+  candidate_count: z.number(),
+});
+
+export const routeNodeDistributionDeltaSchema = z.object({
+  node_id: z.string(),
+  targets: z.array(routeTargetCountDeltaSchema),
+});
+
+export const routingComparisonSchema = z.object({
+  baseline: routingLabReportSchema,
+  candidate: routingLabReportSchema,
+  distribution_deltas: z.array(routeNodeDistributionDeltaSchema),
 });
 
 export const providerModelOptionSchema = z.object({
@@ -334,6 +420,37 @@ export const llmProfileSchema = z.object({
 });
 
 /**
+ * P1 rollout plan, parallel track ("Versioned reusable entity registry" —
+ * see docs/planning/features/p1-rollout-plan.md and
+ * backend/app/resource_versions.py). An immutable snapshot of a stored
+ * resource's payload at publish time, for prompts/tools/mcp_servers/
+ * agents/llm_profiles only — chat_sessions (a runtime scratchpad) is
+ * excluded.
+ */
+export const resourceVersionSchema = z.object({
+  version_id: z.string(),
+  kind: z.string(),
+  resource_id: z.string(),
+  payload: z.record(z.string(), z.unknown()),
+  fingerprint: z.string(),
+  created_at: z.string(),
+});
+
+export const publishResourceVersionResponseSchema = z.object({
+  version: resourceVersionSchema,
+  created: z.boolean(),
+});
+
+// GET /api/{path}/{resource_id}/versions's compact per-entry shape
+// (storage.py's get_resource_version_index) — not the full ResourceVersion
+// payload, same convention as releaseIndexEntrySchema.
+export const resourceVersionIndexEntrySchema = z.object({
+  version_id: z.string(),
+  fingerprint: z.string(),
+  created_at: z.string(),
+});
+
+/**
  * A direct model scratchpad (studio-consolidation Phase 8) — bypasses the
  * graph engine entirely, chatting straight to a chosen provider/model. Not
  * a Run: no compile step, no relation to any graph_id.
@@ -388,4 +505,46 @@ export const analyticsDashboardPayloadSchema = z.object({
   totals: analyticsTotalsSchema,
   daily: z.array(analyticsDailyPointSchema),
   by_graph: z.array(analyticsGraphRowSchema),
+});
+
+/**
+ * P2, "Cross-cutting policy overlays" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/policies.py). A time-boxed waiver for a specific policy
+ * diagnostic on a specific graph — optionally scoped to one node.
+ */
+export const policyExceptionSchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  policy_code: z.string(),
+  node_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  created_at: z.string(),
+  expires_at: z.string(),
+});
+
+export const createPolicyExceptionRequestSchema = z.object({
+  policy_code: z.string(),
+  node_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  expires_at: z.string(),
+});
+
+/**
+ * P2, "Retrieval/document lineage graph" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/knowledge.py). One durable record of a knowledge chunk
+ * actually retrieved and used to augment an `llm` node's system prompt
+ * during a run — "which runs/nodes used this document."
+ */
+export const knowledgeLineageEntrySchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  document_id: z.string(),
+  document_name: z.string(),
+  chunk_id: z.string(),
+  run_id: z.string(),
+  node_id: z.string(),
+  score: z.number(),
+  created_at: z.string(),
 });

@@ -1,6 +1,12 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
-import type { Diagnostic, GraphRelease, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
+import type {
+  Diagnostic,
+  GraphElementChange,
+  GraphRelease,
+  ReleaseDiff,
+  ReleaseIndexEntry,
+} from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
 import { hasBlockingErrors } from "@/lib/diagnostics";
@@ -54,6 +60,15 @@ export function ReleasesPanel({
   const [expandedReleaseId, setExpandedReleaseId] = useState<string | null>(null);
   const [expandedRelease, setExpandedRelease] = useState<GraphRelease | null>(null);
   const [expandedLoading, setExpandedLoading] = useState(false);
+
+  // P1 rollout plan, Slice A ("Semantic release comparison"): pick up to two
+  // releases from the history list below to diff. Selection order is
+  // preserved (first pick = from, second = to) so the diff reads in the
+  // order the user compared them, not creation order.
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareDiff, setCompareDiff] = useState<ReleaseDiff | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   const blocked = hasBlockingErrors(diagnostics);
 
@@ -119,6 +134,40 @@ export function ReleasesPanel({
     [expandedReleaseId, graphId],
   );
 
+  const toggleCompareSelection = useCallback((releaseId: string) => {
+    setCompareIds((current) => {
+      if (current.includes(releaseId)) return current.filter((id) => id !== releaseId);
+      if (current.length < 2) return [...current, releaseId];
+      // Already have two picked — replace the first pick, keep the second.
+      return [current[1], releaseId];
+    });
+  }, []);
+
+  useEffect(() => {
+    if (compareIds.length !== 2) {
+      setCompareDiff(null);
+      setCompareError(null);
+      return;
+    }
+    let cancelled = false;
+    setCompareLoading(true);
+    setCompareError(null);
+    void client
+      .compareReleases(compareIds[0], compareIds[1])
+      .then((diff) => {
+        if (!cancelled) setCompareDiff(diff);
+      })
+      .catch((err) => {
+        if (!cancelled) setCompareError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setCompareLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compareIds]);
+
   return (
     <div style={containerStyle(layout)}>
       <div style={scrollerStyle}>
@@ -176,20 +225,29 @@ export function ReleasesPanel({
           ) : (
             releases.map((entry) => (
               <div key={entry.release_id} style={{ marginBottom: spacing[2] }}>
-                <button
-                  type="button"
-                  onClick={() => void handleToggleRelease(entry.release_id)}
-                  aria-expanded={expandedReleaseId === entry.release_id}
-                  style={releaseButtonStyle}
-                >
-                  <div style={rowStyle}>
-                    <span style={{ ...monoStyle, fontWeight: 600 }}>{shortId(entry.release_id)}</span>
-                    <span style={{ opacity: 0.6 }}>{formatTimestamp(entry.created_at)}</span>
-                  </div>
-                  <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1], ...monoStyle }}>
-                    {entry.semantic_fingerprint.slice(0, 16)}
-                  </div>
-                </button>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: spacing[1] }}>
+                  <label style={compareCheckboxLabelStyle} title="Select to compare (up to two releases)">
+                    <input
+                      type="checkbox"
+                      checked={compareIds.includes(entry.release_id)}
+                      onChange={() => toggleCompareSelection(entry.release_id)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleRelease(entry.release_id)}
+                    aria-expanded={expandedReleaseId === entry.release_id}
+                    style={{ ...releaseButtonStyle, flex: 1 }}
+                  >
+                    <div style={rowStyle}>
+                      <span style={{ ...monoStyle, fontWeight: 600 }}>{shortId(entry.release_id)}</span>
+                      <span style={{ opacity: 0.6 }}>{formatTimestamp(entry.created_at)}</span>
+                    </div>
+                    <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1], ...monoStyle }}>
+                      {entry.semantic_fingerprint.slice(0, 16)}
+                    </div>
+                  </button>
+                </div>
                 {expandedReleaseId === entry.release_id && (
                   <div style={expandedStyle}>
                     {expandedLoading ? (
@@ -216,9 +274,82 @@ export function ReleasesPanel({
             ))
           )}
         </CollapsibleSection>
+
+        {compareIds.length > 0 && (
+          <CollapsibleSection sectionId="releases-compare" title="Compare releases" reducedMotion={reducedMotion}>
+            {compareIds.length === 1 ? (
+              <div style={emptyTextStyle}>
+                Pick a second release above to compare against <span style={monoStyle}>{shortId(compareIds[0])}</span>.
+              </div>
+            ) : compareLoading ? (
+              <SkeletonBlock lines={3} gap={spacing[2]} />
+            ) : compareError ? (
+              <div style={errorTextStyle}>{compareError}</div>
+            ) : compareDiff ? (
+              <div>
+                <div style={{ ...typeScale.caption, marginBottom: spacing[2] }}>
+                  <span style={monoStyle}>{shortId(compareDiff.from_release_id)}</span>
+                  {" → "}
+                  <span style={monoStyle}>{shortId(compareDiff.to_release_id)}</span>
+                </div>
+                {compareDiff.identical ? (
+                  <div style={resultTextStyle}>Identical — same semantic_fingerprint, no behavior changes.</div>
+                ) : (
+                  <>
+                    <ChangeList title="Nodes" changes={compareDiff.node_changes} />
+                    <ChangeList title="Edges" changes={compareDiff.edge_changes} />
+                    <ChangeList title="Resources" changes={compareDiff.resource_changes} />
+                  </>
+                )}
+              </div>
+            ) : null}
+          </CollapsibleSection>
+        )}
       </div>
     </div>
   );
+}
+
+function ChangeList({ title, changes }: { title: string; changes: GraphElementChange[] }) {
+  if (changes.length === 0) return null;
+  return (
+    <div style={{ marginBottom: spacing[2] }}>
+      <div style={{ ...typeScale.caption, fontWeight: 600, marginBottom: spacing[1] }}>
+        {title} ({changes.length})
+      </div>
+      {changes.map((change) => (
+        <div key={change.id} style={changeRowStyle}>
+          <div style={rowStyle}>
+            <span style={monoStyle}>{shortId(change.id)}</span>
+            <span style={{ ...changeBadgeStyle, ...changeBadgeVariant(change.change) }}>{change.change}</span>
+          </div>
+          {change.change === "modified" &&
+            Object.entries(change.fields).map(([field, delta]) => (
+              <div key={field} style={{ ...typeScale.caption, opacity: 0.75, marginTop: spacing[1] }}>
+                <span style={{ fontWeight: 600 }}>{field}</span>: {formatDeltaValue(delta.from)} {"→"}{" "}
+                {formatDeltaValue(delta.to)}
+              </div>
+            ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatDeltaValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function changeBadgeVariant(change: GraphElementChange["change"]): CSSProperties {
+  if (change === "added") return { color: color.primary[500] };
+  if (change === "removed") return { color: accentSurface.destructive.text };
+  return { color: color.warning[500] };
 }
 
 const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
@@ -281,4 +412,25 @@ const expandedStyle: CSSProperties = {
   background: surface.page,
   borderRadius: radius.lg,
   marginTop: spacing[1],
+};
+
+const compareCheckboxLabelStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  minHeight: shell.touchTarget.min,
+  paddingTop: spacing[2],
+};
+
+const changeRowStyle: CSSProperties = {
+  padding: spacing[2],
+  borderRadius: radius.md,
+  background: surface.raised,
+  border: `1px solid ${surface.border}`,
+  marginBottom: spacing[1],
+};
+
+const changeBadgeStyle: CSSProperties = {
+  ...typeScale.caption,
+  fontWeight: 600,
+  textTransform: "uppercase",
 };

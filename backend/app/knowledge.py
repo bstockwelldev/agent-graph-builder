@@ -35,6 +35,8 @@ from .embedding_model import (
     missing_embedding_provider_message,
     resolve_embedding_model,
 )
+from .events import now_iso
+from .models import KnowledgeLineageEntry
 
 CHUNK_TARGET = 900
 CHUNK_OVERLAP = 100
@@ -122,6 +124,8 @@ def top_k_chunks_by_embedding(
 ) -> list[dict[str, Any]]:
     scored = [
         {
+            "chunkId": chunk.id,
+            "documentId": chunk.document_id,
             "documentName": document_names.get(chunk.document_id, chunk.document_id),
             "text": chunk.text,
             "score": cosine_similarity(query_vector, chunk.vector),
@@ -155,6 +159,17 @@ def get_knowledge_entry(graph_id: str) -> KnowledgeEntry | None:
     return KnowledgeEntry.model_validate(payload)
 
 
+def list_knowledge_lineage(
+    graph_id: str, document_id: str | None = None
+) -> list[KnowledgeLineageEntry]:
+    """P2, "Retrieval/document lineage graph": every recorded retrieval for
+    `graph_id`, newest last, optionally filtered to one document."""
+    return [
+        KnowledgeLineageEntry.model_validate(item)
+        for item in storage.list_knowledge_lineage(graph_id, document_id)
+    ]
+
+
 # P0 graph foundation, Slice C: sentinel distinguishing "no resource_snapshot
 # argument given" (draft-sourced run — resolve live, the pre-Slice-C
 # behavior) from an explicit `None` (release-sourced run whose release has
@@ -172,8 +187,39 @@ def _embedding_model_for_entry(entry: KnowledgeEntry) -> ResolvedEmbeddingModel 
     return current
 
 
+def _record_lineage(graph_id: str, run_id: str, node_id: str, hits: list[dict[str, Any]]) -> None:
+    """P2, "Retrieval/document lineage graph": one durable row per chunk
+    actually used to augment this node's prompt, so "which runs used
+    document X" stays queryable without scanning every run's NodeTraces.
+    Best-effort like the retrieval it records — a storage error here must
+    not fail the run any more than an embedding error above does."""
+    now = now_iso()
+    try:
+        for hit in hits:
+            entry = KnowledgeLineageEntry(
+                id=f"klin_{uuid4().hex[:12]}",
+                graph_id=graph_id,
+                document_id=hit["documentId"],
+                document_name=hit["documentName"],
+                chunk_id=hit["chunkId"],
+                run_id=run_id,
+                node_id=node_id,
+                score=hit["score"],
+                created_at=now,
+            )
+            storage.save_knowledge_lineage_entry(graph_id, entry.id, entry.model_dump(mode="json"))
+    except Exception:  # noqa: BLE001 - lineage recording is best-effort
+        pass
+
+
 async def augment_system_with_knowledge(
-    system: str, graph_id: str, query: str, *, resource_snapshot: Any = UNSET
+    system: str,
+    graph_id: str,
+    query: str,
+    *,
+    resource_snapshot: Any = UNSET,
+    run_id: str | None = None,
+    node_id: str | None = None,
 ) -> str:
     """When `graph_id` has an uploaded knowledge base, embeds `query` and
     appends top-K snippets above the score threshold to `system`. Degrades
@@ -188,6 +234,12 @@ async def augment_system_with_knowledge(
     is used as-is instead: a release-sourced run's already-resolved
     snapshot (or `None` when that release has no knowledge base), never
     falling back to a live lookup.
+
+    `run_id`/`node_id` (P2, "Retrieval/document lineage graph"): when both
+    are given and at least one chunk is actually used, each hit is recorded
+    as a `KnowledgeLineageEntry`. Optional and keyword-only so every
+    existing caller that doesn't need lineage (tests, any future direct
+    use) is unaffected.
     """
     entry = (
         get_knowledge_entry(graph_id)
@@ -214,6 +266,8 @@ async def augment_system_with_knowledge(
             for hit in top_k_chunks_by_embedding(query_vector, entry.chunks, names, TOP_K)
             if hit["score"] > SCORE_THRESHOLD
         ]
+        if hits and run_id is not None and node_id is not None:
+            _record_lineage(graph_id, run_id, node_id, hits)
         block = format_knowledge_augmentation(hits)
         return f"{system}{block}" if block else system
     except Exception:  # noqa: BLE001 - RAG is best-effort, never fails the run
