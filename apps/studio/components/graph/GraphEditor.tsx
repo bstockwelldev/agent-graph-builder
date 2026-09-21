@@ -62,6 +62,7 @@ import {
 import { useUndoStack } from "@/hooks/useUndoStack";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
+import type { WorkbenchPanelId } from "@/components/workbench/panels";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
@@ -85,6 +86,21 @@ import { shell } from "@/lib/graph-theme";
 function isDesktopViewport(): boolean {
   return typeof window === "undefined" || window.innerWidth >= shell.breakpoint.compact;
 }
+
+// The node/edge inspector shares its HUD slot with these three panels (see
+// showInspector below), gating the inspector's own render.
+const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab"]);
+
+// Phase 10 Slice A follow-up (docs/planning/features/studio-shell-ux-gap-analysis.md):
+// selecting a node/edge on canvas already closed "palette" (so the add-node
+// list doesn't linger over a now-selected node) but never
+// run/releases/routingLab, so the inspector stayed hidden behind whichever
+// of those was open until the user closed it manually first. Closing any
+// panel in this superset on selection fixes that friction.
+const CLOSE_ON_CANVAS_SELECTION_PANELS = new Set<WorkbenchPanelId | null>([
+  "palette",
+  ...INSPECTOR_EXCLUSIVE_PANELS,
+]);
 
 const nodeTypes = {
   input: GraphNodeView,
@@ -903,10 +919,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     />
   ) : null;
   const showInspector =
-    workbench.activePanel !== "run" &&
-    workbench.activePanel !== "releases" &&
-    workbench.activePanel !== "routingLab" &&
-    Boolean(selectedNode || selectedEdge);
+    !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel) && Boolean(selectedNode || selectedEdge);
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -1070,12 +1083,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onNodeClick={(nodeId) => {
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
-            if (workbench.activePanel === "palette") workbench.close();
+            if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
           }}
           onEdgeClick={(edgeId) => {
             setSelectedEdgeId(edgeId);
             setSelectedNodeId(null);
-            if (workbench.activePanel === "palette") workbench.close();
+            if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
           }}
           onPaneClick={() => {
             setPendingConnection(null);

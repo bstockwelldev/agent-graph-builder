@@ -15,6 +15,7 @@ export type WorkbenchPanelId =
   | "tools"
   | "mcp"
   | "llmProfiles"
+  | "analytics"
   | "help";
 
 // Hotkey format: "mod+shift+<key>" ("mod" = Cmd on macOS, Ctrl elsewhere).
@@ -45,6 +46,11 @@ export const WORKBENCH_PANELS: Record<
   tools: { title: "Tools", hotkey: null, scope: "global" },
   mcp: { title: "MCP", hotkey: null, scope: "global" },
   llmProfiles: { title: "LLM Profiles", hotkey: null, scope: "global" },
+  // Phase 10 Slice A (docs/planning/features/studio-shell-ux-gap-analysis.md):
+  // workspace-wide run totals/daily-trend/per-graph spend — spans every
+  // graph, so global scope, same as the resource registries. Closes the
+  // gap analysis's Tier 1 finding that /analytics had no HUD door at all.
+  analytics: { title: "Analytics", hotkey: null, scope: "global" },
   // Real hotkey is bare "?" — HelpOverlay.tsx manages that listener itself
   // rather than going through matchesHotkey below (its shiftKey-must-match
   // check doesn't fit a symbol that inherently requires Shift to type), so
