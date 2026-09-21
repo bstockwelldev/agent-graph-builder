@@ -64,6 +64,7 @@ import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import type { WorkbenchPanelId } from "@/components/workbench/panels";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
+import { WorkflowSummary } from "./WorkflowSummary";
 import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
 import { NodeContextMenu } from "./NodeContextMenu";
@@ -87,8 +88,9 @@ function isDesktopViewport(): boolean {
   return typeof window === "undefined" || window.innerWidth >= shell.breakpoint.compact;
 }
 
-// The node/edge inspector shares its HUD slot with these three panels (see
-// showInspector below), gating the inspector's own render.
+// The node/edge inspector (and, when nothing is selected, the workflow
+// summary) shares its HUD slot with these three panels (see
+// showSelectionDock below), gating the dock's own render.
 const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab"]);
 
 // Phase 10 Slice A follow-up (docs/planning/features/studio-shell-ux-gap-analysis.md):
@@ -861,18 +863,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
-  const routerOutgoingEdges: GraphEdge[] =
-    selectedNode?.data.nodeType === "router" || selectedNode?.data.nodeType === "branch"
-      ? edges
-          .filter((edge) => edge.source === selectedNode.id)
-          .map((edge) => ({
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            kind: (edge.data?.kind as EdgeKind) ?? "sequence",
-            condition: (edge.data?.condition as string | null) ?? null,
-          }))
-      : [];
+  const toGraphEdge = (edge: Edge): GraphEdge => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    kind: (edge.data?.kind as EdgeKind) ?? "sequence",
+    condition: (edge.data?.condition as string | null) ?? null,
+  });
+  // Selection dock's I/O tab (Phase 10 Slice B) needs both directions for
+  // any node type, not just router/branch's own branch editor.
+  const selectedOutgoingEdges: GraphEdge[] = selectedNode
+    ? edges.filter((edge) => edge.source === selectedNode.id).map(toGraphEdge)
+    : [];
+  const selectedIncomingEdges: GraphEdge[] = selectedNode
+    ? edges.filter((edge) => edge.target === selectedNode.id).map(toGraphEdge)
+    : [];
   const selectedTrace = selectedNodeId ? nodeTraces[selectedNodeId] ?? null : null;
   const showEmptyCoach = isCoachVisible(graphId, coachDismissed, nodes, edges);
   const authoringCoachStep = coachStep(nodes, edges);
@@ -882,6 +887,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // duplicate the NodeInspector/EdgeInspector branch.
   const inspectorContent = selectedNode ? (
     <NodeInspector
+      key={selectedNode.id}
       graphId={graphId}
       node={{
         id: selectedNode.id,
@@ -890,7 +896,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         config: selectedNode.data.config,
       }}
       issues={diagnosticsForNode(diagnostics, selectedNode.id)}
-      outgoingEdges={routerOutgoingEdges}
+      outgoingEdges={selectedOutgoingEdges}
+      incomingEdges={selectedIncomingEdges}
+      selectedTrace={selectedTrace}
       onConfigChange={(config) => {
         recordMutation();
         setNodes((nds) =>
@@ -903,6 +911,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       }}
       onEdgeChange={patchEdgeById}
       onDelete={deleteSelection}
+      onDuplicate={() => duplicateNode(selectedNode.id)}
+      onOpenRunPanel={() => workbench.open("run")}
+      onPolicyExceptionCreated={refreshDiagnostics}
     />
   ) : selectedEdge ? (
     <EdgeInspector
@@ -918,8 +929,28 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDelete={deleteSelection}
     />
   ) : null;
-  const showInspector =
-    !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel) && Boolean(selectedNode || selectedEdge);
+  // Phase 10 Slice B: the same dock slot the inspector occupies now always
+  // shows something -- WorkflowSummary when nothing is selected, per
+  // studio-ux-revision-plan.md Section 6 -- rather than sitting empty.
+  const showSelectionDock = !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel);
+  const selectionDockContent =
+    selectedNode || selectedEdge ? (
+      inspectorContent
+    ) : (
+      <WorkflowSummary
+        nodes={nodes}
+        edges={edges}
+        diagnostics={diagnostics}
+        runHistory={runHistory}
+        onAddNode={(type) => addNode(type)}
+        onOpenPalette={() => workbench.open("palette")}
+        onRunFixture={() => workbench.open("run")}
+        onSelectRun={(runId) => {
+          workbench.open("run");
+          void handleSelectHistoricalRun(runId);
+        }}
+      />
+    );
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -1205,9 +1236,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </div>
 
       {/* Right reserved column — the run panel, the releases panel, and the
-          node/edge inspector share this slot (already mutually exclusive
-          via `showInspector`'s `workbench.activePanel` checks), so at most
-          one ever occupies this column's width at a time. */}
+          selection dock (node/edge inspector, or the workflow summary when
+          nothing is selected) share this slot (already mutually exclusive
+          via `showSelectionDock`'s `workbench.activePanel` checks), so at
+          most one ever occupies this column's width at a time. */}
       <WorkbenchDrawer panelId="run" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <RunPanel
           layout="rail"
@@ -1242,14 +1274,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       <WorkbenchDrawer panelId="routingLab" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <RoutingLabPanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
-      {showInspector && !workbench.isCompact && (
+      {showSelectionDock && !workbench.isCompact && (
         <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">
-          {inspectorContent}
+          {selectionDockContent}
         </div>
       )}
-      {showInspector && workbench.isCompact && (
+      {showSelectionDock && workbench.isCompact && (
         <div className="glass-panel ghost-border fixed right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
-          {inspectorContent}
+          {selectionDockContent}
         </div>
       )}
     </div>

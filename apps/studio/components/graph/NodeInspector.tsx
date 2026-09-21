@@ -1,7 +1,31 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
-import type { ChatProvider, EdgeKind, GraphEdge, GraphNode, Diagnostic, NodeType } from "@bstockwelldev/agent-graph-sdk";
-import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
+import type {
+  ChatProvider,
+  EdgeKind,
+  GraphEdge,
+  GraphNode,
+  Diagnostic,
+  NodeTrace,
+  NodeType,
+  PolicyException,
+} from "@bstockwelldev/agent-graph-sdk";
+import {
+  accentSurface,
+  color,
+  fontFamily,
+  localType,
+  nodeType as nodeTypeAccents,
+  radius,
+  shell,
+  spacing,
+  surface,
+  text,
+  typeScale,
+} from "@/lib/graph-theme";
+import { client } from "@/lib/api-client";
 import { GenuiSurfaceView } from "@/components/genui/genui-renderer";
 import { tryParseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
@@ -9,6 +33,7 @@ import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Select, TextArea, TextInput } from "./ui/fields";
+import { Tabs } from "./ui/Tabs";
 
 function IssueList({ issues }: { issues: Diagnostic[] }) {
   if (issues.length === 0) return null;
@@ -37,34 +62,121 @@ export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): G
   return { ...edge, kind, condition };
 }
 
+const NODE_INSPECTOR_TABS = [
+  { id: "configure", label: "Configure" },
+  { id: "io", label: "I/O" },
+  { id: "policy", label: "Policy" },
+  { id: "run", label: "Run" },
+];
+
+/**
+ * Phase 10 Slice B (docs/planning/features/studio-shell-ux-gap-analysis.md,
+ * "Selection dock rebuild"): Configure/I-O/Policy/Run tabs on the node
+ * inspector, per `studio-ux-revision-plan.md` Section 6. `GraphEditor.tsx`
+ * remounts this component on node-selection change (`key={node.id}`), so
+ * `activeTab` resets to "configure" whenever a different node is selected
+ * rather than needing its own reset effect.
+ */
 export function NodeInspector({
   node,
   graphId = null,
   issues = [],
   outgoingEdges = [],
+  incomingEdges = [],
+  selectedTrace = null,
   onConfigChange,
   onEdgeChange,
   onDelete,
+  onDuplicate,
+  onOpenRunPanel,
+  onPolicyExceptionCreated,
   fullWidth = false,
-  reducedMotion = false,
 }: {
   node: GraphNode;
   graphId?: string | null;
   issues?: Diagnostic[];
   outgoingEdges?: GraphEdge[];
+  /** Edges targeting this node, for the I/O tab's input-port cross-reference. */
+  incomingEdges?: GraphEdge[];
+  /** This node's most recent execution, for the Run tab. */
+  selectedTrace?: NodeTrace | null;
   onConfigChange: (config: Record<string, unknown>) => void;
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
+  onDuplicate?: () => void;
+  onOpenRunPanel?: () => void;
+  /** Called after a policy exception is created/deleted from the Policy tab,
+   * so the caller can re-validate and pick up the diagnostic change. */
+  onPolicyExceptionCreated?: () => void;
   fullWidth?: boolean;
-  reducedMotion?: boolean;
 }) {
+  const [activeTab, setActiveTab] = useState("configure");
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
+  const accent = nodeTypeAccents[node.type]?.accent ?? color.primary[600];
 
   return (
     <div style={panelStyle(fullWidth)}>
-      <CollapsibleSection sectionId={`inspector-node-${node.type}`} title={`Configure: ${node.type}`} reducedMotion={reducedMotion}>
-      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>{node.id}</div>
+      <div style={{ borderTop: `3px solid ${accent}`, margin: `-${shell.panelPadding}px -${shell.panelPadding}px ${spacing[3]}px` }} />
+      <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[1] - 2 }}>
+        {NODE_TYPE_TAXONOMY[node.type].title}
+      </div>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2] }}>{node.id}</div>
       <IssueList issues={issues} />
+
+      <Tabs tabs={NODE_INSPECTOR_TABS} activeId={activeTab} onChange={setActiveTab} />
+
+      {activeTab === "configure" && (
+        <ConfigureTab
+          node={node}
+          graphId={graphId}
+          issues={issues}
+          outgoingEdges={outgoingEdges}
+          onEdgeChange={onEdgeChange}
+          set={set}
+        />
+      )}
+      {activeTab === "io" && <IoTab node={node} issues={issues} incomingEdges={incomingEdges} outgoingEdges={outgoingEdges} />}
+      {activeTab === "policy" && (
+        <PolicyTab
+          graphId={graphId}
+          nodeId={node.id}
+          issues={issues}
+          onPolicyExceptionCreated={onPolicyExceptionCreated}
+        />
+      )}
+      {activeTab === "run" && <RunTab selectedTrace={selectedTrace} onOpenRunPanel={onOpenRunPanel} />}
+
+      <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[3] }}>
+        {onDuplicate && (
+          <Button variant="secondary" style={{ minHeight: 44 }} onClick={onDuplicate}>
+            Duplicate
+          </Button>
+        )}
+        <Button variant="destructive" style={{ minHeight: 44 }} onClick={onDelete}>
+          Delete node
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ConfigureTab({
+  node,
+  graphId,
+  issues,
+  outgoingEdges,
+  onEdgeChange,
+  set,
+}: {
+  node: GraphNode;
+  graphId: string | null;
+  issues: Diagnostic[];
+  outgoingEdges: GraphEdge[];
+  onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
+  set: (key: string, value: unknown) => void;
+}) {
+  return (
+    <div>
       <IntentBlurb nodeType={node.type} />
 
       {node.type === "input" && (
@@ -267,14 +379,330 @@ export function NodeInspector({
           <GenuiCheckpointPreview raw={(node.config.genuiCheckpointSurfaceJson as string) ?? ""} />
         </>
       )}
-
-      <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
-        Delete node
-      </Button>
-      </CollapsibleSection>
     </div>
   );
 }
+
+function portKindLabel(kind: string): string {
+  return kind.replace(/-/g, " ");
+}
+
+function IoTab({
+  node,
+  issues,
+  incomingEdges,
+  outgoingEdges,
+}: {
+  node: GraphNode;
+  issues: Diagnostic[];
+  incomingEdges: GraphEdge[];
+  outgoingEdges: GraphEdge[];
+}) {
+  const inputPorts = inputPortsFor(node);
+  const outputPorts = outputPortsFor(node);
+  // Mirrors backend/app/ports.py's default_input_port/default_output_port:
+  // an edge with no explicit target_port/source_port binds to the first-
+  // listed port, not a literal "input"/"output" id (router/branch's default
+  // output port is "passthrough", not "output").
+  const defaultInputPortId = inputPorts[0]?.id;
+  const defaultOutputPortId = outputPorts[0]?.id;
+
+  return (
+    <div>
+      <div style={{ ...localType.label, opacity: 0.6, marginBottom: spacing[2] }}>Input ports</div>
+      {inputPorts.length === 0 ? (
+        <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] }}>None.</div>
+      ) : (
+        inputPorts.map((port) => (
+          <PortRow
+            key={port.id}
+            port={port}
+            connectedEdges={incomingEdges.filter((edge) => (edge.target_port ?? defaultInputPortId) === port.id)}
+            edgeLabel={(edge) => `from ${edge.source}`}
+            issues={issues.filter((issue) => issue.port_id === port.id)}
+          />
+        ))
+      )}
+      <div style={{ ...localType.label, opacity: 0.6, marginTop: spacing[3], marginBottom: spacing[2] }}>
+        Output ports
+      </div>
+      {outputPorts.length === 0 ? (
+        <div style={{ ...typeScale.caption, opacity: 0.6 }}>None.</div>
+      ) : (
+        outputPorts.map((port) => (
+          <PortRow
+            key={port.id}
+            port={port}
+            connectedEdges={outgoingEdges.filter((edge) => (edge.source_port ?? defaultOutputPortId) === port.id)}
+            edgeLabel={(edge) => `to ${edge.target}`}
+            issues={issues.filter((issue) => issue.port_id === port.id)}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function PortRow({
+  port,
+  connectedEdges,
+  edgeLabel,
+  issues,
+}: {
+  port: { id: string; name: string; contract: { kind: string } };
+  connectedEdges: GraphEdge[];
+  edgeLabel: (edge: GraphEdge) => string;
+  issues: Diagnostic[];
+}) {
+  return (
+    <div
+      style={{
+        marginBottom: spacing[2],
+        padding: spacing[2],
+        borderRadius: radius.lg,
+        border: `1px solid ${surface.borderStrong}`,
+        background: surface.raised,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
+        <span style={{ ...typeScale.small, fontWeight: 600 }}>{port.name}</span>
+        <span style={{ ...typeScale.caption, opacity: 0.6 }}>{portKindLabel(port.contract.kind)}</span>
+      </div>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1] - 2 }}>
+        {connectedEdges.length === 0
+          ? "Not connected on canvas."
+          : connectedEdges.map(edgeLabel).join(", ")}
+      </div>
+      <IssueList issues={issues} />
+    </div>
+  );
+}
+
+function PolicyTab({
+  graphId,
+  nodeId,
+  issues,
+  onPolicyExceptionCreated,
+}: {
+  graphId: string | null;
+  nodeId: string;
+  issues: Diagnostic[];
+  onPolicyExceptionCreated?: () => void;
+}) {
+  const [exceptions, setExceptions] = useState<PolicyException[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!graphId) return;
+    let cancelled = false;
+    setLoading(true);
+    client
+      .listPolicyExceptions(graphId)
+      .then((all) => {
+        if (!cancelled) setExceptions(all.filter((exception) => exception.node_id === nodeId));
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load policy exceptions.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [graphId, nodeId]);
+
+  async function handleWaive(diagnostic: Diagnostic, key: string) {
+    if (!graphId) return;
+    setBusyKey(key);
+    setError(null);
+    try {
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const created = await client.createPolicyException(
+        graphId,
+        diagnostic.code,
+        expiresAt,
+        nodeId,
+        "Waived from Studio",
+      );
+      setExceptions((current) => [...current, created]);
+      onPolicyExceptionCreated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function handleRevoke(exceptionId: string) {
+    if (!graphId) return;
+    setBusyKey(exceptionId);
+    setError(null);
+    try {
+      await client.deletePolicyException(graphId, exceptionId);
+      setExceptions((current) => current.filter((exception) => exception.id !== exceptionId));
+      onPolicyExceptionCreated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke exception.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  const policyIssues = issues.filter((issue) => issue.category === "policy");
+
+  if (!graphId) {
+    return (
+      <div style={{ ...typeScale.caption, opacity: 0.6 }}>Save the graph to manage policy exceptions.</div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ ...localType.label, opacity: 0.6, marginBottom: spacing[2] }}>Policy diagnostics</div>
+      {policyIssues.length === 0 ? (
+        <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] }}>
+          No policy diagnostics on this node.
+        </div>
+      ) : (
+        policyIssues.map((issue, index) => {
+          const key = `${issue.code}-${index}`;
+          const waivable = issue.blocking;
+          return (
+            <div key={key} style={{ marginBottom: spacing[2] }}>
+              <div
+                style={{
+                  ...typeScale.caption,
+                  color: issue.severity === "error" ? accentSurface.destructive.text : color.warning[500],
+                }}
+              >
+                {issue.message}
+              </div>
+              {waivable && (
+                <Button
+                  variant="secondary"
+                  disabled={busyKey === key}
+                  onClick={() => void handleWaive(issue, key)}
+                  style={{ marginTop: spacing[1] - 2, minHeight: shell.touchTarget.min }}
+                >
+                  {busyKey === key ? "Waiving…" : "Waive (30 days)"}
+                </Button>
+              )}
+            </div>
+          );
+        })
+      )}
+
+      <div style={{ ...localType.label, opacity: 0.6, marginTop: spacing[3], marginBottom: spacing[2] }}>
+        Active exceptions
+      </div>
+      {loading ? (
+        <div style={{ ...typeScale.caption, opacity: 0.6 }}>Loading…</div>
+      ) : exceptions.length === 0 ? (
+        <div style={{ ...typeScale.caption, opacity: 0.6 }}>No exceptions on this node.</div>
+      ) : (
+        exceptions.map((exception) => (
+          <div
+            key={exception.id}
+            style={{
+              marginBottom: spacing[2],
+              padding: spacing[2],
+              borderRadius: radius.lg,
+              border: `1px solid ${surface.borderStrong}`,
+              background: surface.raised,
+            }}
+          >
+            <div style={{ ...typeScale.small, fontWeight: 600 }}>{exception.policy_code}</div>
+            <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1] - 2 }}>
+              Expires {new Date(exception.expires_at).toLocaleDateString()}
+            </div>
+            <Button
+              variant="secondary"
+              disabled={busyKey === exception.id}
+              onClick={() => void handleRevoke(exception.id)}
+              style={{ marginTop: spacing[1], minHeight: shell.touchTarget.min }}
+            >
+              {busyKey === exception.id ? "Revoking…" : "Revoke"}
+            </Button>
+          </div>
+        ))
+      )}
+      {error && (
+        <div role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[1] }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatTraceDuration(trace: NodeTrace): string | null {
+  if (!trace.completed_at) return null;
+  const ms = new Date(trace.completed_at).getTime() - new Date(trace.started_at).getTime();
+  if (ms < 0) return null;
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+function RunTab({
+  selectedTrace,
+  onOpenRunPanel,
+}: {
+  selectedTrace: NodeTrace | null;
+  onOpenRunPanel?: () => void;
+}) {
+  if (!selectedTrace) {
+    return (
+      <div>
+        <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2], lineHeight: "18px" }}>
+          No trace yet for this node — run the graph to see its most recent execution here.
+        </div>
+        {onOpenRunPanel && (
+          <Button variant="secondary" onClick={onOpenRunPanel}>
+            Open Run panel
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  const duration = formatTraceDuration(selectedTrace);
+  return (
+    <div>
+      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2] }}>
+        {selectedTrace.status}
+        {duration ? ` · ${duration}` : ""}
+      </div>
+      <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
+      <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
+      <div style={{ ...typeScale.caption, opacity: 0.6 }}>Output</div>
+      <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
+      {selectedTrace.error && (
+        <div style={{ ...typeScale.caption, color: accentSurface.destructive.text }}>{selectedTrace.error}</div>
+      )}
+      {onOpenRunPanel && (
+        <Button variant="secondary" style={{ marginTop: spacing[2] }} onClick={onOpenRunPanel}>
+          Open Run panel
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const preStyle: CSSProperties = {
+  ...typeScale.caption,
+  fontFamily: fontFamily.mono,
+  background: surface.raised,
+  border: `1px solid ${surface.borderStrong}`,
+  borderRadius: radius.lg,
+  padding: spacing[2],
+  marginBottom: spacing[2],
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  maxHeight: 240,
+  overflowY: "auto",
+};
 
 export function EdgeInspector({
   edge,
@@ -386,12 +814,12 @@ function IntentBlurb({ nodeType }: { nodeType: NodeType }) {
 }
 
 function GenuiCheckpointPreview({ raw }: { raw: string }) {
-  const surface = tryParseGenuiSurface(raw);
-  if (!surface) return null;
+  const surfaceValue = tryParseGenuiSurface(raw);
+  if (!surfaceValue) return null;
   return (
     <div style={{ marginBottom: spacing[3] }}>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Live preview</div>
-      <GenuiSurfaceView surface={surface} />
+      <GenuiSurfaceView surface={surfaceValue} />
     </div>
   );
 }
