@@ -506,3 +506,45 @@ export const analyticsDashboardPayloadSchema = z.object({
   daily: z.array(analyticsDailyPointSchema),
   by_graph: z.array(analyticsGraphRowSchema),
 });
+
+/**
+ * P2, "Cross-cutting policy overlays" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/policies.py). A time-boxed waiver for a specific policy
+ * diagnostic on a specific graph — optionally scoped to one node.
+ */
+export const policyExceptionSchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  policy_code: z.string(),
+  node_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  created_at: z.string(),
+  expires_at: z.string(),
+});
+
+export const createPolicyExceptionRequestSchema = z.object({
+  policy_code: z.string(),
+  node_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  expires_at: z.string(),
+});
+
+/**
+ * P2, "Retrieval/document lineage graph" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/knowledge.py). One durable record of a knowledge chunk
+ * actually retrieved and used to augment an `llm` node's system prompt
+ * during a run — "which runs/nodes used this document."
+ */
+export const knowledgeLineageEntrySchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  document_id: z.string(),
+  document_name: z.string(),
+  chunk_id: z.string(),
+  run_id: z.string(),
+  node_id: z.string(),
+  score: z.number(),
+  created_at: z.string(),
+});

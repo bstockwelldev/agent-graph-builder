@@ -9,9 +9,11 @@ import {
   deletedSchema,
   graphDefinitionSchema,
   graphReleaseSchema,
+  knowledgeLineageEntrySchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
+  policyExceptionSchema,
   promptTemplateSchema,
   providerCredentialsSchema,
   providerModelCatalogSchema,
@@ -39,10 +41,12 @@ import type {
   Fixture,
   GraphDefinition,
   GraphRelease,
+  KnowledgeLineageEntry,
   LlmProfile,
   McpServerConfig,
   NodeTrace,
   PlatformEvent,
+  PolicyException,
   ProviderCredentials,
   ProviderModelCatalog,
   PromptTemplate,
@@ -370,6 +374,58 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingComparisonSchema,
       ),
+    // P2, "Cross-cutting policy overlays" (backend/app/policies.py) — a
+    // time-boxed waiver for a specific policy diagnostic on a graph,
+    // optionally scoped to one node. Graph-scoped routes (not release_id-
+    // only, unlike releases/compare) since exceptions apply to the draft's
+    // compile gate, not a specific immutable release.
+    createPolicyException: (
+      graphId: string,
+      policyCode: string,
+      expiresAt: string,
+      nodeId?: string,
+      reason?: string,
+    ) =>
+      jsonFetch<PolicyException>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            policy_code: policyCode,
+            node_id: nodeId,
+            reason,
+            expires_at: expiresAt,
+          }),
+        },
+        policyExceptionSchema,
+      ),
+    listPolicyExceptions: (graphId: string) =>
+      jsonFetch<PolicyException[]>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions`,
+        undefined,
+        policyExceptionSchema.array(),
+      ),
+    deletePolicyException: (graphId: string, exceptionId: string) =>
+      jsonFetch<{ deleted: boolean }>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
+        { method: "DELETE" },
+        deletedSchema,
+      ),
+    // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py) —
+    // every recorded retrieval for this graph's knowledge base, optionally
+    // filtered to one document: "which runs/nodes used this document."
+    getKnowledgeLineage: (graphId: string, documentId?: string) => {
+      const query = documentId ? `?document_id=${encodeURIComponent(documentId)}` : "";
+      return jsonFetch<KnowledgeLineageEntry[]>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge/lineage${query}`,
+        undefined,
+        knowledgeLineageEntrySchema.array(),
+      );
+    },
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.
     getRuntimeTargetCapabilities: (targetId: string) =>

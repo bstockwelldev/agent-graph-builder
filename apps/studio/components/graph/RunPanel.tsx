@@ -104,6 +104,7 @@ export function RunPanel({
   onCompile,
   onRun,
   onDiagnosticClick,
+  onPolicyExceptionCreated,
   runSummary,
   runHistory,
   runHistoryLoading = false,
@@ -126,6 +127,10 @@ export function RunPanel({
   onCompile: (selection: RunSelection) => Promise<void> | void;
   onRun: (question: string, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
   onDiagnosticClick: (diagnostic: Diagnostic) => void;
+  /** P2, "Cross-cutting policy overlays" — called after a policy exception
+   * is created from the Waive button below, so the caller can re-validate
+   * and pick up the now-non-blocking diagnostic. */
+  onPolicyExceptionCreated?: () => void;
   runSummary: RunSummary | null;
   runHistory: RunSummary[];
   runHistoryLoading?: boolean;
@@ -171,6 +176,36 @@ export function RunPanel({
   const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
   const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
+
+  // P2, "Cross-cutting policy overlays" — waives a blocking `category:
+  // "policy"` diagnostic with a fixed 30-day exception. Self-contained,
+  // same pattern as simulate/replay above.
+  const [waivingKey, setWaivingKey] = useState<string | null>(null);
+  const [waiveError, setWaiveError] = useState<string | null>(null);
+
+  const handleWaive = useCallback(
+    async (diagnostic: Diagnostic, key: string) => {
+      if (!graphId) return;
+      setWaivingKey(key);
+      setWaiveError(null);
+      try {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await client.createPolicyException(
+          graphId,
+          diagnostic.code,
+          expiresAt,
+          diagnostic.node_id ?? undefined,
+          "Waived from Studio",
+        );
+        onPolicyExceptionCreated?.();
+      } catch (err) {
+        setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
+      } finally {
+        setWaivingKey(null);
+      }
+    },
+    [graphId, onPolicyExceptionCreated],
+  );
 
   const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
@@ -482,6 +517,7 @@ export function RunPanel({
             ) : (
               diagnostics.map((diagnostic, index) => {
                 const clickable = Boolean(diagnostic.node_id || diagnostic.edge_id);
+                const key = diagnosticKey(diagnostic, index);
                 const content = (
                   <>
                     <span style={{ fontWeight: 600 }}>{diagnostic.severity === "error" ? "Error" : "Warning"}</span>
@@ -489,32 +525,53 @@ export function RunPanel({
                     {diagnostic.message}
                   </>
                 );
-                if (!clickable) {
-                  return (
-                    <div
-                      key={diagnosticKey(diagnostic, index)}
-                      style={{
-                        ...typeScale.caption,
-                        color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
-                        marginBottom: spacing[1],
-                        lineHeight: "16px",
-                      }}
-                    >
-                      {content}
-                    </div>
-                  );
-                }
-                return (
+                // P2, "Cross-cutting policy overlays" — only a blocking
+                // policy diagnostic is waivable; a warning is already
+                // non-blocking, and structural/contract diagnostics have
+                // no exception mechanism.
+                const waivable = diagnostic.category === "policy" && diagnostic.blocking && Boolean(graphId);
+                const diagnosticNode = !clickable ? (
+                  <div
+                    style={{
+                      ...typeScale.caption,
+                      color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
+                      marginBottom: waivable ? 0 : spacing[1],
+                      lineHeight: "16px",
+                    }}
+                  >
+                    {content}
+                  </div>
+                ) : (
                   <button
-                    key={diagnosticKey(diagnostic, index)}
                     type="button"
                     onClick={() => onDiagnosticClick(diagnostic)}
-                    style={diagnosticButtonStyle(diagnostic.severity)}
+                    style={{ ...diagnosticButtonStyle(diagnostic.severity), marginBottom: waivable ? 0 : spacing[1] }}
                   >
                     {content}
                   </button>
                 );
+                if (!waivable) {
+                  return <div key={key}>{diagnosticNode}</div>;
+                }
+                return (
+                  <div key={key} style={{ marginBottom: spacing[1] }}>
+                    {diagnosticNode}
+                    <Button
+                      variant="secondary"
+                      disabled={waivingKey === key}
+                      onClick={() => void handleWaive(diagnostic, key)}
+                      style={{ marginTop: spacing[1] - 2, minHeight: shell.touchTarget.min }}
+                    >
+                      {waivingKey === key ? "Waiving…" : "Waive (30 days)"}
+                    </Button>
+                  </div>
+                );
               })
+            )}
+            {waiveError && (
+              <div role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[1] }}>
+                {waiveError}
+              </div>
             )}
           </CollapsibleSection>
         </div>

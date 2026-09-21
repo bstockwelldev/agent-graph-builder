@@ -450,3 +450,46 @@ class ResourceVersion(BaseModel):
 class PublishResourceVersionResponse(BaseModel):
     version: ResourceVersion
     created: bool
+
+
+# P2, "Cross-cutting policy overlays" (docs/planning/roadmap.md's Strategic
+# Roadmap Addendum): a named, time-boxed waiver for one policy diagnostic
+# code on one graph — optionally scoped to a single node — so a compile or
+# publish gate a policy would otherwise block can proceed deliberately,
+# with the waiver itself expiring rather than becoming a silent permanent
+# exemption. See policies.py.
+class PolicyException(BaseModel):
+    id: str
+    graph_id: str
+    policy_code: str
+    node_id: str | None = None
+    reason: str | None = None
+    created_at: str
+    expires_at: str
+
+
+class CreatePolicyExceptionRequest(BaseModel):
+    policy_code: str
+    node_id: str | None = None
+    reason: str | None = None
+    expires_at: str
+
+
+# P2, "Retrieval/document lineage graph" (docs/planning/roadmap.md's
+# Strategic Roadmap Addendum): one durable record of a single knowledge
+# chunk actually being retrieved and used to augment an `llm` node's system
+# prompt during a run. Recorded by knowledge.py's
+# `augment_system_with_knowledge` at retrieval time — independent of
+# NodeTrace/RunSummary's own lifecycle, so "which runs used this document"
+# stays queryable (via a graph-scoped, document-filterable list) without
+# scanning every run's traces.
+class KnowledgeLineageEntry(BaseModel):
+    id: str
+    graph_id: str
+    document_id: str
+    document_name: str
+    chunk_id: str
+    run_id: str
+    node_id: str
+    score: float
+    created_at: str

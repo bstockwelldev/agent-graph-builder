@@ -19,6 +19,7 @@ from app.knowledge import (
     chunk_text,
     cosine_similarity,
     format_knowledge_augmentation,
+    list_knowledge_lineage,
     top_k_chunks_by_embedding,
 )
 from app.main import app
@@ -88,6 +89,10 @@ def test_top_k_chunks_orders_by_score_and_limits() -> None:
     hits = top_k_chunks_by_embedding([1.0, 0.0], chunks, {"d1": "doc.txt"}, k=2)
     assert [h["text"] for h in hits] == ["exact match", "close"]
     assert hits[0]["documentName"] == "doc.txt"
+    # P2, "Retrieval/document lineage graph" — chunk/document ids travel
+    # with the hit so a caller can record which chunk was actually used.
+    assert hits[0]["chunkId"] == "c2"
+    assert hits[0]["documentId"] == "d1"
 
 
 def test_format_knowledge_augmentation_empty_hits_is_empty_string() -> None:
@@ -338,10 +343,18 @@ def test_upload_success_then_conflict_on_model_mismatch_then_delete(
 async def test_compute_llm_calls_augment_system_with_knowledge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[str, str, str, str | None, str | None]] = []
 
-    async def _spy(system: str, graph_id: str, query: str) -> str:
-        calls.append((system, graph_id, query))
+    async def _spy(
+        system: str,
+        graph_id: str,
+        query: str,
+        *,
+        run_id: str | None = None,
+        node_id: str | None = None,
+        **_: object,
+    ) -> str:
+        calls.append((system, graph_id, query, run_id, node_id))
         return system
 
     monkeypatch.setattr("app.nodes.augment_system_with_knowledge", _spy)
@@ -379,7 +392,149 @@ async def test_compute_llm_calls_augment_system_with_knowledge(
     await start_run_inline("cwf_rag_wiring_test", {"question": "hello?"}, provider="stub")
 
     assert len(calls) == 1
-    system, graph_id, query = calls[0]
+    system, graph_id, query, run_id, node_id = calls[0]
     assert system == "Be concise."
     assert graph_id == "graph_rag_wiring_test"
     assert query == "hello?"
+    # P2, "Retrieval/document lineage graph" — compute_llm threads the
+    # run/node ids through so a real retrieval hit gets recorded.
+    assert run_id is not None
+    assert node_id == "llm_1"
+
+
+# --- P2, "Retrieval/document lineage graph" ------------------------------
+#
+# Unlike the rest of this file (which reuses live storage and gets away with
+# it because every resource lookup here overwrites by a fixed key), lineage
+# entries accumulate under a fresh, unique id per retrieval — so an
+# exact-count assertion needs a clean database, not just a unique graph_id.
+
+
+@pytest.fixture
+def _isolated_db(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "graphs.db"))
+    monkeypatch.delenv("VERCEL", raising=False)
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
+
+
+def _seed_lineage_entry(monkeypatch: pytest.MonkeyPatch, graph_id: str) -> KnowledgeEntry:
+    entry = KnowledgeEntry(
+        id=graph_id,
+        embedding_provider="openai",
+        embedding_model_id="text-embedding-3-small",
+        documents=[
+            KnowledgeDocument(
+                id="doc1", name="facts.txt", mime_type="text/plain", uploaded_at="now", char_count=5
+            )
+        ],
+        chunks=[
+            KnowledgeChunk(id="c1", document_id="doc1", text="the sky is blue", vector=[1.0, 0.0])
+        ],
+    )
+    storage.save_resource("knowledge", graph_id, entry.model_dump())
+    monkeypatch.setattr(
+        "app.knowledge.resolve_embedding_model",
+        lambda: ResolvedEmbeddingModel(
+            provider="openai", model_id="text-embedding-3-small", api_key="sk-test"
+        ),
+    )
+
+    async def _fake_embed_query(resolution, query):
+        return [1.0, 0.0]
+
+    monkeypatch.setattr("app.knowledge.embed_query", _fake_embed_query)
+    return entry
+
+
+async def test_augment_system_with_knowledge_records_lineage_when_ids_given(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    graph_id = "graph_lineage_1"
+    _seed_lineage_entry(monkeypatch, graph_id)
+
+    await augment_system_with_knowledge(
+        "base prompt", graph_id, "what color?", run_id="run_1", node_id="llm_1"
+    )
+
+    entries = list_knowledge_lineage(graph_id)
+    assert len(entries) == 1
+    assert entries[0].graph_id == graph_id
+    assert entries[0].document_id == "doc1"
+    assert entries[0].document_name == "facts.txt"
+    assert entries[0].chunk_id == "c1"
+    assert entries[0].run_id == "run_1"
+    assert entries[0].node_id == "llm_1"
+    assert entries[0].score == pytest.approx(1.0)
+
+
+async def test_augment_system_with_knowledge_does_not_record_lineage_without_ids(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    graph_id = "graph_lineage_2"
+    _seed_lineage_entry(monkeypatch, graph_id)
+
+    await augment_system_with_knowledge("base prompt", graph_id, "what color?")
+
+    assert list_knowledge_lineage(graph_id) == []
+
+
+async def test_list_knowledge_lineage_filters_by_document_id(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    graph_id = "graph_lineage_3"
+    entry = _seed_lineage_entry(monkeypatch, graph_id)
+    entry.documents.append(
+        KnowledgeDocument(
+            id="doc2", name="other.txt", mime_type="text/plain", uploaded_at="now", char_count=5
+        )
+    )
+    entry.chunks.append(
+        KnowledgeChunk(id="c2", document_id="doc2", text="the grass is green", vector=[1.0, 0.0])
+    )
+    storage.save_resource("knowledge", graph_id, entry.model_dump())
+
+    await augment_system_with_knowledge(
+        "base prompt", graph_id, "what color?", run_id="run_1", node_id="llm_1"
+    )
+
+    all_entries = list_knowledge_lineage(graph_id)
+    assert {e.document_id for e in all_entries} == {"doc1", "doc2"}
+
+    doc1_entries = list_knowledge_lineage(graph_id, document_id="doc1")
+    assert [e.document_id for e in doc1_entries] == ["doc1"]
+
+
+def test_knowledge_lineage_endpoint_round_trip(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    demo = build_demo_graph()
+    graph_id = f"{demo.id}_lineage_route"
+    demo = demo.model_copy(update={"id": graph_id})
+    storage.save_graph(demo)
+    _seed_lineage_entry(monkeypatch, graph_id)
+
+    import asyncio
+
+    asyncio.run(
+        augment_system_with_knowledge(
+            "base prompt", graph_id, "what color?", run_id="run_1", node_id="llm_1"
+        )
+    )
+
+    response = client.get(f"/api/graphs/{graph_id}/knowledge/lineage")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["document_id"] == "doc1"
+
+    filtered = client.get(f"/api/graphs/{graph_id}/knowledge/lineage?document_id=doc1")
+    assert len(filtered.json()) == 1
+
+    empty = client.get(f"/api/graphs/{graph_id}/knowledge/lineage?document_id=no-such-doc")
+    assert empty.json() == []
+
+
+def test_knowledge_lineage_endpoint_404_for_unknown_graph() -> None:
+    response = client.get("/api/graphs/does-not-exist/knowledge/lineage")
+    assert response.status_code == 404

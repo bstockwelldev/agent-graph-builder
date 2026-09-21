@@ -147,6 +147,43 @@ _SCHEMA_STATEMENTS = (
         created_at text not null
     )
     """,
+    # P2, "Cross-cutting policy overlays": time-boxed waivers for a policy
+    # diagnostic code, scoped to a graph (and optionally one node). See
+    # policies.py.
+    """
+    create table if not exists policy_exception (
+        id text primary key,
+        graph_id text not null,
+        policy_code text not null,
+        node_id text,
+        reason text,
+        created_at text not null,
+        expires_at text not null
+    )
+    """,
+    """
+    create index if not exists idx_policy_exception_graph
+    on policy_exception (graph_id, policy_code)
+    """,
+    # P2, "Retrieval/document lineage graph": one row per knowledge chunk
+    # actually retrieved and used during a run. See knowledge.py.
+    """
+    create table if not exists knowledge_lineage_entry (
+        id text primary key,
+        graph_id text not null,
+        document_id text not null,
+        document_name text not null,
+        chunk_id text not null,
+        run_id text not null,
+        node_id text not null,
+        score real not null,
+        created_at text not null
+    )
+    """,
+    """
+    create index if not exists idx_knowledge_lineage_graph_document
+    on knowledge_lineage_entry (graph_id, document_id)
+    """,
 )
 
 
@@ -903,3 +940,166 @@ def get_resource_version_index(kind: str, resource_id: str) -> list[dict[str, An
             (kind, resource_id),
         ).fetchall()
     return [{"version_id": row[0], "fingerprint": row[1], "created_at": row[2]} for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Policy exceptions (P2, "Cross-cutting policy overlays" — see
+# docs/planning/roadmap.md's Strategic Roadmap Addendum and policies.py).
+# Every route that touches one is graph-scoped (`/api/graphs/{graph_id}/
+# policy-exceptions/...`), so — unlike graph releases' deliberately
+# release_id-only routes — there's no need for a separate owner reverse
+# index here.
+# ---------------------------------------------------------------------------
+
+_POLICY_EXCEPTION_PREFIX = "policy_exceptions/"
+
+
+def _policy_exception_key(graph_id: str, exception_id: str) -> str:
+    return f"{_POLICY_EXCEPTION_PREFIX}{graph_id}/{exception_id}.json"
+
+
+def save_policy_exception(graph_id: str, exception_id: str, payload: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_policy_exception_key(graph_id, exception_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into policy_exception "
+            "(id, graph_id, policy_code, node_id, reason, created_at, expires_at) "
+            "values (?, ?, ?, ?, ?, ?, ?)",
+            (
+                exception_id,
+                graph_id,
+                payload["policy_code"],
+                payload.get("node_id"),
+                payload.get("reason"),
+                payload["created_at"],
+                payload["expires_at"],
+            ),
+        )
+
+
+def list_policy_exceptions(graph_id: str) -> list[dict[str, Any]]:
+    remote = _json_object_backend()
+    if remote is not None:
+        items: list[dict[str, Any]] = []
+        for key in remote.list_keys(f"{_POLICY_EXCEPTION_PREFIX}{graph_id}/"):
+            payload = remote.get_json(key)
+            if payload is not None:
+                items.append(payload)
+        items.sort(key=lambda item: item.get("created_at", ""))
+        return items
+    with _connect() as conn:
+        rows = conn.execute(
+            "select id, graph_id, policy_code, node_id, reason, created_at, expires_at "
+            "from policy_exception where graph_id = ? order by created_at",
+            (graph_id,),
+        ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "graph_id": row[1],
+            "policy_code": row[2],
+            "node_id": row[3],
+            "reason": row[4],
+            "created_at": row[5],
+            "expires_at": row[6],
+        }
+        for row in rows
+    ]
+
+
+def delete_policy_exception(graph_id: str, exception_id: str) -> bool:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.delete_json(_policy_exception_key(graph_id, exception_id))
+    with _connect() as conn:
+        row = conn.execute(
+            "select 1 from policy_exception where id = ? and graph_id = ?",
+            (exception_id, graph_id),
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute(
+            "delete from policy_exception where id = ? and graph_id = ?", (exception_id, graph_id)
+        )
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Knowledge retrieval lineage (P2, "Retrieval/document lineage graph" — see
+# docs/planning/roadmap.md's Strategic Roadmap Addendum and knowledge.py).
+# Graph-scoped like policy exceptions above: every route is
+# `/api/graphs/{graph_id}/knowledge/...`, and the per-document filter
+# (`list_knowledge_lineage`'s `document_id`) is applied in Python over a
+# graph's entries rather than needing a second index — a graph's knowledge
+# base is a handful of documents at most (see knowledge.py's
+# MAX_UPLOAD_BYTES), so this never scans more than one graph's history.
+# ---------------------------------------------------------------------------
+
+_KNOWLEDGE_LINEAGE_PREFIX = "knowledge_lineage/"
+
+
+def _knowledge_lineage_key(graph_id: str, entry_id: str) -> str:
+    return f"{_KNOWLEDGE_LINEAGE_PREFIX}{graph_id}/{entry_id}.json"
+
+
+def save_knowledge_lineage_entry(graph_id: str, entry_id: str, payload: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_knowledge_lineage_key(graph_id, entry_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into knowledge_lineage_entry "
+            "(id, graph_id, document_id, document_name, chunk_id, run_id, node_id, score, "
+            "created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                entry_id,
+                graph_id,
+                payload["document_id"],
+                payload["document_name"],
+                payload["chunk_id"],
+                payload["run_id"],
+                payload["node_id"],
+                payload["score"],
+                payload["created_at"],
+            ),
+        )
+
+
+def list_knowledge_lineage(graph_id: str, document_id: str | None = None) -> list[dict[str, Any]]:
+    remote = _json_object_backend()
+    if remote is not None:
+        items: list[dict[str, Any]] = []
+        for key in remote.list_keys(f"{_KNOWLEDGE_LINEAGE_PREFIX}{graph_id}/"):
+            payload = remote.get_json(key)
+            if payload is not None:
+                items.append(payload)
+    else:
+        with _connect() as conn:
+            rows = conn.execute(
+                "select id, graph_id, document_id, document_name, chunk_id, run_id, node_id, "
+                "score, created_at from knowledge_lineage_entry where graph_id = ? "
+                "order by created_at",
+                (graph_id,),
+            ).fetchall()
+        items = [
+            {
+                "id": row[0],
+                "graph_id": row[1],
+                "document_id": row[2],
+                "document_name": row[3],
+                "chunk_id": row[4],
+                "run_id": row[5],
+                "node_id": row[6],
+                "score": row[7],
+                "created_at": row[8],
+            }
+            for row in rows
+        ]
+    if document_id is not None:
+        items = [item for item in items if item["document_id"] == document_id]
+    items.sort(key=lambda item: item.get("created_at", ""))
+    return items
