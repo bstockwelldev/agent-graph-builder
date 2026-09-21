@@ -14,6 +14,13 @@ import { cn } from "@/lib/utils";
 import { client } from "@/lib/api-client";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
+import {
+  agentFormConfig,
+  llmProfileFormConfig,
+  mcpFormConfig,
+  promptFormConfig,
+  toolFormConfig,
+} from "@/components/workbench/resourceFormConfigs";
 import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
 import { AnalyticsPanel } from "@/components/workbench/panels/AnalyticsPanel";
 import { CommandPalette } from "@/components/workbench/CommandPalette";
@@ -145,19 +152,24 @@ export function StudioShell({
         <ChatPanel />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="agents" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-        <ResourceBrowserPanel resourceClient={client.agents} title="Agents" routeHref="/agents" />
+        <ResourceBrowserPanel resourceClient={client.agents} title="Agents" routeHref="/agents" {...agentFormConfig} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="prompts" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-        <ResourceBrowserPanel resourceClient={client.prompts} title="Prompts" routeHref="/prompts" />
+        <ResourceBrowserPanel resourceClient={client.prompts} title="Prompts" routeHref="/prompts" {...promptFormConfig} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="tools" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-        <ResourceBrowserPanel resourceClient={client.tools} title="Tools" routeHref="/tools" />
+        <ResourceBrowserPanel resourceClient={client.tools} title="Tools" routeHref="/tools" {...toolFormConfig} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="mcp" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-        <ResourceBrowserPanel resourceClient={client.mcpServers} title="MCP Servers" routeHref="/mcp" />
+        <ResourceBrowserPanel resourceClient={client.mcpServers} title="MCP Servers" routeHref="/mcp" {...mcpFormConfig} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="llmProfiles" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-        <ResourceBrowserPanel resourceClient={client.llmProfiles} title="LLM Profiles" routeHref="/llm-profiles" />
+        <ResourceBrowserPanel
+          resourceClient={client.llmProfiles}
+          title="LLM Profiles"
+          routeHref="/llm-profiles"
+          {...llmProfileFormConfig}
+        />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="analytics" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
         <AnalyticsPanel />
