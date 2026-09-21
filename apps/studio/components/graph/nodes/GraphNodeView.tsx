@@ -19,6 +19,7 @@ import type { CompileIssue } from "@/lib/diagnostics";
 import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { color, fontFamily, localType, nodeType as nodeTypeTokens, nodeTypeGlow, radius, shadow, shell, spacing, status as statusColor, text } from "@/lib/graph-theme";
 import { computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
+import { summaryFor } from "@/lib/nodeDefaults";
 
 const ICONS: Record<NodeType, LucideIcon> = {
   input: LogIn,
@@ -92,6 +93,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   const showSourceHandle = nodeData.nodeType !== "output";
   const Icon = ICONS[nodeData.nodeType];
   const tokens = nodeTypeTokens[nodeData.nodeType];
+  const summary = summaryFor(nodeData.nodeType, nodeData.config);
   const handleHit = shell.touchTarget.min;
   const handleStyle: CSSProperties = {
     width: handleHit,
@@ -192,6 +194,18 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
         >
           {nodeData.label}
         </div>
+        {summary && (
+          <div
+            style={{
+              ...localType.micro,
+              marginTop: 2,
+              opacity: 0.65,
+              textAlign: nodeData.nodeType === "router" ? "center" : undefined,
+            }}
+          >
+            {summary}
+          </div>
+        )}
         {nodeStatus !== "idle" && (
           <div style={{ ...localType.micro, marginTop: spacing[1], color: statusColor[nodeStatus] }}>{nodeStatus}</div>
         )}

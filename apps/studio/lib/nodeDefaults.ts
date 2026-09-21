@@ -35,6 +35,37 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
   }
 }
 
+// Phase 10 Slice D ("Node cards: category label, title, and runtime
+// status are present; the summary line is not." --
+// docs/planning/features/studio-shell-ux-gap-analysis.md). `labelFor`
+// above already surfaces each type's single most distinguishing config
+// field as the card's title -- this is a genuinely SECOND field, shown
+// only for the types that have one worth surfacing; other types return
+// null (rendered as no summary line) rather than repeating the title or
+// inventing filler text.
+export function summaryFor(type: NodeType, config: Record<string, unknown>): string | null {
+  switch (type) {
+    case "llm":
+      return `via ${String(config.provider ?? "ollama")}`;
+    case "tool_loop":
+      return `via ${String(config.provider ?? "ollama")} · max ${String(config.maxToolIterations ?? 4)} iterations`;
+    case "tool":
+      return `input: ${String(config.inputVariable ?? "question")}`;
+    case "guardrail":
+      return config.allowUrls ? "Allows URLs" : "Blocks URLs";
+    case "rubric":
+      return config.rubricFailOnFindings ? "Fails run on findings" : "Findings don't fail the run";
+    case "input":
+    case "prompt":
+    case "router":
+    case "output":
+    case "branch":
+    case "code_exec":
+    case "human_gate":
+      return null;
+  }
+}
+
 export function labelFor(type: NodeType, config: Record<string, unknown>): string {
   switch (type) {
     case "input":
