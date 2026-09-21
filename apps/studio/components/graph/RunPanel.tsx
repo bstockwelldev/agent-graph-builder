@@ -1,5 +1,6 @@
 import type { CSSProperties, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { client } from "@/lib/api-client";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
@@ -25,6 +26,7 @@ import type {
 import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
 import { useExclusiveCollapse } from "@/hooks/usePersistedCollapse";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { NodeContextMenu, type NodeContextMenuAction } from "./NodeContextMenu";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
@@ -164,6 +166,8 @@ export function RunPanel({
   onExitInspection,
   onCompile,
   onRun,
+  onRunFromNode,
+  onValidate,
   onDiagnosticClick,
   onPolicyExceptionCreated,
   runSummary,
@@ -187,6 +191,19 @@ export function RunPanel({
   onExitInspection?: () => void;
   onCompile: (selection: RunSelection) => Promise<void> | void;
   onRun: (question: string, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
+  /** Phase 10 Slice C, "Run from selected node" — mocks every ancestor of
+   * `nodeId` with a null placeholder so the run skips straight to it. */
+  onRunFromNode?: (
+    nodeId: string,
+    question: string,
+    provider: ChatProvider,
+    model?: string,
+    apiKey?: string,
+  ) => Promise<void> | void;
+  /** Phase 10 Slice C, "A real, labeled Validate action" — re-runs
+   * diagnostics against the current canvas state without registering a
+   * runnable artifact the way Compile does. */
+  onValidate?: () => Promise<void> | void;
   onDiagnosticClick: (diagnostic: Diagnostic) => void;
   /** P2, "Cross-cutting policy overlays" — called after a policy exception
    * is created from the Waive button below, so the caller can re-validate
@@ -280,11 +297,66 @@ export function RunPanel({
   );
 
   const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
+
+  // Phase 10 Slice C ("A real, labeled Validate action"): self-contained
+  // loading state around the caller-supplied onValidate, same pattern as
+  // Compile/Run's own disabled-while-busy handling above.
+  const [validating, setValidating] = useState(false);
+  const handleValidate = useCallback(async () => {
+    setValidating(true);
+    try {
+      await onValidate?.();
+    } finally {
+      setValidating(false);
+    }
+  }, [onValidate]);
+
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const summary = validationSummary(diagnostics);
   const inspecting = Boolean(inspectionRunId && runSummary);
   const showModelSelect = showModelCatalog(provider);
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
+
+  // Phase 10 Slice C ("Consolidate Run into a split-button model" +
+  // "Debug run"): a trigger-anchored dropdown reusing NodeContextMenu's
+  // existing "plain action list at an {x,y} point" component (Phase 7)
+  // instead of the unused shadcn DropdownMenu in components/ui — that
+  // primitive is Tailwind-styled and would mix styling systems inside
+  // this token-styled (lib/graph-theme.ts) panel, the same reason
+  // ui/Tabs.tsx avoided shadcn's Tabs in Slice B.
+  const [runMenuAnchor, setRunMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const runMenuActions: NodeContextMenuAction[] = [
+    ...(selectedNodeId && onRunFromNode
+      ? [
+          {
+            label: "Run from selected node",
+            title: "Runs downstream of this node only — upstream nodes are stubbed with empty values, not replayed.",
+            onClick: () =>
+              void onRunFromNode(
+                selectedNodeId,
+                question,
+                provider,
+                showModelSelect ? selectedModel || undefined : undefined,
+                showApiKeyField ? apiKey.trim() || undefined : undefined,
+              ),
+          },
+        ]
+      : []),
+    { label: "Run with fixture…", onClick: () => openSection("run-simulate") },
+    {
+      label: "Debug run",
+      onClick: () => {
+        openSection("observe-events");
+        void onRun(
+          question,
+          provider,
+          showModelSelect ? selectedModel || undefined : undefined,
+          showApiKeyField ? apiKey.trim() || undefined : undefined,
+        );
+      },
+    },
+  ];
+
   const displayedEvents = resolveEventLogEvents(events, runSummary?.events);
   const isRail = layout === "rail";
   const lastFocusedRunIdRef = useRef<string | undefined>(undefined);
@@ -525,6 +597,11 @@ export function RunPanel({
             <Button variant="secondary" disabled={compiling || running} onClick={() => void onCompile({ provider, model: showModelSelect ? selectedModel || undefined : undefined })} style={{ minHeight: shell.touchTarget.min }}>
               {compiling ? "Compiling…" : "Compile"}
             </Button>
+            {onValidate && (
+              <Button variant="secondary" disabled={validating} onClick={() => void handleValidate()} style={{ minHeight: shell.touchTarget.min }}>
+                {validating ? "Validating…" : "Validate"}
+              </Button>
+            )}
             <Button
               variant="primary"
               disabled={running || compiling}
@@ -540,6 +617,27 @@ export function RunPanel({
             >
               {running ? "Running…" : "Run"}
             </Button>
+            <Button
+              variant="primary"
+              disabled={running || compiling}
+              aria-label="More run options"
+              style={{ minHeight: shell.touchTarget.min, padding: `0 ${spacing[1]}px` }}
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setRunMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
+              }}
+            >
+              <ChevronDown className="size-4" />
+            </Button>
+            {runMenuAnchor && (
+              <NodeContextMenu
+                x={runMenuAnchor.x}
+                y={runMenuAnchor.y}
+                title="Run"
+                actions={runMenuActions}
+                onClose={() => setRunMenuAnchor(null)}
+              />
+            )}
           </div>
         </CollapsibleSection>
 

@@ -19,6 +19,8 @@ export type NodeContextMenuAction = {
   label: string;
   onClick: () => void;
   tone?: "default" | "destructive";
+  /** Native tooltip text, e.g. a caveat for a non-obvious action. */
+  title?: string;
 };
 
 export function NodeContextMenu({
@@ -83,6 +85,7 @@ export function NodeContextMenu({
             key={action.label}
             type="button"
             role="menuitem"
+            title={action.title}
             onClick={() => {
               action.onClick();
               onClose();

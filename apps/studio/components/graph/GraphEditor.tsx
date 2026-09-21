@@ -51,6 +51,7 @@ import {
 } from "@/lib/graphAuthoring";
 import { defaultConfig, labelFor } from "@/lib/nodeDefaults";
 import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
+import { computeAncestorNodeIds } from "@/lib/runFromNode";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
 import {
   failedUnavailableRunSummary,
@@ -412,7 +413,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const refreshDiagnostics = useCallback(() => {
     try {
       const graph = buildGraphDefinition();
-      client
+      // The `return` makes this awaitable for Phase 10 Slice C's Validate
+      // button (RunPanel.tsx's onValidate prop) without changing behavior
+      // for this function's original fire-and-forget callers.
+      return client
         .validateGraph(graph)
         .then((result) => setDiagnostics(result.diagnostics))
         .catch((err: unknown) => console.error("Diagnostics refresh failed:", err));
@@ -720,8 +724,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [buildGraphDefinition, focusDiagnostics, nodes, setNodes],
   );
 
-  const handleRun = useCallback(
-    async (question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
+  // Phase 10 Slice C ("Run from selected node" —
+  // docs/planning/features/studio-shell-ux-gap-analysis.md): the shared
+  // core `handleRun` used to be. `nodeOutputs`, when passed, pre-seeds
+  // those node ids so the backend's existing fixture_node_outputs
+  // mechanism short-circuits them instead of invoking their real
+  // executors — see handleRunFromNode below.
+  const runGraph = useCallback(
+    async (opts: {
+      question: string;
+      provider: ChatProvider;
+      model?: string;
+      apiKey?: string;
+      nodeOutputs?: Record<string, unknown>;
+    }) => {
+      const { question, provider, model, apiKey, nodeOutputs } = opts;
       setProviderBlockMessage(null);
       setCompiling(true);
       try {
@@ -752,7 +769,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setInspectionRouteDecisions([]);
         closeStreamRef.current?.();
 
-        const summary = await client.startRun(graph.id, { question }, provider, model, apiKey);
+        const summary = await client.startRun(graph.id, { question }, provider, model, apiKey, nodeOutputs);
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
 
@@ -859,6 +876,31 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       }
     },
     [buildGraphDefinition, focusDiagnostics, nodes, refreshRunHistory, setNodes],
+  );
+
+  const handleRun = useCallback(
+    (question: string, provider: ChatProvider, model?: string, apiKey?: string) =>
+      runGraph({ question, provider, model, apiKey }),
+    [runGraph],
+  );
+
+  // Phase 10 Slice C, "Run from selected node": mocks every ancestor of
+  // `nodeId` with `null` so the run skips straight to it — a structural/
+  // debugging pass, not a semantically meaningful run. If the graph's
+  // input node is among those ancestors (the common case), its mocked
+  // output means `question` never actually reaches downstream nodes the
+  // normal way; this deliberately does NOT attempt to replay a prior
+  // run's real traced values for ancestors, which is a larger follow-up.
+  const handleRunFromNode = useCallback(
+    (nodeId: string, question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
+      const ancestorIds = computeAncestorNodeIds(
+        nodeId,
+        edges.map((edge) => ({ source: edge.source, target: edge.target })),
+      );
+      const nodeOutputs = Object.fromEntries(ancestorIds.map((id) => [id, null]));
+      return runGraph({ question, provider, model, apiKey, nodeOutputs });
+    },
+    [edges, runGraph],
   );
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -1251,6 +1293,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onExitInspection={exitInspection}
           onCompile={handleCompile}
           onRun={handleRun}
+          onRunFromNode={handleRunFromNode}
+          onValidate={refreshDiagnostics}
           onDiagnosticClick={handleDiagnosticClick}
           onPolicyExceptionCreated={refreshDiagnostics}
           runSummary={runSummary}
