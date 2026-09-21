@@ -59,3 +59,26 @@ export function inputPortsFor(node: Pick<GraphNode, "type" | "input_ports">): Gr
 export function outputPortsFor(node: Pick<GraphNode, "type" | "output_ports">): GraphPort[] {
   return node.output_ports ?? NODE_PORT_CATALOG[node.type].output;
 }
+
+/**
+ * Phase 10 Slice C follow-up ("typed-port/compatible-target connect-drag
+ * feedback"): a frontend mirror of backend/app/contracts.py's
+ * `_kind_incompatibility`, for live drag-time feedback only. Deliberately
+ * narrower than the backend check -- at drag time there is no edge yet, so
+ * no `transform` and no declared port JSON Schema exist to consult; this
+ * answers "would this connection need one" (a 3-state signal for canvas
+ * styling), not "is this connection definitively valid." The backend
+ * contract pass remains the actual validation authority -- this never
+ * blocks a connection, only hints at it. Keep in sync with
+ * `_kind_incompatibility` by hand, same caveat as NODE_PORT_CATALOG above.
+ */
+export type PortDragCompatibility = "compatible" | "needs-transform" | "incompatible";
+
+const STRUCTURED_KINDS = new Set<PortKind>(["tool-result", "artifact", "structured-json"]);
+
+export function computePortDragCompatibility(sourceKind: PortKind, targetKind: PortKind): PortDragCompatibility {
+  if (sourceKind === targetKind) return "compatible";
+  if (targetKind === "message") return "needs-transform";
+  if (STRUCTURED_KINDS.has(sourceKind) || STRUCTURED_KINDS.has(targetKind)) return "needs-transform";
+  return "incompatible";
+}

@@ -1,4 +1,4 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, useConnection, type NodeProps } from "@xyflow/react";
 import {
   Bot,
   Code2,
@@ -18,6 +18,7 @@ import type { CSSProperties } from "react";
 import type { CompileIssue } from "@/lib/diagnostics";
 import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { color, fontFamily, localType, nodeType as nodeTypeTokens, nodeTypeGlow, radius, shadow, shell, spacing, status as statusColor, text } from "@/lib/graph-theme";
+import { computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
 
 const ICONS: Record<NodeType, LucideIcon> = {
   input: LogIn,
@@ -82,7 +83,7 @@ function shapeStyles(type: NodeType): CSSProperties {
   }
 }
 
-export function GraphNodeView({ data, selected, sourcePosition = Position.Right, targetPosition = Position.Left }: NodeProps) {
+export function GraphNodeView({ id, data, selected, sourcePosition = Position.Right, targetPosition = Position.Left }: NodeProps) {
   const nodeData = data as GraphNodeData;
   const nodeStatus = nodeData.status ?? "idle";
   const compileIssue = nodeData.compileIssue ?? null;
@@ -101,6 +102,34 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
     border: "none",
     borderRadius: 999,
   };
+
+  // Phase 10 Slice C follow-up ("typed-port/compatible-target connect-drag
+  // feedback" -- docs/planning/features/studio-shell-ux-gap-analysis.md):
+  // while a connection is being dragged from another node's source handle,
+  // highlight this node's target handle as compatible/needs-transform/
+  // incompatible with the dragged port's kind. Only the node being dragged
+  // FROM is skipped -- every other node (including the eventual actual
+  // target) gets a live signal, matching "highlights compatible targets
+  // and fades incompatible ports" from studio-ux-revision-plan.md.
+  const connection = useConnection();
+  let dragCompatibility: ReturnType<typeof computePortDragCompatibility> | null = null;
+  if (connection.inProgress && connection.fromNode.id !== id) {
+    const sourceType = (connection.fromNode.data as GraphNodeData | undefined)?.nodeType;
+    const sourcePort = sourceType ? outputPortsFor({ type: sourceType })[0] : undefined;
+    const targetPort = inputPortsFor({ type: nodeData.nodeType })[0];
+    if (sourcePort && targetPort) {
+      dragCompatibility = computePortDragCompatibility(sourcePort.contract.kind, targetPort.contract.kind);
+    }
+  }
+
+  const targetHandleStyle: CSSProperties =
+    dragCompatibility === "compatible"
+      ? { ...handleStyle, boxShadow: `0 0 0 4px ${color.success[500]}`, transform: "scale(1.15)" }
+      : dragCompatibility === "needs-transform"
+        ? { ...handleStyle, boxShadow: `0 0 0 4px ${color.warning[500]}` }
+        : dragCompatibility === "incompatible"
+          ? { ...handleStyle, opacity: 0.3 }
+          : handleStyle;
 
   const borderColor =
     nodeStatus !== "idle"
@@ -136,7 +165,7 @@ export function GraphNodeView({ data, selected, sourcePosition = Position.Right,
           position={targetPosition}
           title={targetHandleLabel}
           aria-label={targetHandleLabel}
-          style={{ ...handleStyle, pointerEvents: "auto" }}
+          style={{ ...targetHandleStyle, pointerEvents: "auto" }}
         />
       )}
       <div style={{ ...cardStyle, pointerEvents: "auto" }}>
