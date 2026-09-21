@@ -245,6 +245,13 @@ class RunRequest(BaseModel):
     provider: Literal["ollama", "stub", "openai_compat", "groq", "google", "azure"] | None = None
     model: str | None = None
     api_key: str | None = None
+    # Phase 10 Slice C, "Run from selected node" (docs/planning/features/
+    # studio-shell-ux-gap-analysis.md) — pre-seeds these node ids' outputs
+    # (typically an ancestor set, mocked with null) so runtime.start_run's
+    # existing fixture_node_outputs mechanism (already used by P1 fixture
+    # simulation and human_gate resume) short-circuits them instead of
+    # invoking their real executors.
+    node_outputs: dict[str, Any] = Field(default_factory=dict)
 
 
 class CreateGraphRequest(BaseModel):

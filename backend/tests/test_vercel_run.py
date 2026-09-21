@@ -59,6 +59,51 @@ def test_vercel_run_includes_events_in_response(monkeypatch) -> None:
     assert "run.completed" in event_types
 
 
+def test_vercel_run_seeds_node_outputs(monkeypatch) -> None:
+    """Phase 10 Slice C, "Run from selected node" (docs/planning/features/
+    studio-shell-ux-gap-analysis.md): RunRequest.node_outputs threads
+    through to runtime.start_run's existing fixture_node_outputs param, so
+    a seeded node short-circuits instead of invoking its real executor —
+    the same mechanism P1 fixture-simulation already exercises via
+    /api/graphs/{id}/simulate, now reachable from the real run endpoint."""
+    _enable_vercel_runtime(monkeypatch)
+    graph = build_demo_graph()
+    storage.save_graph(graph)
+
+    response = client.post(
+        "/api/runs",
+        json={
+            "graph_id": graph.id,
+            "input": {"question": "How does a database index work?"},
+            "provider": "stub",
+            # Mocking llm_classify's output also forces router_1's branch
+            # deterministically ("other" doesn't match the "technical"
+            # conditional edge, so it takes the default edge to
+            # prompt_answer) — this is exactly what "Run from selected
+            # node" produces when a node downstream of the classifier is
+            # selected and everything upstream is mocked.
+            "node_outputs": {"llm_classify": "other"},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "succeeded"
+    events_by_type = [
+        (event["event_type"], event.get("node_id")) for event in payload.get("events", [])
+    ]
+    completed_events = [
+        event
+        for event in payload.get("events", [])
+        if event["event_type"] == "node.completed" and event["node_id"] == "llm_classify"
+    ]
+    assert len(completed_events) == 1
+    assert completed_events[0]["payload"]["fixture"] is True
+    assert completed_events[0]["payload"]["output"] == "other"
+    assert ("node.started", "prompt_answer") in events_by_type
+    assert ("node.started", "tool_lookup") not in events_by_type
+
+
 def test_local_run_returns_queued() -> None:
     graph = build_demo_graph()
     storage.save_graph(graph)
