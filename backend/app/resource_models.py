@@ -16,6 +16,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .models import Fixture
+
 
 class PromptTemplate(BaseModel):
     id: str
@@ -62,6 +64,28 @@ class LlmProfile(BaseModel):
     description: str | None = None
 
 
+class FixtureDataset(BaseModel):
+    """A named, reusable list of simulation fixtures (each a
+    `models.Fixture`: `{input, node_outputs}`) for the Routing Lab, so a
+    dataset survives closing the panel instead of living only in a
+    textarea. `graph_id` is a provenance hint, not a constraint: any graph
+    can run any dataset (node ids in `node_outputs` that don't exist in the
+    target graph are reported by `simulate_graph` as `FIXTURE_UNKNOWN_NODE`).
+    `source="runs"` datasets were captured from historical runs by
+    `datasets.build_dataset_from_runs`.
+    """
+
+    id: str
+    name: str
+    description: str | None = None
+    graph_id: str | None = None
+    fixtures: list[Fixture] = Field(default_factory=list)
+    source: Literal["manual", "runs"] = "manual"
+    source_run_ids: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -92,4 +116,5 @@ RESOURCE_MODELS: dict[str, type[BaseModel]] = {
     "agents": AgentProfile,
     "llm_profiles": LlmProfile,
     "chat_sessions": ChatSession,
+    "datasets": FixtureDataset,
 }

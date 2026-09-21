@@ -16,6 +16,7 @@ import type {
   diagnosticSchema,
   edgeKindSchema,
   edgeTransformSchema,
+  fixtureDatasetSchema,
   fixtureSchema,
   graphDefinitionSchema,
   graphEdgeSchema,
@@ -114,6 +115,7 @@ export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 
 // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph stubbing").
 export type Fixture = z.infer<typeof fixtureSchema>;
+export type FixtureDataset = z.infer<typeof fixtureDatasetSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
 
 // P1 rollout plan, Slice D ("Routing policy lab").

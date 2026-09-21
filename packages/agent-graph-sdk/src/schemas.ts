@@ -286,6 +286,23 @@ export const fixtureSchema = z.object({
   node_outputs: z.record(z.string(), z.unknown()),
 });
 
+/**
+ * A named, saved list of Routing Lab fixtures (backend/app/resource_models.py's
+ * `FixtureDataset`). `graph_id` is a provenance hint, not a constraint.
+ * `source: "runs"` datasets were captured from historical runs.
+ */
+export const fixtureDatasetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  graph_id: z.string().nullish(),
+  fixtures: z.array(fixtureSchema),
+  source: z.enum(["manual", "runs"]),
+  source_run_ids: z.array(z.string()),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export const simulateResultSchema = z.object({
   run: runSummarySchema,
   traces: z.array(nodeTraceSchema),

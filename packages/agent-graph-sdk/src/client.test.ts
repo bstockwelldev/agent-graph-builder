@@ -557,3 +557,94 @@ describe("createAgentGraphClient knowledge base", () => {
     await expect(createAgentGraphClient({ baseUrl }).getKnowledge("g1")).rejects.toThrow(/unexpected shape/);
   });
 });
+
+// Saved Routing Lab datasets (backend/app/resource_models.py FixtureDataset)
+// and capture-from-runs (backend/app/datasets.py).
+describe("createAgentGraphClient datasets", () => {
+  const baseUrl = "http://localhost:8000";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function jsonResponse(body: unknown, ok = true, status = 200) {
+    return {
+      ok,
+      status,
+      text: async () => JSON.stringify(body),
+      json: async () => body,
+    };
+  }
+
+  const dataset = {
+    id: "ds1",
+    name: "Captured",
+    description: null,
+    graph_id: "g1",
+    fixtures: [{ input: { question: "q" }, node_outputs: { n1: "x" } }],
+    source: "runs",
+    source_run_ids: ["r1"],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  it("datasets.list fetches GET /api/datasets", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([dataset]));
+
+    const result = await createAgentGraphClient({ baseUrl }).datasets.list();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${baseUrl}/api/datasets`);
+    expect(result[0]?.fixtures).toHaveLength(1);
+  });
+
+  it("datasets.create POSTs the dataset", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(dataset));
+
+    await createAgentGraphClient({ baseUrl }).datasets.create({ ...dataset, source: "manual" } as never);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${baseUrl}/api/datasets`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("createDatasetFromRuns maps camelCase options to the snake_case request", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(dataset));
+
+    const result = await createAgentGraphClient({ baseUrl }).createDatasetFromRuns({
+      name: "Captured",
+      runIds: ["r1", "r2"],
+      includeNodeOutputs: false,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${baseUrl}/api/datasets/from-runs`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Captured",
+      run_ids: ["r1", "r2"],
+      include_node_outputs: false,
+    });
+    expect(result.source).toBe("runs");
+  });
+
+  it("createDatasetFromRuns freezes node outputs by default", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(dataset));
+
+    await createAgentGraphClient({ baseUrl }).createDatasetFromRuns({ name: "X", runIds: ["r1"] });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).include_node_outputs).toBe(true);
+  });
+
+  it("datasets.get rejects a dataset with an unknown source", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...dataset, source: "imported" }));
+
+    await expect(createAgentGraphClient({ baseUrl }).datasets.get("ds1")).rejects.toThrow(/unexpected shape/);
+  });
+});

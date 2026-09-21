@@ -7,6 +7,7 @@ import {
   chatSessionSchema,
   compileResultSchema,
   deletedSchema,
+  fixtureDatasetSchema,
   graphDefinitionSchema,
   graphReleaseSchema,
   knowledgeDeleteResponseSchema,
@@ -42,6 +43,7 @@ import type {
   ChatSession,
   CompileResult,
   Fixture,
+  FixtureDataset,
   GraphDefinition,
   GraphRelease,
   KnowledgeDeleteResponse,
@@ -501,6 +503,30 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       ...resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
       versions: resourceVersionClient(baseUrl, "llm-profiles"),
     },
+    // Saved Routing Lab fixture datasets (backend/app/resource_models.py's
+    // FixtureDataset) — free CRUD, plus one bespoke method that captures a
+    // dataset from historical runs (backend/app/datasets.py).
+    datasets: resourceClient<FixtureDataset>(baseUrl, "datasets", fixtureDatasetSchema),
+    createDatasetFromRuns: (request: {
+      name: string;
+      description?: string;
+      runIds: string[];
+      includeNodeOutputs?: boolean;
+    }) =>
+      jsonFetch<FixtureDataset>(
+        baseUrl,
+        "/api/datasets/from-runs",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: request.name,
+            description: request.description,
+            run_ids: request.runIds,
+            include_node_outputs: request.includeNodeOutputs ?? true,
+          }),
+        },
+        fixtureDatasetSchema,
+      ),
     // Direct model scratchpad (studio-consolidation Phase 8) — a
     // ChatSession is a stored resource like the others above (free CRUD),
     // plus one bespoke non-CRUD method for actually sending a message.

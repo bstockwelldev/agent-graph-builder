@@ -31,8 +31,10 @@ in code, diagnostics, or the API surface.
 
 from __future__ import annotations
 
+from typing import Any
+
 from . import runtime, storage
-from .models import Diagnostic, GraphDefinition, NodeType, SimulateResult
+from .models import Diagnostic, GraphDefinition, NodeTrace, NodeType, SimulateResult
 from .ports import default_output_port
 from .releases import get_release
 
@@ -52,6 +54,33 @@ class ReplayBlocked(Exception):
     def __init__(self, diagnostics: list[Diagnostic]) -> None:
         self.diagnostics = diagnostics
         super().__init__("replay blocked by diagnostics")
+
+
+def frozen_node_outputs(graph: GraphDefinition, traces: list[NodeTrace]) -> dict[str, Any]:
+    """The `Fixture.node_outputs` that reproduce a recorded run: every
+    succeeded, non-routing node's original `NodeTrace.output`. Shared by
+    `replay_run` and `datasets.build_dataset_from_runs` so a replayed run and
+    a run captured into a dataset freeze exactly the same set of nodes.
+    """
+    nodes_by_id = {n.id: n for n in graph.nodes}
+    routing_ids = {n.id for n in graph.nodes if n.type in _ROUTING_NODE_TYPES}
+    # A node with no output port (only `output` today — see ports.py's
+    # catalog) has nothing a fixture can faithfully freeze: its projected
+    # `node_outputs` entry is always `{}` regardless of what its executor
+    # returned, so the resume-replay early-return branch this reuses would
+    # display `None` instead of the original trace value. Such node types
+    # are side-effect-free by construction (`compute_output` just forwards
+    # its upstream input), so leaving them out and letting them recompute
+    # live from already-frozen upstream input reproduces the same value
+    # without that display gap.
+    return {
+        trace.node_id: trace.output
+        for trace in traces
+        if trace.node_id in nodes_by_id
+        and trace.node_id not in routing_ids
+        and trace.status == "succeeded"
+        and default_output_port(nodes_by_id[trace.node_id]) is not None
+    }
 
 
 def _resolve_replay_graph(
@@ -105,24 +134,7 @@ async def replay_run(run_id: str) -> SimulateResult:
 
     graph, resource_snapshots, release_id = _resolve_replay_graph(run_id)
     original_traces = runtime.get_run_node_traces(run_id)
-    nodes_by_id = {n.id: n for n in graph.nodes}
-    routing_ids = {n.id for n in graph.nodes if n.type in _ROUTING_NODE_TYPES}
-    # A node with no output port (only `output` today — see ports.py's
-    # catalog) has nothing a fixture can faithfully freeze: its projected
-    # `node_outputs` entry is always `{}` regardless of what its executor
-    # returned, so the resume-replay early-return branch this reuses would
-    # display `None` instead of the original trace value. Such node types
-    # are side-effect-free by construction (`compute_output` just forwards
-    # its upstream input), so leaving them out and letting them recompute
-    # live from already-frozen upstream input reproduces the same value
-    # without that display gap.
-    fixture_node_outputs = {
-        trace.node_id: trace.output
-        for trace in original_traces
-        if trace.node_id not in routing_ids
-        and trace.status == "succeeded"
-        and default_output_port(nodes_by_id[trace.node_id]) is not None
-    }
+    fixture_node_outputs = frozen_node_outputs(graph, original_traces)
 
     compile_result = runtime.compile_workflow(graph)
     if not compile_result.ok or compile_result.compiled_workflow_id is None:
