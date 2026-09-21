@@ -43,6 +43,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Playground shell panels (Execute vs Observe) | Shipped | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) — `c6b5467` on `master`; prod https://agent-graph-builder-app.vercel.app |
 | Frontend tests (Vitest + RTL) | Shipped | `canvasFit.test.ts`, `Tooltip.test.tsx`, `shellLayout.test.ts`, `FlowCanvas.test.tsx` (mocked `fitView`) |
 | Studio shell UX remediation (Phase 10, Slices A-D) | Shipped | [studio-shell-ux-gap-analysis.md](features/studio-shell-ux-gap-analysis.md) |
+| Knowledge-base panel + saved/run-captured Routing Lab datasets | Shipped | Graph-scoped `knowledge` panel; `datasets` stored resource with a Routing Lab picker; `POST /api/datasets/from-runs` + run-history "Save selected as dataset". See the gap analysis's Tier 2 rows. |
 
 ---
 
@@ -59,6 +60,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | ~~**P3**~~ | ~~**Frontend tests (Vitest + RTL)**~~ | Medium | Medium | **Shipped 2026-09-12** — `canFitView` unit tests, TaxonomyTooltip layout RTL, existing `shellLayout` flex cases, mocked `fitView` call gating. |
 | ~~**P3**~~ | ~~**Repo `AGENTS.md`**~~ | Low | Medium | **Shipped 2026-09-10** — repo-root `AGENTS.md` router for agents. |
 | **P3** | **Canvas orientation Phase E** | Low | Low | elk fallback, dual layout positions — [canvas-orientation-plan.md](features/canvas-orientation-plan.md) follow-ons. |
+| **P3** | **Scored eval store** | Medium | Depends on a live-run decision | Not scoped. Extends the saved Routing Lab datasets with expected outputs, scorers (the existing `rubric` node/`rubric.py` are candidates), and scored runs. Needs a design note first: `simulate_graph` forces the stub provider, so scoring output *quality* means a live-provider execution path — who pays, which keys, and how to handle non-deterministic output. |
 | **P3** | **Mobile bottom nav tray** | Low | Medium for mobile users | Future prospect, not scoped yet: a standard mobile-app-style bottom tab bar (3-4 primary destinations) for compact widths, replacing/upgrading the graph canvas route's existing ad hoc compact action bar (`GraphEditor.tsx`'s `workbench.isCompact` icon row) with something closer to native mobile navigation conventions and consistent across more than just the canvas route. |
 | ~~**P2**~~ | ~~**Durable store (object store / Turso)**~~ | Medium | High | **Shipped 2026-09-10** — Vercel Blob (`BLOB_READ_WRITE_TOKEN`) preferred on Vercel; `OBJECT_STORE_*` S3-compatible JSON remains the self-host path; Turso libsql optional. |
 | ~~**P0**~~ | ~~**Studio consolidation Phase 1 — schema**~~ | High | High | **Shipped 2026-09-15.** Absorbed micro-ui-agent-builder's 11-node vocabulary into `NodeType` with typed configs; per-type compiler diagnostics. See [studio-consolidation-plan.md](features/studio-consolidation-plan.md). |
@@ -166,7 +168,7 @@ Full gap table and rationale in [studio-shell-ux-gap-analysis.md](features/studi
 3. **Slice C — Run/Debug/canvas affordances.** A labeled "Validate" action, "Run from selected node," "Debug run," a searchable node launcher, typed-port/compatible-target connect feedback, a consolidated Run split-button. ("Run with production inputs" excluded — undefined anywhere.)
 4. **Slice D — Lower-priority polish.** Focus mode, node-card summary line, a sortable run-history data grid, and a styling-ownership doc (`apps/studio/AGENTS.md`). The five resource registries deliberately stay as card grids rather than being converted to data grids — see the gap-analysis doc's Slice D note.
 
-Large-graph complexity management (subgraphs, collapse/expand, dependency search, graph health score — named in `graph-native-control-plane-plan.md`) and knowledge-base UI are explicitly out of this phase's slices; both are follow-on work tracked separately.
+Large-graph complexity management (subgraphs, collapse/expand, dependency search, graph health score — named in `graph-native-control-plane-plan.md`) is explicitly out of this phase's slices and is follow-on work tracked separately. The knowledge-base UI, previously listed alongside it, has since shipped.
 
 ---
 

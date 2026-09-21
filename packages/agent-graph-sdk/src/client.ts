@@ -7,9 +7,13 @@ import {
   chatSessionSchema,
   compileResultSchema,
   deletedSchema,
+  fixtureDatasetSchema,
   graphDefinitionSchema,
   graphReleaseSchema,
+  knowledgeDeleteResponseSchema,
   knowledgeLineageEntrySchema,
+  knowledgeSummarySchema,
+  knowledgeUploadResponseSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
@@ -39,9 +43,13 @@ import type {
   ChatSession,
   CompileResult,
   Fixture,
+  FixtureDataset,
   GraphDefinition,
   GraphRelease,
+  KnowledgeDeleteResponse,
   KnowledgeLineageEntry,
+  KnowledgeSummary,
+  KnowledgeUploadResponse,
   LlmProfile,
   McpServerConfig,
   NodeTrace,
@@ -428,6 +436,29 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         { method: "DELETE" },
         deletedSchema,
       ),
+    // Knowledge base (studio-consolidation Phase 5, backend/app/knowledge.py):
+    // per-graph .txt/.md documents, chunked + embedded on upload. The upload
+    // sends `headers: {}` so `jsonFetch`'s JSON Content-Type default doesn't
+    // apply — the browser must set the multipart boundary itself.
+    getKnowledge: (graphId: string) =>
+      jsonFetch<KnowledgeSummary>(baseUrl, `/api/graphs/${graphId}/knowledge`, undefined, knowledgeSummarySchema),
+    uploadKnowledgeDocument: (graphId: string, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return jsonFetch<KnowledgeUploadResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge`,
+        { method: "POST", body: form, headers: {} },
+        knowledgeUploadResponseSchema,
+      );
+    },
+    deleteKnowledgeDocument: (graphId: string, documentId: string) =>
+      jsonFetch<KnowledgeDeleteResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge/${documentId}`,
+        { method: "DELETE" },
+        knowledgeDeleteResponseSchema,
+      ),
     // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py) —
     // every recorded retrieval for this graph's knowledge base, optionally
     // filtered to one document: "which runs/nodes used this document."
@@ -472,6 +503,30 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       ...resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
       versions: resourceVersionClient(baseUrl, "llm-profiles"),
     },
+    // Saved Routing Lab fixture datasets (backend/app/resource_models.py's
+    // FixtureDataset) — free CRUD, plus one bespoke method that captures a
+    // dataset from historical runs (backend/app/datasets.py).
+    datasets: resourceClient<FixtureDataset>(baseUrl, "datasets", fixtureDatasetSchema),
+    createDatasetFromRuns: (request: {
+      name: string;
+      description?: string;
+      runIds: string[];
+      includeNodeOutputs?: boolean;
+    }) =>
+      jsonFetch<FixtureDataset>(
+        baseUrl,
+        "/api/datasets/from-runs",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: request.name,
+            description: request.description,
+            run_ids: request.runIds,
+            include_node_outputs: request.includeNodeOutputs ?? true,
+          }),
+        },
+        fixtureDatasetSchema,
+      ),
     // Direct model scratchpad (studio-consolidation Phase 8) — a
     // ChatSession is a stored resource like the others above (free CRUD),
     // plus one bespoke non-CRUD method for actually sending a message.

@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { RunGraphSnapshot, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
+import { CaptureDatasetDialog } from "@/components/studio/capture-dataset-dialog";
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
 import { Badge } from "@/components/ui/badge";
@@ -173,10 +174,15 @@ export default function GraphRunsPage({ params }: { params: Promise<{ graphId: s
   const [snapshotRunId, setSnapshotRunId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("started_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  // Rows ticked for "Save as dataset" (docs/planning/features/graph-native-control-plane-plan.md,
+  // "historical runs should become engineering datasets").
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [captureOpen, setCaptureOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setSelectedIds(new Set());
     client
       .listRuns(graphId)
       .then((loaded) => {
@@ -196,6 +202,18 @@ export default function GraphRunsPage({ params }: { params: Promise<{ graphId: s
   const closeSnapshot = useCallback((open: boolean) => {
     if (!open) setSnapshotRunId(null);
   }, []);
+
+  const toggleSelected = useCallback((runId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(runId)) next.add(runId);
+      return next;
+    });
+  }, []);
+
+  const toggleAllSelected = useCallback(() => {
+    setSelectedIds((current) => (current.size === runs.length ? new Set() : new Set(runs.map((run) => run.run_id))));
+  }, [runs]);
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((current) => {
@@ -220,6 +238,8 @@ export default function GraphRunsPage({ params }: { params: Promise<{ graphId: s
     return copy;
   }, [runs, sortKey, sortDir]);
 
+  const selectedRuns = useMemo(() => runs.filter((run) => selectedIds.has(run.run_id)), [runs, selectedIds]);
+
   return (
     <StudioPage>
       <Link
@@ -238,64 +258,96 @@ export default function GraphRunsPage({ params }: { params: Promise<{ graphId: s
         runs.length === 0 ? (
           <p className="text-muted-foreground text-sm">No runs for this graph yet.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Run</TableHead>
-                <SortHeader label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <TableHead>Source</TableHead>
-                <TableHead>Provider</TableHead>
-                <SortHeader
-                  label="Started"
-                  sortKey="started_at"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={handleSort}
-                />
-                <TableHead>Completed</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedRuns.map((run) => (
-                <TableRow key={run.run_id}>
-                  <TableCell className="max-w-40 truncate font-mono text-xs" title={run.run_id}>
-                    {run.run_id}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={STATUS_VARIANT[run.status]}>
-                      {run.status}
-                    </Badge>
-                    {run.error ? (
-                      <p className="text-destructive mt-1 max-w-48 truncate text-xs" title={run.error}>
-                        {run.error}
-                      </p>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    {run.source ? (
-                      <Badge variant={run.source === "release" ? "default" : "outline"}>
-                        {run.source === "release" ? "Release" : "Draft snapshot"}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">{run.provider ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{run.started_at ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{run.completed_at ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setSnapshotRunId(run.run_id)}>
-                      View snapshot
-                    </Button>
-                  </TableCell>
+          <>
+            <div className="mb-2 flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selectedRuns.length === 0}
+                onClick={() => setCaptureOpen(true)}
+              >
+                {selectedRuns.length > 0 ? `Save ${selectedRuns.length} selected as dataset` : "Save selected as dataset"}
+              </Button>
+              <span className="text-muted-foreground text-xs">
+                Tick runs to capture them as a Routing Lab dataset.
+              </span>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all runs"
+                      checked={runs.length > 0 && selectedIds.size === runs.length}
+                      onChange={toggleAllSelected}
+                    />
+                  </TableHead>
+                  <TableHead>Run</TableHead>
+                  <SortHeader label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                  <TableHead>Source</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <SortHeader
+                    label="Started"
+                    sortKey="started_at"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <TableHead>Completed</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sortedRuns.map((run) => (
+                  <TableRow key={run.run_id} data-state={selectedIds.has(run.run_id) ? "selected" : undefined}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select run ${run.run_id}`}
+                        checked={selectedIds.has(run.run_id)}
+                        onChange={() => toggleSelected(run.run_id)}
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-40 truncate font-mono text-xs" title={run.run_id}>
+                      {run.run_id}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={STATUS_VARIANT[run.status]}>
+                        {run.status}
+                      </Badge>
+                      {run.error ? (
+                        <p className="text-destructive mt-1 max-w-48 truncate text-xs" title={run.error}>
+                          {run.error}
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      {run.source ? (
+                        <Badge variant={run.source === "release" ? "default" : "outline"}>
+                          {run.source === "release" ? "Release" : "Draft snapshot"}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs">{run.provider ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{run.started_at ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{run.completed_at ?? "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setSnapshotRunId(run.run_id)}>
+                        View snapshot
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         )
       ) : null}
       <SnapshotDialog runId={snapshotRunId} onOpenChange={closeSnapshot} />
+      <CaptureDatasetDialog open={captureOpen} onOpenChange={setCaptureOpen} graphId={graphId} runs={selectedRuns} />
     </StudioPage>
   );
 }

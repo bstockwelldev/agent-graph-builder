@@ -9,6 +9,7 @@ export type WorkbenchPanelId =
   | "run"
   | "releases"
   | "routingLab"
+  | "knowledge"
   | "chat"
   | "agents"
   | "prompts"
@@ -39,6 +40,11 @@ export const WORKBENCH_PANELS: Record<
   // current graph (or a comparison graph) and see the resulting
   // route-decision distribution.
   routingLab: { title: "Routing lab", hotkey: null, scope: "graph" },
+  // Phase 10 follow-up (docs/planning/features/studio-shell-ux-gap-analysis.md,
+  // "Knowledge base has zero UI"): upload/remove the graph's RAG documents
+  // and see which runs/nodes retrieved from them. Graph scope — the backend
+  // keeps one knowledge base per graph.
+  knowledge: { title: "Knowledge", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
   chat: { title: "Chat", hotkey: "mod+shift+c", scope: "global" },
   agents: { title: "Agents", hotkey: null, scope: "global" },

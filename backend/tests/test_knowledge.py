@@ -4,13 +4,14 @@ docs/planning/features/studio-consolidation-plan.md and knowledge.py).
 
 from __future__ import annotations
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from app import knowledge, storage
 from app.compiler import compile_graph
 from app.demo_graph import build_demo_graph
-from app.embedding_model import ResolvedEmbeddingModel
+from app.embedding_model import EmbeddingProviderError, ResolvedEmbeddingModel
 from app.knowledge import (
     KnowledgeChunk,
     KnowledgeDocument,
@@ -287,6 +288,56 @@ def test_upload_rejects_unsupported_file_type(monkeypatch: pytest.MonkeyPatch) -
 
 async def _fake_embed_texts(resolution, texts, *, task="document"):
     return [[float(len(t) % 7), 1.0] for t in texts]
+
+
+def _configure_openai_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.knowledge.resolve_embedding_model",
+        lambda: ResolvedEmbeddingModel(
+            provider="openai", model_id="text-embedding-3-small", api_key="sk-test"
+        ),
+    )
+
+
+def test_upload_maps_provider_error_to_502_with_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression: an EmbeddingProviderError (e.g. OpenAI 429 quota) used to
+    # escape upload_knowledge_document as an unhandled bare 500.
+    _configure_openai_embeddings(monkeypatch)
+    demo = build_demo_graph()
+    storage.save_graph(demo)
+    storage.delete_resource("knowledge", demo.id)
+
+    async def _provider_429(resolution, texts, *, task="document"):
+        raise EmbeddingProviderError("OpenAI embeddings request failed (429)")
+
+    monkeypatch.setattr("app.knowledge.embed_texts", _provider_429)
+    response = client.post(
+        f"/api/graphs/{demo.id}/knowledge",
+        files={"file": ("notes.txt", b"some notes", "text/plain")},
+    )
+    assert response.status_code == 502
+    assert "429" in response.json()["detail"]
+    # Nothing was persisted for the failed upload.
+    assert client.get(f"/api/graphs/{demo.id}/knowledge").json()["documents"] == []
+
+
+def test_upload_maps_network_error_to_generic_502(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_openai_embeddings(monkeypatch)
+    demo = build_demo_graph()
+    storage.save_graph(demo)
+    storage.delete_resource("knowledge", demo.id)
+
+    async def _timeout(resolution, texts, *, task="document"):
+        # Mimics httpx putting a keyed URL into its error text.
+        raise httpx.ConnectTimeout("timed out: https://example.test/embed?key=SECRET-KEY")
+
+    monkeypatch.setattr("app.knowledge.embed_texts", _timeout)
+    response = client.post(
+        f"/api/graphs/{demo.id}/knowledge",
+        files={"file": ("notes.txt", b"some notes", "text/plain")},
+    )
+    assert response.status_code == 502
+    assert "SECRET-KEY" not in response.text
 
 
 def test_upload_success_then_conflict_on_model_mismatch_then_delete(

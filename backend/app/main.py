@@ -9,13 +9,14 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from . import runtime, storage
 from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
+from .datasets import DatasetBuildError, build_dataset_from_runs
 from .demo_graph import build_demo_graph
 from .env_config import (
     load_app_env,
@@ -514,6 +515,7 @@ _RESOURCE_ROUTE_PATHS: dict[str, str] = {
     "agents": "agents",
     "llm_profiles": "llm-profiles",
     "chat_sessions": "chat-sessions",
+    "datasets": "datasets",
 }
 
 
@@ -562,6 +564,32 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
 
 for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
     _register_resource_routes(_kind, _path, RESOURCE_MODELS[_kind])
+
+
+class CreateDatasetFromRunsRequest(BaseModel):
+    name: str = Field(min_length=1)
+    description: str | None = None
+    run_ids: list[str] = Field(min_length=1)
+    # Freeze each run's recorded node outputs into its fixture (routers then
+    # see the real upstream classifications). False captures inputs only.
+    include_node_outputs: bool = True
+
+
+# Follow-on to the Routing Lab: "historical runs should become engineering
+# datasets" (graph-native-control-plane-plan.md). A distinct path from the
+# generic `POST /api/datasets` create above, so neither shadows the other.
+@app.post("/api/datasets/from-runs", name="create_dataset_from_runs")
+def create_dataset_from_runs_route(body: CreateDatasetFromRunsRequest) -> dict[str, Any]:
+    try:
+        dataset = build_dataset_from_runs(
+            name=body.name,
+            description=body.description,
+            run_ids=body.run_ids,
+            include_node_outputs=body.include_node_outputs,
+        )
+    except DatasetBuildError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return dataset.model_dump(mode="json")
 
 
 # P1 rollout plan, parallel track ("Versioned reusable entity registry") —

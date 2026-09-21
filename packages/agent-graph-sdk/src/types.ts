@@ -16,6 +16,7 @@ import type {
   diagnosticSchema,
   edgeKindSchema,
   edgeTransformSchema,
+  fixtureDatasetSchema,
   fixtureSchema,
   graphDefinitionSchema,
   graphEdgeSchema,
@@ -24,7 +25,11 @@ import type {
   graphOrientationSchema,
   graphPortSchema,
   graphReleaseSchema,
+  knowledgeDeleteResponseSchema,
+  knowledgeDocumentSchema,
   knowledgeLineageEntrySchema,
+  knowledgeSummarySchema,
+  knowledgeUploadResponseSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodePositionSchema,
@@ -110,6 +115,7 @@ export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 
 // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph stubbing").
 export type Fixture = z.infer<typeof fixtureSchema>;
+export type FixtureDataset = z.infer<typeof fixtureDatasetSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
 
 // P1 rollout plan, Slice D ("Routing policy lab").
@@ -176,3 +182,9 @@ export type PolicyException = z.infer<typeof policyExceptionSchema>;
 
 // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py).
 export type KnowledgeLineageEntry = z.infer<typeof knowledgeLineageEntrySchema>;
+
+// Studio-consolidation Phase 5 knowledge base (backend/app/knowledge.py).
+export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
+export type KnowledgeSummary = z.infer<typeof knowledgeSummarySchema>;
+export type KnowledgeUploadResponse = z.infer<typeof knowledgeUploadResponseSchema>;
+export type KnowledgeDeleteResponse = z.infer<typeof knowledgeDeleteResponseSchema>;

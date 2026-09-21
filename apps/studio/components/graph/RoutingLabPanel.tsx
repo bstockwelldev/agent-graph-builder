@@ -3,7 +3,9 @@ import { useCallback, useState } from "react";
 import type { RouteNodeDistributionDelta, RoutingComparison, RoutingLabReport } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
+import { fixturesFromText, fixturesToText } from "@/lib/datasets";
 import { color, fontFamily, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { DatasetPicker } from "./DatasetPicker";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { SkeletonBlock } from "./ui/Skeleton";
@@ -99,11 +101,7 @@ export function RoutingLabPanel({
   const [report, setReport] = useState<RoutingLabReport | null>(null);
   const [comparison, setComparison] = useState<RoutingComparison | null>(null);
 
-  const parseDataset = useCallback(() => {
-    const parsed = JSON.parse(datasetText || "[]");
-    if (!Array.isArray(parsed)) throw new Error("Dataset must be a JSON array of fixtures");
-    return parsed as Array<{ input: Record<string, unknown>; node_outputs: Record<string, unknown> }>;
-  }, [datasetText]);
+  const parseDataset = useCallback(() => fixturesFromText(datasetText), [datasetText]);
 
   const handleRun = useCallback(async () => {
     if (!graphId) return;
@@ -141,6 +139,11 @@ export function RoutingLabPanel({
     <div style={containerStyle(layout)}>
       <div style={scrollerStyle}>
         <CollapsibleSection sectionId="routing-lab-dataset" title="Dataset" reducedMotion={reducedMotion}>
+          <DatasetPicker
+            getFixtures={parseDataset}
+            onLoad={(fixtures) => setDatasetText(fixturesToText(fixtures))}
+            disabled={running}
+          />
           <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
             A JSON array of fixtures — each a Slice B <code style={monoStyle}>{"{input, node_outputs}"}</code> pair.
             No live tool or model calls are made; the offline stub provider runs every fixture.

@@ -25,10 +25,12 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
+import httpx
 from pydantic import BaseModel
 
 from . import storage
 from .embedding_model import (
+    EmbeddingProviderError,
     ResolvedEmbeddingModel,
     embed_query,
     embed_texts,
@@ -367,7 +369,18 @@ async def upload_knowledge_document(
     new_chunks: list[KnowledgeChunk] = []
     for i in range(0, len(pieces), EMBED_BATCH):
         batch = pieces[i : i + EMBED_BATCH]
-        vectors = await embed_texts(resolution, batch)
+        try:
+            vectors = await embed_texts(resolution, batch)
+        except EmbeddingProviderError as exc:
+            # Provider-side failure (quota/auth/bad shape): surface its
+            # status-only message instead of letting it escape as a bare 500.
+            raise KnowledgeUploadError(502, f"Embedding provider error: {exc}") from exc
+        except httpx.HTTPError as exc:
+            # Deliberately generic: for Google the API key rides in the
+            # request URL, and httpx error strings can include that URL.
+            raise KnowledgeUploadError(
+                502, "Could not reach the embedding provider. Try again shortly."
+            ) from exc
         if len(vectors) != len(batch):
             raise KnowledgeUploadError(502, "Embedding provider returned unexpected batch size")
         for text_piece, vector in zip(batch, vectors, strict=True):
