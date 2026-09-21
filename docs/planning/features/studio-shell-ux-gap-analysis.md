@@ -79,15 +79,15 @@ leaving them as an implicit backlog.
 
 | Gap | Evidence |
 | --- | --- |
-| Selection dock has no Configure/I-O/Policy/Run **tabs** | `NodeInspector` is a flat collapsible-section form, not a tabbed dock. No node-scoped Policy tab surfacing that node's active policy exceptions. No "nothing selected" workflow summary (node/edge counts, validation summary, entrypoints/terminal nodes, recent runs) — Section 6's spec for both selection states. |
-| No node launcher | No `onPaneDoubleClick` handler exists anywhere; the only "add node" UI is the static 12-item `NodePalette` list (no search/fuzzy filter) or the equivalent right-click "Add node" context-menu items. Section 7 and Sequence item 4 call for a searchable double-click launcher. |
-| No focus mode | Zero trace in code (Sequence item 6). |
-| No typed-port / compatible-target connect feedback | Handles are plain circular dots colored by node-type accent, not differentiated by port/data type; no highlight-compatible-targets-on-drag behavior (Section 8, Sequence item 5). |
-| Half of the six named run/debug scopes don't exist | "Run," "Run with fixture," and "Replay run" exist and match their spec. **"Run from selected node" has zero trace anywhere** — every run always starts at the graph's `entry_node_id`. **"Debug run"** (auto-opening a trace console) doesn't exist as a distinct action. **"Validate"** isn't a standalone labeled action — it's implicit, via a 400ms-debounced auto-validate effect plus an unrelated "Compile" button, never labeled "Validate" anywhere in the UI. |
-| Toolbar's "Run ▾" split-button doesn't exist | Section 5 calls for one Run control with split options (run from here / with fixture / with production inputs). Currently Run and Run-with-fixture are two separately-placed buttons in different sections of the same panel. |
-| Node cards are missing the "summary" line | Category label, title, and runtime status are present (`GraphNodeView.tsx`); the description/summary line Section 10 calls for is not. |
-| No operational data grids for registries/run history/eval datasets | Sequence item 9. Current registry pages are plain lists inside dialogs, not sortable/filterable data grids. |
-| No standardized styling-ownership pass | Sequence item 10 — too broad to verify with a grep; flagged as still open per the doc, not independently confirmed either way. |
+| ~~Selection dock has no Configure/I-O/Policy/Run **tabs**~~ **Shipped (PR #34, Slice B).** | `NodeInspector` is now a Configure/I-O/Policy/Run tabbed dock (`NodeInspector.tsx`), with a node-scoped Policy tab and a "nothing selected" `WorkflowSummary` (node/edge counts, validation summary, entrypoints/terminal nodes, recent runs, quick actions). |
+| ~~No node launcher~~ **Shipped (PR #38, Slice C follow-up).** | `FlowCanvasInner` now detects a pane double-click and opens a searchable "Add node" menu (`NodeContextMenu`'s new `searchValue`/`onSearchChange` props), filtered against the 12 node types. |
+| ~~No focus mode~~ **Shipped (PR #40, Slice D).** | `computeFocusNodeIds` (`lib/graphFocus.ts`) + a HUD toggle dim any node outside the selected node's ancestor/descendant closure. |
+| ~~No typed-port / compatible-target connect feedback~~ **Shipped (PR #39, Slice C follow-up).** | `GraphNodeView.tsx` uses `useConnection()` + `computePortDragCompatibility` (`content/node-ports.ts`, mirroring `contracts.py`'s `_kind_incompatibility`) to highlight/fade target handles during a connection drag. |
+| ~~Half of the six named run/debug scopes don't exist~~ **Shipped (PR #36, Slice C first cut).** | "Validate" is now a real labeled action (`RunPanel.tsx`); "Run from selected node" mocks ancestor node outputs via the backend's existing `fixture_node_outputs` mechanism (new `RunRequest.node_outputs`); "Debug run" force-opens the Events trace console. "Run," "Run with fixture," and "Replay run" already existed. |
+| ~~Toolbar's "Run ▾" split-button doesn't exist~~ **Shipped (PR #36, Slice C first cut), partially.** | `RunPanel.tsx`'s Execute section now has a "Run ▾" split button (Run / Run from selected node / Run with fixture / Debug run), reusing `NodeContextMenu` as a trigger-anchored dropdown. "Run with production inputs" is excluded, not deferred — no definition of this concept exists anywhere in the codebase or either locked doc; it needs product definition before it can be built. |
+| ~~Node cards are missing the "summary" line~~ **Shipped (PR #40, Slice D).** | `lib/nodeDefaults.ts`'s `summaryFor` adds a second config-derived line for node types that have one worth surfacing (llm/tool_loop's provider, tool's input variable, guardrail/rubric's boolean flag). |
+| No operational data grids for registries/run history/eval datasets — **partially shipped (Slice D).** | Run history (`/runs/[graphId]`) is now a sortable `Table`. The five resource registries (agents/prompts/tools/mcp/llm-profiles) deliberately stay as card grids — their entries are named, described things, not naturally tabular, and converting all five is a larger visual redesign this remediation didn't make unilaterally. Eval datasets have no UI anywhere yet (separate, unstarted gap). |
+| ~~No standardized styling-ownership pass~~ **Shipped (Slice D).** | `apps/studio/AGENTS.md` (new) documents the two-system split (token-styled `components/graph/*` vs. Tailwind/shadcn everywhere else) and the "never mix" rule, citing the precedents this remediation itself set (`ui/Tabs.tsx`, the Run split-button reusing `NodeContextMenu` instead of the unused shadcn `DropdownMenu`). |
 
 ### Tier 3 — named elsewhere, not in either primary doc's checklist
 
@@ -112,31 +112,38 @@ numbering, sliced cheapest/most-violated first — mirroring how
 `p1-rollout-plan.md` sliced P1 by risk and reuse rather than by doc
 section.
 
-**Slice A — Close constraint violations.** Migrate `/runs/[graphId]` and
-`/analytics` into HUD panels (new `runs`/`analytics` entries in
-`panels.ts`, following the exact pattern `releases`/`routingLab` already
-use). Give the resource-registry HUD panels inline edit, not just
-list-and-link. Fold the node inspector into the panel registry properly,
-or at minimum resolve its mutual-exclusivity friction with
-Run/Releases/Routing-lab.
+**Slice A — Close constraint violations. Shipped (PRs #30, #32).** Migrated
+`/runs/[graphId]`'s snapshot viewer and `/analytics` into HUD panels;
+resource-registry HUD panels gained inline edit; the node inspector's
+mutual-exclusivity friction with Run/Releases/Routing-lab was resolved.
 
-**Slice B — Selection dock rebuild.** Configure/I-O/Policy/Run tabs on
-`NodeInspector`; node-scoped policy-exception surfacing in the new Policy
-tab (reusing `client.listPolicyExceptions`/`createPolicyException` from
-the P2 policy-overlays work); the "nothing selected" workflow summary.
+**Slice B — Selection dock rebuild. Shipped (PR #34).** Configure/I-O/Policy/Run
+tabs on `NodeInspector`; node-scoped policy-exception surfacing in the new
+Policy tab; the "nothing selected" workflow summary.
 
-**Slice C — Run/Debug/canvas affordances.** A real, labeled "Validate"
-action; "Run from selected node"; "Debug run"; a double-click + searchable
-node launcher; typed-port/compatible-target connect feedback; consolidate
-Run into the doc's split-button model.
+**Slice C — Run/Debug/canvas affordances. Shipped (PRs #36, #38, #39).**
+A real, labeled "Validate" action; "Run from selected node"; "Debug run";
+a double-click + searchable node launcher; typed-port/compatible-target
+connect feedback; the Run split-button. "Run with production inputs" was
+excluded rather than built — no definition of it exists anywhere.
 
-**Slice D — Lower-priority polish.** Focus mode, operational data grids
-for registries/run history, node-card summary line, styling-ownership
-standardization.
+**Slice D — Lower-priority polish. Shipped (PR #40 + this PR).** Focus
+mode, node-card summary line, run-history data grid, and a styling-ownership
+doc (`apps/studio/AGENTS.md`). Explicitly **not** done: converting the five
+resource registries (agents/prompts/tools/mcp/llm-profiles) from card
+grids into data grids — their entries are named, described things better
+suited to cards, and a wholesale visual redesign of five working pages is
+a larger decision this remediation didn't make unilaterally; flag for a
+dedicated design pass if still wanted. Eval-dataset UI has no code to
+build against yet (a separate, unstarted feature).
 
 **Explicitly out of this sequence:** large-graph complexity management
 (Tier 3) and knowledge-base UI (already a separately queued task) — both
 named as follow-on work, not folded in here.
+
+**Status: this remediation sequence is complete** (Slices A-D all
+shipped, per above) except the two items named as deliberately not done
+in Slice D.
 
 ## Risks / non-goals
 
