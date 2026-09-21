@@ -49,6 +49,12 @@ export interface GraphNodeData extends Record<string, unknown> {
   status?: "idle" | "running" | "succeeded" | "failed" | "paused";
   compileIssue?: CompileIssue | null;
   inspectionDimmed?: boolean;
+  // Phase 10 Slice D ("Focus mode") -- true when this node is outside the
+  // selected node's ancestor/descendant closure while focus mode is on.
+  // Deliberately a separate field from inspectionDimmed (a different
+  // feature, driven by run-inspection state, not selection) even though
+  // both currently render the same dimmed opacity.
+  focusDimmed?: boolean;
 }
 
 function issueBorderColor(issue: CompileIssue | null | undefined): string {
@@ -89,6 +95,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   const nodeStatus = nodeData.status ?? "idle";
   const compileIssue = nodeData.compileIssue ?? null;
   const inspectionDimmed = nodeData.inspectionDimmed ?? false;
+  const focusDimmed = nodeData.focusDimmed ?? false;
   const showTargetHandle = nodeData.nodeType !== "input";
   const showSourceHandle = nodeData.nodeType !== "output";
   const Icon = ICONS[nodeData.nodeType];
@@ -149,7 +156,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
     background: tokens.bg,
     border: `2px solid ${borderColor}`,
     color: text.primary,
-    opacity: inspectionDimmed ? 0.35 : 1,
+    opacity: inspectionDimmed || focusDimmed ? 0.35 : 1,
     boxShadow: nodeStatus === "running" ? shadow.runningGlow : nodeTypeGlow(tokens.accent),
     fontFamily: fontFamily.ui,
     transition: "border-color 150ms, box-shadow 150ms",

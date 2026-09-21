@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GitBranch, HelpCircle, Play, Plus, Tag } from "lucide-react";
+import { Focus, GitBranch, HelpCircle, Play, Plus, Tag } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -52,6 +52,7 @@ import {
 import { defaultConfig, labelFor } from "@/lib/nodeDefaults";
 import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
 import { computeAncestorNodeIds } from "@/lib/runFromNode";
+import { computeFocusNodeIds } from "@/lib/graphFocus";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
 import {
   failedUnavailableRunSummary,
@@ -178,6 +179,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  // Phase 10 Slice D ("Focus mode" -- docs/planning/features/
+  // studio-shell-ux-gap-analysis.md). Off by default and restrained per
+  // studio-ux-revision-plan.md's "must not make the graph unreadable when
+  // users need broad context" -- it only dims anything once a node is
+  // both selected AND this is on (see the effect below).
+  const [focusMode, setFocusMode] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [savedFingerprint, setSavedFingerprint] = useState("");
   const [saving, setSaving] = useState(false);
@@ -668,6 +675,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     applyDiagnosticsToCanvas(diagnostics);
   }, [applyDiagnosticsToCanvas, diagnostics, setNodes]);
 
+  // Phase 10 Slice D, "Focus mode": recompute which nodes are outside the
+  // selected node's ancestor/descendant closure whenever the mode, the
+  // selection, or the graph shape changes. Clears dimming entirely when
+  // focus mode is off or nothing is selected.
+  useEffect(() => {
+    const focusSet = focusMode && selectedNodeId ? computeFocusNodeIds(selectedNodeId, edges) : null;
+    setNodes((nds) =>
+      nds.map((node) => {
+        const focusDimmed = focusSet !== null && !focusSet.has(node.id);
+        if ((node.data.focusDimmed ?? false) === focusDimmed) return node;
+        return { ...node, data: { ...node.data, focusDimmed } };
+      }),
+    );
+  }, [focusMode, selectedNodeId, edges, setNodes]);
+
   useEffect(() => {
     if (!inspectionRunId) return;
     paintInspectionPath(nodeTraces, inspectionRouteDecisions);
@@ -1101,6 +1123,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             {workbench.activePanel === "routingLab" ? "Close routing lab" : "Routing lab"}
           </Button>
           <Button
+            variant={focusMode ? "synth" : "outline"}
+            size="sm"
+            title="Dim nodes unrelated to the current selection"
+            onClick={() => setFocusMode((value) => !value)}
+          >
+            {focusMode ? "Focus: on" : "Focus"}
+          </Button>
+          <Button
             variant="ghost"
             size="icon-sm"
             aria-label="Shortcuts and gestures"
@@ -1289,6 +1319,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             onClick={() => workbench.toggle("routingLab")}
           >
             <GitBranch className="size-4" />
+          </Button>
+          <Button
+            variant={focusMode ? "synth" : "ghost"}
+            size="icon-sm"
+            aria-label="Focus mode"
+            title="Dim nodes unrelated to the current selection"
+            onClick={() => setFocusMode((value) => !value)}
+          >
+            <Focus className="size-4" />
           </Button>
           <Button variant="ghost" size="icon-sm" aria-label="Shortcuts and gestures" onClick={() => workbench.toggle("help")}>
             <HelpCircle className="size-4" />
