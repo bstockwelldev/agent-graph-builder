@@ -79,7 +79,7 @@ This addendum is the forward roadmap for the product after consolidation. It int
 | --- | --- | --- | --- | --- |
 | **P0** | **Canonical typed graph schema and immutable versioning** | High | Foundation | Make `GraphDefinition` the governed graph IR with versioned graph/entity releases, draft/candidate/published lifecycle, and release snapshots. Builds on `backend/app/models.py`, SDK Zod schemas, storage resources. |
 | **P0** | **Graph-aware validation for structure, ports, schemas, and policy** | High | Reliability | Extend today’s compile validation into typed port contracts, edge compatibility, required transforms, data labels, policy checks, and compatibility reports. |
-| **P0** | **Studio UX revision: selection-driven workflow IDE** | High | Core UX | Rail + drawers, workflow identity toolbar, selection dock tabs, canvas node launcher, typed handles, scoped run actions. See [studio-ux-revision-plan.md](features/studio-ux-revision-plan.md). |
+| **P0** | **Studio UX revision: selection-driven workflow IDE** | High | Core UX | Rail + drawers, workflow identity toolbar, selection dock tabs, canvas node launcher, typed handles, scoped run actions. See [studio-ux-revision-plan.md](features/studio-ux-revision-plan.md); gap analysis against current `apps/studio` in [studio-shell-ux-gap-analysis.md](features/studio-shell-ux-gap-analysis.md). |
 | **P0** | **LangGraph adapter as first compiler/runtime target** | High | Execution | Keep LangGraph as the first supported executor while documenting capability limits and target-specific extensions. |
 | **P0** | **Run timeline linked to nodes and edges** | High | Debug loop | Normalize run events into timeline, canvas state, trace drilldown, route decision visibility, pause/resume, retries, and errors. |
 | **P1** | **Semantic graph diffs and review workflow** | High | Differentiator | Compare graph versions by behavior: node config changes, router thresholds, fallback paths, model swaps, cost/latency impact, affected fixtures, required evaluations. Slice A of [p1-rollout-plan.md](features/p1-rollout-plan.md). |
@@ -125,15 +125,19 @@ This addendum is the forward roadmap for the product after consolidation. It int
 
 ### Phase 6 — Canvas identity (P1, high impact)
 
-1. **Node color + shape taxonomy** — map each `NodeType` to token set; update `GraphNodeView` and legend in palette tooltips.
-2. **Blueprint background** — replace flat dark pane; ensure dots/grid readable with node colors.
-3. Lock brief design spec (`docs/planning/features/canvas-visual-language-plan.md`) before implementation if scope grows.
+**Shipped 2026-09-09** — see the "Completed / in flight" table above.
+
+1. ~~**Node color + shape taxonomy** — map each `NodeType` to token set; update `GraphNodeView` and legend in palette tooltips.~~
+2. ~~**Blueprint background** — replace flat dark pane; ensure dots/grid readable with node colors.~~
+3. ~~Lock brief design spec (`docs/planning/features/canvas-visual-language-plan.md`) before implementation if scope grows.~~
 
 ### Phase 7 — Shell resilience UX (P1, high utility)
 
-1. **Loading shimmers** for async surfaces (graph load, compile, run, model catalog).
-2. **Empty states** audit — every list/log/preview region.
-3. **Collapsible rails** — section headers with chevron + persisted state; respect `prefers-reduced-motion`.
+**Shipped 2026-09-09** — see the "Completed / in flight" table above.
+
+1. ~~**Loading shimmers** for async surfaces (graph load, compile, run, model catalog).~~
+2. ~~**Empty states** audit — every list/log/preview region.~~
+3. ~~**Collapsible rails** — section headers with chevron + persisted state; respect `prefers-reduced-motion`.~~
 
 ### Phase 8 — Operator + depth (P2–P3)
 
@@ -150,6 +154,17 @@ Full sequencing, exit gates, and UX constraints in [p1-rollout-plan.md](features
 5. **Parallel track — versioned reusable entity registry.** Lower priority than A–D; no slice depends on it.
 
 All P1 UI ships as canvas-anchored HUD/rail/drawer panels (`apps/studio/components/workbench/panels.ts`), never a new standalone route — including migrating the existing `/runs/[graphId]` page into a HUD panel.
+
+### Phase 10 — Studio shell UX remediation (P1–P2)
+
+Full gap table and rationale in [studio-shell-ux-gap-analysis.md](features/studio-shell-ux-gap-analysis.md) — the formal HUD-anchored-shell review against `studio-ux-revision-plan.md`, following up on the `/runs/[graphId]` gap Phase 9 already named.
+
+1. **Slice A — Close constraint violations.** Migrate `/runs/[graphId]` and `/analytics` into HUD panels; make resource-registry HUD panels support inline edit, not just list-and-link; resolve the node inspector's mutual-exclusivity friction with Run/Releases/Routing-lab.
+2. **Slice B — Selection dock rebuild.** Configure/I-O/Policy/Run tabs on the node inspector, node-scoped policy-exception surfacing, a "nothing selected" workflow summary.
+3. **Slice C — Run/Debug/canvas affordances.** A labeled "Validate" action, "Run from selected node," "Debug run," a searchable node launcher, typed-port/compatible-target connect feedback, a consolidated Run split-button.
+4. **Slice D — Lower-priority polish.** Focus mode, operational data grids for registries/run history, node-card summary line, styling-ownership standardization.
+
+Large-graph complexity management (subgraphs, collapse/expand, dependency search, graph health score — named in `graph-native-control-plane-plan.md`) and knowledge-base UI are explicitly out of this phase's slices; both are follow-on work tracked separately.
 
 ---
 
