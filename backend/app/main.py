@@ -32,6 +32,7 @@ from .knowledge import (
     KnowledgeUploadError,
     delete_knowledge_document,
     get_knowledge_entry,
+    list_knowledge_lineage,
     summarize_entry,
     upload_knowledge_document,
 )
@@ -44,6 +45,7 @@ from .models import (
     Fixture,
     GraphDefinition,
     GraphRelease,
+    KnowledgeLineageEntry,
     NodeTrace,
     PolicyException,
     PublishReleaseRequest,
@@ -476,6 +478,20 @@ def delete_graph_knowledge_document(graph_id: str, document_id: str) -> dict[str
     if result is None:
         raise HTTPException(status_code=404, detail="document not found")
     return result
+
+
+# P2, "Retrieval/document lineage graph" (docs/planning/roadmap.md's
+# Strategic Roadmap Addendum): every recorded retrieval for this graph's
+# knowledge base, optionally filtered to one document — "which runs/nodes
+# actually used this document." See knowledge.py's `augment_system_with_
+# knowledge`, which records these at retrieval time.
+@app.get("/api/graphs/{graph_id}/knowledge/lineage")
+def get_graph_knowledge_lineage(
+    graph_id: str, document_id: str | None = None
+) -> list[KnowledgeLineageEntry]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list_knowledge_lineage(graph_id, document_id)
 
 
 # ---------------------------------------------------------------------------
