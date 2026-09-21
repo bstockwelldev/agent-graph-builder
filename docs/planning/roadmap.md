@@ -42,6 +42,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | Ultra-wide layout tokens | Shipped | `feat/p2-ultra-wide-layout-tokens` — `shell.breakpoint.wide` (1280), `shell.canvasMinWidth`, inspector drawer below wide |
 | Playground shell panels (Execute vs Observe) | Shipped | [playground-shell-panels-plan.md](features/playground-shell-panels-plan.md) — `c6b5467` on `master`; prod https://agent-graph-builder-app.vercel.app |
 | Frontend tests (Vitest + RTL) | Shipped | `canvasFit.test.ts`, `Tooltip.test.tsx`, `shellLayout.test.ts`, `FlowCanvas.test.tsx` (mocked `fitView`) |
+| Studio shell UX remediation (Phase 10, Slices A-D) | Shipped | [studio-shell-ux-gap-analysis.md](features/studio-shell-ux-gap-analysis.md) |
 
 ---
 
@@ -58,6 +59,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | ~~**P3**~~ | ~~**Frontend tests (Vitest + RTL)**~~ | Medium | Medium | **Shipped 2026-09-12** — `canFitView` unit tests, TaxonomyTooltip layout RTL, existing `shellLayout` flex cases, mocked `fitView` call gating. |
 | ~~**P3**~~ | ~~**Repo `AGENTS.md`**~~ | Low | Medium | **Shipped 2026-09-10** — repo-root `AGENTS.md` router for agents. |
 | **P3** | **Canvas orientation Phase E** | Low | Low | elk fallback, dual layout positions — [canvas-orientation-plan.md](features/canvas-orientation-plan.md) follow-ons. |
+| **P3** | **Mobile bottom nav tray** | Low | Medium for mobile users | Future prospect, not scoped yet: a standard mobile-app-style bottom tab bar (3-4 primary destinations) for compact widths, replacing/upgrading the graph canvas route's existing ad hoc compact action bar (`GraphEditor.tsx`'s `workbench.isCompact` icon row) with something closer to native mobile navigation conventions and consistent across more than just the canvas route. |
 | ~~**P2**~~ | ~~**Durable store (object store / Turso)**~~ | Medium | High | **Shipped 2026-09-10** — Vercel Blob (`BLOB_READ_WRITE_TOKEN`) preferred on Vercel; `OBJECT_STORE_*` S3-compatible JSON remains the self-host path; Turso libsql optional. |
 | ~~**P0**~~ | ~~**Studio consolidation Phase 1 — schema**~~ | High | High | **Shipped 2026-09-15.** Absorbed micro-ui-agent-builder's 11-node vocabulary into `NodeType` with typed configs; per-type compiler diagnostics. See [studio-consolidation-plan.md](features/studio-consolidation-plan.md). |
 | ~~**P1**~~ | ~~**Studio consolidation Phase 2 — executors**~~ | High | High | **Shipped 2026-09-15.** `guardrail`/`rubric`/`branch`/`tool_loop`/`code_exec`/`human_gate` node executors (pause/resume in-memory only); `FlowDocument → GraphDefinition` migration script. |
@@ -155,14 +157,14 @@ Full sequencing, exit gates, and UX constraints in [p1-rollout-plan.md](features
 
 All P1 UI ships as canvas-anchored HUD/rail/drawer panels (`apps/studio/components/workbench/panels.ts`), never a new standalone route — including migrating the existing `/runs/[graphId]` page into a HUD panel.
 
-### Phase 10 — Studio shell UX remediation (P1–P2)
+### Phase 10 — Studio shell UX remediation (P1–P2) — Shipped
 
 Full gap table and rationale in [studio-shell-ux-gap-analysis.md](features/studio-shell-ux-gap-analysis.md) — the formal HUD-anchored-shell review against `studio-ux-revision-plan.md`, following up on the `/runs/[graphId]` gap Phase 9 already named.
 
-1. **Slice A — Close constraint violations.** Migrate `/runs/[graphId]` and `/analytics` into HUD panels; make resource-registry HUD panels support inline edit, not just list-and-link; resolve the node inspector's mutual-exclusivity friction with Run/Releases/Routing-lab.
+1. **Slice A — Close constraint violations.** Migrated `/runs/[graphId]` and `/analytics` into HUD panels; resource-registry HUD panels gained inline edit; resolved the node inspector's mutual-exclusivity friction with Run/Releases/Routing-lab.
 2. **Slice B — Selection dock rebuild.** Configure/I-O/Policy/Run tabs on the node inspector, node-scoped policy-exception surfacing, a "nothing selected" workflow summary.
-3. **Slice C — Run/Debug/canvas affordances.** A labeled "Validate" action, "Run from selected node," "Debug run," a searchable node launcher, typed-port/compatible-target connect feedback, a consolidated Run split-button.
-4. **Slice D — Lower-priority polish.** Focus mode, operational data grids for registries/run history, node-card summary line, styling-ownership standardization.
+3. **Slice C — Run/Debug/canvas affordances.** A labeled "Validate" action, "Run from selected node," "Debug run," a searchable node launcher, typed-port/compatible-target connect feedback, a consolidated Run split-button. ("Run with production inputs" excluded — undefined anywhere.)
+4. **Slice D — Lower-priority polish.** Focus mode, node-card summary line, a sortable run-history data grid, and a styling-ownership doc (`apps/studio/AGENTS.md`). The five resource registries deliberately stay as card grids rather than being converted to data grids — see the gap-analysis doc's Slice D note.
 
 Large-graph complexity management (subgraphs, collapse/expand, dependency search, graph health score — named in `graph-native-control-plane-plan.md`) and knowledge-base UI are explicitly out of this phase's slices; both are follow-on work tracked separately.
 
