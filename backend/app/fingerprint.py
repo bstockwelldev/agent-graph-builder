@@ -27,6 +27,14 @@ def _canonical_json(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
+def fingerprint_payload(payload: dict[str, Any]) -> str:
+    """SHA-256 over the canonical JSON of an arbitrary payload — the same
+    canonicalization this module's graph-specific fingerprints use,
+    generalized for non-graph payloads (e.g. resource_versions.py's
+    versioned reusable entity registry, P1 rollout plan)."""
+    return hashlib.sha256(_canonical_json(payload)).hexdigest()
+
+
 def _num(value: float) -> float | int:
     """JSON doesn't distinguish int/float, but Python's json.dumps renders a
     whole-number float as "1.0" while JS's JSON.stringify renders the same
@@ -238,4 +246,5 @@ __all__ = [
     "release_document_fingerprint",
     "release_semantic_fingerprint",
     "diff_graphs",
+    "fingerprint_payload",
 ]

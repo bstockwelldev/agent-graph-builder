@@ -104,6 +104,7 @@ export function RunPanel({
   onCompile,
   onRun,
   onDiagnosticClick,
+  onPolicyExceptionCreated,
   runSummary,
   runHistory,
   runHistoryLoading = false,
@@ -126,6 +127,10 @@ export function RunPanel({
   onCompile: (selection: RunSelection) => Promise<void> | void;
   onRun: (question: string, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
   onDiagnosticClick: (diagnostic: Diagnostic) => void;
+  /** P2, "Cross-cutting policy overlays" — called after a policy exception
+   * is created from the Waive button below, so the caller can re-validate
+   * and pick up the now-non-blocking diagnostic. */
+  onPolicyExceptionCreated?: () => void;
   runSummary: RunSummary | null;
   runHistory: RunSummary[];
   runHistoryLoading?: boolean;
@@ -162,6 +167,45 @@ export function RunPanel({
   const [simulating, setSimulating] = useState(false);
   const [simulateError, setSimulateError] = useState<string | null>(null);
   const [simulateResult, setSimulateResult] = useState<SimulateResult | null>(null);
+
+  // P1 rollout plan, Slice C ("Historical replay") — fills the
+  // studio-ux-revision-plan.md "Replay run" slot. Shares SimulateResult's
+  // shape with the fixture section above (same run+traces response), but
+  // keeps its own state/result display so replaying a past run never
+  // overwrites an in-progress fixture simulation, or vice versa.
+  const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
+
+  // P2, "Cross-cutting policy overlays" — waives a blocking `category:
+  // "policy"` diagnostic with a fixed 30-day exception. Self-contained,
+  // same pattern as simulate/replay above.
+  const [waivingKey, setWaivingKey] = useState<string | null>(null);
+  const [waiveError, setWaiveError] = useState<string | null>(null);
+
+  const handleWaive = useCallback(
+    async (diagnostic: Diagnostic, key: string) => {
+      if (!graphId) return;
+      setWaivingKey(key);
+      setWaiveError(null);
+      try {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await client.createPolicyException(
+          graphId,
+          diagnostic.code,
+          expiresAt,
+          diagnostic.node_id ?? undefined,
+          "Waived from Studio",
+        );
+        onPolicyExceptionCreated?.();
+      } catch (err) {
+        setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
+      } finally {
+        setWaivingKey(null);
+      }
+    },
+    [graphId, onPolicyExceptionCreated],
+  );
 
   const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
@@ -283,6 +327,19 @@ export function RunPanel({
       setSimulating(false);
     }
   }, [fixtureInputText, fixtureNodeOutputsText, graphId]);
+
+  const handleReplay = useCallback(async (runId: string) => {
+    setReplayingRunId(runId);
+    setReplayError(null);
+    try {
+      const result = await client.replayRun(runId);
+      setReplayResult(result);
+    } catch (err) {
+      setReplayError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReplayingRunId(null);
+    }
+  }, []);
 
   return (
     <div style={containerStyle(layout)}>
@@ -460,6 +517,7 @@ export function RunPanel({
             ) : (
               diagnostics.map((diagnostic, index) => {
                 const clickable = Boolean(diagnostic.node_id || diagnostic.edge_id);
+                const key = diagnosticKey(diagnostic, index);
                 const content = (
                   <>
                     <span style={{ fontWeight: 600 }}>{diagnostic.severity === "error" ? "Error" : "Warning"}</span>
@@ -467,32 +525,53 @@ export function RunPanel({
                     {diagnostic.message}
                   </>
                 );
-                if (!clickable) {
-                  return (
-                    <div
-                      key={diagnosticKey(diagnostic, index)}
-                      style={{
-                        ...typeScale.caption,
-                        color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
-                        marginBottom: spacing[1],
-                        lineHeight: "16px",
-                      }}
-                    >
-                      {content}
-                    </div>
-                  );
-                }
-                return (
+                // P2, "Cross-cutting policy overlays" — only a blocking
+                // policy diagnostic is waivable; a warning is already
+                // non-blocking, and structural/contract diagnostics have
+                // no exception mechanism.
+                const waivable = diagnostic.category === "policy" && diagnostic.blocking && Boolean(graphId);
+                const diagnosticNode = !clickable ? (
+                  <div
+                    style={{
+                      ...typeScale.caption,
+                      color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
+                      marginBottom: waivable ? 0 : spacing[1],
+                      lineHeight: "16px",
+                    }}
+                  >
+                    {content}
+                  </div>
+                ) : (
                   <button
-                    key={diagnosticKey(diagnostic, index)}
                     type="button"
                     onClick={() => onDiagnosticClick(diagnostic)}
-                    style={diagnosticButtonStyle(diagnostic.severity)}
+                    style={{ ...diagnosticButtonStyle(diagnostic.severity), marginBottom: waivable ? 0 : spacing[1] }}
                   >
                     {content}
                   </button>
                 );
+                if (!waivable) {
+                  return <div key={key}>{diagnosticNode}</div>;
+                }
+                return (
+                  <div key={key} style={{ marginBottom: spacing[1] }}>
+                    {diagnosticNode}
+                    <Button
+                      variant="secondary"
+                      disabled={waivingKey === key}
+                      onClick={() => void handleWaive(diagnostic, key)}
+                      style={{ marginTop: spacing[1] - 2, minHeight: shell.touchTarget.min }}
+                    >
+                      {waivingKey === key ? "Waiving…" : "Waive (30 days)"}
+                    </Button>
+                  </div>
+                );
               })
+            )}
+            {waiveError && (
+              <div role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[1] }}>
+                {waiveError}
+              </div>
             )}
           </CollapsibleSection>
         </div>
@@ -635,35 +714,67 @@ export function RunPanel({
               runHistory.map((run) => {
                 const active = inspectionRunId ? run.run_id === inspectionRunId : runSummary?.run_id === run.run_id;
                 return (
-                  <button
-                    key={run.run_id}
-                    type="button"
-                    onClick={() => onSelectRun(run.run_id)}
-                    style={{
-                      ...historyButtonStyle,
-                      borderColor: active ? color.primary[600] : surface.borderStrong,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
-                      <span style={{ fontWeight: 600 }}>{run.status}</span>
-                      <span style={{ display: "flex", gap: spacing[1], opacity: 0.6 }}>
-                        {/* P0 graph foundation, Slice D: labels whether this
-                            run came from a published release (immune to
-                            later draft edits) or the draft as it stood at
-                            run time — design doc, "Run history: labels the
-                            release or draft snapshot used." */}
-                        {run.source === "release" && (
-                          <span title={run.graph_release_id ?? undefined}>release</span>
-                        )}
-                        {run.provider && <span>{run.provider}</span>}
-                      </span>
-                    </div>
-                    <div style={{ ...typeScale.caption, opacity: 0.75, textAlign: "left", marginTop: spacing[1] }}>
-                      {formatRunLabel(run)}
-                    </div>
-                  </button>
+                  <div key={run.run_id} style={{ marginBottom: spacing[2] }}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectRun(run.run_id)}
+                      style={{
+                        ...historyButtonStyle,
+                        marginBottom: 0,
+                        borderColor: active ? color.primary[600] : surface.borderStrong,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
+                        <span style={{ fontWeight: 600 }}>{run.status}</span>
+                        <span style={{ display: "flex", gap: spacing[1], opacity: 0.6 }}>
+                          {/* P0 graph foundation, Slice D: labels whether this
+                              run came from a published release (immune to
+                              later draft edits) or the draft as it stood at
+                              run time — design doc, "Run history: labels the
+                              release or draft snapshot used." */}
+                          {run.source === "release" && (
+                            <span title={run.graph_release_id ?? undefined}>release</span>
+                          )}
+                          {run.provider && <span>{run.provider}</span>}
+                        </span>
+                      </div>
+                      <div style={{ ...typeScale.caption, opacity: 0.75, textAlign: "left", marginTop: spacing[1] }}>
+                        {formatRunLabel(run)}
+                      </div>
+                    </button>
+                    {run.status === "succeeded" && (
+                      <Button
+                        variant="secondary"
+                        disabled={replayingRunId !== null}
+                        onClick={() => void handleReplay(run.run_id)}
+                        style={{ marginTop: spacing[1], minHeight: shell.touchTarget.min }}
+                      >
+                        {replayingRunId === run.run_id ? "Replaying…" : "Replay"}
+                      </Button>
+                    )}
+                  </div>
                 );
               })
+            )}
+            {replayError && (
+              <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
+                {replayError}
+              </div>
+            )}
+            {replayResult && (
+              <div style={{ marginTop: spacing[2] }}>
+                <div style={typeScale.caption}>
+                  Replay of node outputs, read-only — <b>{replayResult.run.status}</b>
+                </div>
+                {replayResult.traces.map((trace) => (
+                  <div
+                    key={trace.node_id}
+                    style={{ ...typeScale.caption, opacity: 0.75, marginTop: spacing[1], fontFamily: fontFamily.mono }}
+                  >
+                    {trace.node_id}: {JSON.stringify(trace.output)}
+                  </div>
+                ))}
+              </div>
             )}
           </CollapsibleSection>
         </div>
