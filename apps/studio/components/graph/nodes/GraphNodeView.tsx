@@ -19,6 +19,7 @@ import type { CompileIssue } from "@/lib/diagnostics";
 import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { color, fontFamily, localType, nodeType as nodeTypeTokens, nodeTypeGlow, radius, shadow, shell, spacing, status as statusColor, text } from "@/lib/graph-theme";
 import { computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
+import { summaryFor } from "@/lib/nodeDefaults";
 
 const ICONS: Record<NodeType, LucideIcon> = {
   input: LogIn,
@@ -48,6 +49,12 @@ export interface GraphNodeData extends Record<string, unknown> {
   status?: "idle" | "running" | "succeeded" | "failed" | "paused";
   compileIssue?: CompileIssue | null;
   inspectionDimmed?: boolean;
+  // Phase 10 Slice D ("Focus mode") -- true when this node is outside the
+  // selected node's ancestor/descendant closure while focus mode is on.
+  // Deliberately a separate field from inspectionDimmed (a different
+  // feature, driven by run-inspection state, not selection) even though
+  // both currently render the same dimmed opacity.
+  focusDimmed?: boolean;
 }
 
 function issueBorderColor(issue: CompileIssue | null | undefined): string {
@@ -88,10 +95,12 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   const nodeStatus = nodeData.status ?? "idle";
   const compileIssue = nodeData.compileIssue ?? null;
   const inspectionDimmed = nodeData.inspectionDimmed ?? false;
+  const focusDimmed = nodeData.focusDimmed ?? false;
   const showTargetHandle = nodeData.nodeType !== "input";
   const showSourceHandle = nodeData.nodeType !== "output";
   const Icon = ICONS[nodeData.nodeType];
   const tokens = nodeTypeTokens[nodeData.nodeType];
+  const summary = summaryFor(nodeData.nodeType, nodeData.config);
   const handleHit = shell.touchTarget.min;
   const handleStyle: CSSProperties = {
     width: handleHit,
@@ -147,7 +156,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
     background: tokens.bg,
     border: `2px solid ${borderColor}`,
     color: text.primary,
-    opacity: inspectionDimmed ? 0.35 : 1,
+    opacity: inspectionDimmed || focusDimmed ? 0.35 : 1,
     boxShadow: nodeStatus === "running" ? shadow.runningGlow : nodeTypeGlow(tokens.accent),
     fontFamily: fontFamily.ui,
     transition: "border-color 150ms, box-shadow 150ms",
@@ -192,6 +201,18 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
         >
           {nodeData.label}
         </div>
+        {summary && (
+          <div
+            style={{
+              ...localType.micro,
+              marginTop: 2,
+              opacity: 0.65,
+              textAlign: nodeData.nodeType === "router" ? "center" : undefined,
+            }}
+          >
+            {summary}
+          </div>
+        )}
         {nodeStatus !== "idle" && (
           <div style={{ ...localType.micro, marginTop: spacing[1], color: statusColor[nodeStatus] }}>{nodeStatus}</div>
         )}
