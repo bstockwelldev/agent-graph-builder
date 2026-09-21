@@ -357,3 +357,139 @@ class RunPauseState(BaseModel):
     provider: str | None = None
     model: str | None = None
     api_key: str | None = None
+
+
+# P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
+# stubbing"): declares a simulate request's graph input plus optional
+# per-node mocked/recorded outputs (raw executor-shaped values, not yet
+# port-projected — simulate.py projects them the same way a real run's node
+# runner would). Not persisted in this slice — the SDK/Studio pass one
+# inline per simulate call; a stored, reusable Fixture registry is a
+# natural but out-of-scope follow-on (see the P1 doc's parallel "reusable
+# entity registry" track).
+class Fixture(BaseModel):
+    input: dict[str, Any] = Field(default_factory=dict)
+    node_outputs: dict[str, Any] = Field(default_factory=dict)
+
+
+class SimulateResult(BaseModel):
+    run: RunSummary
+    traces: list[NodeTrace]
+
+
+# P1 rollout plan, Slice D ("Routing policy lab") — runs a graph against a
+# fixture dataset (each entry a `Fixture`, reused from Slice B) and
+# aggregates the resulting `route_decisions` into a per-router/branch-node
+# distribution: how many dataset runs selected each outgoing target.
+# Comparing two such reports (e.g. before/after an edge condition change)
+# is `graph-native-control-plane-plan.md` Section 4's "compare routing
+# versions over fixture datasets."
+class RouteTargetCount(BaseModel):
+    target_node_id: str
+    count: int
+
+
+class RouteNodeDistribution(BaseModel):
+    node_id: str
+    total: int
+    targets: list[RouteTargetCount] = Field(default_factory=list)
+
+
+class RoutingDatasetRunResult(BaseModel):
+    fixture_index: int
+    run_id: str
+    status: str
+    route_decisions: list[RouteDecision] = Field(default_factory=list)
+    estimated_usd: float
+    duration_ms: int | None = None
+
+
+class RoutingLabReport(BaseModel):
+    graph_id: str
+    dataset_size: int
+    distributions: list[RouteNodeDistribution] = Field(default_factory=list)
+    total_estimated_usd: float
+    runs: list[RoutingDatasetRunResult] = Field(default_factory=list)
+
+
+class RunRoutingDatasetRequest(BaseModel):
+    dataset: list[Fixture] = Field(default_factory=list)
+
+
+class RouteTargetCountDelta(BaseModel):
+    target_node_id: str
+    baseline_count: int
+    candidate_count: int
+
+
+class RouteNodeDistributionDelta(BaseModel):
+    node_id: str
+    targets: list[RouteTargetCountDelta] = Field(default_factory=list)
+
+
+class RoutingComparison(BaseModel):
+    baseline: RoutingLabReport
+    candidate: RoutingLabReport
+    distribution_deltas: list[RouteNodeDistributionDelta] = Field(default_factory=list)
+
+
+# P1 rollout plan, parallel track ("Versioned reusable entity registry") —
+# an immutable snapshot of a stored resource's payload at publish time.
+# Deliberately narrower than a full entity registry: no branching, no
+# approvals, no "current version" pointer distinct from `resource`'s own
+# CRUD row — see resource_versions.py's module docstring.
+class ResourceVersion(BaseModel):
+    version_id: str
+    kind: str
+    resource_id: str
+    payload: dict[str, Any]
+    fingerprint: str
+    created_at: str
+
+
+class PublishResourceVersionResponse(BaseModel):
+    version: ResourceVersion
+    created: bool
+
+
+# P2, "Cross-cutting policy overlays" (docs/planning/roadmap.md's Strategic
+# Roadmap Addendum): a named, time-boxed waiver for one policy diagnostic
+# code on one graph — optionally scoped to a single node — so a compile or
+# publish gate a policy would otherwise block can proceed deliberately,
+# with the waiver itself expiring rather than becoming a silent permanent
+# exemption. See policies.py.
+class PolicyException(BaseModel):
+    id: str
+    graph_id: str
+    policy_code: str
+    node_id: str | None = None
+    reason: str | None = None
+    created_at: str
+    expires_at: str
+
+
+class CreatePolicyExceptionRequest(BaseModel):
+    policy_code: str
+    node_id: str | None = None
+    reason: str | None = None
+    expires_at: str
+
+
+# P2, "Retrieval/document lineage graph" (docs/planning/roadmap.md's
+# Strategic Roadmap Addendum): one durable record of a single knowledge
+# chunk actually being retrieved and used to augment an `llm` node's system
+# prompt during a run. Recorded by knowledge.py's
+# `augment_system_with_knowledge` at retrieval time — independent of
+# NodeTrace/RunSummary's own lifecycle, so "which runs used this document"
+# stays queryable (via a graph-scoped, document-filterable list) without
+# scanning every run's traces.
+class KnowledgeLineageEntry(BaseModel):
+    id: str
+    graph_id: str
+    document_id: str
+    document_name: str
+    chunk_id: str
+    run_id: str
+    node_id: str
+    score: float
+    created_at: str

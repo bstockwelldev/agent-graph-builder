@@ -115,6 +115,13 @@ class ExecContext:
     # run — unchanged behavior, live `storage.get_resource` lookups. `_resolve_resource`
     # below is the one place that reads this.
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None
+    # P1 rollout plan, Slice B ("Fixture-based simulation"): node ids whose
+    # `state["node_outputs"]` entry was pre-seeded from a Fixture rather than
+    # produced by a real resume-after-pause. Only distinguishes which event
+    # flag `runtime.py`'s `_make_node_runner` emits (`fixture` vs.
+    # `replayed`) for the pre-seeded early-return branch both cases share —
+    # no other executor reads this.
+    fixture_node_outputs: frozenset[str] | None = None
 
 
 def _resolve_resource(ctx: ExecContext, kind: str, resource_id: str) -> dict[str, Any] | None:
@@ -184,7 +191,12 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
         else {}
     )
     augmented_system_prompt = await augment_system_with_knowledge(
-        system_prompt or "", ctx.graph.id, str(upstream), **knowledge_kwargs
+        system_prompt or "",
+        ctx.graph.id,
+        str(upstream),
+        run_id=ctx.run_id,
+        node_id=node.id,
+        **knowledge_kwargs,
     )
     output = await chat_model.generate(
         system_prompt=augmented_system_prompt, user_prompt=str(upstream)

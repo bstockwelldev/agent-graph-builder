@@ -67,6 +67,40 @@ describe("createAgentGraphClient resource CRUD", () => {
     expect(init.method).toBe("PUT");
   });
 
+  it("prompts.versions.publish POSTs to /api/prompts/{id}/versions", async () => {
+    const response = {
+      version: {
+        version_id: "rver_1",
+        kind: "prompts",
+        resource_id: "p1",
+        payload: { id: "p1", name: "Greeting", body: "Hi" },
+        fingerprint: "a".repeat(64),
+        created_at: "2026-09-20T00:00:00Z",
+      },
+      created: true,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(response));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.prompts.versions.publish("p1");
+
+    expect(result).toEqual(response);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${baseUrl}/api/prompts/p1/versions`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("tools.versions.list fetches GET /api/tools/{id}/versions", async () => {
+    const versions = [{ version_id: "rver_1", fingerprint: "a".repeat(64), created_at: "2026-09-20T00:00:00Z" }];
+    fetchMock.mockResolvedValueOnce(jsonResponse(versions));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.tools.versions.list("t1");
+
+    expect(result).toEqual(versions);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/tools/t1/versions`, expect.objectContaining({}));
+  });
+
   it("agents.delete DELETEs /api/agents/{id} and returns the deleted flag", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ deleted: true }));
 
