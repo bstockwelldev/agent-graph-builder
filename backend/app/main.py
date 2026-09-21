@@ -725,6 +725,7 @@ async def start_run(request: RunRequest) -> RunSummary:
         "provider": request.provider,
         "model": request.model,
         "api_key": request.api_key,
+        "fixture_node_outputs": request.node_outputs or None,
     }
     if runtime.is_serverless_runtime():
         run_id, _bus = await runtime.start_run_inline(**start_kwargs)

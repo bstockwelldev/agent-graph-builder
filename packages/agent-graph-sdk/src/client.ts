@@ -198,11 +198,25 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       provider?: ChatProvider,
       model?: string,
       apiKey?: string,
+      // Phase 10 Slice C, "Run from selected node" — pre-seeds these node
+      // ids' outputs (typically a mocked ancestor set) so the backend
+      // skips invoking their real executors. Omitted for an ordinary run.
+      nodeOutputs?: Record<string, unknown>,
     ) =>
       jsonFetch<RunSummary>(
         baseUrl,
         "/api/runs",
-        { method: "POST", body: JSON.stringify({ graph_id: graphId, input, provider, model, api_key: apiKey }) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            graph_id: graphId,
+            input,
+            provider,
+            model,
+            api_key: apiKey,
+            ...(nodeOutputs ? { node_outputs: nodeOutputs } : {}),
+          }),
+        },
         runSummarySchema,
       ),
     getRunNodeTraces: (runId: string) =>
