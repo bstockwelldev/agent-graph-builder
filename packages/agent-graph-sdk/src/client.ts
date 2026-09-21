@@ -9,16 +9,21 @@ import {
   deletedSchema,
   graphDefinitionSchema,
   graphReleaseSchema,
+  knowledgeLineageEntrySchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
+  policyExceptionSchema,
   promptTemplateSchema,
   providerCredentialsSchema,
   providerModelCatalogSchema,
   providerReadySchema,
   publishReleaseResponseSchema,
+  publishResourceVersionResponseSchema,
   releaseDiffSchema,
   releaseIndexEntrySchema,
+  resourceVersionIndexEntrySchema,
+  resourceVersionSchema,
   routingComparisonSchema,
   routingLabReportSchema,
   runGraphSnapshotSchema,
@@ -36,16 +41,21 @@ import type {
   Fixture,
   GraphDefinition,
   GraphRelease,
+  KnowledgeLineageEntry,
   LlmProfile,
   McpServerConfig,
   NodeTrace,
   PlatformEvent,
+  PolicyException,
   ProviderCredentials,
   ProviderModelCatalog,
   PromptTemplate,
   PublishReleaseResponse,
+  PublishResourceVersionResponse,
   ReleaseDiff,
   ReleaseIndexEntry,
+  ResourceVersion,
+  ResourceVersionIndexEntry,
   RoutingComparison,
   RoutingLabReport,
   RunGraphSnapshot,
@@ -105,6 +115,39 @@ function resourceClient<T extends { id: string }>(baseUrl: string, path: string,
       ),
     delete: (id: string) =>
       jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${id}`, { method: "DELETE" }, deletedSchema),
+  };
+}
+
+/**
+ * P1 rollout plan, parallel track ("Versioned reusable entity registry")
+ * — POST/GET /api/{path}/{resource_id}/versions[/{version_id}]. Attached
+ * to a resourceClient's return value as `.versions` for prompts, tools,
+ * mcp-servers, agents, and llm-profiles — never chat-sessions, which
+ * backend/app/resource_versions.py's VERSIONABLE_RESOURCE_KINDS excludes.
+ */
+function resourceVersionClient(baseUrl: string, path: string) {
+  return {
+    publish: (resourceId: string) =>
+      jsonFetch<PublishResourceVersionResponse>(
+        baseUrl,
+        `/api/${path}/${resourceId}/versions`,
+        { method: "POST" },
+        publishResourceVersionResponseSchema,
+      ),
+    list: (resourceId: string) =>
+      jsonFetch<ResourceVersionIndexEntry[]>(
+        baseUrl,
+        `/api/${path}/${resourceId}/versions`,
+        undefined,
+        resourceVersionIndexEntrySchema.array(),
+      ),
+    get: (resourceId: string, versionId: string) =>
+      jsonFetch<ResourceVersion>(
+        baseUrl,
+        `/api/${path}/${resourceId}/versions/${versionId}`,
+        undefined,
+        resourceVersionSchema,
+      ),
   };
 }
 
@@ -331,6 +374,58 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingComparisonSchema,
       ),
+    // P2, "Cross-cutting policy overlays" (backend/app/policies.py) — a
+    // time-boxed waiver for a specific policy diagnostic on a graph,
+    // optionally scoped to one node. Graph-scoped routes (not release_id-
+    // only, unlike releases/compare) since exceptions apply to the draft's
+    // compile gate, not a specific immutable release.
+    createPolicyException: (
+      graphId: string,
+      policyCode: string,
+      expiresAt: string,
+      nodeId?: string,
+      reason?: string,
+    ) =>
+      jsonFetch<PolicyException>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            policy_code: policyCode,
+            node_id: nodeId,
+            reason,
+            expires_at: expiresAt,
+          }),
+        },
+        policyExceptionSchema,
+      ),
+    listPolicyExceptions: (graphId: string) =>
+      jsonFetch<PolicyException[]>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions`,
+        undefined,
+        policyExceptionSchema.array(),
+      ),
+    deletePolicyException: (graphId: string, exceptionId: string) =>
+      jsonFetch<{ deleted: boolean }>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
+        { method: "DELETE" },
+        deletedSchema,
+      ),
+    // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py) —
+    // every recorded retrieval for this graph's knowledge base, optionally
+    // filtered to one document: "which runs/nodes used this document."
+    getKnowledgeLineage: (graphId: string, documentId?: string) => {
+      const query = documentId ? `?document_id=${encodeURIComponent(documentId)}` : "";
+      return jsonFetch<KnowledgeLineageEntry[]>(
+        baseUrl,
+        `/api/graphs/${graphId}/knowledge/lineage${query}`,
+        undefined,
+        knowledgeLineageEntrySchema.array(),
+      );
+    },
     // design doc, "LangGraph adapter boundary" — shown in Studio only when
     // a user encounters a capability diagnostic.
     getRuntimeTargetCapabilities: (targetId: string) =>
@@ -340,12 +435,29 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         undefined,
         capabilityMatrixSchema,
       ),
-    // Stored resources (studio-consolidation Phase 3).
-    prompts: resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),
-    tools: resourceClient<ToolDefinition>(baseUrl, "tools", toolDefinitionSchema),
-    mcpServers: resourceClient<McpServerConfig>(baseUrl, "mcp-servers", mcpServerConfigSchema),
-    agents: resourceClient<AgentProfile>(baseUrl, "agents", agentProfileSchema),
-    llmProfiles: resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
+    // Stored resources (studio-consolidation Phase 3). `.versions` (P1
+    // rollout plan, parallel track) is a reusable entity's immutable
+    // publish history alongside its mutable CRUD row.
+    prompts: {
+      ...resourceClient<PromptTemplate>(baseUrl, "prompts", promptTemplateSchema),
+      versions: resourceVersionClient(baseUrl, "prompts"),
+    },
+    tools: {
+      ...resourceClient<ToolDefinition>(baseUrl, "tools", toolDefinitionSchema),
+      versions: resourceVersionClient(baseUrl, "tools"),
+    },
+    mcpServers: {
+      ...resourceClient<McpServerConfig>(baseUrl, "mcp-servers", mcpServerConfigSchema),
+      versions: resourceVersionClient(baseUrl, "mcp-servers"),
+    },
+    agents: {
+      ...resourceClient<AgentProfile>(baseUrl, "agents", agentProfileSchema),
+      versions: resourceVersionClient(baseUrl, "agents"),
+    },
+    llmProfiles: {
+      ...resourceClient<LlmProfile>(baseUrl, "llm-profiles", llmProfileSchema),
+      versions: resourceVersionClient(baseUrl, "llm-profiles"),
+    },
     // Direct model scratchpad (studio-consolidation Phase 8) — a
     // ChatSession is a stored resource like the others above (free CRUD),
     // plus one bespoke non-CRUD method for actually sending a message.

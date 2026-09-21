@@ -420,6 +420,37 @@ export const llmProfileSchema = z.object({
 });
 
 /**
+ * P1 rollout plan, parallel track ("Versioned reusable entity registry" —
+ * see docs/planning/features/p1-rollout-plan.md and
+ * backend/app/resource_versions.py). An immutable snapshot of a stored
+ * resource's payload at publish time, for prompts/tools/mcp_servers/
+ * agents/llm_profiles only — chat_sessions (a runtime scratchpad) is
+ * excluded.
+ */
+export const resourceVersionSchema = z.object({
+  version_id: z.string(),
+  kind: z.string(),
+  resource_id: z.string(),
+  payload: z.record(z.string(), z.unknown()),
+  fingerprint: z.string(),
+  created_at: z.string(),
+});
+
+export const publishResourceVersionResponseSchema = z.object({
+  version: resourceVersionSchema,
+  created: z.boolean(),
+});
+
+// GET /api/{path}/{resource_id}/versions's compact per-entry shape
+// (storage.py's get_resource_version_index) — not the full ResourceVersion
+// payload, same convention as releaseIndexEntrySchema.
+export const resourceVersionIndexEntrySchema = z.object({
+  version_id: z.string(),
+  fingerprint: z.string(),
+  created_at: z.string(),
+});
+
+/**
  * A direct model scratchpad (studio-consolidation Phase 8) — bypasses the
  * graph engine entirely, chatting straight to a chosen provider/model. Not
  * a Run: no compile step, no relation to any graph_id.
@@ -474,4 +505,46 @@ export const analyticsDashboardPayloadSchema = z.object({
   totals: analyticsTotalsSchema,
   daily: z.array(analyticsDailyPointSchema),
   by_graph: z.array(analyticsGraphRowSchema),
+});
+
+/**
+ * P2, "Cross-cutting policy overlays" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/policies.py). A time-boxed waiver for a specific policy
+ * diagnostic on a specific graph — optionally scoped to one node.
+ */
+export const policyExceptionSchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  policy_code: z.string(),
+  node_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  created_at: z.string(),
+  expires_at: z.string(),
+});
+
+export const createPolicyExceptionRequestSchema = z.object({
+  policy_code: z.string(),
+  node_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  expires_at: z.string(),
+});
+
+/**
+ * P2, "Retrieval/document lineage graph" (see
+ * docs/planning/roadmap.md's Strategic Roadmap Addendum and
+ * backend/app/knowledge.py). One durable record of a knowledge chunk
+ * actually retrieved and used to augment an `llm` node's system prompt
+ * during a run — "which runs/nodes used this document."
+ */
+export const knowledgeLineageEntrySchema = z.object({
+  id: z.string(),
+  graph_id: z.string(),
+  document_id: z.string(),
+  document_name: z.string(),
+  chunk_id: z.string(),
+  run_id: z.string(),
+  node_id: z.string(),
+  score: z.number(),
+  created_at: z.string(),
 });

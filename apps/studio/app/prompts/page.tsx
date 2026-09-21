@@ -7,6 +7,7 @@ import { client } from "@/lib/api-client";
 import { StudioConfirmDialog } from "@/components/studio/studio-confirm-dialog";
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
+import { ResourceVersionHistory } from "@/components/studio/resource-version-history";
 import {
   StudioCardDeleteIconButton,
   StudioCardEditIconButton,
@@ -203,6 +204,9 @@ export default function PromptsPage() {
                 className="font-mono text-xs"
               />
             </div>
+            {editing ? (
+              <ResourceVersionHistory resourceId={editing.id} versionsClient={client.prompts.versions} />
+            ) : null}
           </div>
           <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
             <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">

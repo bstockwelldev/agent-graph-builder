@@ -24,12 +24,14 @@ import type {
   graphOrientationSchema,
   graphPortSchema,
   graphReleaseSchema,
+  knowledgeLineageEntrySchema,
   llmProfileSchema,
   mcpServerConfigSchema,
   nodePositionSchema,
   nodeTraceSchema,
   nodeTypeSchema,
   platformEventSchema,
+  policyExceptionSchema,
   portContractSchema,
   portKindSchema,
   promptTemplateSchema,
@@ -37,8 +39,11 @@ import type {
   providerModelCatalogSchema,
   providerModelOptionSchema,
   publishReleaseResponseSchema,
+  publishResourceVersionResponseSchema,
   releaseDiffSchema,
   releaseIndexEntrySchema,
+  resourceVersionIndexEntrySchema,
+  resourceVersionSchema,
   routeDecisionSchema,
   routeNodeDistributionDeltaSchema,
   routeNodeDistributionSchema,
@@ -147,6 +152,11 @@ export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type LlmProfile = z.infer<typeof llmProfileSchema>;
 
+// P1 rollout plan, parallel track ("Versioned reusable entity registry").
+export type ResourceVersion = z.infer<typeof resourceVersionSchema>;
+export type PublishResourceVersionResponse = z.infer<typeof publishResourceVersionResponseSchema>;
+export type ResourceVersionIndexEntry = z.infer<typeof resourceVersionIndexEntrySchema>;
+
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatSession = z.infer<typeof chatSessionSchema>;
 
@@ -160,3 +170,9 @@ export type AnalyticsDailyPoint = z.infer<typeof analyticsDailyPointSchema>;
 export type AnalyticsGraphRow = z.infer<typeof analyticsGraphRowSchema>;
 export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
 export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayloadSchema>;
+
+// P2, "Cross-cutting policy overlays" (backend/app/policies.py).
+export type PolicyException = z.infer<typeof policyExceptionSchema>;
+
+// P2, "Retrieval/document lineage graph" (backend/app/knowledge.py).
+export type KnowledgeLineageEntry = z.infer<typeof knowledgeLineageEntrySchema>;
