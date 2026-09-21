@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
 
-import { summaryFor } from "./nodeDefaults";
+import { defaultConfig, summaryFor } from "./nodeDefaults";
 
 describe("summaryFor", () => {
   it("shows the provider for llm and tool_loop nodes", () => {
@@ -33,5 +34,40 @@ describe("summaryFor", () => {
     expect(summaryFor("branch", { content: "yes" })).toBeNull();
     expect(summaryFor("code_exec", { codeExecLanguage: "python" })).toBeNull();
     expect(summaryFor("human_gate", { content: "Approve?" })).toBeNull();
+  });
+});
+
+describe("defaultConfig", () => {
+  // Regression test: backend/app/node_configs.py's typed config models
+  // declare these fields `Field(min_length=1)`. A freshly-added node's
+  // config comes straight from defaultConfig() before the user edits
+  // anything -- if a required field defaults to "", the node is invalid
+  // the instant it's created (human_gate and code_exec both did this;
+  // "content: String should have at least 1 character" was a blocking
+  // compile error on a brand-new, untouched node). Every node type in
+  // this table must keep a non-empty default for the listed fields.
+  const REQUIRED_NON_EMPTY_FIELDS: Partial<Record<NodeType, readonly string[]>> = {
+    tool_loop: ["model"],
+    code_exec: ["content"],
+    human_gate: ["content"],
+  };
+
+  for (const [type, fields] of Object.entries(REQUIRED_NON_EMPTY_FIELDS) as [
+    NodeType,
+    readonly string[],
+  ][]) {
+    it(`gives a non-empty default ${type}.${fields.join("/")}`, () => {
+      const config = defaultConfig(type);
+      for (const field of fields) {
+        expect(typeof config[field]).toBe("string");
+        expect((config[field] as string).length).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  it("keeps tool_loop's maxToolIterations within the backend's 1-64 range", () => {
+    const config = defaultConfig("tool_loop");
+    expect(config.maxToolIterations).toBeGreaterThanOrEqual(1);
+    expect(config.maxToolIterations).toBeLessThanOrEqual(64);
   });
 });

@@ -29,9 +29,13 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
     case "tool_loop":
       return { provider: "ollama", model: "qwen2.5:3b", systemPrompt: "", maxToolIterations: 4 };
     case "code_exec":
-      return { content: "", codeExecLanguage: "python" };
+      // backend/app/node_configs.py's CodeExecConfig.content requires at
+      // least 1 character -- an empty default made every new code_exec
+      // node invalid the instant it was created, before the user touched
+      // anything. Same bug, same fix, for human_gate below.
+      return { content: "Describe what this step should produce.", codeExecLanguage: "python" };
     case "human_gate":
-      return { content: "" };
+      return { content: "Review and approve to continue." };
   }
 }
 

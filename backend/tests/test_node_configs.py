@@ -118,6 +118,43 @@ def test_existing_node_types_are_unvalidated_by_this_module() -> None:
     assert validate_node_config(NodeType.TOOL, {}) == []
 
 
+def test_studio_default_configs_validate_for_every_typed_node_type() -> None:
+    """Regression test: apps/studio/lib/nodeDefaults.ts's defaultConfig()
+    is what a freshly-added node's config starts as, before the user edits
+    anything. It must validate cleanly against this module's models, or a
+    node is invalid the instant it's created with no user action taken —
+    exactly what happened for human_gate (and identically for code_exec):
+    both defaulted `content` to "" against a `Field(min_length=1)`
+    constraint, so "Node reachability"/"unbound port" warnings (expected
+    and universal for any fresh, unconnected node) were joined by a real
+    blocking NODE_CONFIG_INVALID error before the graph was even edited.
+
+    Mirrors defaultConfig()'s literal values for every node type this
+    module has a typed model for — keep the two in sync by hand, same
+    caveat as every other cross-language mirror in this codebase (see
+    apps/studio/content/node-ports.ts's header comment for the precedent).
+    """
+    studio_default_configs: dict[NodeType, dict[str, object]] = {
+        NodeType.GUARDRAIL: {"allowUrls": False},
+        NodeType.RUBRIC: {"rubricFailOnFindings": False},
+        NodeType.BRANCH: {"content": ""},
+        NodeType.TOOL_LOOP: {
+            "provider": "ollama",
+            "model": "qwen2.5:3b",
+            "systemPrompt": "",
+            "maxToolIterations": 4,
+        },
+        NodeType.CODE_EXEC: {
+            "content": "Describe what this step should produce.",
+            "codeExecLanguage": "python",
+        },
+        NodeType.HUMAN_GATE: {"content": "Review and approve to continue."},
+    }
+    for node_type, config in studio_default_configs.items():
+        errors = validate_node_config(node_type, config)
+        assert errors == [], f"{node_type.value} default config failed validation: {errors}"
+
+
 def test_node_config_invalid_diagnostic_surfaces_from_validate_graph() -> None:
     node = GraphNode(
         id="tool_loop_1",
