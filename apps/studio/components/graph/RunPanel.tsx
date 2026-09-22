@@ -2,6 +2,7 @@ import type { CSSProperties, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { client } from "@/lib/api-client";
+import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
 import {
@@ -27,6 +28,7 @@ import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
 import { useExclusiveCollapse } from "@/hooks/usePersistedCollapse";
 import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { NodeContextMenu, type NodeContextMenuAction } from "./NodeContextMenu";
+import { RunWaterfall } from "./RunWaterfall";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
@@ -177,6 +179,8 @@ export function RunPanel({
   events,
   selectedTrace,
   selectedNodeId = null,
+  nodeTraces = {},
+  onFocusNode,
   inspectLoadError = false,
   onRetryInspect,
   compiling = false,
@@ -216,6 +220,13 @@ export function RunPanel({
   events: PlatformEvent[];
   selectedTrace: NodeTrace | null;
   selectedNodeId?: string | null;
+  /** Historical run waterfall (studio-ux-gap-remediation-plan.md §2): every
+   * trace for the currently-inspected/live run, keyed by node id. */
+  nodeTraces?: Record<string, NodeTrace>;
+  /** Bidirectional canvas link for the waterfall — pans/selects the node a
+   * waterfall bar represents, reusing the same focus mechanism diagnostics
+   * clicks use. */
+  onFocusNode?: (nodeId: string) => void;
   inspectLoadError?: boolean;
   onRetryInspect?: () => void;
   compiling?: boolean;
@@ -408,13 +419,19 @@ export function RunPanel({
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error("Failed to load provider credentials:", err);
+        logConsoleEntry({
+          severity: "error",
+          source: "Provider",
+          message: `Failed to load provider credentials: ${err instanceof Error ? err.message : String(err)}`,
+          graphId: graphId ?? undefined,
+        });
         setApiKeyConfigured(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [provider, showApiKeyField]);
+  }, [provider, showApiKeyField, graphId]);
 
   useEffect(() => {
     if (!showModelSelect) {
@@ -443,6 +460,12 @@ export function RunPanel({
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error("Failed to load provider models:", err);
+        logConsoleEntry({
+          severity: "error",
+          source: "Provider",
+          message: `Failed to load provider models: ${err instanceof Error ? err.message : String(err)}`,
+          graphId: graphId ?? undefined,
+        });
         setModelOptions([]);
         setSelectedModel("");
         setModelCatalogMessage("Could not load model catalog.");
@@ -832,6 +855,28 @@ export function RunPanel({
                   </div>
                 )}
               </>
+            )}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            sectionId="observe-waterfall"
+            title="Waterfall"
+            open={openId === "observe-waterfall"}
+            onOpenChange={() => toggleSection("observe-waterfall")}
+            reducedMotion={reducedMotion}
+          >
+            {!runSummary ? (
+              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+                No run to inspect yet. Compile and run to see timing here.
+              </div>
+            ) : (
+              <RunWaterfall
+                nodeTraces={nodeTraces}
+                runStartedAt={runSummary.started_at}
+                runCompletedAt={runSummary.completed_at}
+                selectedNodeId={selectedNodeId}
+                onFocusNode={onFocusNode}
+              />
             )}
           </CollapsibleSection>
 

@@ -75,18 +75,47 @@ inspector tab — confirmed by grep: `FlowCanvas.tsx` has no
 
 ### Acceptance criteria
 
-- [ ] Every diagnostic surfaced anywhere in Studio (node badge,
-      validation panel, compile-error list) is clickable.
-- [ ] Clicking a diagnostic centers the canvas on the affected
+**Status: implemented 2026-09-22**, with one deliberate simplification noted below.
+
+- [x] Every diagnostic surfaced anywhere in Studio (node badge,
+      validation panel, compile-error list) is clickable. Already true
+      for the validation panel (`onDiagnosticClick` existed) and node
+      cards (select on click) before this change; this work is what
+      made the click actually navigate.
+- [x] Clicking a diagnostic centers the canvas on the affected
       node/edge in one animation, no manual scrolling/searching required.
-- [ ] The affected object is selected and visibly highlighted, distinct
-      from normal selection styling.
-- [ ] The correct `NodeInspector` tab opens automatically based on the
-      diagnostic's category.
-- [ ] Diagnostic messages name the specific field/port expectation, not
-      a generic "Invalid" string.
-- [ ] Works for both node-level and edge-level diagnostics.
-- [ ] No new route or standalone page introduced.
+      `FlowCanvas`'s new `focusRequest` prop calls React Flow's
+      `fitView({ nodes, padding, maxZoom, duration })` scoped to the
+      diagnostic's node (or both endpoints of its edge).
+- [~] The affected object is selected and visibly highlighted, **reusing
+      the existing selection highlight rather than a new distinct
+      style** — deliberate scope cut to avoid inventing a second visual
+      selection language; revisit only if the reused style proves
+      ambiguous in practice.
+- [x] The correct `NodeInspector` tab opens automatically based on the
+      diagnostic's category (`contract` → I/O, `policy` → Policy,
+      `structure`/`capability`/unset → Configure) via
+      `lib/diagnostics.ts`'s new `tabForDiagnostic`, guarded so a stale
+      request can never apply to a different, later-selected node.
+- [x] Diagnostic messages name the specific field/port expectation, not
+      a generic "Invalid" string. Already true in `backend/app/contracts.py`
+      before this change (e.g. `f"Node {node.id!r} has no {direction} port
+      {explicit_port_id!r}"`) — no backend change needed.
+- [x] Works for both node-level and edge-level diagnostics. Edge clicks
+      focus both endpoint nodes; `EdgeInspector` has no tabs so only the
+      node-tab-routing criterion above is node-specific.
+- [x] No new route or standalone page introduced. Implemented entirely
+      via new props on existing `FlowCanvas`/`NodeInspector` plus one new
+      pure function in `lib/diagnostics.ts` (unit-tested,
+      `lib/diagnostics.test.ts`).
+
+**Not built in this pass** (out of this spec's written acceptance
+criteria, noted for completeness): the `graphObjectId`/`fieldPath`/
+`suggestedActions` generalized diagnostic data model and field-level
+scroll-to-highlight described in the Design spec above. The shipped
+version resolves directly off the existing `node_id`/`edge_id`/`port_id`/
+`category` fields already on the backend `Diagnostic` model — sufficient
+for every AC above without the added model surface.
 
 ---
 
@@ -129,20 +158,46 @@ no parallel-vs-sequential view.
 
 ### Acceptance criteria
 
-- [ ] Opening a historical run's detail view shows a waterfall with one
-      bar per executed node.
-- [ ] Bar position/width accurately reflects each node's start offset
-      and duration relative to run start.
-- [ ] Parallel execution is visually distinguishable from sequential
-      execution.
+**Status: implemented 2026-09-22.** No backend work was needed —
+`NodeTrace.started_at`/`completed_at`/`status` and
+`RunSummary.started_at`/`completed_at` already carried everything
+required; this shipped as a pure frontend rendering layer over data
+RunPanel's existing "Node trace" section already consumed.
+
+- [x] Opening a historical run's detail view shows a waterfall with one
+      bar per executed node. New "Waterfall" `CollapsibleSection` in
+      `RunPanel.tsx`, between "Run status" and "Node trace."
+- [x] Bar position/width accurately reflects each node's start offset
+      and duration relative to run start. `lib/runWaterfall.ts`'s
+      `computeWaterfallRows` (unit-tested, `lib/runWaterfall.test.ts`,
+      6 cases) computes offsets/durations in ms; `RunWaterfall.tsx`
+      scales them to bar `left%`/`width%`.
+- [x] Parallel execution is visually distinguishable from sequential
+      execution. One row (lane) per node, positioned by real timestamp —
+      overlapping time ranges render as visually overlapping bars across
+      rows with no lane-packing algorithm needed.
 - [ ] Retries appear as distinguishable sub-segments, not separate
-      top-level rows.
-- [ ] Errored nodes are visually distinct from succeeded/skipped nodes.
-- [ ] Clicking a bar focuses and selects the corresponding canvas node.
-- [ ] Selecting a canvas node while the waterfall is open scrolls to
-      and highlights its bar.
-- [ ] No MUI dependency introduced; the component lives under
+      top-level rows. **Not built — no retry mechanism exists anywhere in
+      the runtime** (`grep` across `nodes.py`/`runtime.py`/
+      `node_configs.py` returns nothing, confirmed during the P0 review
+      that preceded this item). Nothing to render; revisit if/when
+      per-node retries are ever implemented.
+- [x] Errored nodes are visually distinct from succeeded/skipped nodes.
+      Bar color keys off `NodeTrace.status` via the existing
+      `lib/graph-theme.ts` `status` token map (`succeeded`/`failed`/
+      `running`/`paused`), the same colors already used for node-card
+      status elsewhere.
+- [x] Clicking a bar focuses and selects the corresponding canvas node.
+      `GraphEditor.tsx`'s new shared `focusNode()` helper (also used by
+      diagnostics clicks) — a waterfall click additionally force-opens
+      the NodeInspector's Run tab, so the click both focuses the canvas
+      and shows that node's trace.
+- [x] Selecting a canvas node while the waterfall is open scrolls to
+      and highlights its bar. `RunWaterfall.tsx` scrolls the matching
+      row into view and outlines it when `selectedNodeId` changes.
+- [x] No MUI dependency introduced; the component lives under
       `components/graph/*` and uses `graph-theme.ts` tokens.
+      `components/graph/RunWaterfall.tsx` — confirmed no MUI import.
 
 ---
 

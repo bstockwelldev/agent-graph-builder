@@ -75,21 +75,54 @@ unfulfilled today.
 
 ### Acceptance criteria
 
-- [ ] `NodeInspector` gains a "Raw" tab showing the selected node's
-      config as valid, formatted JSON.
-- [ ] Editing raw JSON and applying it validates through the same
-      schema the typed Configure tab uses — invalid input is rejected
-      with a diagnostic-style message, never silently applied.
-- [ ] Switching between Configure and Raw tabs never loses or corrupts
-      field data.
-- [ ] Edge config gets the same Raw tab treatment as node config.
-- [ ] A graph-level export produces JSON that re-imports into a new
-      graph without data loss (round-trip test).
-- [ ] No new backend config format introduced — JSON stays the
-      underlying contract; YAML (if offered) is a presentation-layer
-      transform only.
-- [ ] No heavy editor dependency added without first shipping and
-      evaluating the lightweight text-area version.
+**Status: implemented 2026-09-22 (Phase 1 and Phase 2 both shipped)**,
+with two notes below.
+
+- [x] `NodeInspector` gains a "Raw" tab showing the selected node's
+      config as valid, formatted JSON. New `components/graph/ui/JsonEditor.tsx`,
+      wired as the 5th `NODE_INSPECTOR_TABS` entry.
+- [~] Editing raw JSON and applying it validates through the same
+      schema the typed Configure tab uses. **Note:** there is no
+      per-node-type Zod schema in the SDK to validate against client-side
+      (`GraphNode.config` is untyped `Record<string, unknown>` by design —
+      the typed shape lives only in the backend's `node_configs.py`). The
+      Raw tab synchronously rejects invalid JSON syntax or a non-object
+      top level (`lib/jsonEditor.ts`'s `parseConfigJson`) — that much
+      "never silently applies." Deeper schema violations surface exactly
+      the way they already do for the typed Configure tab: async, via
+      `GraphEditor.tsx`'s existing debounced `client.validateGraph` call.
+      The Raw tab is exactly as strict as Configure, not more, not less.
+- [x] Switching between Configure and Raw tabs never loses or corrupts
+      field data. Committed `node.config` is the only source of truth;
+      `JsonEditor` re-derives its draft text from it on every mount.
+      (An in-progress, never-applied keystroke draft is lost on tab
+      switch — expected, same as any unsaved form.)
+- [x] Edge config gets the same Raw tab treatment as node config. New
+      "Raw" `CollapsibleSection` in `EdgeInspector`, deliberately scoped
+      to `kind`/`condition` only — `patchFlowEdgeData` only ever actually
+      applies those two fields from a patch today, so exposing
+      `source_port`/`target_port`/`transform` here would let an edit look
+      accepted while silently doing nothing.
+- [x] A graph-level export produces JSON that re-imports into a new
+      graph without data loss. New `lib/graphJsonPortability.ts`
+      (`exportGraphJson`/`importGraphJson`), reusing the SDK's real
+      `graphDefinitionSchema` for full structural validation on import —
+      stronger than the node/edge case, since this schema actually
+      exists. Round-trip-tested (`lib/graphJsonPortability.test.ts`).
+      Wired as "Export JSON" / "Import JSON" buttons in the graph HUD
+      toolbar (browser download / file picker); importing replaces
+      canvas state but leaves `savedFingerprint` untouched, so the graph
+      is correctly marked dirty until the user explicitly saves.
+- [x] No new backend config format introduced — JSON stays the
+      underlying contract. **YAML was not built** — the spec framed it as
+      optional ("if offered"), and a presentation-only YAML↔JSON
+      transform layer without a library wasn't judged worth it once the
+      JSON pretty-printed textarea already served the "code escape
+      hatch" need on its own.
+- [x] No heavy editor dependency added without first shipping and
+      evaluating the lightweight text-area version. `JsonEditor` is a
+      plain `<textarea>` (`components/graph/ui/fields.tsx`'s `TextArea`)
+      with monospace styling — no Monaco/CodeMirror.
 
 ---
 
@@ -147,23 +180,49 @@ app-level (non-run) errors, which is closer to what was asked for
 
 ### Acceptance criteria
 
-- [ ] A bottom drawer exists, toggleable from the HUD, showing
-      Logs/Warnings/Errors/Run events in separate tabs.
-- [ ] Client-side errors currently only visible in the browser devtools
+**Status: implemented 2026-09-22**, with two deliberate scope decisions
+noted below.
+
+- [x] A bottom drawer exists, toggleable from the HUD, showing
+      Logs/Warnings/Errors/Run events in separate tabs. **Scope decision:**
+      shipped as a right-side floating panel (`WorkbenchDrawer`,
+      bottom-anchored via `dockedClassName="right-4 bottom-4 ..."`)
+      reusing the exact infrastructure every other global panel (Chat,
+      Analytics, the resource browsers) already uses, rather than a new
+      bottom-drawer primitive — this repo has no bottom-drawer component
+      at all, and building one for a single panel isn't proportional.
+      Functionally equivalent: toggleable, tabbed, collapsed by default.
+- [x] Client-side errors currently only visible in the browser devtools
       console (e.g. provider-credential/model load failures) now also
-      appear in the Errors tab.
-- [ ] Each log/warning/error entry shows timestamp, severity, source,
+      appear in the Errors tab. Wired at all 5 existing `console.error`
+      call sites found across `RunPanel.tsx` (2) and `GraphEditor.tsx` (3:
+      live validation, diagnostics refresh, run inspection/traces load).
+- [x] Each log/warning/error entry shows timestamp, severity, source,
       and message.
-- [ ] An entry tied to a specific node/run is clickable and
-      focuses/opens the relevant canvas object or panel.
-- [ ] The HUD toggle shows a count/severity badge when unread errors or
-      warnings exist.
-- [ ] Existing run-event content (`observe-events`) is not duplicated —
+- [x] An entry tied to a specific node/run is clickable and
+      focuses/opens the relevant canvas object or panel. New canvas focus
+      bridge in `lib/consoleLog.ts` (`requestCanvasFocus`/
+      `consumeCanvasFocus`): navigates to the graph if not already open,
+      then reuses the same `focusNode()` mechanism diagnostics/waterfall
+      clicks use.
+- [x] The HUD toggle shows a count/severity badge when unread errors or
+      warnings exist. **Scope decision:** this repo's global panels have
+      no persistent icon-button row to attach a literal badge dot to —
+      confirmed by inspection, not even Chat/Analytics have one; every
+      global panel is reached via hotkey + command palette only. The
+      badge lives on the Console command palette entry's label instead
+      (e.g. "Console — 2 errors, 1 warning"), consistent with how this
+      app actually surfaces every other global panel.
+- [x] Existing run-event content (`observe-events`) is not duplicated —
       this drawer either relocates or mirrors it, not forks it into a
-      second, divergent implementation.
-- [ ] Drawer is collapsed by default and does not permanently consume
+      second, divergent implementation. Mirrored: `GraphEditor.tsx`'s SSE
+      `onEvent` handler pushes into the console log store as an
+      independent second subscriber; `RunPanel.tsx`'s own Event log
+      section is untouched.
+- [x] Drawer is collapsed by default and does not permanently consume
       canvas space, consistent with the "quiet canvas" thesis already in
-      `studio-ux-revision-plan.md`.
+      `studio-ux-revision-plan.md`. True by construction —
+      `WorkbenchDrawer` only renders when it's the active panel.
 
 ---
 

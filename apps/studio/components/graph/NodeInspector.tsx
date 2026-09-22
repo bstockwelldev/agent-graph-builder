@@ -33,6 +33,8 @@ import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Select, TextArea, TextInput } from "./ui/fields";
+import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
+import { JsonEditor } from "./ui/JsonEditor";
 import { Tabs } from "./ui/Tabs";
 
 function IssueList({ issues }: { issues: Diagnostic[] }) {
@@ -67,6 +69,8 @@ const NODE_INSPECTOR_TABS = [
   { id: "io", label: "I/O" },
   { id: "policy", label: "Policy" },
   { id: "run", label: "Run" },
+  // Raw JSON config editor (studio-config-editor-and-console-plan.md §6).
+  { id: "raw", label: "Raw" },
 ];
 
 /**
@@ -91,6 +95,7 @@ export function NodeInspector({
   onOpenRunPanel,
   onPolicyExceptionCreated,
   fullWidth = false,
+  focusTab = null,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -109,10 +114,22 @@ export function NodeInspector({
    * so the caller can re-validate and pick up the diagnostic change. */
   onPolicyExceptionCreated?: () => void;
   fullWidth?: boolean;
+  /** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
+   * force-open a specific tab (e.g. "io" for a contract diagnostic). Guarded
+   * by `nodeId` so a stale request from a previously-selected node can never
+   * apply to this one — this component remounts on node change (`key=
+   * {node.id}` at the call site), but `focusTab` itself doesn't change
+   * identity just because the mount did. */
+  focusTab?: { tab: string; nonce: number; nodeId: string } | null;
 }) {
   const [activeTab, setActiveTab] = useState("configure");
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
   const accent = nodeTypeAccents[node.type]?.accent ?? color.primary[600];
+
+  useEffect(() => {
+    if (focusTab && focusTab.nodeId === node.id) setActiveTab(focusTab.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on nonce/nodeId change only, not on every node.id re-render
+  }, [focusTab?.nonce, focusTab?.nodeId, node.id]);
 
   return (
     <div style={panelStyle(fullWidth)}>
@@ -145,6 +162,7 @@ export function NodeInspector({
         />
       )}
       {activeTab === "run" && <RunTab selectedTrace={selectedTrace} onOpenRunPanel={onOpenRunPanel} />}
+      {activeTab === "raw" && <JsonEditor value={node.config} onApply={onConfigChange} />}
 
       <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[3] }}>
         {onDuplicate && (
@@ -752,6 +770,20 @@ export function EdgeInspector({
       <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
         Delete edge
       </Button>
+      </CollapsibleSection>
+
+      {/* Raw JSON config editor (studio-config-editor-and-console-plan.md
+          §6): scoped to kind/condition only, the same fields "Configure
+          edge" above edits — patchFlowEdgeData only ever applies those two
+          from a patch, so exposing more here would let an edit look
+          accepted while silently doing nothing. */}
+      <CollapsibleSection sectionId="inspector-edge-raw" title="Raw" reducedMotion={reducedMotion}>
+        <JsonEditor
+          value={{ kind: edge.kind, condition: edge.condition ?? null }}
+          onApply={(next) => onChange(next)}
+          parse={parseEdgeRawConfig}
+          format={formatEdgeRawConfig}
+        />
       </CollapsibleSection>
     </div>
   );

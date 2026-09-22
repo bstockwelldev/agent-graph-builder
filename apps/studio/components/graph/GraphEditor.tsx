@@ -30,6 +30,8 @@ import {
 } from "@bstockwelldev/agent-graph-sdk";
 
 import { client, streamRunEvents } from "@/lib/api-client";
+import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
+import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
   applyCompileIssueToEdge,
   applyCompileIssueToNodeData,
@@ -38,6 +40,7 @@ import {
   diagnosticsForNode,
   edgeStrokeForKind,
   fingerprintIssueMaps,
+  tabForDiagnostic,
   validationSummary,
 } from "@/lib/diagnostics";
 import {
@@ -240,6 +243,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const closeStreamRef = useRef<(() => void) | null>(null);
   const lastInspectAttemptRef = useRef<string | null>(null);
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1).
+  const [focusRequest, setFocusRequest] = useState<{ nodeId?: string | null; edgeId?: string | null; nonce: number } | null>(
+    null,
+  );
+  const [inspectorTabRequest, setInspectorTabRequest] = useState<{ tab: string; nonce: number; nodeId: string } | null>(
+    null,
+  );
   const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
 
@@ -253,17 +264,50 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     diagnosticsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
-  const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
-    if (diagnostic.edge_id) {
-      setSelectedEdgeId(diagnostic.edge_id);
-      setSelectedNodeId(null);
-      return;
-    }
-    if (diagnostic.node_id) {
-      setSelectedNodeId(diagnostic.node_id);
-      setSelectedEdgeId(null);
-    }
+  // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
+  // clicking a diagnostic already selected the node/edge; it now also pans/
+  // zooms the canvas onto it and, for node diagnostics, opens the
+  // NodeInspector tab that owns the offending field.
+  // Shared by diagnostic clicks and the run waterfall (below) — selects a
+  // node, pans/zooms the canvas onto it, and optionally forces a specific
+  // NodeInspector tab.
+  const focusNode = useCallback((nodeId: string, tab?: string) => {
+    const nonce = Date.now();
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+    setFocusRequest({ nodeId, nonce });
+    if (tab) setInspectorTabRequest({ tab, nonce, nodeId });
   }, []);
+
+  const handleDiagnosticClick = useCallback(
+    (diagnostic: Diagnostic) => {
+      if (diagnostic.edge_id) {
+        setSelectedEdgeId(diagnostic.edge_id);
+        setSelectedNodeId(null);
+        setFocusRequest({ edgeId: diagnostic.edge_id, nonce: Date.now() });
+        return;
+      }
+      if (diagnostic.node_id) focusNode(diagnostic.node_id, tabForDiagnostic(diagnostic));
+    },
+    [focusNode],
+  );
+
+  // Historical run waterfall (studio-ux-gap-remediation-plan.md §2):
+  // clicking a bar focuses the node and opens its trace on the Run tab.
+  const handleWaterfallFocusNode = useCallback((nodeId: string) => focusNode(nodeId, "run"), [focusNode]);
+
+  // Console panel deep links (lib/consoleLog.ts's canvas focus bridge):
+  // clicking a console entry tied to a node navigates here (if this graph
+  // wasn't already open) and requests a focus; this picks the request up
+  // once the graph's nodes are actually loaded, since fitView needs the
+  // node to exist first. Re-running on every nodes-length change is
+  // harmless — consumeCanvasFocus is single-shot and returns null after
+  // the first successful consume.
+  useEffect(() => {
+    if (!graphId || nodes.length === 0) return;
+    const nodeId = consumeCanvasFocus(graphId);
+    if (nodeId && nodes.some((n) => n.id === nodeId)) focusNode(nodeId);
+  }, [graphId, nodes, focusNode]);
 
   const refreshRunHistory = useCallback(async () => {
     setRunHistoryLoading(true);
@@ -431,6 +475,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           .catch((err: unknown) => {
             if (err instanceof DOMException && err.name === "AbortError") return;
             console.error("Live validation failed:", err);
+            logConsoleEntry({
+              severity: "error",
+              source: "Validation",
+              message: `Live validation failed: ${err instanceof Error ? err.message : String(err)}`,
+              graphId: graphId ?? undefined,
+            });
           });
       } catch {
         // Graph not ready yet.
@@ -440,7 +490,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [semanticFingerprint, buildGraphDefinition]);
+  }, [semanticFingerprint, buildGraphDefinition, graphId]);
 
   // P2, "Cross-cutting policy overlays" — waiving a diagnostic from
   // RunPanel doesn't change the graph, so the debounced effect above (keyed
@@ -455,11 +505,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       return client
         .validateGraph(graph)
         .then((result) => setDiagnostics(result.diagnostics))
-        .catch((err: unknown) => console.error("Diagnostics refresh failed:", err));
+        .catch((err: unknown) => {
+          console.error("Diagnostics refresh failed:", err);
+          logConsoleEntry({
+            severity: "error",
+            source: "Validation",
+            message: `Diagnostics refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+            graphId: graphId ?? undefined,
+          });
+        });
     } catch {
       // Graph not ready yet.
     }
-  }, [buildGraphDefinition]);
+  }, [buildGraphDefinition, graphId]);
 
   const applyDiagnosticsToCanvas = useCallback(
     (nextDiagnostics: Diagnostic[]) => {
@@ -658,6 +716,54 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }
   }, [buildGraphDefinition, dirty]);
 
+  // Raw JSON/YAML config editor, Phase 2 - graph scope
+  // (studio-config-editor-and-console-plan.md §6): copy-paste/backup/
+  // scripting, not a live-editing surface. Client-side only - importing
+  // replaces canvas state but doesn't touch savedFingerprint, so the
+  // graph is correctly `dirty` until the user explicitly Saves, same as
+  // any other canvas edit.
+  const handleExportGraph = useCallback(() => {
+    try {
+      const graph = buildGraphDefinition();
+      const json = exportGraphJson(graph);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${graph.name || "graph"}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    }
+  }, [buildGraphDefinition]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const result = importGraphJson(text);
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      if (dirty && !window.confirm("Importing will replace the current unsaved graph. Continue?")) {
+        return;
+      }
+      recordMutation();
+      const graph = result.graph;
+      syncIdCounter(graph);
+      setGraphName(graph.name);
+      setGraphOrientation(graph.orientation ?? "auto");
+      setNodes(graph.nodes.map(toFlowNode));
+      setEdges(graph.edges.map(toFlowEdge));
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+      setDiagnostics([]);
+      setSaveError(null);
+    },
+    [dirty, recordMutation, setEdges, setNodes],
+  );
+
   const paintInspectionPath = useCallback(
     (traces: Record<string, NodeTrace>, routeDecisions: RouteDecision[]) => {
       const graphEdges: GraphEdge[] = edges.map((edge) => ({
@@ -756,6 +862,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           return;
         }
         console.error("Failed to load run inspection:", err);
+        logConsoleEntry({
+          severity: "error",
+          source: "Run",
+          message: `Failed to load run inspection: ${err instanceof Error ? err.message : String(err)}`,
+          graphId: graphId ?? undefined,
+          runId,
+        });
       }
     },
     [applyRunInspection, graphId],
@@ -841,6 +954,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
             } else {
               console.error("Failed to load run traces:", err);
+              logConsoleEntry({
+                severity: "error",
+                source: "Run",
+                message: `Failed to load run traces: ${err instanceof Error ? err.message : String(err)}`,
+                graphId: graphId ?? undefined,
+                runId: latest.run_id,
+              });
             }
           }
           await refreshRunHistory();
@@ -860,6 +980,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           getRun: client.getRun,
           onEvent: (event) => {
             setEvents((evts) => [...evts, event]);
+            // Mirror (not duplicate) into the app-wide console's Run events
+            // tab — RunPanel's own "Event log" section still reads from
+            // `events` above; this is a second, independent subscriber.
+            const described = describePlatformEvent(event);
+            logConsoleEntry({
+              severity: described.severity,
+              source: "Run",
+              message: described.message,
+              graphId: graphId ?? undefined,
+              nodeId: event.node_id ?? undefined,
+              runId: event.run_id,
+            });
 
             if (event.event_type === "edge.selected" && event.node_id) {
               const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
@@ -931,7 +1063,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [buildGraphDefinition, focusDiagnostics, nodes, refreshRunHistory, setNodes],
+    [buildGraphDefinition, focusDiagnostics, graphId, nodes, refreshRunHistory, setNodes],
   );
 
   const handleRun = useCallback(
@@ -1012,6 +1144,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDuplicate={() => duplicateNode(selectedNode.id)}
       onOpenRunPanel={() => workbench.open("run")}
       onPolicyExceptionCreated={refreshDiagnostics}
+      focusTab={inspectorTabRequest}
     />
   ) : selectedEdge ? (
     <EdgeInspector
@@ -1111,6 +1244,23 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           Validation: {validationLabel}
         </Badge>
+        <Button variant="ghost" size="sm" onClick={handleExportGraph}>
+          Export JSON
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+          Import JSON
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void handleImportFile(file);
+          }}
+        />
         {/* Orientation/Add node/Run/Help hidden on compact widths — the
             latter three duplicate the bottom mobile action bar below, and
             hiding them here is what stops the HUD from wrapping to 3-4 rows
@@ -1209,6 +1359,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           reducedMotion={false}
           graphOrientation={graphOrientation}
           relayoutNonce={relayoutNonce}
+          focusRequest={focusRequest}
           liveAnnouncement=""
           onLiveAnnouncement={() => {}}
           onClearLiveAnnouncement={() => {}}
@@ -1412,6 +1563,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           events={events}
           selectedTrace={selectedTrace}
           selectedNodeId={selectedNodeId}
+          nodeTraces={nodeTraces}
+          onFocusNode={handleWaterfallFocusNode}
           inspectLoadError={inspectLoadError}
           onRetryInspect={() => {
             const runId = lastInspectAttemptRef.current ?? inspectionRunId;

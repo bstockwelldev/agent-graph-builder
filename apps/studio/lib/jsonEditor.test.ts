@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vitest";
+
+import { formatConfigJson, formatEdgeRawConfig, parseConfigJson, parseEdgeRawConfig } from "./jsonEditor";
+
+describe("parseConfigJson", () => {
+  it("accepts a valid JSON object", () => {
+    const result = parseConfigJson('{"provider": "groq", "temperature": 0.2}');
+    expect(result).toEqual({ ok: true, value: { provider: "groq", temperature: 0.2 } });
+  });
+
+  it("accepts an empty object", () => {
+    expect(parseConfigJson("{}")).toEqual({ ok: true, value: {} });
+  });
+
+  it("rejects malformed JSON", () => {
+    const result = parseConfigJson("{provider: groq}");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/Invalid JSON/);
+  });
+
+  it("rejects a top-level array", () => {
+    const result = parseConfigJson("[1, 2, 3]");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/must be a JSON object/);
+  });
+
+  it("rejects a top-level scalar", () => {
+    const result = parseConfigJson('"just a string"');
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects null", () => {
+    const result = parseConfigJson("null");
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("formatConfigJson", () => {
+  it("pretty-prints with 2-space indentation", () => {
+    expect(formatConfigJson({ a: 1 })).toBe('{\n  "a": 1\n}');
+  });
+
+  it("round-trips through parseConfigJson without losing or reordering keys", () => {
+    const original = { zeta: 1, alpha: 2, middle: { nested: true } };
+    const formatted = formatConfigJson(original);
+    const parsed = parseConfigJson(formatted);
+    expect(parsed).toEqual({ ok: true, value: original });
+    if (parsed.ok) expect(Object.keys(parsed.value)).toEqual(Object.keys(original));
+  });
+});
+
+describe("parseEdgeRawConfig / formatEdgeRawConfig", () => {
+  it("accepts a valid edge kind/condition pair", () => {
+    expect(parseEdgeRawConfig('{"kind": "conditional", "condition": "yes"}')).toEqual({
+      ok: true,
+      value: { kind: "conditional", condition: "yes" },
+    });
+  });
+
+  it("defaults a missing condition to null", () => {
+    expect(parseEdgeRawConfig('{"kind": "sequence"}')).toEqual({
+      ok: true,
+      value: { kind: "sequence", condition: null },
+    });
+  });
+
+  it("rejects an invalid kind", () => {
+    const result = parseEdgeRawConfig('{"kind": "loop"}');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/must be one of/);
+  });
+
+  it("rejects a non-string, non-null condition", () => {
+    const result = parseEdgeRawConfig('{"kind": "conditional", "condition": 5}');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/condition.*must be a string or null/);
+  });
+
+  it("round-trips through formatEdgeRawConfig", () => {
+    const formatted = formatEdgeRawConfig({ kind: "default", condition: null });
+    expect(parseEdgeRawConfig(formatted)).toEqual({ ok: true, value: { kind: "default", condition: null } });
+  });
+});

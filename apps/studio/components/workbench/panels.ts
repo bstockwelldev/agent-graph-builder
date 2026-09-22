@@ -17,6 +17,7 @@ export type WorkbenchPanelId =
   | "mcp"
   | "llmProfiles"
   | "analytics"
+  | "console"
   | "help";
 
 // Hotkey format: "mod+shift+<key>" ("mod" = Cmd on macOS, Ctrl elsewhere).
@@ -57,6 +58,11 @@ export const WORKBENCH_PANELS: Record<
   // graph, so global scope, same as the resource registries. Closes the
   // gap analysis's Tier 1 finding that /analytics had no HUD door at all.
   analytics: { title: "Analytics", hotkey: null, scope: "global" },
+  // App-wide console/log drawer (studio-config-editor-and-console-plan.md
+  // §7): logs/warnings/errors — including client-side errors that
+  // previously only reached the browser devtools console — plus live run
+  // events, mirrored (not duplicated) from RunPanel's "Event log" section.
+  console: { title: "Console", hotkey: "mod+shift+j", scope: "global" },
   // Real hotkey is bare "?" — HelpOverlay.tsx manages that listener itself
   // rather than going through matchesHotkey below (its shiftKey-must-match
   // check doesn't fit a symbol that inherently requires Shift to type), so
