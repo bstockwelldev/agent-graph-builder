@@ -99,6 +99,19 @@ function isDesktopViewport(): boolean {
 // showSelectionDock below), gating the dock's own render.
 const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge"]);
 
+// Compact/mobile selection dock positioning. The dock used to anchor at a
+// hardcoded `top-24` (96px) regardless of the HUD's actual rendered
+// height — on any width where the HUD wraps to 2+ rows (increasingly
+// likely as HUD buttons are added), the dock overlapped and hid the HUD
+// instead of sitting below it, and a `max-h-[75vh]` cap made it look like
+// it covered the whole viewport on shorter phones. Reusing `hudBottom`
+// (already measured via ResizeObserver for EmptyGraphCoach's positioning,
+// below) fixes the overlap; bounding height to the *actual* remaining
+// viewport, not a flat vh percentage, fixes the "covers everything" feel.
+const COMPACT_DOCK_TOP_GAP_PX = 16;
+/** Clears the bottom mobile action bar (`bottom-4` + its own height) plus margin. */
+const COMPACT_DOCK_BOTTOM_RESERVE_PX = 96;
+
 // Phase 10 Slice A follow-up (docs/planning/features/studio-shell-ux-gap-analysis.md):
 // selecting a node/edge on canvas already closed "palette" (so the add-node
 // list doesn't linger over a now-selected node) but never
@@ -183,6 +196,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  // Mobile selection dock fix: the "nothing selected" workflow summary used
+  // to force-render as a full-viewport sheet on every compact page load
+  // (no dismiss short of tapping a backdrop it mostly covered, and no close
+  // button at all in that state). It now defaults to a small collapsed
+  // strip; this tracks whether the user tapped it open.
+  const [mobileSummaryExpanded, setMobileSummaryExpanded] = useState(false);
+  // Selecting a node/edge (e.g. tapping one directly on canvas, not via
+  // this dock's own close/backdrop handlers) should always show that
+  // selection's inspector next, not a stale expanded-summary state from
+  // before.
+  useEffect(() => {
+    if (selectedNodeId || selectedEdgeId) setMobileSummaryExpanded(false);
+  }, [selectedNodeId, selectedEdgeId]);
   // Phase 10 Slice D ("Focus mode" -- docs/planning/features/
   // studio-shell-ux-gap-analysis.md). Off by default and restrained per
   // studio-ux-revision-plan.md's "must not make the graph unreadable when
@@ -1093,6 +1119,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
+  const hasSelection = Boolean(selectedNode || selectedEdge);
+  const compactDockTop = (hudBottom ?? 96) + COMPACT_DOCK_TOP_GAP_PX;
   const toGraphEdge = (edge: Edge): GraphEdge => ({
     id: edge.id,
     source: edge.source,
@@ -1586,40 +1614,68 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           {selectionDockContent}
         </div>
       )}
-      {showSelectionDock && workbench.isCompact && (
+      {showSelectionDock && workbench.isCompact && (hasSelection || mobileSummaryExpanded) && (
         <>
           {/* Full-viewport backdrop -- without this the dock behind it (the
               graph canvas, the graph switcher's own drawer) stayed visible
               and tappable around the dock's edges, which read as a broken
-              overlay rather than a deliberate one. Tapping it deselects,
-              matching onPaneClick's canvas-tap-to-deselect behavior. */}
+              overlay rather than a deliberate one. Tapping it deselects
+              (matching onPaneClick's canvas-tap-to-deselect behavior) and
+              collapses the workflow summary back to its strip. */}
           <div
             className="fixed inset-0 z-20 bg-black/45"
             onClick={() => {
               setPendingConnection(null);
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
+              setMobileSummaryExpanded(false);
             }}
           />
-          <div className="glass-panel ghost-border fixed inset-x-4 top-24 z-20 flex max-h-[75vh] flex-col overflow-y-auto rounded-2xl border">
-            {(selectedNode || selectedEdge) && (
-              <div className="flex justify-end p-2 pb-0">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Close"
-                  onClick={() => {
-                    setSelectedNodeId(null);
-                    setSelectedEdgeId(null);
-                  }}
-                >
-                  <X className="size-4" />
-                </Button>
-              </div>
-            )}
+          <div
+            className="glass-panel ghost-border fixed inset-x-4 z-20 flex flex-col overflow-y-auto rounded-2xl border"
+            style={{ top: compactDockTop, maxHeight: `calc(100vh - ${compactDockTop}px - ${COMPACT_DOCK_BOTTOM_RESERVE_PX}px)` }}
+          >
+            {/* Always rendered now -- it used to be gated on `hasSelection`,
+                which meant the workflow-summary case (the default state on
+                every compact page load) had no way to dismiss the sheet at
+                all short of the backdrop tap above, which the sheet itself
+                mostly covered on shorter phones. */}
+            <div className="flex justify-end p-2 pb-0">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Close"
+                onClick={() => {
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                  setMobileSummaryExpanded(false);
+                }}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
             <div className="pb-[env(safe-area-inset-bottom)]">{selectionDockContent}</div>
           </div>
         </>
+      )}
+      {showSelectionDock && workbench.isCompact && !hasSelection && !mobileSummaryExpanded && (
+        // Collapsed default state: a small tappable strip instead of the
+        // full workflow-summary sheet, so nothing covers the canvas until
+        // the user asks for it. Doubles as a live-glance status readout.
+        <button
+          type="button"
+          className="glass-panel ghost-border fixed inset-x-4 z-20 flex items-center justify-between rounded-2xl border px-4 py-3 text-left"
+          style={{ top: compactDockTop }}
+          onClick={() => setMobileSummaryExpanded(true)}
+          aria-label="Show workflow summary"
+        >
+          <span className="text-sm font-medium">
+            {nodes.length} node{nodes.length === 1 ? "" : "s"} · {edges.length} edge{edges.length === 1 ? "" : "s"}
+          </span>
+          <span className={cn("text-xs", validationLabel === "Ready" ? "text-emerald-400" : "text-amber-400")}>
+            {validationLabel}
+          </span>
+        </button>
       )}
     </div>
   );
