@@ -115,6 +115,10 @@ This addendum is the forward roadmap for the product after consolidation. It int
 - Do not prioritize autonomous graph generation before contracts, validation, versioning, and simulation.
 - Do not frame the product as a visual code replacement; preserve code escape hatches, typed SDKs, and testable runtime artifacts.
 
+## External trackers
+
+Linear (`Stockwise-productions-prototypes` team, no dedicated project for this repo) held exactly two issues referencing `agent-graph-builder`: [STO-586](https://linear.app/stockwise-productions-prototypes/issue/STO-586) and [STO-587](https://linear.app/stockwise-productions-prototypes/issue/STO-587), both from a 2026-09-12 UX critique against the now-deleted `apps/playground` POC (`agent-graph-builder-poc.vercel.app`). Reviewed 2026-09-22: every acceptance criterion in both issues checks out against current `apps/studio` — some satisfied directly (provider-override copy in `RunPanel.tsx`, the `ROUTER_MISSING_FALLBACK`/`BRANCH_MISSING_FALLBACK` compiler diagnostics, the `shell.canvasMinWidth`/`breakpoint.wide` tokens, the single-open `RunPanel` accordion), some moot because the mechanism they critiqued (drag/click palette, blank-template seed edge) was replaced outright by Phase 10's node launcher. Both closed as Done with cited evidence in Linear comments. This roadmap is the only other place this repo's backlog lives — check Linear before starting UX work in case something new lands there un-synced.
+
 ## Documentation Contradictions to Resolve
 
 | Doc / area | Current contradiction | Required update |
