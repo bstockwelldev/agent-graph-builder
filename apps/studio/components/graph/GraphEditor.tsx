@@ -9,7 +9,7 @@ import {
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, Focus, GitBranch, HelpCircle, Play, Plus, Tag, X } from "lucide-react";
 import {
@@ -193,6 +193,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
+  // Bug fix: EmptyGraphCoach used a fixed 12px top offset, so it rendered
+  // directly underneath/behind the floating top HUD (same absolute-position
+  // coordinate frame, no reserved flow space for either) instead of below
+  // it. The HUD's height is dynamic — it wraps to two rows once its button
+  // group no longer fits, and drops a whole row in compact/mobile mode — so
+  // a bigger fixed offset would either still collide at some widths or
+  // leave a needless gap at others. Measuring the HUD's real rendered
+  // bottom edge (its `offsetTop`, which is 0 unless the `top-4` Tailwind
+  // class above changes, plus `offsetHeight`) keeps the coach panel
+  // correctly clear of the HUD at every width without duplicating that
+  // class's value here.
+  const hudRef = useRef<HTMLDivElement | null>(null);
+  const [hudBottom, setHudBottom] = useState<number | null>(null);
   const [relayoutNonce, setRelayoutNonce] = useState(0);
   const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
@@ -261,6 +274,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setRunHistoryLoading(false);
     }
   }, [graphId]);
+
+  // Re-measures on mount and whenever the HUD's own size changes (button
+  // group wrapping, compact/mobile mode toggling a whole row on/off, window
+  // resize). `useLayoutEffect`, like Tooltip.tsx's own measure-then-position
+  // effect, so the coach panel never paints at the wrong offset first.
+  useLayoutEffect(() => {
+    const element = hudRef.current;
+    if (!element) return;
+    const measure = () => setHudBottom(element.offsetTop + element.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     void refreshRunHistory();
@@ -1046,7 +1074,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           space, rather than continuing to span the original full width. */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Floating top HUD */}
-      <div className="glass-panel ghost-border absolute left-4 right-4 top-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border p-3">
+      <div
+        ref={hudRef}
+        className="glass-panel ghost-border absolute left-4 right-4 top-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border p-3"
+      >
         <Button
           variant="ghost"
           size="sm"
@@ -1190,6 +1221,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             <EmptyGraphCoach
               visible={showEmptyCoach}
               step={authoringCoachStep}
+              hudBottom={hudBottom ?? undefined}
               onDismiss={() => {
                 dismissCoach(graphId);
                 setCoachDismissed(true);
