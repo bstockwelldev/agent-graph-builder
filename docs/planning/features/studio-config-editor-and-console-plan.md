@@ -75,21 +75,54 @@ unfulfilled today.
 
 ### Acceptance criteria
 
-- [ ] `NodeInspector` gains a "Raw" tab showing the selected node's
-      config as valid, formatted JSON.
-- [ ] Editing raw JSON and applying it validates through the same
-      schema the typed Configure tab uses — invalid input is rejected
-      with a diagnostic-style message, never silently applied.
-- [ ] Switching between Configure and Raw tabs never loses or corrupts
-      field data.
-- [ ] Edge config gets the same Raw tab treatment as node config.
-- [ ] A graph-level export produces JSON that re-imports into a new
-      graph without data loss (round-trip test).
-- [ ] No new backend config format introduced — JSON stays the
-      underlying contract; YAML (if offered) is a presentation-layer
-      transform only.
-- [ ] No heavy editor dependency added without first shipping and
-      evaluating the lightweight text-area version.
+**Status: implemented 2026-09-22 (Phase 1 and Phase 2 both shipped)**,
+with two notes below.
+
+- [x] `NodeInspector` gains a "Raw" tab showing the selected node's
+      config as valid, formatted JSON. New `components/graph/ui/JsonEditor.tsx`,
+      wired as the 5th `NODE_INSPECTOR_TABS` entry.
+- [~] Editing raw JSON and applying it validates through the same
+      schema the typed Configure tab uses. **Note:** there is no
+      per-node-type Zod schema in the SDK to validate against client-side
+      (`GraphNode.config` is untyped `Record<string, unknown>` by design —
+      the typed shape lives only in the backend's `node_configs.py`). The
+      Raw tab synchronously rejects invalid JSON syntax or a non-object
+      top level (`lib/jsonEditor.ts`'s `parseConfigJson`) — that much
+      "never silently applies." Deeper schema violations surface exactly
+      the way they already do for the typed Configure tab: async, via
+      `GraphEditor.tsx`'s existing debounced `client.validateGraph` call.
+      The Raw tab is exactly as strict as Configure, not more, not less.
+- [x] Switching between Configure and Raw tabs never loses or corrupts
+      field data. Committed `node.config` is the only source of truth;
+      `JsonEditor` re-derives its draft text from it on every mount.
+      (An in-progress, never-applied keystroke draft is lost on tab
+      switch — expected, same as any unsaved form.)
+- [x] Edge config gets the same Raw tab treatment as node config. New
+      "Raw" `CollapsibleSection` in `EdgeInspector`, deliberately scoped
+      to `kind`/`condition` only — `patchFlowEdgeData` only ever actually
+      applies those two fields from a patch today, so exposing
+      `source_port`/`target_port`/`transform` here would let an edit look
+      accepted while silently doing nothing.
+- [x] A graph-level export produces JSON that re-imports into a new
+      graph without data loss. New `lib/graphJsonPortability.ts`
+      (`exportGraphJson`/`importGraphJson`), reusing the SDK's real
+      `graphDefinitionSchema` for full structural validation on import —
+      stronger than the node/edge case, since this schema actually
+      exists. Round-trip-tested (`lib/graphJsonPortability.test.ts`).
+      Wired as "Export JSON" / "Import JSON" buttons in the graph HUD
+      toolbar (browser download / file picker); importing replaces
+      canvas state but leaves `savedFingerprint` untouched, so the graph
+      is correctly marked dirty until the user explicitly saves.
+- [x] No new backend config format introduced — JSON stays the
+      underlying contract. **YAML was not built** — the spec framed it as
+      optional ("if offered"), and a presentation-only YAML↔JSON
+      transform layer without a library wasn't judged worth it once the
+      JSON pretty-printed textarea already served the "code escape
+      hatch" need on its own.
+- [x] No heavy editor dependency added without first shipping and
+      evaluating the lightweight text-area version. `JsonEditor` is a
+      plain `<textarea>` (`components/graph/ui/fields.tsx`'s `TextArea`)
+      with monospace styling — no Monaco/CodeMirror.
 
 ---
 

@@ -31,6 +31,7 @@ import {
 
 import { client, streamRunEvents } from "@/lib/api-client";
 import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
+import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
   applyCompileIssueToEdge,
   applyCompileIssueToNodeData,
@@ -242,6 +243,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const closeStreamRef = useRef<(() => void) | null>(null);
   const lastInspectAttemptRef = useRef<string | null>(null);
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1).
   const [focusRequest, setFocusRequest] = useState<{ nodeId?: string | null; edgeId?: string | null; nonce: number } | null>(
     null,
@@ -713,6 +715,54 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setSaving(false);
     }
   }, [buildGraphDefinition, dirty]);
+
+  // Raw JSON/YAML config editor, Phase 2 - graph scope
+  // (studio-config-editor-and-console-plan.md §6): copy-paste/backup/
+  // scripting, not a live-editing surface. Client-side only - importing
+  // replaces canvas state but doesn't touch savedFingerprint, so the
+  // graph is correctly `dirty` until the user explicitly Saves, same as
+  // any other canvas edit.
+  const handleExportGraph = useCallback(() => {
+    try {
+      const graph = buildGraphDefinition();
+      const json = exportGraphJson(graph);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${graph.name || "graph"}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    }
+  }, [buildGraphDefinition]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const result = importGraphJson(text);
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      if (dirty && !window.confirm("Importing will replace the current unsaved graph. Continue?")) {
+        return;
+      }
+      recordMutation();
+      const graph = result.graph;
+      syncIdCounter(graph);
+      setGraphName(graph.name);
+      setGraphOrientation(graph.orientation ?? "auto");
+      setNodes(graph.nodes.map(toFlowNode));
+      setEdges(graph.edges.map(toFlowEdge));
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+      setDiagnostics([]);
+      setSaveError(null);
+    },
+    [dirty, recordMutation, setEdges, setNodes],
+  );
 
   const paintInspectionPath = useCallback(
     (traces: Record<string, NodeTrace>, routeDecisions: RouteDecision[]) => {
@@ -1194,6 +1244,23 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         >
           Validation: {validationLabel}
         </Badge>
+        <Button variant="ghost" size="sm" onClick={handleExportGraph}>
+          Export JSON
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+          Import JSON
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void handleImportFile(file);
+          }}
+        />
         {/* Orientation/Add node/Run/Help hidden on compact widths — the
             latter three duplicate the bottom mobile action bar below, and
             hiding them here is what stops the HUD from wrapping to 3-4 rows
