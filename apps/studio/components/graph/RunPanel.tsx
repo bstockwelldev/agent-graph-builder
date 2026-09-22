@@ -2,6 +2,7 @@ import type { CSSProperties, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { client } from "@/lib/api-client";
+import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
 import {
@@ -418,13 +419,19 @@ export function RunPanel({
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error("Failed to load provider credentials:", err);
+        logConsoleEntry({
+          severity: "error",
+          source: "Provider",
+          message: `Failed to load provider credentials: ${err instanceof Error ? err.message : String(err)}`,
+          graphId: graphId ?? undefined,
+        });
         setApiKeyConfigured(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [provider, showApiKeyField]);
+  }, [provider, showApiKeyField, graphId]);
 
   useEffect(() => {
     if (!showModelSelect) {
@@ -453,6 +460,12 @@ export function RunPanel({
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error("Failed to load provider models:", err);
+        logConsoleEntry({
+          severity: "error",
+          source: "Provider",
+          message: `Failed to load provider models: ${err instanceof Error ? err.message : String(err)}`,
+          graphId: graphId ?? undefined,
+        });
         setModelOptions([]);
         setSelectedModel("");
         setModelCatalogMessage("Could not load model catalog.");

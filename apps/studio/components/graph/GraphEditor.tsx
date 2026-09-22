@@ -30,6 +30,7 @@ import {
 } from "@bstockwelldev/agent-graph-sdk";
 
 import { client, streamRunEvents } from "@/lib/api-client";
+import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
 import {
   applyCompileIssueToEdge,
   applyCompileIssueToNodeData,
@@ -293,6 +294,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // clicking a bar focuses the node and opens its trace on the Run tab.
   const handleWaterfallFocusNode = useCallback((nodeId: string) => focusNode(nodeId, "run"), [focusNode]);
 
+  // Console panel deep links (lib/consoleLog.ts's canvas focus bridge):
+  // clicking a console entry tied to a node navigates here (if this graph
+  // wasn't already open) and requests a focus; this picks the request up
+  // once the graph's nodes are actually loaded, since fitView needs the
+  // node to exist first. Re-running on every nodes-length change is
+  // harmless — consumeCanvasFocus is single-shot and returns null after
+  // the first successful consume.
+  useEffect(() => {
+    if (!graphId || nodes.length === 0) return;
+    const nodeId = consumeCanvasFocus(graphId);
+    if (nodeId && nodes.some((n) => n.id === nodeId)) focusNode(nodeId);
+  }, [graphId, nodes, focusNode]);
+
   const refreshRunHistory = useCallback(async () => {
     setRunHistoryLoading(true);
     try {
@@ -459,6 +473,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           .catch((err: unknown) => {
             if (err instanceof DOMException && err.name === "AbortError") return;
             console.error("Live validation failed:", err);
+            logConsoleEntry({
+              severity: "error",
+              source: "Validation",
+              message: `Live validation failed: ${err instanceof Error ? err.message : String(err)}`,
+              graphId: graphId ?? undefined,
+            });
           });
       } catch {
         // Graph not ready yet.
@@ -468,7 +488,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [semanticFingerprint, buildGraphDefinition]);
+  }, [semanticFingerprint, buildGraphDefinition, graphId]);
 
   // P2, "Cross-cutting policy overlays" — waiving a diagnostic from
   // RunPanel doesn't change the graph, so the debounced effect above (keyed
@@ -483,11 +503,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       return client
         .validateGraph(graph)
         .then((result) => setDiagnostics(result.diagnostics))
-        .catch((err: unknown) => console.error("Diagnostics refresh failed:", err));
+        .catch((err: unknown) => {
+          console.error("Diagnostics refresh failed:", err);
+          logConsoleEntry({
+            severity: "error",
+            source: "Validation",
+            message: `Diagnostics refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+            graphId: graphId ?? undefined,
+          });
+        });
     } catch {
       // Graph not ready yet.
     }
-  }, [buildGraphDefinition]);
+  }, [buildGraphDefinition, graphId]);
 
   const applyDiagnosticsToCanvas = useCallback(
     (nextDiagnostics: Diagnostic[]) => {
@@ -784,6 +812,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           return;
         }
         console.error("Failed to load run inspection:", err);
+        logConsoleEntry({
+          severity: "error",
+          source: "Run",
+          message: `Failed to load run inspection: ${err instanceof Error ? err.message : String(err)}`,
+          graphId: graphId ?? undefined,
+          runId,
+        });
       }
     },
     [applyRunInspection, graphId],
@@ -869,6 +904,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
             } else {
               console.error("Failed to load run traces:", err);
+              logConsoleEntry({
+                severity: "error",
+                source: "Run",
+                message: `Failed to load run traces: ${err instanceof Error ? err.message : String(err)}`,
+                graphId: graphId ?? undefined,
+                runId: latest.run_id,
+              });
             }
           }
           await refreshRunHistory();
@@ -888,6 +930,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           getRun: client.getRun,
           onEvent: (event) => {
             setEvents((evts) => [...evts, event]);
+            // Mirror (not duplicate) into the app-wide console's Run events
+            // tab — RunPanel's own "Event log" section still reads from
+            // `events` above; this is a second, independent subscriber.
+            const described = describePlatformEvent(event);
+            logConsoleEntry({
+              severity: described.severity,
+              source: "Run",
+              message: described.message,
+              graphId: graphId ?? undefined,
+              nodeId: event.node_id ?? undefined,
+              runId: event.run_id,
+            });
 
             if (event.event_type === "edge.selected" && event.node_id) {
               const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
@@ -959,7 +1013,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [buildGraphDefinition, focusDiagnostics, nodes, refreshRunHistory, setNodes],
+    [buildGraphDefinition, focusDiagnostics, graphId, nodes, refreshRunHistory, setNodes],
   );
 
   const handleRun = useCallback(

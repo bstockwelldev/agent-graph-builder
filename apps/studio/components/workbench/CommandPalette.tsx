@@ -14,6 +14,7 @@ import {
 import { studioNavGroups } from "@/components/studio/studio-nav";
 import { client } from "@/lib/api-client";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
+import { useConsoleUnreadCounts } from "@/lib/consoleLog";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels";
 
@@ -25,6 +26,10 @@ export function CommandPalette() {
   const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
   const router = useRouter();
   const workbench = useWorkbench();
+  // Studio-config-editor-and-console-plan.md §7's "HUD toggle shows a
+  // count/severity badge" — this repo's global panels have no persistent
+  // icon-button row, so the badge lives on the Console command instead.
+  const { errors: unreadErrors, warnings: unreadWarnings } = useConsoleUnreadCounts();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -92,11 +97,20 @@ export function CommandPalette() {
           </CommandGroup>
         ))}
         <CommandGroup heading="Workbench">
-          {globalPanels.map(([id, meta]) => (
-            <CommandItem key={id} value={meta.title} onSelect={() => openPanel(id)}>
-              {meta.title}
-            </CommandItem>
-          ))}
+          {globalPanels.map(([id, meta]) => {
+            const unreadSuffix =
+              id === "console" && (unreadErrors > 0 || unreadWarnings > 0)
+                ? ` — ${[unreadErrors > 0 ? `${unreadErrors} error${unreadErrors === 1 ? "" : "s"}` : null, unreadWarnings > 0 ? `${unreadWarnings} warning${unreadWarnings === 1 ? "" : "s"}` : null]
+                    .filter(Boolean)
+                    .join(", ")}`
+                : "";
+            return (
+              <CommandItem key={id} value={meta.title} onSelect={() => openPanel(id)}>
+                {meta.title}
+                {unreadSuffix}
+              </CommandItem>
+            );
+          })}
         </CommandGroup>
         {recentSessions.length > 0 && (
           <CommandGroup heading="Recent sessions">
