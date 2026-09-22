@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ChatSession } from "@bstockwelldev/agent-graph-sdk";
+import type { ChatContext, ChatSession } from "@bstockwelldev/agent-graph-sdk";
 import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,13 @@ export function ChatPanel() {
 
   const [newProvider, setNewProvider] = useState<ChatProvider>("stub");
   const [newModel, setNewModel] = useState("stub");
+
+  // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596).
+  // On by default; the user can opt out per-panel-session via the strip
+  // below. Hidden entirely when no graph is open (workbench.graphContext
+  // is null, e.g. on /agents).
+  const [includeContext, setIncludeContext] = useState(true);
+  const graphContext = workbench.graphContext;
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +107,17 @@ export function ChatPanel() {
     setSending(true);
     setError(null);
     try {
-      const updated = await client.sendChatMessage(activeSession.id, content);
+      const context: ChatContext | undefined =
+        includeContext && graphContext
+          ? {
+              graph: graphContext.getGraph(),
+              graph_id: graphContext.graphId,
+              selected_node_id: graphContext.selectedNodeId,
+              selected_edge_id: graphContext.selectedEdgeId,
+              run_id: graphContext.runId,
+            }
+          : undefined;
+      const updated = await client.sendChatMessage(activeSession.id, content, context);
       setActiveSession(updated);
       setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (err) {
@@ -151,6 +168,25 @@ export function ChatPanel() {
         </div>
       ) : (
         <>
+          {graphContext && (
+            <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+              <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                Context: {graphContext.graphName || graphContext.graphId}
+                {graphContext.selectedNodeId ? ` · Selected: ${graphContext.selectedNodeId}` : ""}
+                {graphContext.runId ? ` · Run: ${graphContext.runId}` : ""}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant={includeContext ? "secondary" : "ghost"}
+                className="h-6 shrink-0 px-2 text-xs"
+                onClick={() => setIncludeContext((v) => !v)}
+                aria-pressed={includeContext}
+              >
+                {includeContext ? "Context on" : "Context off"}
+              </Button>
+            </div>
+          )}
           <Conversation autoScrollKey={activeSession.messages.length}>
             <ConversationContent>
               {activeSession.messages.length === 0 ? (

@@ -1,9 +1,27 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
 import { useShellLayout } from "@/hooks/useShellLayout";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
 import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels";
+
+/**
+ * Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596).
+ * Published by GraphEditor whenever a graph is open, so global panels
+ * (ChatPanel renders outside the GraphEditor tree) can read the current
+ * canvas/selection/run without prop-drilling. `getGraph` is a function
+ * rather than a snapshot so the graph is only serialized when a message is
+ * actually sent -- the canvas may be dirty (unsaved) between renders.
+ */
+export type StudioGraphContext = {
+  graphId: string;
+  graphName: string;
+  getGraph: () => GraphDefinition;
+  selectedNodeId: string | null;
+  selectedEdgeId: string | null;
+  runId: string | null;
+};
 
 // Studio-consolidation Phase 8 — promotes the drawer mechanism (ShellDrawer/
 // useShellLayout, ported in Phase 7 but scoped entirely inside GraphEditor)
@@ -22,6 +40,10 @@ type WorkbenchContextValue = {
   isCompact: boolean;
   reducedMotion: boolean;
   drawerPanelWidth: string;
+  /** Current graph/selection/run context, published by GraphEditor. `null`
+   * when no graph is open (e.g. on /agents). See StudioGraphContext. */
+  graphContext: StudioGraphContext | null;
+  setGraphContext: (context: StudioGraphContext | null) => void;
 };
 
 const WorkbenchContext = createContext<WorkbenchContextValue | null>(null);
@@ -29,6 +51,7 @@ const WorkbenchContext = createContext<WorkbenchContextValue | null>(null);
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const [activePanel, setActivePanel] = useState<WorkbenchPanelId | null>(null);
   const [panelContext, setPanelContext] = useState<unknown>(null);
+  const [graphContext, setGraphContext] = useState<StudioGraphContext | null>(null);
   const shellLayout = useShellLayout();
 
   const open = useCallback((panel: WorkbenchPanelId, context?: unknown) => {
@@ -69,6 +92,8 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       isCompact: shellLayout.isCompact,
       reducedMotion: shellLayout.reducedMotion,
       drawerPanelWidth: shellLayout.drawerPanelWidth,
+      graphContext,
+      setGraphContext,
     }),
     [
       activePanel,
@@ -79,6 +104,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       shellLayout.isCompact,
       shellLayout.reducedMotion,
       shellLayout.drawerPanelWidth,
+      graphContext,
     ],
   );
 

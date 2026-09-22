@@ -16,6 +16,7 @@ from starlette.requests import Request
 from . import runtime, storage
 from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
+from .chat_context import ChatContext, build_chat_system_prompt
 from .datasets import DatasetBuildError, build_dataset_from_runs
 from .demo_graph import build_demo_graph
 from .env_config import (
@@ -634,6 +635,10 @@ for _kind in VERSIONABLE_RESOURCE_KINDS:
 
 class ChatSessionMessageRequest(BaseModel):
     content: str
+    # Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
+    # optional, so an old client (or a request with nothing selected) still
+    # gets exactly the pre-existing behavior.
+    context: ChatContext | None = None
 
 
 @app.post(
@@ -655,8 +660,9 @@ async def send_chat_session_message_route(
     history = [{"role": m.role, "content": m.content} for m in session.messages]
     session.messages.append(ChatMessage(role="user", content=body.content))
 
+    system_prompt = build_chat_system_prompt(body.context) if body.context is not None else None
     chat_model = get_chat_model(model=session.model, provider=session.provider)
-    reply = await chat_model.generate(system_prompt=None, user_prompt=body.content, history=history)
+    reply = await chat_model.generate(system_prompt=system_prompt, user_prompt=body.content, history=history)
     session.messages.append(ChatMessage(role="assistant", content=reply))
     session.updated_at = datetime.now(UTC)
 
