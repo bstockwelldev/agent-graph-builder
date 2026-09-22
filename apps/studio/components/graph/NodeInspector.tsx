@@ -91,6 +91,7 @@ export function NodeInspector({
   onOpenRunPanel,
   onPolicyExceptionCreated,
   fullWidth = false,
+  focusTab = null,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -109,10 +110,22 @@ export function NodeInspector({
    * so the caller can re-validate and pick up the diagnostic change. */
   onPolicyExceptionCreated?: () => void;
   fullWidth?: boolean;
+  /** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
+   * force-open a specific tab (e.g. "io" for a contract diagnostic). Guarded
+   * by `nodeId` so a stale request from a previously-selected node can never
+   * apply to this one — this component remounts on node change (`key=
+   * {node.id}` at the call site), but `focusTab` itself doesn't change
+   * identity just because the mount did. */
+  focusTab?: { tab: string; nonce: number; nodeId: string } | null;
 }) {
   const [activeTab, setActiveTab] = useState("configure");
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
   const accent = nodeTypeAccents[node.type]?.accent ?? color.primary[600];
+
+  useEffect(() => {
+    if (focusTab && focusTab.nodeId === node.id) setActiveTab(focusTab.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on nonce/nodeId change only, not on every node.id re-render
+  }, [focusTab?.nonce, focusTab?.nodeId, node.id]);
 
   return (
     <div style={panelStyle(fullWidth)}>

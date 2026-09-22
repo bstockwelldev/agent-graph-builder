@@ -66,6 +66,22 @@ export function hasBlockingErrors(diagnostics: Diagnostic[]): boolean {
   return diagnostics.some((d) => d.blocking);
 }
 
+/** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1): route a
+ * clicked diagnostic to the NodeInspector tab that owns its category.
+ * "structure"/"capability" (and legacy diagnostics with no category at all)
+ * fall back to Configure — they're graph-level or unsupported-feature
+ * issues without a specific I/O or policy home. */
+export function tabForDiagnostic(diagnostic: Diagnostic): string {
+  switch (diagnostic.category) {
+    case "contract":
+      return "io";
+    case "policy":
+      return "policy";
+    default:
+      return "configure";
+  }
+}
+
 export function validationSummary(diagnostics: Diagnostic[]): { errors: number; warnings: number; label: string } {
   const errors = diagnostics.filter((d) => d.severity === "error").length;
   const warnings = diagnostics.filter((d) => d.severity === "warning").length;

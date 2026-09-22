@@ -38,6 +38,7 @@ import {
   diagnosticsForNode,
   edgeStrokeForKind,
   fingerprintIssueMaps,
+  tabForDiagnostic,
   validationSummary,
 } from "@/lib/diagnostics";
 import {
@@ -240,6 +241,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const closeStreamRef = useRef<(() => void) | null>(null);
   const lastInspectAttemptRef = useRef<string | null>(null);
   const diagnosticsSectionRef = useRef<HTMLDivElement>(null);
+  // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1).
+  const [focusRequest, setFocusRequest] = useState<{ nodeId?: string | null; edgeId?: string | null; nonce: number } | null>(
+    null,
+  );
+  const [inspectorTabRequest, setInspectorTabRequest] = useState<{ tab: string; nonce: number; nodeId: string } | null>(
+    null,
+  );
   const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
   const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
 
@@ -253,15 +261,23 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     diagnosticsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
+  // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
+  // clicking a diagnostic already selected the node/edge; it now also pans/
+  // zooms the canvas onto it and, for node diagnostics, opens the
+  // NodeInspector tab that owns the offending field.
   const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
+    const nonce = Date.now();
     if (diagnostic.edge_id) {
       setSelectedEdgeId(diagnostic.edge_id);
       setSelectedNodeId(null);
+      setFocusRequest({ edgeId: diagnostic.edge_id, nonce });
       return;
     }
     if (diagnostic.node_id) {
       setSelectedNodeId(diagnostic.node_id);
       setSelectedEdgeId(null);
+      setFocusRequest({ nodeId: diagnostic.node_id, nonce });
+      setInspectorTabRequest({ tab: tabForDiagnostic(diagnostic), nonce, nodeId: diagnostic.node_id });
     }
   }, []);
 
@@ -1012,6 +1028,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDuplicate={() => duplicateNode(selectedNode.id)}
       onOpenRunPanel={() => workbench.open("run")}
       onPolicyExceptionCreated={refreshDiagnostics}
+      focusTab={inspectorTabRequest}
     />
   ) : selectedEdge ? (
     <EdgeInspector
@@ -1209,6 +1226,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           reducedMotion={false}
           graphOrientation={graphOrientation}
           relayoutNonce={relayoutNonce}
+          focusRequest={focusRequest}
           liveAnnouncement=""
           onLiveAnnouncement={() => {}}
           onClearLiveAnnouncement={() => {}}

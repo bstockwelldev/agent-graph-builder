@@ -38,6 +38,11 @@ import { CanvasEdgeLegend } from "./CanvasEdgeLegend";
 
 const FIT_VIEW_PADDING = 0.18;
 const FIT_VIEW_DEBOUNCE_MS = 150;
+/** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1): a
+ * focus request fits a single node/edge closer and more zoomed-in than the
+ * whole-graph FIT_VIEW_PADDING above, so the target is unambiguous. */
+const FOCUS_FIT_PADDING = 0.6;
+const FOCUS_FIT_MAX_ZOOM = 1.2;
 
 type FlowCanvasProps = {
   graphId: string | null;
@@ -74,6 +79,12 @@ type FlowCanvasProps = {
   liveAnnouncement: string;
   onLiveAnnouncement: (message: string) => void;
   onClearLiveAnnouncement: () => void;
+  /** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
+   * bump `nonce` to pan/zoom the canvas onto a node or edge (e.g. from a
+   * diagnostic click), independent of the normal fit-view-on-load/relayout
+   * behavior above. `nodeId`/`edgeId` are looked up in the current
+   * nodes/edges at the moment `nonce` changes. */
+  focusRequest?: { nodeId?: string | null; edgeId?: string | null; nonce: number } | null;
 };
 
 function FlowCanvasInner({
@@ -106,6 +117,7 @@ function FlowCanvasInner({
   liveAnnouncement,
   onLiveAnnouncement,
   onClearLiveAnnouncement,
+  focusRequest = null,
 }: FlowCanvasProps) {
   const reactFlow = useReactFlow();
   const paneRef = useRef<HTMLDivElement>(null);
@@ -154,6 +166,32 @@ function FlowCanvasInner({
       clearLiveAnnouncement();
     }
   }, [orientationAnnouncement, clearLiveAnnouncement, onLiveAnnouncement]);
+
+  // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1): pan/
+  // zoom onto the diagnostic's node, or both endpoints of its edge, every
+  // time `nonce` changes — including a repeat click on the same object,
+  // which is why this keys off `nonce` rather than nodeId/edgeId identity.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const targetIds = new Set<string>();
+    if (focusRequest.nodeId) targetIds.add(focusRequest.nodeId);
+    if (focusRequest.edgeId) {
+      const edge = edgesRef.current.find((candidate) => candidate.id === focusRequest.edgeId);
+      if (edge) {
+        targetIds.add(edge.source);
+        targetIds.add(edge.target);
+      }
+    }
+    const targetNodes = nodesRef.current.filter((candidate) => targetIds.has(candidate.id));
+    if (targetNodes.length === 0) return;
+    void reactFlow.fitView({
+      nodes: targetNodes,
+      padding: FOCUS_FIT_PADDING,
+      maxZoom: FOCUS_FIT_MAX_ZOOM,
+      duration: reducedMotion ? 0 : shell.motion.drawerMs,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per nonce; nodesRef/edgesRef read the latest state without retriggering on every node/edge identity change
+  }, [focusRequest?.nonce]);
 
   const prevRankDirRef = useRef(effectiveRankDir);
   const prevGraphIdRef = useRef<string | null>(null);
