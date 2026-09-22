@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Focus, GitBranch, HelpCircle, Play, Plus, Tag } from "lucide-react";
+import { BookOpen, Focus, GitBranch, HelpCircle, Play, Plus, Tag, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -1402,9 +1402,39 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         </div>
       )}
       {showSelectionDock && workbench.isCompact && (
-        <div className="glass-panel ghost-border fixed right-4 top-24 z-20 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border">
-          {selectionDockContent}
-        </div>
+        <>
+          {/* Full-viewport backdrop -- without this the dock behind it (the
+              graph canvas, the graph switcher's own drawer) stayed visible
+              and tappable around the dock's edges, which read as a broken
+              overlay rather than a deliberate one. Tapping it deselects,
+              matching onPaneClick's canvas-tap-to-deselect behavior. */}
+          <div
+            className="fixed inset-0 z-20 bg-black/45"
+            onClick={() => {
+              setPendingConnection(null);
+              setSelectedNodeId(null);
+              setSelectedEdgeId(null);
+            }}
+          />
+          <div className="glass-panel ghost-border fixed inset-x-4 top-24 z-20 flex max-h-[75vh] flex-col overflow-y-auto rounded-2xl border">
+            {(selectedNode || selectedEdge) && (
+              <div className="flex justify-end p-2 pb-0">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Close"
+                  onClick={() => {
+                    setSelectedNodeId(null);
+                    setSelectedEdgeId(null);
+                  }}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+            )}
+            <div className="pb-[env(safe-area-inset-bottom)]">{selectionDockContent}</div>
+          </div>
+        </>
       )}
     </div>
   );
