@@ -158,20 +158,46 @@ no parallel-vs-sequential view.
 
 ### Acceptance criteria
 
-- [ ] Opening a historical run's detail view shows a waterfall with one
-      bar per executed node.
-- [ ] Bar position/width accurately reflects each node's start offset
-      and duration relative to run start.
-- [ ] Parallel execution is visually distinguishable from sequential
-      execution.
+**Status: implemented 2026-09-22.** No backend work was needed —
+`NodeTrace.started_at`/`completed_at`/`status` and
+`RunSummary.started_at`/`completed_at` already carried everything
+required; this shipped as a pure frontend rendering layer over data
+RunPanel's existing "Node trace" section already consumed.
+
+- [x] Opening a historical run's detail view shows a waterfall with one
+      bar per executed node. New "Waterfall" `CollapsibleSection` in
+      `RunPanel.tsx`, between "Run status" and "Node trace."
+- [x] Bar position/width accurately reflects each node's start offset
+      and duration relative to run start. `lib/runWaterfall.ts`'s
+      `computeWaterfallRows` (unit-tested, `lib/runWaterfall.test.ts`,
+      6 cases) computes offsets/durations in ms; `RunWaterfall.tsx`
+      scales them to bar `left%`/`width%`.
+- [x] Parallel execution is visually distinguishable from sequential
+      execution. One row (lane) per node, positioned by real timestamp —
+      overlapping time ranges render as visually overlapping bars across
+      rows with no lane-packing algorithm needed.
 - [ ] Retries appear as distinguishable sub-segments, not separate
-      top-level rows.
-- [ ] Errored nodes are visually distinct from succeeded/skipped nodes.
-- [ ] Clicking a bar focuses and selects the corresponding canvas node.
-- [ ] Selecting a canvas node while the waterfall is open scrolls to
-      and highlights its bar.
-- [ ] No MUI dependency introduced; the component lives under
+      top-level rows. **Not built — no retry mechanism exists anywhere in
+      the runtime** (`grep` across `nodes.py`/`runtime.py`/
+      `node_configs.py` returns nothing, confirmed during the P0 review
+      that preceded this item). Nothing to render; revisit if/when
+      per-node retries are ever implemented.
+- [x] Errored nodes are visually distinct from succeeded/skipped nodes.
+      Bar color keys off `NodeTrace.status` via the existing
+      `lib/graph-theme.ts` `status` token map (`succeeded`/`failed`/
+      `running`/`paused`), the same colors already used for node-card
+      status elsewhere.
+- [x] Clicking a bar focuses and selects the corresponding canvas node.
+      `GraphEditor.tsx`'s new shared `focusNode()` helper (also used by
+      diagnostics clicks) — a waterfall click additionally force-opens
+      the NodeInspector's Run tab, so the click both focuses the canvas
+      and shows that node's trace.
+- [x] Selecting a canvas node while the waterfall is open scrolls to
+      and highlights its bar. `RunWaterfall.tsx` scrolls the matching
+      row into view and outlines it when `selectedNodeId` changes.
+- [x] No MUI dependency introduced; the component lives under
       `components/graph/*` and uses `graph-theme.ts` tokens.
+      `components/graph/RunWaterfall.tsx` — confirmed no MUI import.
 
 ---
 

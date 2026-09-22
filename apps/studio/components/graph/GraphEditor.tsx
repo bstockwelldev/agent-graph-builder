@@ -265,21 +265,33 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // clicking a diagnostic already selected the node/edge; it now also pans/
   // zooms the canvas onto it and, for node diagnostics, opens the
   // NodeInspector tab that owns the offending field.
-  const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
+  // Shared by diagnostic clicks and the run waterfall (below) — selects a
+  // node, pans/zooms the canvas onto it, and optionally forces a specific
+  // NodeInspector tab.
+  const focusNode = useCallback((nodeId: string, tab?: string) => {
     const nonce = Date.now();
-    if (diagnostic.edge_id) {
-      setSelectedEdgeId(diagnostic.edge_id);
-      setSelectedNodeId(null);
-      setFocusRequest({ edgeId: diagnostic.edge_id, nonce });
-      return;
-    }
-    if (diagnostic.node_id) {
-      setSelectedNodeId(diagnostic.node_id);
-      setSelectedEdgeId(null);
-      setFocusRequest({ nodeId: diagnostic.node_id, nonce });
-      setInspectorTabRequest({ tab: tabForDiagnostic(diagnostic), nonce, nodeId: diagnostic.node_id });
-    }
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+    setFocusRequest({ nodeId, nonce });
+    if (tab) setInspectorTabRequest({ tab, nonce, nodeId });
   }, []);
+
+  const handleDiagnosticClick = useCallback(
+    (diagnostic: Diagnostic) => {
+      if (diagnostic.edge_id) {
+        setSelectedEdgeId(diagnostic.edge_id);
+        setSelectedNodeId(null);
+        setFocusRequest({ edgeId: diagnostic.edge_id, nonce: Date.now() });
+        return;
+      }
+      if (diagnostic.node_id) focusNode(diagnostic.node_id, tabForDiagnostic(diagnostic));
+    },
+    [focusNode],
+  );
+
+  // Historical run waterfall (studio-ux-gap-remediation-plan.md §2):
+  // clicking a bar focuses the node and opens its trace on the Run tab.
+  const handleWaterfallFocusNode = useCallback((nodeId: string) => focusNode(nodeId, "run"), [focusNode]);
 
   const refreshRunHistory = useCallback(async () => {
     setRunHistoryLoading(true);
@@ -1430,6 +1442,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           events={events}
           selectedTrace={selectedTrace}
           selectedNodeId={selectedNodeId}
+          nodeTraces={nodeTraces}
+          onFocusNode={handleWaterfallFocusNode}
           inspectLoadError={inspectLoadError}
           onRetryInspect={() => {
             const runId = lastInspectAttemptRef.current ?? inspectionRunId;
