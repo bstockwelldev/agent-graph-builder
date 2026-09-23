@@ -137,6 +137,9 @@ export const diagnosticSchema = z.object({
   port_id: z.string().nullish(),
   target: z.enum(["langgraph"]).nullish(),
   remediation: z.string().nullish(),
+  // Configurable policies (STO-608): a policy diagnostic that will block
+  // publishing unless waived -- including a non-blocking `block_publish` warning.
+  blocks_publish: z.boolean().nullish(),
 });
 
 export const compileResultSchema = z.object({
@@ -619,6 +622,54 @@ export const createPolicyExceptionRequestSchema = z.object({
   node_id: z.string().nullish(),
   reason: z.string().nullish(),
   expires_at: z.string(),
+});
+
+/**
+ * Configurable policies (STO-608, backend/app/policies.py): the rule
+ * catalog, a scope's settings (workspace defaults or one graph's
+ * overrides), and each rule's effective value after default → workspace →
+ * graph resolution.
+ */
+export const policyEnforcementSchema = z.enum(["off", "warn", "block_publish", "block"]);
+export const policyParamValueSchema = z.union([z.number(), z.string(), z.boolean()]);
+const policySourceSchema = z.enum(["default", "workspace", "graph"]);
+
+export const policyParamSpecSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  type: z.enum(["integer", "choice"]),
+  default: policyParamValueSchema,
+  description: z.string().nullish(),
+  minimum: z.number().nullish(),
+  choices: z.array(z.string()).nullish(),
+});
+
+export const policyRuleInfoSchema = z.object({
+  code: z.string(),
+  category: z.enum(["security", "reliability", "cost", "governance"]),
+  title: z.string(),
+  description: z.string(),
+  gate: z.enum(["compile", "publish"]),
+  default_enforcement: policyEnforcementSchema,
+  params: z.array(policyParamSpecSchema),
+});
+
+export const policyRuleSettingSchema = z.object({
+  enforcement: policyEnforcementSchema.nullish(),
+  params: z.record(z.string(), policyParamValueSchema),
+});
+
+export const policySettingsSchema = z.object({
+  rules: z.record(z.string(), policyRuleSettingSchema),
+  updated_at: z.string().nullish(),
+});
+
+export const effectivePolicyRuleSchema = z.object({
+  rule: policyRuleInfoSchema,
+  enforcement: policyEnforcementSchema,
+  enforcement_source: policySourceSchema,
+  params: z.record(z.string(), policyParamValueSchema),
+  param_sources: z.record(z.string(), policySourceSchema),
 });
 
 /**

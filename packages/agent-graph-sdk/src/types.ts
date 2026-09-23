@@ -42,7 +42,14 @@ import type {
   nodeTraceSchema,
   nodeTypeSchema,
   platformEventSchema,
+  effectivePolicyRuleSchema,
+  policyEnforcementSchema,
   policyExceptionSchema,
+  policyParamSpecSchema,
+  policyParamValueSchema,
+  policyRuleInfoSchema,
+  policyRuleSettingSchema,
+  policySettingsSchema,
   portContractSchema,
   portKindSchema,
   promptTemplateSchema,
@@ -192,6 +199,14 @@ export type NodeExecution = z.infer<typeof nodeExecutionSchema>;
 
 // P2, "Cross-cutting policy overlays" (backend/app/policies.py).
 export type PolicyException = z.infer<typeof policyExceptionSchema>;
+// Configurable policies (STO-608).
+export type PolicyEnforcement = z.infer<typeof policyEnforcementSchema>;
+export type PolicyParamValue = z.infer<typeof policyParamValueSchema>;
+export type PolicyParamSpec = z.infer<typeof policyParamSpecSchema>;
+export type PolicyRuleInfo = z.infer<typeof policyRuleInfoSchema>;
+export type PolicyRuleSetting = z.infer<typeof policyRuleSettingSchema>;
+export type PolicySettings = z.infer<typeof policySettingsSchema>;
+export type EffectivePolicyRule = z.infer<typeof effectivePolicyRuleSchema>;
 
 // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py).
 export type KnowledgeLineageEntry = z.infer<typeof knowledgeLineageEntrySchema>;

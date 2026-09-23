@@ -165,6 +165,15 @@ _SCHEMA_STATEMENTS = (
     create index if not exists idx_policy_exception_graph
     on policy_exception (graph_id, policy_code)
     """,
+    # Configurable policies (STO-608): one JSON settings document per scope
+    # -- "workspace", or "graph:<graph_id>" for a graph's overrides.
+    """
+    create table if not exists policy_settings (
+        scope text primary key,
+        payload text not null,
+        updated_at text not null
+    )
+    """,
     # P2, "Retrieval/document lineage graph": one row per knowledge chunk
     # actually retrieved and used during a run. See knowledge.py.
     """
@@ -1010,6 +1019,57 @@ def list_policy_exceptions(graph_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def list_all_policy_exceptions() -> list[dict[str, Any]]:
+    """Every graph's exceptions, oldest first -- the workspace Policies page."""
+    remote = _json_object_backend()
+    if remote is not None:
+        items: list[dict[str, Any]] = []
+        for key in remote.list_keys(_POLICY_EXCEPTION_PREFIX):
+            payload = remote.get_json(key)
+            if payload is not None:
+                items.append(payload)
+        items.sort(key=lambda item: item.get("created_at", ""))
+        return items
+    with _connect() as conn:
+        rows = conn.execute(
+            "select id, graph_id, policy_code, node_id, reason, created_at, expires_at "
+            "from policy_exception order by created_at"
+        ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "graph_id": row[1],
+            "policy_code": row[2],
+            "node_id": row[3],
+            "reason": row[4],
+            "created_at": row[5],
+            "expires_at": row[6],
+        }
+        for row in rows
+    ]
+
+
+def get_policy_exception(graph_id: str, exception_id: str) -> dict[str, Any] | None:
+    for item in list_policy_exceptions(graph_id):
+        if item.get("id") == exception_id:
+            return item
+    return None
+
+
+def update_policy_exception(graph_id: str, exception_id: str, payload: dict[str, Any]) -> None:
+    """Overwrites an existing exception's expiry/reason (the caller has
+    already checked it exists)."""
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_policy_exception_key(graph_id, exception_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "update policy_exception set reason = ?, expires_at = ? where id = ? and graph_id = ?",
+            (payload.get("reason"), payload["expires_at"], exception_id, graph_id),
+        )
+
+
 def delete_policy_exception(graph_id: str, exception_id: str) -> bool:
     remote = _json_object_backend()
     if remote is not None:
@@ -1025,6 +1085,38 @@ def delete_policy_exception(graph_id: str, exception_id: str) -> bool:
             "delete from policy_exception where id = ? and graph_id = ?", (exception_id, graph_id)
         )
     return True
+
+
+_POLICY_SETTINGS_PREFIX = "policy_settings/"
+
+
+def _policy_settings_key(scope: str) -> str:
+    return f"{_POLICY_SETTINGS_PREFIX}{scope.replace(':', '/')}.json"
+
+
+def get_policy_settings(scope: str) -> dict[str, Any] | None:
+    """`scope` is "workspace" or "graph:<graph_id>"."""
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.get_json(_policy_settings_key(scope))
+    with _connect() as conn:
+        row = conn.execute(
+            "select payload from policy_settings where scope = ?", (scope,)
+        ).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def save_policy_settings(scope: str, payload: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_policy_settings_key(scope), payload)
+        return
+    with _connect() as conn:
+        conn.execute("delete from policy_settings where scope = ?", (scope,))
+        conn.execute(
+            "insert into policy_settings (scope, payload, updated_at) values (?, ?, ?)",
+            (scope, json.dumps(payload), payload.get("updated_at") or ""),
+        )
 
 
 # ---------------------------------------------------------------------------

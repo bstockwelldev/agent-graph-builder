@@ -14,7 +14,7 @@ from . import storage
 from .bindings import node_bindings
 from .builtin_tools import BUILTIN_TOOL_IDS
 from .contracts import validate_contracts
-from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
+from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType, PolicyGate
 from .node_configs import validate_node_config
 from .nodes import EXECUTORS
 from .policies import evaluate_graph_policies
@@ -24,7 +24,9 @@ from .policies import evaluate_graph_policies
 _KNOWN_TOOL_IDS = frozenset({"lookup_topic", *BUILTIN_TOOL_IDS})
 
 
-def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
+def validate_graph(
+    graph: GraphDefinition, *, policy_gate: PolicyGate = "compile"
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     node_ids = {n.id for n in graph.nodes}
 
@@ -250,7 +252,7 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
     # Cross-cutting policy overlays (P2, docs/planning/roadmap.md's
     # Strategic Roadmap Addendum): security, reliability, and cost checks,
     # with active policy exceptions already applied. See policies.py.
-    diagnostics.extend(evaluate_graph_policies(graph))
+    diagnostics.extend(evaluate_graph_policies(graph, gate=policy_gate))
 
     return diagnostics
 

@@ -12,7 +12,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, FlaskConical, Focus, HelpCircle, ListChecks, MoreHorizontal, Play, Plus, Sparkles, Tag, Workflow, X } from "lucide-react";
+import { BookOpen, FlaskConical, Focus, HelpCircle, ListChecks, MoreHorizontal, Play, Plus, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -82,6 +82,7 @@ import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
+import { PolicyPanel } from "./PolicyPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
 import { RoutingLabPanel } from "./RoutingLabPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
@@ -137,7 +138,7 @@ function isDesktopViewport(): boolean {
 // The node/edge inspector (and, when nothing is selected, the workflow
 // summary) shares its HUD slot with these four panels (see
 // showSelectionDock below), gating the dock's own render.
-const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge"]);
+const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge", "policies"]);
 
 // Compact/mobile selection dock positioning. The dock used to anchor at a
 // hardcoded `top-24` (96px) regardless of the HUD's actual rendered
@@ -1925,6 +1926,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               onClick: () => workbench.toggle("knowledge"),
             },
             {
+              label: "Policies",
+              icon: <ShieldCheck size={14} />,
+              checked: workbench.activePanel === "policies",
+              onClick: () => workbench.toggle("policies"),
+            },
+            {
               label: "Shortcuts and gestures",
               icon: <HelpCircle size={14} />,
               separatorBefore: true,
@@ -1986,6 +1993,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="knowledge" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <KnowledgePanel layout="rail" graphId={graphId} />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />
       </WorkbenchDrawer>
       {showSelectionDock && !workbench.isCompact && (
         <div className="glass-panel ghost-border h-full min-h-0 w-96 shrink-0 overflow-y-auto border-l">

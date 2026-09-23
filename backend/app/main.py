@@ -45,12 +45,15 @@ from .models import (
     CompileResult,
     CreateGraphRequest,
     CreatePolicyExceptionRequest,
+    EffectivePolicyRule,
     Fixture,
     GraphDefinition,
     GraphRelease,
     KnowledgeLineageEntry,
     NodeTrace,
     PolicyException,
+    PolicyRuleInfo,
+    PolicySettings,
     PublishReleaseRequest,
     PublishReleaseResponse,
     PublishResourceVersionResponse,
@@ -66,12 +69,22 @@ from .models import (
     RunRoutingDatasetRequest,
     RunSummary,
     SimulateResult,
+    UpdatePolicyExceptionRequest,
 )
 from .node_analytics import GraphAnalytics, NodeExecution, get_graph_analytics, get_node_history
 from .policies import (
+    POLICY_CATALOG,
+    WORKSPACE_SCOPE,
+    PolicySettingsInvalid,
     create_policy_exception,
     delete_policy_exception,
+    effective_policies,
+    get_policy_settings,
+    graph_scope,
+    list_all_policy_exceptions,
     list_graph_policy_exceptions,
+    save_policy_settings,
+    update_policy_exception,
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
@@ -380,6 +393,74 @@ def list_policy_exceptions_endpoint(graph_id: str) -> list[PolicyException]:
     return list_graph_policy_exceptions(graph_id)
 
 
+@app.patch("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
+def update_policy_exception_endpoint(
+    graph_id: str, exception_id: str, request: UpdatePolicyExceptionRequest
+) -> PolicyException:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    updated = update_policy_exception(
+        graph_id, exception_id, expires_at=request.expires_at, reason=request.reason
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="policy exception not found")
+    return updated
+
+
+@app.get("/api/policy-exceptions")
+def list_all_policy_exceptions_endpoint() -> list[PolicyException]:
+    return list_all_policy_exceptions()
+
+
+# Configurable policies (STO-608): the rule catalog, workspace defaults, and
+# per-graph overrides. See policies.py.
+@app.get("/api/policies/catalog")
+def policy_catalog_endpoint() -> list[PolicyRuleInfo]:
+    return list(POLICY_CATALOG)
+
+
+@app.get("/api/policies/workspace")
+def get_workspace_policies_endpoint() -> PolicySettings:
+    return get_policy_settings(WORKSPACE_SCOPE)
+
+
+@app.put("/api/policies/workspace")
+def put_workspace_policies_endpoint(settings: PolicySettings) -> PolicySettings:
+    try:
+        return save_policy_settings(WORKSPACE_SCOPE, settings)
+    except PolicySettingsInvalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/policies/effective")
+def get_workspace_effective_policies_endpoint() -> list[EffectivePolicyRule]:
+    return list(effective_policies(None).values())
+
+
+@app.get("/api/graphs/{graph_id}/policies")
+def get_graph_policies_endpoint(graph_id: str) -> PolicySettings:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return get_policy_settings(graph_scope(graph_id))
+
+
+@app.put("/api/graphs/{graph_id}/policies")
+def put_graph_policies_endpoint(graph_id: str, settings: PolicySettings) -> PolicySettings:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    try:
+        return save_policy_settings(graph_scope(graph_id), settings)
+    except PolicySettingsInvalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/graphs/{graph_id}/policies/effective")
+def get_graph_effective_policies_endpoint(graph_id: str) -> list[EffectivePolicyRule]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list(effective_policies(graph_id).values())
+
+
 @app.delete("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
 def delete_policy_exception_endpoint(graph_id: str, exception_id: str) -> dict[str, bool]:
     if storage.get_graph(graph_id) is None:
@@ -684,7 +765,9 @@ async def send_chat_session_message_route(
 
     system_prompt = build_chat_system_prompt(body.context) if body.context is not None else None
     chat_model = get_chat_model(model=session.model, provider=session.provider)
-    reply = await chat_model.generate(system_prompt=system_prompt, user_prompt=body.content, history=history)
+    reply = await chat_model.generate(
+        system_prompt=system_prompt, user_prompt=body.content, history=history
+    )
     session.messages.append(ChatMessage(role="assistant", content=reply))
     session.updated_at = datetime.now(UTC)
 

@@ -39,7 +39,7 @@ describe("MobileTabBar", () => {
     render(
       <MobileTabBar
         aria-label="Studio tabs"
-        tabs={STUDIO_RAIL_ITEMS.map(({ href, label, icon: Icon, matches }) => ({
+        tabs={STUDIO_RAIL_ITEMS.filter((item) => item.mobileTab !== false).map(({ href, label, icon: Icon, matches }) => ({
           id: href,
           label,
           icon: <Icon />,
