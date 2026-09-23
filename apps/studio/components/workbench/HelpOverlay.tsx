@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, type WorkbenchPanelId } from "./panels";
 
@@ -25,6 +26,9 @@ const PANEL_ID: WorkbenchPanelId = "help";
 export function HelpOverlay() {
   const workbench = useWorkbench();
   const open = workbench.activePanel === PANEL_ID;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Wave 3: modal -- trap focus, restore it to the opener on close.
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -32,9 +36,8 @@ export function HelpOverlay() {
       if (event.key === "?") {
         event.preventDefault();
         workbench.toggle(PANEL_ID);
-      } else if (event.key === "Escape" && open) {
-        workbench.close();
       }
+      // Escape is handled by WorkbenchProvider for every panel (Wave 3).
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -52,13 +55,16 @@ export function HelpOverlay() {
         type="button"
         aria-label="Close help"
         onClick={() => workbench.close()}
-        className="fixed inset-0 z-40 bg-black/40"
+        tabIndex={-1}
+        className="animate-in fade-in-0 fixed inset-0 z-40 bg-black/40 duration-200"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Shortcuts and gestures"
-        className="glass-panel ghost-border fixed left-1/2 top-1/2 z-50 max-h-[80vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border p-6"
+        data-workbench-drawer=""
+        className="animate-in fade-in-0 zoom-in-95 duration-200 glass-panel ghost-border fixed left-1/2 top-1/2 z-50 max-h-[80vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border p-6"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Shortcuts &amp; gestures</h2>

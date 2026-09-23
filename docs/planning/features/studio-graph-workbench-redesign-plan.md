@@ -415,14 +415,53 @@ Waves 1 and 2 redesigned the header, the nodes, the rail and analytics. The two 
 - The derived node title placeholder read as a hint.
 - `ProviderModelPicker` refetched the catalog, and reset a custom model, on every model change.
 
-## Wave 3: Motion + accessibility (open, [STO-604](https://linear.app/stockwise-productions-prototypes/issue/STO-604))
+## Wave 3: Motion + accessibility — shipped ([STO-604](https://linear.app/stockwise-productions-prototypes/issue/STO-604))
 
-- **Drawers slide:** `ShellDrawer` returns null when closed, so its transition never runs.
-- **Graph menus** emerge from their trigger.
-- **Escape closes panels**, with a focus trap and focus returning to the trigger.
-- **`reducedMotion`** is passed to every panel.
-- **Focus rings** across the whole graph kit.
-- **Dead CSS removed:** the `graph-editor-canvas-glow-*` rules.
+Review sections 52–57, 73 and 80, audited 2026-09-23.
+
+### What shipped
+
+- **Drawers slide both ways.**
+  - `hooks/usePresence.ts` keeps an element mounted through its exit animation.
+  - `WorkbenchDrawer` uses it, so compact drawers slide in from their edge and back out, and the backdrop fades. Before, `ShellDrawer` returned `null` the instant it closed, so its transition never ran.
+  - Floating panels scale from their top corner.
+  - Docked panels fade and slide in on open, but unmount at once on close. The canvas reflows into their width, and animating that would be a layout shift.
+- **Menus emerge from their trigger.**
+  - `NodeContextMenu` and `ConnectKindMenu` scale in from a `transform-origin` set at the anchor point, even when the menu is nudged to stay inside the viewport.
+  - The same applies to the `Combobox` popover (bottom origin when it flips above) and the Tailwind `GraphSwitcherCombobox` (`animate-in zoom-in-95`).
+  - Tooltips fade in, and the expanded template editor floats up over a fading backdrop.
+- **Escape closes the active panel.** `WorkbenchProvider` handles it for every workbench panel, but only when no menu, listbox or non-panel modal dialog is open (`hasOverlayOwningEscape`), and only if no handler has already consumed the key. The old `useShellLayout` Escape only closed the unused `openDrawer`, and `HelpOverlay` had its own copy, which is now gone.
+- **Focus returns to the opener.**
+  - The provider tracks the last focus outside any panel or menu, so a panel opened from a menu item returns focus to the menu's trigger.
+  - It also covers panels that were already open on load.
+  - Both menus now hand focus back to their trigger when they close.
+- **Focus trap.** `hooks/useFocusTrap.ts` gives initial focus (`data-autofocus`, otherwise the first focusable element) and keeps Tab cycling inside, then restores focus on close. It's used by `ShellDrawer` (initial focus on its close button), `HelpOverlay` and the expanded `TemplateEditor`.
+- **Reduced motion.** A global, unlayered `prefers-reduced-motion` rule collapses every animation and transition, inline ones included. `lib/motion.ts` `scrollBehavior()` handles the explicit smooth `scrollIntoView` calls, which CSS can't override. Canvas `fitView`/`setCenter` already honoured `reducedMotion`. This replaces the plan to pass `reducedMotion` to each panel.
+- **Visible focus everywhere.** A zero-specificity `[data-graph-surface] :where(button, a, input, select, textarea, tab, menuitem, option, [tabindex]):focus-visible` ring. It is set on the GraphEditor root, the workbench panels, the drawers, menus and portaled popovers. shadcn controls (`data-slot`) and controls with their own focus treatment (`.agb-field`, inline `outline: none`) keep theirs.
+- **Styling-rule fix.** `ShellDrawer`'s close control is the graph kit's `IconButton`; it used to be shadcn's `Button`.
+- **Dead CSS removed:** the `graph-editor-canvas-*` keyframes and `-glow-*` classes.
+
+### Acceptance criteria
+
+- [x] **Drawers slide, dialogs float, and menus originate from their triggers.**
+  - `usePresence` test.
+  - Playwright: the mobile drawer runs `agb-drawer-in-right`, and `data-closing` shows mid-exit.
+  - Playwright: the header Run▾ menu runs `agb-pop-in` with its origin at the trigger.
+- [x] **Escape closes the active panel and focus returns to its trigger.**
+  - Provider test.
+  - Playwright: header Run▾ → Run controls → Esc closed the Run console and focus landed on "Run options".
+  - Esc inside an open provider combobox closed only the combobox. Esc closed the Help overlay.
+- [x] **`prefers-reduced-motion` disables every transition.** Playwright `reducedMotion: "reduce"`: the drawer's `animation-duration` computes to `1e-05s`.
+- [x] **Every interactive graph control has a visible focus ring.**
+  - Playwright: an inspector tab and an unclassed React Flow "Zoom In" button both compute `outline: solid rgb(143, 186, 255)` on keyboard focus.
+  - Drawer focus trap test.
+
+### Verification
+
+- **Studio:** `vitest` 222/222.
+- **Other gates:** `tsc` clean, `eslint` 0 errors (3 pre-existing warnings), root build passes.
+- **Backend:** no changes.
+- **Playwright on a live stub backend,** desktop 1440×900 and mobile 390×844, plus a reduced-motion context.
 
 ## Wave 4: Resource binding + inspector consolidation (open, [STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605))
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { scrollBehavior } from "@/lib/motion";
 import {
   addEdge,
   useEdgesState,
@@ -377,7 +378,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   const focusDiagnostics = useCallback(() => {
     diagnosticsSectionRef.current?.focus();
-    diagnosticsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    diagnosticsSectionRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
   }, []);
 
   // Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
@@ -1593,7 +1594,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     );
 
   return (
-    <div className="relative flex min-h-0 flex-1 overflow-hidden">
+    <div data-graph-surface="" className="relative flex min-h-0 flex-1 overflow-hidden">
       {/* Node palette — reserved-space docked column (fixing a real reported
           bug): a floating panel has no relation to node positions, so it
           could — and did — render on top of live canvas nodes near its

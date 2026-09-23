@@ -186,56 +186,6 @@
     );
   }
 
-  /* Graph editor canvas — test-run status outline (ported from MUI's
-     flow-editor-canvas-* keyframes, renamed to match AGB's "graph" noun) */
-  @keyframes graph-editor-canvas-running {
-    0%,
-    100% {
-      box-shadow:
-        0 0 0 1px rgb(0 229 255 / 0.35),
-        0 0 22px rgb(0 229 255 / 0.12);
-    }
-    50% {
-      box-shadow:
-        0 0 0 2px rgb(0 229 255 / 0.75),
-        0 0 36px rgb(0 229 255 / 0.22);
-    }
-  }
-  @keyframes graph-editor-canvas-error {
-    0%,
-    100% {
-      box-shadow:
-        0 0 0 1px rgb(239 68 68 / 0.45),
-        0 0 18px rgb(239 68 68 / 0.12);
-    }
-    50% {
-      box-shadow:
-        0 0 0 2px rgb(239 68 68 / 0.85),
-        0 0 28px rgb(239 68 68 / 0.2);
-    }
-  }
-  @keyframes graph-editor-canvas-success {
-    0% {
-      box-shadow:
-        0 0 0 1px rgb(52 211 153 / 0.5),
-        0 0 24px rgb(52 211 153 / 0.18);
-    }
-    100% {
-      box-shadow:
-        0 0 0 0px rgb(52 211 153 / 0),
-        0 0 0px rgb(52 211 153 / 0);
-    }
-  }
-  .graph-editor-canvas-glow-running {
-    animation: graph-editor-canvas-running 1.15s ease-in-out infinite;
-  }
-  .graph-editor-canvas-glow-error {
-    animation: graph-editor-canvas-error 0.9s ease-in-out infinite;
-  }
-  .graph-editor-canvas-glow-success {
-    animation: graph-editor-canvas-success 1.1s ease-out forwards;
-  }
-
   /* Skeleton/shimmer loading placeholder (ported from apps/playground's
      src/index.css — the .agb-skeleton class survived the studio port via
      apps/studio/components/graph/ui/Skeleton.tsx but this CSS did not,
@@ -263,6 +213,78 @@
       animation: none;
       background: var(--surface-container);
     }
+  }
+
+  /* Wave 3 motion (studio-graph-workbench-redesign-plan.md): drawers slide
+     from their edge, floating panels and menus emerge from their trigger
+     (a scale from a transform-origin set inline at the anchor point).
+     Durations mirror lib/graph-theme.ts shell.motion (standard 200ms,
+     fast 120ms). */
+  @keyframes agb-drawer-in-right {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes agb-drawer-in-left {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes agb-drawer-out-right {
+    to { transform: translateX(100%); }
+  }
+  @keyframes agb-drawer-out-left {
+    to { transform: translateX(-100%); }
+  }
+  @keyframes agb-fade-in {
+    from { opacity: 0; }
+  }
+  @keyframes agb-fade-out {
+    to { opacity: 0; }
+  }
+  @keyframes agb-pop-in {
+    from { opacity: 0; transform: scale(0.96); }
+  }
+  @keyframes agb-pop-out {
+    to { opacity: 0; transform: scale(0.96); }
+  }
+  @keyframes agb-panel-in {
+    from { opacity: 0; transform: translateX(12px); }
+  }
+  @keyframes agb-panel-in-left {
+    from { opacity: 0; transform: translateX(-12px); }
+  }
+  .agb-drawer-right { animation: agb-drawer-in-right 200ms cubic-bezier(0.2, 0, 0, 1); }
+  .agb-drawer-left { animation: agb-drawer-in-left 200ms cubic-bezier(0.2, 0, 0, 1); }
+  .agb-drawer-right[data-closing] { animation: agb-drawer-out-right 160ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+  .agb-drawer-left[data-closing] { animation: agb-drawer-out-left 160ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+  .agb-backdrop { animation: agb-fade-in 200ms ease-out; }
+  .agb-backdrop[data-closing] { animation: agb-fade-out 160ms ease-in forwards; }
+  .agb-pop { animation: agb-pop-in 120ms cubic-bezier(0.2, 0, 0, 1); }
+  .agb-pop[data-closing] { animation: agb-pop-out 120ms ease-in forwards; }
+  .agb-fade { animation: agb-fade-in 120ms ease-out; }
+  .agb-panel-in { animation: agb-panel-in 200ms cubic-bezier(0.2, 0, 0, 1); }
+  .agb-panel-in-left { animation: agb-panel-in-left 200ms cubic-bezier(0.2, 0, 0, 1); }
+
+  /* Visible focus for every interactive control on a graph surface
+     (Wave 3, review section 80). Scoped to [data-graph-surface] so the
+     shadcn pages keep their own ring styles; :where() keeps specificity at
+     zero, so controls with a deliberate focus treatment (inline
+     `outline: none` plus their own ring, e.g. .agb-field) still win.
+     shadcn controls (`data-slot`) keep their own ring. */
+  [data-graph-surface]
+    :where(
+      button,
+      a[href],
+      summary,
+      input:not(.agb-field):not(.agb-template-input),
+      select:not(.agb-field),
+      textarea:not(.agb-field):not(.agb-template-input),
+      [role="tab"],
+      [role="menuitem"],
+      [role="option"],
+      [tabindex]:not([tabindex="-1"])
+    ):not([data-slot]):focus-visible {
+    outline: 2px solid #8fbaff;
+    outline-offset: 2px;
   }
 
   /* Graph-kit focus ring + hover (studio-graph-workbench-redesign-plan.md,
@@ -338,5 +360,20 @@
     .agb-edge-active {
       animation: none;
     }
+  }
+}
+
+/* Wave 3: honour prefers-reduced-motion everywhere -- every transition and
+   animation in the studio (graph surfaces, drawers, menus, shadcn pages)
+   collapses to an instant change. Unlayered and !important so it beats
+   both layered rules and inline `transition` styles. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

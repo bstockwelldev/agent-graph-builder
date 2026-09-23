@@ -2,8 +2,12 @@
 
 import type { ReactNode } from "react";
 import { ShellDrawer } from "@/components/graph/ShellDrawer";
+import { usePresence } from "@/hooks/usePresence";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, type WorkbenchPanelId } from "./panels";
+
+/** Matches the `.agb-drawer-*[data-closing]` / `.agb-pop[data-closing]` exit animations in globals.css. */
+const EXIT_MS = 160;
 
 // Centralizes the docked-div-vs-ShellDrawer decision that GraphEditor.tsx
 // used to hand-write three times (studio-consolidation Phase 8). Renders
@@ -46,12 +50,18 @@ export function WorkbenchDrawer({
   children: ReactNode;
 }) {
   const workbench = useWorkbench();
-  if (workbench.activePanel !== panelId) return null;
+  const active = workbench.activePanel === panelId;
+  // Wave 3: stay mounted through the exit animation (drawer slide-out,
+  // floating panel shrink-back). Docked panels unmount at once -- the
+  // canvas reflows into their width, and animating that is a layout shift.
+  const { mounted, closing } = usePresence(active, EXIT_MS, workbench.reducedMotion);
+  if (!mounted) return null;
 
   if (workbench.isCompact) {
     return (
       <ShellDrawer
-        open
+        open={active}
+        closing={closing}
         onClose={workbench.close}
         side={side}
         title={WORKBENCH_PANELS[panelId].title}
@@ -65,6 +75,7 @@ export function WorkbenchDrawer({
   }
 
   if (mode === "docked-reserve") {
+    if (!active) return null;
     // `min-h-0` is load-bearing: as a flex item, `h-full` alone leaves
     // `min-height: auto` (content-based), so a child's `overflow-y-auto`
     // never actually engages — instead the panel grows to fit its content
@@ -72,7 +83,11 @@ export function WorkbenchDrawer({
     // surfaced as page-level scroll instead of panel-internal scroll, and
     // as the canvas viewport re-fitting to a moving pane size after a run.
     return (
-      <div className={`glass-panel ghost-border h-full min-h-0 shrink-0 ${className} ${dockedClassName}`}>
+      <div
+        data-graph-surface=""
+        data-workbench-panel=""
+        className={`glass-panel ghost-border h-full min-h-0 shrink-0 ${side === "left" ? "agb-panel-in-left" : "agb-panel-in"} ${className} ${dockedClassName}`}
+      >
         {children}
       </div>
     );
@@ -88,8 +103,12 @@ export function WorkbenchDrawer({
     // canvas AND the docked selection dock, whose text bled through the
     // 82%-opaque glass (Wave 2 visual QA).
     <div
-      className={`glass-panel ghost-border fixed z-30 rounded-2xl border shadow-2xl ${className} ${dockedClassName}`}
-      style={{ background: "var(--popover)" }}
+      data-graph-surface=""
+      data-workbench-panel=""
+      data-closing={closing ? "" : undefined}
+      inert={closing || undefined}
+      className={`agb-pop glass-panel ghost-border fixed z-30 rounded-2xl border shadow-2xl ${className} ${dockedClassName}`}
+      style={{ background: "var(--popover)", transformOrigin: side === "left" ? "top left" : "top right" }}
     >
       {children}
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from "react";
+import { scrollBehavior } from "@/lib/motion";
 import type { NodeTrace } from "@bstockwelldev/agent-graph-sdk";
 import { computeWaterfallRows, type WaterfallRow } from "@/lib/runWaterfall";
 import { color, fontFamily, radius, spacing, status as statusColor, text, typeScale } from "@/lib/graph-theme";
@@ -40,7 +41,7 @@ export function RunWaterfall({
 
   useEffect(() => {
     if (!selectedNodeId) return;
-    rowRefs.current.get(selectedNodeId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    rowRefs.current.get(selectedNodeId)?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
   }, [selectedNodeId]);
 
   if (rows.length === 0) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
 import { useShellLayout } from "@/hooks/useShellLayout";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
@@ -53,13 +53,51 @@ type WorkbenchContextValue = {
 
 const WorkbenchContext = createContext<WorkbenchContextValue | null>(null);
 
+const PANEL_OR_MENU = '[data-workbench-panel], [data-workbench-drawer], [role="menu"]';
+
+/**
+ * Something above the panels already owns Escape: an open menu, listbox,
+ * or a modal dialog that isn't itself a workbench panel (the command
+ * palette, a shadcn dialog, the expanded template editor). Those register
+ * their own Escape handlers -- often as later `window` listeners that run
+ * after ours -- so the panel must not close underneath them.
+ */
+export function hasOverlayOwningEscape(doc: Document = document): boolean {
+  return Boolean(
+    doc.querySelector('[role="menu"], [role="listbox"], [role="dialog"][aria-modal="true"]:not([data-workbench-drawer])'),
+  );
+}
+
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const [activePanel, setActivePanel] = useState<WorkbenchPanelId | null>(null);
   const [panelContext, setPanelContext] = useState<unknown>(null);
   const [graphContext, setGraphContext] = useState<StudioGraphContext | null>(null);
   const shellLayout = useShellLayout();
+  // Wave 3: the control that opened the current panel, so closing it
+  // (Escape, its close button, a hotkey) hands focus back instead of
+  // dropping it on <body>.
+  const openerRef = useRef<HTMLElement | null>(null);
+  const lastOutsideFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement && !event.target.closest(PANEL_OR_MENU)) lastOutsideFocusRef.current = event.target;
+    };
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, []);
+  // The opener is whatever had focus outside every panel and menu: a panel
+  // opened from a menu item (header Run▾ → "Run controls") resolves to the
+  // menu's trigger, not the item that's about to unmount.
+  const rememberOpener = () => {
+    const active = document.activeElement;
+    openerRef.current =
+      active instanceof HTMLElement && active !== document.body && !active.closest(PANEL_OR_MENU)
+        ? active
+        : lastOutsideFocusRef.current;
+  };
 
   const open = useCallback((panel: WorkbenchPanelId, context?: unknown) => {
+    rememberOpener();
     setActivePanel(panel);
     setPanelContext(context ?? null);
   }, []);
@@ -67,10 +105,47 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     setActivePanel(null);
     setPanelContext(null);
   }, []);
-  const toggle = useCallback(
-    (panel: WorkbenchPanelId) => setActivePanel((current) => (current === panel ? null : panel)),
-    [],
-  );
+  const toggle = useCallback((panel: WorkbenchPanelId) => {
+    setActivePanel((current) => {
+      if (current !== panel) rememberOpener();
+      return current === panel ? null : panel;
+    });
+  }, []);
+
+  // Focus return: once a panel closes and its content unmounts, focus has
+  // fallen to <body> -- put it back on the opener if it's still there.
+  const previousPanelRef = useRef<WorkbenchPanelId | null>(null);
+  useEffect(() => {
+    const previous = previousPanelRef.current;
+    previousPanelRef.current = activePanel;
+    if (!previous || activePanel === previous) return;
+    // No recorded opener (the panel was open on load, or re-targeted by a
+    // menu while open): fall back to the last focus outside every panel.
+    const opener = openerRef.current ?? lastOutsideFocusRef.current;
+    if (activePanel === null) openerRef.current = null;
+    // Drawers keep their content mounted for the exit animation and restore
+    // focus themselves (useFocusTrap); this catches docked/floating panels.
+    const frame = window.requestAnimationFrame(() => {
+      const focused = document.activeElement;
+      const lost = !focused || focused === document.body;
+      if (activePanel === null && lost && opener?.isConnected) opener.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePanel]);
+
+  // Escape closes the active panel (review section 80) -- unless a menu,
+  // listbox or non-panel dialog is open, or a handler already consumed it.
+  useEffect(() => {
+    if (!activePanel) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || hasOverlayOwningEscape()) return;
+      event.preventDefault();
+      setActivePanel(null);
+      setPanelContext(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePanel]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -125,6 +125,7 @@ export function HoverTooltip({
             ref={tooltipRef}
             id={tooltipId}
             role="tooltip"
+            className="agb-fade"
             style={{
               ...tooltipStyle,
               top: position?.top ?? -9999,
