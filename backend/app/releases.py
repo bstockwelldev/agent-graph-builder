@@ -208,8 +208,43 @@ def compare_releases(from_release: GraphRelease, to_release: GraphRelease) -> Re
     )
 
 
+def compare_draft_to_release(release: GraphRelease, draft: GraphDefinition) -> ReleaseDiff:
+    """STO-609: the same categorized diff as `compare_releases`, from a
+    published release to a draft that was never published -- typically the
+    live canvas, unsaved edits included. The draft's resources resolve live
+    the way a publish would snapshot them; references that don't resolve
+    are simply absent from its side of the resource diff."""
+    draft_snapshots, _diagnostics = resolve_resource_snapshots(draft)
+    deltas = diff_graphs(release.graph, draft, release.resource_snapshots, draft_snapshots)
+    draft_fp = release_semantic_fingerprint(draft, draft_snapshots)
+    return ReleaseDiff(
+        from_release_id=release.id,
+        to_release_id=None,
+        to_label="Draft",
+        from_semantic_fingerprint=release.semantic_fingerprint,
+        to_semantic_fingerprint=draft_fp,
+        identical=release.semantic_fingerprint == draft_fp,
+        node_changes=deltas["node_changes"],
+        edge_changes=deltas["edge_changes"],
+        resource_changes=deltas["resource_changes"],
+    )
+
+
+def resolve_release_selector(graph_id: str, selector: str) -> GraphRelease | None:
+    """A release by id, or the newest one for `selector == "latest"`."""
+    if selector == "latest":
+        index = storage.get_release_index(graph_id)
+        if not index:
+            return None
+        newest = max(index, key=lambda entry: entry.get("created_at", ""))
+        return get_release(newest["release_id"], graph_id)
+    return get_release(selector, graph_id)
+
+
 __all__ = [
     "ReleasePublishBlocked",
+    "compare_draft_to_release",
+    "resolve_release_selector",
     "resolve_resource_snapshots",
     "publish_release",
     "get_release",

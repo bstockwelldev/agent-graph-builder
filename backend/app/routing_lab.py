@@ -89,14 +89,26 @@ def _aggregate_distributions(runs: list[RoutingDatasetRunResult]) -> list[RouteN
     ]
 
 
-async def run_routing_dataset(graph: GraphDefinition, dataset: list[Fixture]) -> RoutingLabReport:
+async def run_routing_dataset(
+    graph: GraphDefinition,
+    dataset: list[Fixture],
+    *,
+    release_resource_snapshots: dict[str, dict[str, object]] | None = None,
+    release_id: str | None = None,
+) -> RoutingLabReport:
     """Runs `graph` once per fixture in `dataset`, collecting each run's
     route decisions, estimated cost, and duration, then aggregates a
-    per-router/branch-node route distribution across the whole dataset."""
+    per-router/branch-node route distribution across the whole dataset.
+    Pass a release's snapshots and id to run it as that release (STO-609)."""
     runs: list[RoutingDatasetRunResult] = []
     for index, fixture in enumerate(dataset):
         try:
-            result = await simulate_graph(graph, fixture)
+            result = await simulate_graph(
+                graph,
+                fixture,
+                release_resource_snapshots=release_resource_snapshots,
+                release_id=release_id,
+            )
         except SimulateBlocked as exc:
             raise RoutingLabBlocked(exc.diagnostics) from exc
         token_estimate = estimate_run_tokens(result.run)

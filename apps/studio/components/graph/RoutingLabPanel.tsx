@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { useCallback, useState } from "react";
-import type { RouteNodeDistributionDelta, RoutingComparison, RoutingLabReport } from "@bstockwelldev/agent-graph-sdk";
+import { useCallback, useEffect, useState } from "react";
+import type { ReleaseIndexEntry, RouteNodeDistributionDelta, RoutingComparison, RoutingLabReport } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
 import { fixturesFromText, fixturesToText } from "@/lib/datasets";
@@ -8,6 +8,8 @@ import { color, fontFamily, radius, shell, spacing, surface, text, typeScale } f
 import { DatasetPicker } from "./DatasetPicker";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
+import { Combobox } from "./ui/Combobox";
+import { SegmentedControl } from "./ui/SegmentedControl";
 import { SkeletonBlock } from "./ui/Skeleton";
 import { TextArea, TextInput } from "./ui/fields";
 
@@ -96,6 +98,28 @@ export function RoutingLabPanel({
 }) {
   const [datasetText, setDatasetText] = useState(DEFAULT_DATASET_TEXT);
   const [otherGraphId, setOtherGraphId] = useState("");
+  // STO-609: compare the draft against a published release (default) or,
+  // as before, against another graph.
+  const [compareMode, setCompareMode] = useState<"release" | "graph">("release");
+  const [releases, setReleases] = useState<ReleaseIndexEntry[]>([]);
+  const [releaseId, setReleaseId] = useState("latest");
+  const [comparisonLabels, setComparisonLabels] = useState<[string, string] | null>(null);
+
+  useEffect(() => {
+    if (!graphId) return;
+    let cancelled = false;
+    client
+      .listReleases(graphId)
+      .then((entries) => {
+        if (!cancelled) setReleases(entries);
+      })
+      .catch(() => {
+        if (!cancelled) setReleases([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [graphId]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<RoutingLabReport | null>(null);
@@ -120,20 +144,27 @@ export function RoutingLabPanel({
   }, [graphId, parseDataset]);
 
   const handleCompare = useCallback(async () => {
-    if (!graphId || !otherGraphId.trim()) return;
+    if (!graphId || (compareMode === "graph" && !otherGraphId.trim())) return;
     setRunning(true);
     setError(null);
     setReport(null);
     try {
       const dataset = parseDataset();
+      if (compareMode === "release") {
+        const result = await client.compareRoutingToRelease(graphId, releaseId, dataset);
+        setComparisonLabels([`Release ${releaseId === "latest" ? "(latest)" : shortId(releaseId)}`, "Draft"]);
+        setComparison(result);
+        return;
+      }
       const result = await client.compareRoutingDatasets(graphId, otherGraphId.trim(), dataset);
+      setComparisonLabels(null);
       setComparison(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
     }
-  }, [graphId, otherGraphId, parseDataset]);
+  }, [compareMode, graphId, otherGraphId, parseDataset, releaseId]);
 
   return (
     <div style={containerStyle(layout)}>
@@ -160,25 +191,56 @@ export function RoutingLabPanel({
               {running ? "Running…" : "Run dataset"}
             </Button>
           </div>
-          <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[2], marginBottom: spacing[1] }}>
-            Compare against another graph id (optional)
-          </div>
-          <div style={{ display: "flex", gap: spacing[2] }}>
-            <TextInput
-              value={otherGraphId}
-              onChange={(e) => setOtherGraphId(e.target.value)}
-              placeholder="graph id to compare against"
-              disabled={running}
-            />
+          <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[3], marginBottom: spacing[1] }}>Compare the draft against</div>
+          <SegmentedControl<"release" | "graph">
+            aria-label="Compare against"
+            value={compareMode}
+            onChange={setCompareMode}
+            options={[
+              { value: "release", label: "A release" },
+              { value: "graph", label: "Another graph" },
+            ]}
+          />
+          <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[2] }}>
+            {compareMode === "release" ? (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Combobox
+                  aria-label="Release to compare against"
+                  value={releaseId}
+                  disabled={running}
+                  onChange={(value) => setReleaseId(value || "latest")}
+                  emptyMessage="No releases yet"
+                  options={[
+                    { value: "latest", label: "Latest release", disabled: releases.length === 0 },
+                    ...[...releases].reverse().map((entry) => ({
+                      value: entry.release_id,
+                      label: shortId(entry.release_id),
+                      description: new Date(entry.created_at).toLocaleString(),
+                    })),
+                  ]}
+                />
+              </div>
+            ) : (
+              <TextInput
+                aria-label="Graph id to compare against"
+                value={otherGraphId}
+                onChange={(e) => setOtherGraphId(e.target.value)}
+                placeholder="graph id to compare against"
+                disabled={running}
+              />
+            )}
             <Button
               variant="secondary"
-              disabled={!graphId || !otherGraphId.trim() || running}
+              disabled={!graphId || running || (compareMode === "graph" ? !otherGraphId.trim() : releases.length === 0)}
               onClick={() => void handleCompare()}
               style={{ minHeight: shell.touchTarget.min, whiteSpace: "nowrap" }}
             >
               Compare
             </Button>
           </div>
+          {compareMode === "release" && releases.length === 0 && (
+            <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1] }}>Publish a release to compare against it.</div>
+          )}
           {error && (
             <div style={{ ...typeScale.caption, color: color.warning[500], marginTop: spacing[2], lineHeight: "16px" }}>
               {error}
@@ -192,9 +254,9 @@ export function RoutingLabPanel({
           ) : comparison ? (
             <div>
               <div style={{ ...typeScale.caption, marginBottom: spacing[2] }}>
-                <span style={monoStyle}>{shortId(comparison.baseline.graph_id)}</span>
+                <span style={monoStyle}>{comparisonLabels ? comparisonLabels[0] : shortId(comparison.baseline.graph_id)}</span>
                 {" (baseline) → "}
-                <span style={monoStyle}>{shortId(comparison.candidate.graph_id)}</span>
+                <span style={monoStyle}>{comparisonLabels ? comparisonLabels[1] : shortId(comparison.candidate.graph_id)}</span>
                 {" (candidate)"}
               </div>
               <ComparisonView comparison={comparison} />

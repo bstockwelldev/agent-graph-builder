@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
 import type {
   Diagnostic,
+  GraphDefinition,
   GraphElementChange,
   GraphRelease,
   ReleaseDiff,
@@ -35,6 +36,7 @@ export function ReleasesPanel({
   graphId,
   diagnostics,
   dirty,
+  getDraftGraph,
   layout = "rail",
   reducedMotion = false,
 }: {
@@ -44,6 +46,8 @@ export function ReleasesPanel({
    * unsaved canvas edits — publishing is disabled while dirty rather than
    * silently publishing something other than what's on screen. */
   dirty: boolean;
+  /** The live canvas graph (unsaved edits included), for "Diff vs draft" (STO-609). */
+  getDraftGraph?: () => GraphDefinition;
   layout?: "rail" | "drawer";
   reducedMotion?: boolean;
 }) {
@@ -142,6 +146,22 @@ export function ReleasesPanel({
       return [current[1], releaseId];
     });
   }, []);
+
+  // STO-609: a release vs the live canvas (unsaved edits included).
+  const [draftDiff, setDraftDiff] = useState<{ releaseId: string; diff: ReleaseDiff | null; loading: boolean; error: string | null } | null>(null);
+  const handleDiffDraft = useCallback(
+    async (releaseId: string) => {
+      if (!getDraftGraph) return;
+      setDraftDiff({ releaseId, diff: null, loading: true, error: null });
+      try {
+        const diff = await client.compareDraftToRelease(releaseId, getDraftGraph());
+        setDraftDiff({ releaseId, diff, loading: false, error: null });
+      } catch (err) {
+        setDraftDiff({ releaseId, diff: null, loading: false, error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+    [getDraftGraph],
+  );
 
   useEffect(() => {
     if (compareIds.length !== 2) {
@@ -264,6 +284,13 @@ export function ReleasesPanel({
                         <div style={{ opacity: 0.6, marginTop: spacing[1] }}>
                           Document fingerprint: <span style={monoStyle}>{expandedRelease.document_fingerprint}</span>
                         </div>
+                        {getDraftGraph && (
+                          <div style={{ marginTop: spacing[2] }}>
+                            <Button variant="secondary" onClick={() => void handleDiffDraft(entry.release_id)} disabled={draftDiff?.loading}>
+                              Diff vs draft
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div style={{ ...typeScale.caption, opacity: 0.6 }}>Could not load release details.</div>
@@ -274,6 +301,36 @@ export function ReleasesPanel({
             ))
           )}
         </CollapsibleSection>
+
+        {draftDiff && (
+          <CollapsibleSection sectionId="releases-draft-diff" title="Draft vs release" reducedMotion={reducedMotion}>
+            {draftDiff.loading ? (
+              <SkeletonBlock lines={3} gap={spacing[2]} />
+            ) : draftDiff.error ? (
+              <div style={errorTextStyle}>{draftDiff.error}</div>
+            ) : draftDiff.diff ? (
+              <div aria-label="Draft vs release diff">
+                <div style={{ ...typeScale.caption, marginBottom: spacing[2] }}>
+                  <span style={monoStyle}>{shortId(draftDiff.releaseId)}</span>
+                  {" → "}
+                  <span style={{ fontWeight: 600 }}>Draft{dirty ? " (unsaved)" : ""}</span>
+                </div>
+                {draftDiff.diff.identical ? (
+                  <div style={resultTextStyle}>No behavior changes since this release.</div>
+                ) : (
+                  <>
+                    <ChangeList title="Nodes" changes={draftDiff.diff.node_changes} />
+                    <ChangeList title="Edges" changes={draftDiff.diff.edge_changes} />
+                    <ChangeList title="Resources" changes={draftDiff.diff.resource_changes} />
+                  </>
+                )}
+                <Button variant="ghost" onClick={() => setDraftDiff(null)}>
+                  Close
+                </Button>
+              </div>
+            ) : null}
+          </CollapsibleSection>
+        )}
 
         {compareIds.length > 0 && (
           <CollapsibleSection sectionId="releases-compare" title="Compare releases" reducedMotion={reducedMotion}>
@@ -290,7 +347,7 @@ export function ReleasesPanel({
                 <div style={{ ...typeScale.caption, marginBottom: spacing[2] }}>
                   <span style={monoStyle}>{shortId(compareDiff.from_release_id)}</span>
                   {" → "}
-                  <span style={monoStyle}>{shortId(compareDiff.to_release_id)}</span>
+                  <span style={monoStyle}>{compareDiff.to_release_id ? shortId(compareDiff.to_release_id) : (compareDiff.to_label ?? "Draft")}</span>
                 </div>
                 {compareDiff.identical ? (
                   <div style={resultTextStyle}>Identical — same semantic_fingerprint, no behavior changes.</div>
