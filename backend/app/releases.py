@@ -127,7 +127,8 @@ def publish_release(
     created "after clean LangGraph capability validation" (design doc,
     Slice C).
     """
-    diagnostics = validate_graph(graph)
+    # The publish gate: `block_publish` policy rules block here (STO-608).
+    diagnostics = validate_graph(graph, policy_gate="publish")
     resource_snapshots, resource_diagnostics = resolve_resource_snapshots(graph)
     # P2, "Cross-cutting policy overlays": the deploy gate. validate_graph
     # above already ran the compile-gate policies (security/reliability/

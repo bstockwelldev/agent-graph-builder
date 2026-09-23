@@ -56,7 +56,7 @@ export function StudioShell({
   // the same breakpoint where the rail gives way to the mobile header.
   const workbench = useWorkbench();
   const mobileTabs: MobileTab[] = [
-    ...STUDIO_RAIL_ITEMS.map(({ href, label, icon: Icon, matches }) => ({
+    ...STUDIO_RAIL_ITEMS.filter((item) => item.mobileTab !== false).map(({ href, label, icon: Icon, matches }) => ({
       id: href,
       label,
       icon: <Icon />,

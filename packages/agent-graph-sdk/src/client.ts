@@ -17,7 +17,10 @@ import {
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
+  effectivePolicyRuleSchema,
   policyExceptionSchema,
+  policyRuleInfoSchema,
+  policySettingsSchema,
   promptTemplateSchema,
   providerCredentialsSchema,
   providerModelCatalogSchema,
@@ -60,7 +63,10 @@ import type {
   McpServerConfig,
   NodeTrace,
   PlatformEvent,
+  EffectivePolicyRule,
   PolicyException,
+  PolicyRuleInfo,
+  PolicySettings,
   ProviderCredentials,
   ProviderModelCatalog,
   PromptTemplate,
@@ -455,6 +461,46 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graphs/${graphId}/policy-exceptions`,
         undefined,
         policyExceptionSchema.array(),
+      ),
+    /** Extend (or shorten) a waiver's expiry; `reason` is kept when omitted. */
+    updatePolicyException: (graphId: string, exceptionId: string, expiresAt: string, reason?: string) =>
+      jsonFetch<PolicyException>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
+        { method: "PATCH", body: JSON.stringify({ expires_at: expiresAt, reason }) },
+        policyExceptionSchema,
+      ),
+    /** Every graph's exceptions -- the workspace Policies page. */
+    listAllPolicyExceptions: () =>
+      jsonFetch<PolicyException[]>(baseUrl, "/api/policy-exceptions", undefined, policyExceptionSchema.array()),
+    // Configurable policies (STO-608): catalog, workspace defaults, per-graph
+    // overrides, and the effective (resolved) rules.
+    getPolicyCatalog: () =>
+      jsonFetch<PolicyRuleInfo[]>(baseUrl, "/api/policies/catalog", undefined, policyRuleInfoSchema.array()),
+    getWorkspacePolicies: () =>
+      jsonFetch<PolicySettings>(baseUrl, "/api/policies/workspace", undefined, policySettingsSchema),
+    saveWorkspacePolicies: (settings: Pick<PolicySettings, "rules">) =>
+      jsonFetch<PolicySettings>(
+        baseUrl,
+        "/api/policies/workspace",
+        { method: "PUT", body: JSON.stringify({ rules: settings.rules }) },
+        policySettingsSchema,
+      ),
+    getEffectivePolicies: (graphId?: string) =>
+      jsonFetch<EffectivePolicyRule[]>(
+        baseUrl,
+        graphId ? `/api/graphs/${graphId}/policies/effective` : "/api/policies/effective",
+        undefined,
+        effectivePolicyRuleSchema.array(),
+      ),
+    getGraphPolicies: (graphId: string) =>
+      jsonFetch<PolicySettings>(baseUrl, `/api/graphs/${graphId}/policies`, undefined, policySettingsSchema),
+    saveGraphPolicies: (graphId: string, settings: Pick<PolicySettings, "rules">) =>
+      jsonFetch<PolicySettings>(
+        baseUrl,
+        `/api/graphs/${graphId}/policies`,
+        { method: "PUT", body: JSON.stringify({ rules: settings.rules }) },
+        policySettingsSchema,
       ),
     deletePolicyException: (graphId: string, exceptionId: string) =>
       jsonFetch<{ deleted: boolean }>(

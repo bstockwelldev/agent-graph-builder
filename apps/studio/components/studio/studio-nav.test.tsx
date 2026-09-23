@@ -8,11 +8,11 @@ afterEach(() => cleanup());
 // studio-graph-workbench-redesign-plan.md, Wave 2: a compact rail with one
 // Resources entry replaces the nine-item sidebar; Runs is retired.
 describe("StudioRail", () => {
-  it("shows only Graphs, Resources, and Analytics as primary destinations", () => {
+  it("shows only Graphs, Resources, Analytics, and Policies as primary destinations", () => {
     render(<StudioRail pathname="/graphs" />);
     const nav = screen.getByRole("navigation", { name: "Studio" });
     const labels = within(nav).getAllByRole("link").map((link) => link.textContent);
-    expect(labels).toEqual(["Graphs", "Resources", "Analytics"]);
+    expect(labels).toEqual(["Graphs", "Resources", "Analytics", "Policies"]);
   });
 
   it("marks Resources active on any resource page", () => {

@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   Save,
+  ShieldCheck,
   Sparkles,
   Tag,
   Upload,
@@ -199,6 +200,12 @@ export function GraphHeader({
       checked: activePanel === "knowledge",
       onClick: () => onTogglePanel("knowledge"),
     },
+    {
+      label: "Policies",
+      icon: <ShieldCheck size={14} />,
+      checked: activePanel === "policies",
+      onClick: () => onTogglePanel("policies"),
+    },
     { label: "Export JSON", icon: <Download size={14} />, separatorBefore: true, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
     { label: "Shortcuts", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
@@ -320,7 +327,7 @@ export function GraphHeader({
           icon={<MoreHorizontal size={18} />}
           aria-haspopup="menu"
           aria-expanded={menu?.id === "overflow"}
-          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge"}
+          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies"}
           onClick={() => openMenu("overflow", overflowMenuRef.current, "right")}
         />
       </div>

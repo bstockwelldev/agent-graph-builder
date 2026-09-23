@@ -28,6 +28,7 @@ import { client } from "@/lib/api-client";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
+import { expiryFromNow, WAIVE_DURATIONS_DAYS } from "@/lib/policies";
 import {
   INSPECT_LOAD_FAIL,
   RUN_RESULT_EMPTY,
@@ -438,13 +439,12 @@ export function RunPanel({
   const [waivingKey, setWaivingKey] = useState<string | null>(null);
   const [waiveError, setWaiveError] = useState<string | null>(null);
   const handleWaive = useCallback(
-    async (diagnostic: Diagnostic, key: string) => {
+    async (diagnostic: Diagnostic, key: string, days: number) => {
       if (!graphId) return;
       setWaivingKey(key);
       setWaiveError(null);
       try {
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        await client.createPolicyException(graphId, diagnostic.code, expiresAt, diagnostic.node_id ?? undefined, "Waived from Studio");
+        await client.createPolicyException(graphId, diagnostic.code, expiryFromNow(days), diagnostic.node_id ?? undefined, "Waived from Studio");
         onPolicyExceptionCreated?.();
       } catch (err) {
         setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
@@ -1180,8 +1180,9 @@ export function RunPanel({
                       </span>
                     </>
                   );
-                  // Only a blocking policy diagnostic is waivable.
-                  const waivable = diagnostic.category === "policy" && diagnostic.blocking && Boolean(graphId);
+                  // A policy diagnostic that blocks runs or publishing is waivable
+                  // (a block_publish rule is only a warning on the draft).
+                  const waivable = diagnostic.category === "policy" && (diagnostic.blocking || Boolean(diagnostic.blocks_publish)) && Boolean(graphId);
                   return (
                     <div key={key} style={{ marginBottom: spacing[2] }}>
                       {clickable ? (
@@ -1192,9 +1193,21 @@ export function RunPanel({
                         <div style={diagnosticStyle(diagnostic.severity, false)}>{body}</div>
                       )}
                       {waivable && (
-                        <Button variant="secondary" disabled={waivingKey === key} onClick={() => void handleWaive(diagnostic, key)} style={{ marginTop: 4, fontSize: 12, padding: "4px 10px" }}>
-                          {waivingKey === key ? "Waiving…" : "Waive (30 days)"}
-                        </Button>
+                        <div role="group" aria-label={`Waive ${diagnostic.code}`} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, opacity: 0.75 }}>{waivingKey === key ? "Waiving…" : "Waive for"}</span>
+                          {WAIVE_DURATIONS_DAYS.map((days) => (
+                            <Button
+                              key={days}
+                              variant="secondary"
+                              disabled={waivingKey === key}
+                              aria-label={`Waive for ${days} days`}
+                              onClick={() => void handleWaive(diagnostic, key, days)}
+                              style={{ fontSize: 12, padding: "4px 10px" }}
+                            >
+                              {days}d
+                            </Button>
+                          ))}
+                        </div>
                       )}
                     </div>
                   );

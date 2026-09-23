@@ -149,6 +149,11 @@ class Diagnostic(BaseModel):
     port_id: str | None = None
     target: Literal["langgraph"] | None = None
     remediation: str | None = None
+    # Configurable policies (STO-608): true on a policy diagnostic that will
+    # block publishing -- including a `block_publish` rule's draft-time
+    # warning, which doesn't block runs -- unless waived. Lets Studio offer
+    # "Waive" on it without parsing the message.
+    blocks_publish: bool | None = None
 
 
 class CompileResult(BaseModel):
@@ -493,6 +498,70 @@ class CreatePolicyExceptionRequest(BaseModel):
     node_id: str | None = None
     reason: str | None = None
     expires_at: str
+
+
+class UpdatePolicyExceptionRequest(BaseModel):
+    """Extend (or shorten) a waiver, optionally re-stating why."""
+
+    expires_at: str
+    reason: str | None = None
+
+
+# Configurable policies (STO-608): each rule in policies.py's catalog has
+# an enforcement level and optional parameters. Settings resolve catalog
+# default → workspace → graph override, per rule and per parameter.
+#
+#   off           -- the rule never runs
+#   warn          -- a non-blocking warning at every gate
+#   block_publish -- a warning on the draft, blocking when publishing
+#   block         -- blocking everywhere (compile, run, publish)
+PolicyEnforcement = Literal["off", "warn", "block_publish", "block"]
+PolicyGate = Literal["compile", "publish"]
+PolicyParamValue = int | float | str | bool
+
+
+class PolicyParamSpec(BaseModel):
+    name: str
+    label: str
+    type: Literal["integer", "choice"]
+    default: PolicyParamValue
+    description: str | None = None
+    minimum: int | None = None
+    choices: list[str] | None = None
+
+
+class PolicyRuleInfo(BaseModel):
+    code: str
+    category: Literal["security", "reliability", "cost", "governance"]
+    title: str
+    description: str
+    # "publish" rules only have something to check at publish time (e.g.
+    # release metadata); "compile" rules run at both gates.
+    gate: PolicyGate
+    default_enforcement: PolicyEnforcement
+    params: list[PolicyParamSpec] = Field(default_factory=list)
+
+
+class PolicyRuleSetting(BaseModel):
+    """One scope's setting for one rule. `None` / missing params inherit."""
+
+    enforcement: PolicyEnforcement | None = None
+    params: dict[str, PolicyParamValue] = Field(default_factory=dict)
+
+
+class PolicySettings(BaseModel):
+    """A scope's (workspace or one graph's) rule settings, keyed by code."""
+
+    rules: dict[str, PolicyRuleSetting] = Field(default_factory=dict)
+    updated_at: str | None = None
+
+
+class EffectivePolicyRule(BaseModel):
+    rule: PolicyRuleInfo
+    enforcement: PolicyEnforcement
+    enforcement_source: Literal["default", "workspace", "graph"]
+    params: dict[str, PolicyParamValue]
+    param_sources: dict[str, Literal["default", "workspace", "graph"]]
 
 
 # P2, "Retrieval/document lineage graph" (docs/planning/roadmap.md's
