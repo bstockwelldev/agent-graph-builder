@@ -463,12 +463,12 @@ Review sections 52–57, 73 and 80, audited 2026-09-23.
 - **Backend:** no changes.
 - **Playwright on a live stub backend,** desktop 1440×900 and mobile 390×844, plus a reduced-motion context.
 
-## Wave 4: Resource binding + inspector consolidation ([STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605))
+## Wave 4: Resource binding + inspector consolidation — shipped ([STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605))
 
 Shipping in two PRs, per a user decision:
 
 - **4a:** binding, validation, "used by", and opening a resource from its node. Shipped.
-- **4b:** one config-driven resource inspector replacing the five duplicated `app/*/page.tsx` shells and the copied forms in `resourceFormConfigs.tsx`. Next.
+- **4b:** one config-driven resource inspector replacing the five duplicated `app/*/page.tsx` shells and the copied forms in `resourceFormConfigs.tsx`. Shipped.
 
 ### Wave 4a: resource binding — shipped
 
@@ -529,7 +529,7 @@ This is the contract tool bindings already had. Editing a bound prompt changes t
 - [x] **A bound resource can be inspected and edited from its node without leaving the canvas.**
   - `ResourceBrowserPanel.test.tsx` and `ResourceBindingField.test.tsx`.
   - Live: Open → the Edit prompt dialog opened over the canvas (URL stayed on the graph), Save updated the node preview immediately, and the next run used the edited body.
-- [ ] **One inspector framework handles all resource types, and the duplicated page shells are removed.** This is Wave 4b.
+- [x] **One inspector framework handles all resource types, and the duplicated page shells are removed.** See Wave 4b below.
 
 ### Verification
 
@@ -544,6 +544,82 @@ This is the contract tool bindings already had. Editing a bound prompt changes t
 - Pinning a binding to a specific resource version (the user chose live references).
 - GenUI, which has no backend resource.
 - Per-node provider from `LlmProfile.model_provider`. The provider is still chosen per run (`runtime.py`), as before.
+
+### Wave 4b: resource inspector consolidation — shipped
+
+**The problem it fixes**
+
+- Five near-identical page shells, `app/{prompts,tools,agents,mcp,llm-profiles}/page.tsx`. Each was 240–290 lines of the same header, card list, Dialog form, delete confirm and version history.
+- A second copy of every form in `components/workbench/resourceFormConfigs.tsx`, used by the workbench panels.
+- "Used by" existed only in the panel.
+- There was no way to deep-link to one resource.
+- The panel's titles came out as "Edit mcp server" and "llm profile".
+
+**What replaces it**
+
+- **`components/studio/resource-kinds.tsx`** holds one `ResourceKindConfig` per registry. Each config contains:
+  - client, route and panel id;
+  - noun (singular, e.g. "prompt") and panel title (plural);
+  - the page's existing title, description, dialog description, empty text and delete message, moved over word for word;
+  - card header and body renderers;
+  - `emptyForm`, `toForm`, `normalize` and `renderFields`.
+
+  Field ids come from a per-editor `useId`, so a page editor and a panel editor can be on screen together without duplicate ids.
+- **`components/studio/resource-editor-dialog.tsx`** is the one editor, with three tabs:
+  - **Overview:** the fields, kept mounted so unsaved edits survive switching tabs.
+  - **Usage:** Wave 4a's `ResourceUsageList`.
+  - **History:** `ResourceVersionHistory`.
+
+  A new resource shows Overview only.
+- **`hooks/use-resource-editor.ts`** holds the editor and delete state shared by the page and the panel. It also covers:
+  - `openEdit(item, tab)`;
+  - a delete confirmation that now warns when graphs still use the resource ("Used by N nodes in M graphs; they will fail validation until rebound").
+- **`components/studio/resource-page.tsx`** is the generic full page:
+  - `?id=<id>` opens that resource's editor, and `&tab=usage|history` opens a tab.
+  - It reads `window.location` rather than `useSearchParams`, so the pages stay statically rendered.
+  - Each `app/*/page.tsx` is now a 3-line mount: `<ResourcePage kind={promptKind} />`.
+- **`ResourceBrowserPanel`** now takes `kind` and reuses the same hook and editor.
+  - Opening it from a bound node (`{ resourceId }`) still goes straight to that resource's editor.
+  - "Open full page" deep-links to `?id=` for the resource being edited.
+- **`studio-shell.tsx`** mounts the five drawers by mapping over `RESOURCE_KINDS`.
+- **`resourceFormConfigs.tsx`** is deleted. Net effect: about 1,900 lines of page and form duplication removed.
+
+**Behaviour changes**
+
+- The panel's dialog titles read "Edit MCP server" / "Edit LLM profile".
+- Every editor has Usage and History tabs.
+- Editing a tool no longer drops its `mcp_server_id` / `mcp_tool_name`, which the form doesn't expose. Both old copies used to rebuild the tool from the visible fields only.
+- `app/genui/page.tsx` is left as it was: a static showcase with no backend resource.
+
+**Wave 4b acceptance criteria**
+
+- [x] **One framework handles all five resource types, and the duplicated shells and forms are removed.**
+  - `resource-kinds.test.tsx`: validation and round-trips, the tools' JSON leniency and kept MCP binding, agents' elements.
+  - `resource-page.test.tsx`: 13 tests.
+    - For every kind: the page copy, card content, "New {noun}", and the Overview/Usage/History editor.
+    - `?id=&tab=`.
+    - The delete-in-use warning.
+    - The create flow.
+  - `app/tools/page.test.tsx` passes unchanged.
+- [x] **Every resource shows where it is used.** The Usage tab is on the pages and in the panels. Live: `/prompts?id=p_classify&tab=usage` listed the demo node.
+- [x] **A bound resource is editable from its node without leaving the canvas.** Live check:
+  1. Open, then the Usage tab.
+  2. Clicking the row closed the editor and selected `prompt_classify` in place.
+  3. "Open full page" pointed to `/prompts?id=p_classify`.
+
+**Verification**
+
+- Studio `vitest` 245/245, `tsc` clean, `eslint` 0 errors (3 pre-existing warnings).
+- Backend 443/443 and SDK 100/100 (both unchanged).
+- Root build passes.
+- Playwright on a live stub backend covered:
+  - all five pages, with the same headings and card content as before;
+  - the deep link to the Usage tab;
+  - the History and Overview tabs;
+  - the delete warning;
+  - the "Edit MCP server" title;
+  - canvas → Open → Usage → focus the node;
+  - mobile.
 
 ## Related docs
 

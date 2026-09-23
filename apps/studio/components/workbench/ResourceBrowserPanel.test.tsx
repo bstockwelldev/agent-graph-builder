@@ -17,7 +17,7 @@ window.matchMedia ??= ((query: string) => ({
 
 import { ResourceBrowserPanel } from "./ResourceBrowserPanel";
 import { WorkbenchProvider, useWorkbench } from "./WorkbenchProvider";
-import { promptFormConfig } from "./resourceFormConfigs";
+import { promptKind } from "@/components/studio/resource-kinds";
 
 afterEach(() => cleanup());
 
@@ -48,11 +48,13 @@ describe("ResourceBrowserPanel", () => {
     render(
       <WorkbenchProvider>
         <OpenFromNode />
-        <ResourceBrowserPanel resourceClient={promptClient as never} title="Prompts" routeHref="/prompts" {...promptFormConfig} />
+        <ResourceBrowserPanel kind={{ ...promptKind, client: promptClient as never }} />
       </WorkbenchProvider>,
     );
     expect(await screen.findByRole("dialog", { name: "Edit prompt" })).toBeTruthy();
     expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Explain");
+    expect(screen.getByRole("link", { name: /Open full page/, hidden: true }).getAttribute("href")).toBe("/prompts?id=p_explain");
+    fireEvent.click(screen.getByRole("tab", { name: /Usage/ }));
     const usedBy = await screen.findByRole("region", { name: "Used by" });
     expect(usedBy.textContent).toContain("Support flow");
     expect(usedBy.textContent).toContain("prompt_1 · prompt template");
