@@ -498,10 +498,22 @@ export const resourceVersionIndexEntrySchema = z.object({
  * graph engine entirely, chatting straight to a chosen provider/model. Not
  * a Run: no compile step, no relation to any graph_id.
  */
+/** A graph run started from Chat (STO-600): the message keeps a reference;
+ * live status comes from the run endpoints. */
+export const chatRunRefSchema = z.object({
+  run_id: z.string(),
+  graph_id: z.string(),
+  graph_name: z.string(),
+  source: z.enum(["draft", "release"]),
+  release_id: z.string().nullish(),
+  input: z.record(z.string(), z.unknown()),
+});
+
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string(),
   created_at: z.string(),
+  run: chatRunRefSchema.nullish(),
 });
 
 export const chatSessionSchema = z.object({

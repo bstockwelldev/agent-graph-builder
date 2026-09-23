@@ -151,3 +151,35 @@ def test_send_message_without_context_is_unchanged() -> None:
         assert session["messages"][1]["content"] == "[stub answer] hello there"
     finally:
         client.delete(f"/api/chat-sessions/{session_id}")
+
+
+def test_chat_run_reference_round_trips_and_survives_later_turns() -> None:
+    """STO-600: a run started from Chat is stored on an assistant message as a
+    reference; later model turns keep it and only send plain content as history."""
+    session_id = "chat_run_ref"
+    session = _create_session(session_id)
+    try:
+        run_ref = {
+            "run_id": "run_abc",
+            "graph_id": "demo_classify_and_route",
+            "graph_name": "Classify & Route (demo)",
+            "source": "release",
+            "release_id": "rel_123",
+            "input": {"question": "TCP?"},
+        }
+        session["messages"] = [
+            {"role": "user", "content": "/run demo_classify_and_route@latest TCP?"},
+            {"role": "assistant", "content": "Started Classify & Route (demo) (release rel_123).", "run": run_ref},
+        ]
+        updated = client.put(f"/api/chat-sessions/{session_id}", json=session)
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["messages"][1]["run"] == run_ref
+
+        reply = client.post(f"/api/chat-sessions/{session_id}/messages", json={"content": "thanks"})
+        assert reply.status_code == 200, reply.text
+        messages = reply.json()["messages"]
+        assert len(messages) == 4
+        assert messages[1]["run"] == run_ref
+        assert messages[0]["run"] is None and messages[3]["run"] is None
+    finally:
+        client.delete(f"/api/chat-sessions/{session_id}")

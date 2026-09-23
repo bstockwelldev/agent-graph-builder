@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ChatContext, ChatSession } from "@bstockwelldev/agent-graph-sdk";
+import { useRouter } from "next/navigation";
+import { Play } from "lucide-react";
+import type { ChatContext, ChatMessage, ChatRunRef, ChatSession, GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
 import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,22 @@ import { Conversation, ConversationContent, ConversationEmptyState } from "@/com
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
+import { RunCard, RunConfirmCard, versionLabel } from "@/components/ai-elements/run-card";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
+import { matchRunIntent, needsConfirmation, parseRunCommand, type RunTarget } from "@/lib/chatRuns";
+import { ChatRunPicker } from "./ChatRunPicker";
+
+/** A run waiting on the user's Confirm (release runs, free-text proposals). */
+type PendingRun = { target: RunTarget; command: string; reason: string };
+
+function commandFor(target: RunTarget): string {
+  const selector = target.release === null ? "" : target.release === "latest" ? "@latest" : `@${target.release}`;
+  const args = Object.entries(target.input)
+    .filter(([, value]) => value !== "")
+    .map(([key, value]) => (/\s/.test(value) ? `${key}="${value}"` : `${key}=${value}`))
+    .join(" ");
+  return `/run ${target.graph.id}${selector}${args ? ` ${args}` : ""}`;
+}
 
 /**
  * Direct model scratchpad (studio-consolidation Phase 8 part E) — chats
@@ -44,6 +61,20 @@ export function ChatPanel() {
   // is null, e.g. on /agents).
   const [includeContext, setIncludeContext] = useState(true);
   const graphContext = workbench.graphContext;
+  const router = useRouter();
+
+  // Graph runs from Chat (studio-ux-gap-remediation-plan.md §4, STO-600).
+  const [graphs, setGraphs] = useState<GraphDefinition[] | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
+  const [startingRun, setStartingRun] = useState(false);
+
+  async function loadGraphs(): Promise<GraphDefinition[]> {
+    if (graphs) return graphs;
+    const list = await client.listGraphs();
+    setGraphs(list);
+    return list;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -102,8 +133,119 @@ export function ChatPanel() {
     }
   }
 
+  async function appendMessages(session: ChatSession, messages: ChatMessage[]): Promise<ChatSession> {
+    const updated = await client.chatSessions.update({
+      ...session,
+      messages: [...session.messages, ...messages],
+      updated_at: new Date().toISOString(),
+    });
+    setActiveSession(updated);
+    setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    return updated;
+  }
+
+  /** Starts the run through the same run API the Run panel uses, then
+   * records it in the session as a run card. */
+  async function executeRun(target: RunTarget, command: string) {
+    if (!activeSession) return;
+    setStartingRun(true);
+    setError(null);
+    try {
+      let releaseId: string | null = null;
+      if (target.release !== null) {
+        const releases = [...(await client.listReleases(target.graph.id))].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+        const release = target.release === "latest" ? releases[0] : releases.find((entry) => entry.release_id === target.release);
+        if (!release) {
+          throw new Error(
+            target.release === "latest"
+              ? `${target.graph.name} has no published releases yet.`
+              : `${target.graph.name} has no release ${target.release}.`,
+          );
+        }
+        releaseId = release.release_id;
+      }
+      const provider = activeSession.provider as ChatProvider;
+      const model = activeSession.model || undefined;
+      const summary = releaseId
+        ? await client.startReleaseRun(releaseId, target.input, provider, model)
+        : await client.startRun(target.graph.id, target.input, provider, model);
+      const run: ChatRunRef = {
+        run_id: summary.run_id,
+        graph_id: target.graph.id,
+        graph_name: target.graph.name,
+        source: releaseId ? "release" : "draft",
+        release_id: releaseId,
+        input: target.input,
+      };
+      const now = new Date().toISOString();
+      await appendMessages(activeSession, [
+        { role: "user", content: command, created_at: now },
+        { role: "assistant", content: `Started ${run.graph_name} (${versionLabel(run)}) as ${run.run_id}.`, created_at: now, run },
+      ]);
+      setPendingRun(null);
+      setPickerOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStartingRun(false);
+    }
+  }
+
+  function requestRun(target: RunTarget, command: string) {
+    if (needsConfirmation(target)) {
+      setPendingRun({
+        target,
+        command,
+        reason:
+          target.release !== null
+            ? "This runs a published release, so it needs your confirmation first."
+            : "Proposed from your message — confirm to run the saved draft.",
+      });
+      setPickerOpen(false);
+      return;
+    }
+    void executeRun(target, command);
+  }
+
+  const viewRun = (run: ChatRunRef) => {
+    if (graphContext && graphContext.graphId === run.graph_id && graphContext.inspectRun) {
+      graphContext.inspectRun(run.run_id);
+      workbench.open("run");
+    } else {
+      router.push(`/graphs/${encodeURIComponent(run.graph_id)}?run=${encodeURIComponent(run.run_id)}&panel=run`);
+    }
+  };
+
+  const viewFlow = (run: ChatRunRef) => {
+    if (graphContext && graphContext.graphId === run.graph_id) workbench.close();
+    else router.push(`/graphs/${encodeURIComponent(run.graph_id)}`);
+  };
+
   async function sendMessage(content: string) {
     if (!activeSession) return;
+    // `/run …` and "run <graph>" start graph runs instead of messaging the model.
+    if (/^\/run\b/i.test(content) || /^(?:please\s+|can you\s+|could you\s+)?(?:run|execute|start)\s/i.test(content)) {
+      try {
+        const list = await loadGraphs();
+        const command = parseRunCommand(content, list);
+        if (command) {
+          if (command.ok) requestRun(command.target, content);
+          else setError(command.error);
+          return;
+        }
+        const intent = matchRunIntent(content, list);
+        if (intent) {
+          requestRun(intent, content);
+          return;
+        }
+      } catch (err) {
+        // A plain "run …" sentence still goes to the model if graphs can't load.
+        if (/^\/run\b/i.test(content)) {
+          setError(err instanceof Error ? err.message : String(err));
+          return;
+        }
+      }
+    }
     setSending(true);
     setError(null);
     try {
@@ -132,6 +274,8 @@ export function ChatPanel() {
       <div className="flex items-center gap-2 border-b p-3">
         <Select
           value={activeSession?.id ?? ""}
+          // Shows the session title, not its id, in the trigger.
+          items={Object.fromEntries(sessions.map((session) => [session.id, session.title]))}
           onValueChange={(id) => {
             if (id) void openSession(id);
           }}
@@ -187,22 +331,74 @@ export function ChatPanel() {
               </Button>
             </div>
           )}
-          <Conversation autoScrollKey={activeSession.messages.length}>
+          <Conversation autoScrollKey={`${activeSession.messages.length}:${pendingRun ? "pending" : ""}`}>
             <ConversationContent>
               {activeSession.messages.length === 0 ? (
                 <ConversationEmptyState />
               ) : (
                 activeSession.messages.map((message, index) => (
                   <Message key={index} from={message.role}>
-                    <MessageContent from={message.role}>{message.content}</MessageContent>
+                    {message.run ? (
+                      <RunCard runRef={message.run} onViewRun={() => viewRun(message.run!)} onViewFlow={() => viewFlow(message.run!)} />
+                    ) : (
+                      <MessageContent from={message.role}>{message.content}</MessageContent>
+                    )}
                   </Message>
                 ))
               )}
-              {sending && <Shimmer />}
+              {pendingRun && (
+                <Message from="assistant">
+                  <RunConfirmCard
+                    graphName={pendingRun.target.graph.name}
+                    version={pendingRun.target.release === null ? "Draft" : pendingRun.target.release === "latest" ? "Latest release" : `Release ${pendingRun.target.release}`}
+                    environment={`${activeSession.provider} · ${activeSession.model}`}
+                    input={pendingRun.target.input}
+                    reason={pendingRun.reason}
+                    busy={startingRun}
+                    onConfirm={() => void executeRun(pendingRun.target, pendingRun.command)}
+                    onCancel={() => setPendingRun(null)}
+                  />
+                </Message>
+              )}
+              {(sending || startingRun) && <Shimmer />}
             </ConversationContent>
           </Conversation>
           {error && <div className="text-destructive px-3 py-1 text-xs">{error}</div>}
-          <PromptInput onSubmit={(text) => void sendMessage(text)} disabled={sending} className="border-t" />
+          {pickerOpen && graphs && (
+            <ChatRunPicker
+              graphs={graphs}
+              defaultGraphId={graphContext?.graphId}
+              onSubmit={(target) => requestRun(target, commandFor(target))}
+              onCancel={() => setPickerOpen(false)}
+            />
+          )}
+          <PromptInput
+            onSubmit={(text) => void sendMessage(text)}
+            disabled={sending || startingRun}
+            className="border-t"
+            placeholder="Message the model, or /run <graph> …"
+            actions={
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Run a graph"
+                aria-expanded={pickerOpen}
+                title="Run a graph"
+                onClick={() => {
+                  if (pickerOpen) {
+                    setPickerOpen(false);
+                    return;
+                  }
+                  void loadGraphs()
+                    .then(() => setPickerOpen(true))
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+                }}
+              >
+                <Play className="size-4" />
+              </Button>
+            }
+          />
         </>
       )}
     </div>
