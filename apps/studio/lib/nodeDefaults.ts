@@ -51,7 +51,25 @@ export type SummaryContext = {
   hasUserLabel?: boolean;
   /** Outgoing edges from this node (router/branch route count). */
   routeCount?: number;
+  /** Wave 4a: `"<kind>:<id>"` → registry resource name, for bound nodes. */
+  resourceNames?: Readonly<Record<string, string>>;
 };
+
+function boundId(config: Record<string, unknown>, field: string): string | null {
+  const value = config[field];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** Display name of a bound resource: its registry name when known, else its id. */
+export function boundResourceName(
+  config: Record<string, unknown>,
+  field: string,
+  kind: string,
+  names: Readonly<Record<string, string>> = {},
+): string | null {
+  const id = boundId(config, field);
+  return id ? names[`${kind}:${id}`] ?? id : null;
+}
 
 const SNIPPET_MAX = 40;
 
@@ -68,15 +86,31 @@ export function templateVariables(template: string): string[] {
   return [...seen];
 }
 
+/** Wave 4a: a library-bound prompt/LLM/tool-loop node's title is its
+ * resource's name (null when the node isn't bound). */
+export function boundTitleFor(
+  type: NodeType,
+  config: Record<string, unknown>,
+  names: Readonly<Record<string, string>> = {},
+): string | null {
+  if (type === "prompt") return boundResourceName(config, "promptId", "prompts", names);
+  if (type === "llm" || type === "tool_loop") return boundResourceName(config, "llmProfileId", "llm_profiles", names);
+  return null;
+}
+
 export function summaryFor(type: NodeType, config: Record<string, unknown>, context: SummaryContext = {}): string | null {
-  const { hasUserLabel = false, routeCount } = context;
+  const { hasUserLabel = false, routeCount, resourceNames } = context;
   switch (type) {
     case "llm": {
+      const profile = boundResourceName(config, "llmProfileId", "llm_profiles", resourceNames);
+      if (profile) return hasUserLabel ? `profile · ${profile}` : "LLM profile";
       const provider = String(config.provider ?? "ollama");
       return hasUserLabel ? `${provider} · ${String(config.model ?? "model")}` : `via ${provider}`;
     }
     case "tool_loop": {
       const iterations = `max ${String(config.maxToolIterations ?? 4)} iterations`;
+      const profile = boundResourceName(config, "llmProfileId", "llm_profiles", resourceNames);
+      if (profile) return hasUserLabel ? `profile · ${profile} · ${iterations}` : `LLM profile · ${iterations}`;
       return hasUserLabel
         ? `${String(config.model ?? "model")} · ${iterations}`
         : `via ${String(config.provider ?? "ollama")} · ${iterations}`;
@@ -90,6 +124,8 @@ export function summaryFor(type: NodeType, config: Record<string, unknown>, cont
     case "rubric":
       return config.rubricFailOnFindings ? "Fails run on findings" : "Findings don't fail the run";
     case "prompt": {
+      const bound = boundResourceName(config, "promptId", "prompts", resourceNames);
+      if (bound) return hasUserLabel ? `Library · ${bound}` : "Library prompt";
       const variables = templateVariables(String(config.template ?? ""));
       if (variables.length > 0) return `vars: ${variables.join(", ")}`;
       return hasUserLabel ? snippet(config.template) : null;
@@ -134,11 +170,12 @@ export function labelFor(type: NodeType, config: Record<string, unknown>): strin
     case "input":
       return `input: ${config.variableName ?? "question"}`;
     case "prompt": {
+      if (boundId(config, "promptId")) return String(config.promptId);
       const template = String(config.template ?? "");
       return template.length > 28 ? `${template.slice(0, 28)}…` : template || "prompt";
     }
     case "llm":
-      return String(config.model ?? "llm");
+      return String(boundId(config, "llmProfileId") ?? config.model ?? "llm");
     case "tool":
       return String(config.toolName ?? "tool");
     case "router":
@@ -152,7 +189,7 @@ export function labelFor(type: NodeType, config: Record<string, unknown>): strin
     case "branch":
       return String(config.content ?? "branch");
     case "tool_loop":
-      return String(config.model ?? "tool loop");
+      return String(boundId(config, "llmProfileId") ?? config.model ?? "tool loop");
     case "code_exec":
       return String(config.codeExecLanguage ?? "code exec");
     case "human_gate":

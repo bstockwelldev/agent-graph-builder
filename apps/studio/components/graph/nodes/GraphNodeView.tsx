@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Copy,
   Crosshair,
+  Library,
   PauseCircle,
   Play,
   Settings2,
@@ -29,7 +30,9 @@ import {
 } from "@/lib/graph-theme";
 import { computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
-import { summaryFor } from "@/lib/nodeDefaults";
+import { boundTitleFor, summaryFor } from "@/lib/nodeDefaults";
+import { nodeBindings } from "@bstockwelldev/agent-graph-sdk";
+import { useResourceNames } from "../resourceBindings";
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
 import { useCanvasActions } from "../canvasActions";
 import { NODE_TYPE_ICONS } from "../nodeTypeIcons";
@@ -134,10 +137,16 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   const showSourceHandle = type !== "output";
   const Icon = ICONS[type];
   const tokens = nodeTypeTokens[type];
+  const resourceNames = useResourceNames();
   const summary = summaryFor(type, nodeData.config, {
     hasUserLabel: Boolean(nodeData.userLabel),
     routeCount: nodeData.routeCount,
+    resourceNames,
   });
+  // Wave 4a: a node bound to a library resource is titled by that
+  // resource's name (unless the user named the node) and carries a glyph.
+  const bindings = nodeBindings(type, nodeData.config).filter((binding) => binding.kind !== "tools");
+  const boundTitle = nodeData.userLabel ? null : boundTitleFor(type, nodeData.config, resourceNames);
   const inputs = portSummary(inputPortsFor({ type }));
   const outputs = portSummary(outputPortsFor({ type }));
 
@@ -218,7 +227,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
     ...shapeStyles(type),
   };
 
-  const title = nodeData.label;
+  const title = boundTitle ?? nodeData.label;
   const typeTitle = (NODE_TYPE_TAXONOMY[type]?.title ?? type).replace(/ node$/i, "");
   const duration = formatDuration(nodeData.traceSummary?.durationMs);
 
@@ -287,6 +296,16 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
           <Icon size={14} strokeWidth={2.25} color={tokens.accent} aria-hidden="true" style={{ flexShrink: 0 }} />
           <span style={{ ...eyebrowStyle, color: tokens.label }}>{typeTitle}</span>
           <span style={{ flex: 1 }} />
+          {bindings.length > 0 && (
+            <span
+              role="img"
+              aria-label={`Uses library ${bindings.map((b) => (b.kind === "prompts" ? "prompt" : "LLM profile")).join(" and ")}`}
+              title="Uses a library resource"
+              style={{ display: "inline-flex", color: tokens.label, opacity: 0.85 }}
+            >
+              <Library size={13} aria-hidden="true" />
+            </span>
+          )}
           {nodeStatus !== "idle" && <StatusPill status={nodeStatus} stale={nodeData.statusStale ?? false} />}
           {compileIssue && <IssueBadge issue={compileIssue} />}
         </div>

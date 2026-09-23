@@ -112,4 +112,16 @@ describe("defaultConfig", () => {
     expect(config.maxToolIterations).toBeGreaterThanOrEqual(1);
     expect(config.maxToolIterations).toBeLessThanOrEqual(64);
   });
+
+  it("summarizes library-bound nodes by resource name (Wave 4a)", () => {
+    const names = { "prompts:p1": "Explain", "llm_profiles:lp": "Fast" };
+    expect(summaryFor("prompt", { promptId: "p1", template: "{x}" }, { resourceNames: names })).toBe("Library prompt");
+    expect(summaryFor("prompt", { promptId: "p1" }, { hasUserLabel: true, resourceNames: names })).toBe("Library · Explain");
+    expect(summaryFor("llm", { llmProfileId: "lp" }, { hasUserLabel: true, resourceNames: names })).toBe("profile · Fast");
+    expect(summaryFor("llm", { llmProfileId: "lp_unknown" }, { hasUserLabel: true })).toBe("profile · lp_unknown");
+    expect(summaryFor("tool_loop", { llmProfileId: "lp", maxToolIterations: 2 }, { resourceNames: names })).toBe(
+      "LLM profile · max 2 iterations",
+    );
+    expect(summaryFor("llm", { provider: "groq", llmProfileId: "" })).toBe("via groq");
+  });
 });

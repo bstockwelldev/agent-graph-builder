@@ -5,6 +5,7 @@ vi.mock("@/lib/api-client", () => ({
   client: {
     tools: { list: vi.fn(async () => []) },
     listProviderModels: vi.fn(async () => ({ models: [], message: "" })),
+    prompts: { list: vi.fn(async () => [{ id: "p_explain", name: "Explain", body: "Explain {question}" }]) },
   },
 }));
 
@@ -39,5 +40,22 @@ describe("NodeInspector (v2)", () => {
     fireEvent.click(screen.getByRole("button", { name: "More node actions" }));
     fireEvent.click(screen.getByText("Delete node"));
     expect(onDelete).toHaveBeenCalled();
+  });
+
+  it("shows a library-bound prompt with its preview and an Open action (Wave 4a)", async () => {
+    const onOpenResource = vi.fn();
+    render(
+      <NodeInspector
+        node={{ id: "prompt_1", type: "prompt", position: { x: 0, y: 0 }, config: { template: "INLINE", promptId: "p_explain" } }}
+        onConfigChange={vi.fn()}
+        onDelete={vi.fn()}
+        templateVariables={["question"]}
+        onOpenResource={onOpenResource}
+      />,
+    );
+    expect((screen.getByRole("radio", { name: /Library/ }) as HTMLElement).getAttribute("aria-checked")).toBe("true");
+    expect((await screen.findByLabelText("Bound prompt preview")).textContent).toBe("Explain {question}");
+    fireEvent.click(screen.getByRole("button", { name: "Open prompt" }));
+    expect(onOpenResource).toHaveBeenCalledWith("prompts", "p_explain");
   });
 });

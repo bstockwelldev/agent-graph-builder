@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { emitResourceChanged } from "@/lib/resourceEvents";
 
 type ResourceClient<T extends { id: string }> = {
   list: () => Promise<T[]>;
@@ -53,6 +54,8 @@ export function useResourceList<T extends { id: string }>(resourceClient: Resour
             ? prev.map((item) => (item.id === saved.id ? saved : item))
             : [...prev, saved];
         });
+        // Wave 4a: nodes bound to this resource show its live content.
+        emitResourceChanged();
         return saved;
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : String(err));
@@ -71,6 +74,7 @@ export function useResourceList<T extends { id: string }>(resourceClient: Resour
       try {
         await resourceClient.delete(id);
         setItems((prev) => prev.filter((item) => item.id !== id));
+        emitResourceChanged();
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : String(err));
         throw err;

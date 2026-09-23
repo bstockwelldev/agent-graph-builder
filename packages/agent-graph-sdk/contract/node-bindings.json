@@ -1,0 +1,6 @@
+{
+  "prompt": [["promptId", "prompts"]],
+  "llm": [["llmProfileId", "llm_profiles"], ["systemPromptId", "prompts"]],
+  "tool_loop": [["llmProfileId", "llm_profiles"], ["systemPromptId", "prompts"]],
+  "tool": [["toolName", "tools"]]
+}

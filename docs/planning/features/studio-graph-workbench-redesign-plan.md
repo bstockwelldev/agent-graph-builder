@@ -463,12 +463,87 @@ Review sections 52–57, 73 and 80, audited 2026-09-23.
 - **Backend:** no changes.
 - **Playwright on a live stub backend,** desktop 1440×900 and mobile 390×844, plus a reduced-motion context.
 
-## Wave 4: Resource binding + inspector consolidation (open, [STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605))
+## Wave 4: Resource binding + inspector consolidation ([STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605))
 
-- **Node↔registry binding.** Nodes don't reference registry resources today: prompt, LLM and tool nodes use inline config.
-- **Reverse "used by" API.**
-- **One resource inspector framework** replacing the five duplicated page shells.
-- **Open a resource from its node** without leaving the graph.
+Shipping in two PRs, per a user decision:
+
+- **4a:** binding, validation, "used by", and opening a resource from its node. Shipped.
+- **4b:** one config-driven resource inspector replacing the five duplicated `app/*/page.tsx` shells and the copied forms in `resourceFormConfigs.tsx`. Next.
+
+### Wave 4a: resource binding — shipped
+
+**Semantics** (user decision): a binding is a **live reference, frozen on release**.
+
+- Draft runs read the resource's current content.
+- Publishing a release (and every run snapshot) captures it in `resource_snapshots`.
+
+This is the contract tool bindings already had. Editing a bound prompt changes the draft's semantic fingerprint, because snapshots feed it.
+
+**Bindings** (single source of truth: `backend/app/bindings.py` `BINDING_FIELDS`):
+
+| Node | Field | Registry | Effect |
+| --- | --- | --- | --- |
+| prompt | `promptId` | prompts | Resource `body` replaces the inline `template` |
+| llm, tool_loop | `llmProfileId` | llm_profiles | Resource `model` becomes the node model; the run-level model override still wins |
+| llm, tool_loop | `systemPromptId` | prompts | Resource `body` replaces the inline `systemPrompt` |
+| tool | `toolName` | tools | Existing binding; now also covered by "used by" and Open |
+
+**Backend**
+
+- `node_bindings(node)` is the only walker. Every consumer uses it:
+  - **Compiler** (`compiler.py`): an unresolved non-tool binding is `UNRESOLVED_RESOURCE_BINDING` (blocking). Its message has the field-diagnostic shape, `"<type> node '<id>': <field>: <kind> '<rid>' not found"`, and includes a remediation. The Studio renders it under the field with no mapping code. Tools keep `UNSUPPORTED_TOOL_BINDING`.
+  - **Executors** (`nodes.py`): `_prompt_template`, `_system_prompt` and `_node_model` resolve through the release-aware `_resolve_resource`. A resource deleted mid-run raises instead of silently falling back to stale inline config.
+  - **Snapshots** (`releases.py` `resolve_resource_snapshots`): every binding kind, including the tool → MCP server hop. Runtime, replay and simulate pick this up automatically.
+  - **"Used by"** (`main.py`): `GET /api/{kind}/{id}/usages` → `ResourceUsage[]`, one per bound node across stored graphs. For MCP servers it also returns tool-bound nodes that reach the server through their tool (`via: "tools:<id>"`).
+
+**SDK**
+
+- `resourceUsageSchema` and `ResourceUsage`, plus `client.<kind>.usages(id)`.
+- `bindings.ts`: `NODE_BINDING_FIELDS`, `nodeBindings()` and `RESOURCE_KIND_PATH`.
+- `contract/node-bindings.json` is the cross-language contract. `bindings.test.ts` and `test_resource_bindings.py` both assert against it.
+
+**Studio**
+
+- **`ResourceBindingField`** (token-styled): an **Inline / Library** segmented switch per bindable field.
+  - In Library mode: a registry combobox, a **Not found** flag, a read-only preview (a prompt shows `{var}` highlighting; a profile shows `model · provider`), and **Open**.
+  - Switching back to Inline clears the reference. The inline value was never touched.
+- **Open without leaving the canvas.** `onOpenResource` → `workbench.open(<panel>, { resourceId })`. `ResourceBrowserPanel` reads that context and opens the resource's editor directly.
+- **Live updates.** Saving or deleting in `useResourceList` emits `agb:resource-changed` (`lib/resourceEvents.ts`). Binding pickers and node-card names refetch, so the node's preview shows the edit at once.
+- **"Used by"** (`ResourceUsageList`, in the resource editor): a row in the open graph focuses its node through `graphContext.focusNode`; a row in another graph opens `/graphs/<id>?node=<nodeId>`.
+- **Node cards.** A bound node is titled by its resource's name (unless the user named it), carries a library glyph, and reads "Library prompt" or "LLM profile" in its summary. `ResourceNamesProvider` is loaded only when the graph has library bindings. The inspector header uses the same title.
+
+### Wave 4a acceptance criteria
+
+- [x] **Nodes reference registry resources, validated by the backend.**
+  - `test_resource_bindings.py`, 8 tests:
+    - bound prompt, system prompt and profile are applied;
+    - the run-level override wins;
+    - a field-scoped missing-binding error;
+    - inline nodes are unaffected;
+    - a release freezes the resource while drafts follow edits;
+    - an unresolved binding blocks the release;
+    - usages, including MCP `via`;
+    - the SDK contract.
+  - Live: the bound prompt body and the profile model `stub-fast` reached the run trace.
+- [x] **Every resource shows the graphs and nodes that use it.** Usages API plus `ResourceUsageList`. Live: "Used by · 1 — Classify & Route (demo), prompt_classify · prompt template".
+- [x] **A bound resource can be inspected and edited from its node without leaving the canvas.**
+  - `ResourceBrowserPanel.test.tsx` and `ResourceBindingField.test.tsx`.
+  - Live: Open → the Edit prompt dialog opened over the canvas (URL stayed on the graph), Save updated the node preview immediately, and the next run used the edited body.
+- [ ] **One inspector framework handles all resource types, and the duplicated page shells are removed.** This is Wave 4b.
+
+### Verification
+
+- Backend: 443/443 (8 new).
+- SDK: 100/100.
+- Studio `vitest`: 228/228.
+- `tsc` clean; `eslint` 0 errors (3 pre-existing warnings).
+- Root build passes.
+- Playwright on a live stub backend: bind, save, run, Open/edit/re-run, "Used by", the inline unresolved-binding error, and mobile.
+
+**Not in 4a:**
+- Pinning a binding to a specific resource version (the user chose live references).
+- GenUI, which has no backend resource.
+- Per-node provider from `LlmProfile.model_provider`. The provider is still chosen per run (`runtime.py`), as before.
 
 ## Related docs
 

@@ -26,6 +26,7 @@ import {
   publishResourceVersionResponseSchema,
   releaseDiffSchema,
   releaseIndexEntrySchema,
+  resourceUsageSchema,
   resourceVersionIndexEntrySchema,
   resourceVersionSchema,
   routingComparisonSchema,
@@ -67,6 +68,7 @@ import type {
   PublishResourceVersionResponse,
   ReleaseDiff,
   ReleaseIndexEntry,
+  ResourceUsage,
   ResourceVersion,
   ResourceVersionIndexEntry,
   RoutingComparison,
@@ -128,6 +130,9 @@ function resourceClient<T extends { id: string }>(baseUrl: string, path: string,
       ),
     delete: (id: string) =>
       jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${id}`, { method: "DELETE" }, deletedSchema),
+    /** Wave 4a "used by": draft graph nodes bound to this resource. */
+    usages: (id: string) =>
+      jsonFetch<ResourceUsage[]>(baseUrl, `/api/${path}/${id}/usages`, undefined, resourceUsageSchema.array()),
   };
 }
 

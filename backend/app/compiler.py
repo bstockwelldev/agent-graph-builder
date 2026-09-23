@@ -11,6 +11,7 @@ does not apply to this slice.
 from __future__ import annotations
 
 from . import storage
+from .bindings import node_bindings
 from .builtin_tools import BUILTIN_TOOL_IDS
 from .contracts import validate_contracts
 from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
@@ -182,6 +183,31 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                 blocking=True,
             )
         )
+
+    # Registry bindings (Wave 4a, backend/app/bindings.py): a prompt/LLM/
+    # tool-loop node bound to a Prompt or LLM profile that doesn't exist.
+    # Tools keep UNSUPPORTED_TOOL_BINDING above. The message uses the
+    # "<type> node '<id>': <field>: ..." shape so the Studio renders it
+    # under the offending field (lib/diagnostics.ts fieldForDiagnostic).
+    for node in graph.nodes:
+        for binding in node_bindings(node):
+            if binding.kind == "tools":
+                continue
+            if storage.get_resource(binding.kind, binding.resource_id) is not None:
+                continue
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="UNRESOLVED_RESOURCE_BINDING",
+                    node_id=node.id,
+                    message=(
+                        f"{node.type.value} node {node.id!r}: {binding.field}: "
+                        f"{binding.kind} {binding.resource_id!r} not found"
+                    ),
+                    blocking=True,
+                    remediation="Pick another resource, or switch the field back to inline.",
+                )
+            )
 
     # Generic safety net: any NodeType with no registered executor in
     # nodes.py's EXECUTORS dict blocks compile with a clear diagnostic
