@@ -12,7 +12,7 @@ with, unlike `RouteDecision`'s deliberate alias.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -86,10 +86,26 @@ class FixtureDataset(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class ChatRunRef(BaseModel):
+    """A graph run started from Chat (studio-ux-gap-remediation-plan.md §4,
+    STO-600). The run itself goes through the ordinary run API
+    (`POST /api/runs` / `POST /api/graph-releases/{id}/runs`); the chat
+    message only keeps a reference, and the Studio's run card reads live
+    status from the run endpoints."""
+
+    run_id: str
+    graph_id: str
+    graph_name: str
+    source: Literal["draft", "release"] = "draft"
+    release_id: str | None = None
+    input: dict[str, Any] = Field(default_factory=dict)
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    run: ChatRunRef | None = None
 
 
 class ChatSession(BaseModel):

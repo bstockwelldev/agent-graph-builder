@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type KeyboardEvent, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -18,11 +18,14 @@ export function PromptInput({
   disabled = false,
   placeholder = "Message the model…",
   className,
+  actions,
 }: {
   onSubmit: (text: string) => void;
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  /** Extra composer controls left of the textarea (e.g. Chat's "Run a graph"). */
+  actions?: ReactNode;
 }) {
   const [value, setValue] = useState("");
 
@@ -47,6 +50,7 @@ export function PromptInput({
 
   return (
     <form onSubmit={handleSubmit} className={cn("flex items-end gap-2 p-3", className)}>
+      {actions}
       <Textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}

@@ -10,6 +10,7 @@ import type {
   capabilityMatrixSchema,
   chatContextSchema,
   chatMessageSchema,
+  chatRunRefSchema,
   chatProviderSchema,
   chatSessionSchema,
   compileResultSchema,
@@ -170,6 +171,7 @@ export type PublishResourceVersionResponse = z.infer<typeof publishResourceVersi
 export type ResourceVersionIndexEntry = z.infer<typeof resourceVersionIndexEntrySchema>;
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
+export type ChatRunRef = z.infer<typeof chatRunRefSchema>;
 export type ChatSession = z.infer<typeof chatSessionSchema>;
 export type ChatContext = z.infer<typeof chatContextSchema>;
 

@@ -268,6 +268,8 @@ change and clears it on unmount so non-graph routes show no context.
 
 ## 4. Remote/graph flow invocation from Chat
 
+**Status: shipped 2026-09-23** ([STO-600](https://linear.app/stockwise-productions-prototypes/issue/STO-600)). See "As built" at the end of this section.
+
 ### Problem
 
 Chat can never trigger graph execution today — it only exchanges
@@ -297,21 +299,76 @@ messages with a provider.
 
 ### Acceptance criteria
 
-- [ ] Chat can start a run of a named flow/graph without the user
+- [x] Chat can start a run of a named flow/graph without the user
       leaving the chat panel.
-- [ ] Running status streams into the chat thread node-by-node, not
+- [x] Running status streams into the chat thread node-by-node, not
       just as a final result.
-- [ ] A completed run's chat card links to `[View run]` and
+- [x] A completed run's chat card links to `[View run]` and
       `[View flow]`, both landing the user in the correct existing HUD
       panel/canvas state.
-- [ ] Any execution against a released/production-scoped graph requires
+- [x] Any execution against a released/production-scoped graph requires
       an explicit user confirmation step before it starts.
-- [ ] No duplicate run-execution code path — this calls the same run
+- [x] No duplicate run-execution code path — this calls the same run
       API `RunPanel.tsx` already uses.
+
+### As built (§4)
+
+**Product decisions (user, 2026-09-23)**
+
+- **Confirmation policy.** Draft runs from an explicit picker or `/run` command start at once. Every **published-release** run, and every run **proposed from free text**, shows a `RunConfirmCard` and does nothing until the user clicks Run.
+- **Invocation.** A deterministic picker plus a `/run` command. There is no LLM tool-calling, so it works with every provider, including stub.
+
+**How to start a run from Chat**
+
+- **The "Run a graph" composer button** opens `ChatRunPicker`. It has:
+  - a graph select;
+  - a version select: Draft (saved), Latest release, or a specific release;
+  - one field per input variable.
+- **`/run <graph>[@latest|@<release_id>] [text | key=value …]`.** The graph can be an id or a name, quoted or not. Free text fills the first input variable.
+- **Plain "run / please run the <graph> [graph]"** matches only real graph names. It is always proposed through the confirm card, never executed directly. Any other text goes to the model as before.
+
+The parsing lives in `lib/chatRuns.ts`, which is pure and tested.
+
+**How the run executes and is recorded**
+
+- It calls the same `client.startRun` / `client.startReleaseRun` as the Run panel, using the chat session's provider and model as the environment. There is no new execution path.
+- The session records a `/run …` user message and an assistant message carrying a `ChatRunRef` (`backend/app/resource_models.py`, SDK `chatRunRefSchema`). The run card is rebuilt from that reference after a reload.
+- The model only ever receives the message text as history.
+
+**The run card and its links**
+
+- The `RunCard` (`components/ai-elements/run-card.tsx`) streams node progress with the Run panel's own `watchRunCompletion` and `streamRunEvents`. It shows:
+  - progress ticks and an "n/m" count;
+  - graph, version and environment;
+  - inputs;
+  - the result or error.
+- Once the run finishes it switches to the stored node traces.
+- **View run:** on the same graph, `graphContext.inspectRun` plus the Run panel; otherwise it navigates to `/graphs/<id>?run=<run>&panel=run`.
+- **View flow:** on the same graph it closes the panel so the canvas is visible; otherwise it navigates to `/graphs/<id>`.
+
+**Evidence**
+
+- `ChatPanel.test.tsx` covers four flows:
+  - a draft `/run` goes through `startRun` and is recorded;
+  - a release run waits for confirmation;
+  - free text is only proposed, and Cancel discards it;
+  - ordinary chat still reaches the model.
+- `chatRuns.test.ts` and `run-card.test.tsx`.
+- Backend `test_chat_run_reference_round_trips_and_survives_later_turns`.
+- Playwright on a live stub backend:
+  - the draft run streamed 7 steps to succeeded;
+  - the release run started only after Run was clicked;
+  - the free-text proposal appeared;
+  - the picker showed one field per input;
+  - View run opened the Run console on that run;
+  - the cards persisted across a reload;
+  - checked on mobile.
 
 ---
 
 ## 5. Collapsed reasoning/tool-use disclosure in Chat
+
+**Status: shipped 2026-09-23, together with §4** ([STO-601](https://linear.app/stockwise-productions-prototypes/issue/STO-601)). See "As built" at the end of this section.
 
 ### Problem
 
@@ -336,15 +393,22 @@ once those two exist.
 
 ### Acceptance criteria
 
-- [ ] Tool calls and reasoning steps default to collapsed, one line
+- [x] Tool calls and reasoning steps default to collapsed, one line
       each.
-- [ ] Expanding a row reveals full input/output without navigating away
+- [x] Expanding a row reveals full input/output without navigating away
       from Chat.
-- [ ] Large JSON payloads don't blow out the chat panel's width/height
+- [x] Large JSON payloads don't blow out the chat panel's width/height
       when expanded (scrollable/truncated with an expand-further
       affordance).
-- [ ] Implemented as an addition to `components/ai-elements/*`, not a
+- [x] Implemented as an addition to `components/ai-elements/*`, not a
       parallel component system.
+
+### As built (§5)
+
+- **`ToolStep`** (`components/ai-elements/tool-step.tsx`) renders one collapsed line per executed node, e.g. `▸ llm_classify · llm · 1ms · succeeded`. Expanding it shows the input and output.
+- **`JsonBlock`** keeps payloads from breaking the panel. It wraps lines, caps its height with its own scroller, and truncates anything over 1.2k characters behind "Show all (Nk chars)".
+- **Reasoning is out of scope.** No provider returns a reasoning trace today, so there are only step rows for now. Any future reasoning or tool-call source can reuse `ToolStep` unchanged.
+- **Evidence:** `run-card.test.tsx` covers collapsed-by-default rows, expansion, and truncation with Show all. The Playwright run check expanded `llm_classify` inside the card.
 
 ---
 
