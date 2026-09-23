@@ -12,7 +12,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Focus, HelpCircle, Play, Plus, Sparkles, X } from "lucide-react";
+import { BookOpen, FlaskConical, Focus, HelpCircle, ListChecks, MoreHorizontal, Play, Plus, Sparkles, Tag, Workflow, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -75,7 +75,8 @@ import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { WorkflowSummary } from "./WorkflowSummary";
 import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
-import { NodeContextMenu } from "./NodeContextMenu";
+import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
+import { MOBILE_TAB_BAR_HEIGHT, MobileTabBar } from "@/components/navigation/mobile-tab-bar";
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { FlowCanvas } from "./FlowCanvas";
@@ -317,6 +318,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // its run inputs and only mounts while open, so requests are handed over
   // as nonce-keyed props it consumes on mount/change.
   const [runSectionRequest, setRunSectionRequest] = useState<{ sectionId: RunPanelSectionId; nonce: number } | null>(null);
+  // Mobile tray "More" menu anchor (STO-607).
+  const [trayMenuAnchor, setTrayMenuAnchor] = useState<{ x: number; y: number } | null>(null);
   const [runFromNodeRequest, setRunFromNodeRequest] = useState<{ nodeId: string; nonce: number } | null>(null);
   // Screen-reader announcements from the canvas (orientation changes) --
   // previously passed as no-op stubs, so they were silently dropped.
@@ -1850,58 +1853,85 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           Compact-only: at desktop widths these same actions already have
           dedicated HUD buttons plus hotkeys/palette entries. */}
       {workbench.isCompact && (
-        <div className="glass-panel ghost-border absolute inset-x-4 bottom-4 z-20 flex items-center justify-around rounded-2xl border p-2">
-          <GraphSwitcherCombobox
-            graphs={libraryGraphs}
-            activeGraphId={graphId}
-            loading={libraryLoading}
-            iconOnly
-            openDirection="up"
-            onSelect={handleLibrarySelect}
-            onOpenChange={handleGraphSwitcherOpenChange}
-          />
-          {/* Graph-kit IconButtons (Slice 2): tooltips + pressed state, and
-              44px touch targets. Releases/Routing lab/Knowledge moved into
-              the header's ··· menu, making room for Chat. */}
-          <IconButton
-            size="touch"
-            tooltipPlacement="top"
-            label="Add node"
-            icon={<Plus size={18} />}
-            pressed={workbench.activePanel === "palette"}
-            onClick={() => workbench.toggle("palette")}
-          />
-          <IconButton
-            size="touch"
-            tooltipPlacement="top"
-            label="Run"
-            icon={<Play size={18} />}
-            pressed={workbench.activePanel === "run"}
-            onClick={() => workbench.toggle("run")}
-          />
-          <IconButton
-            size="touch"
-            tooltipPlacement="top"
-            label="Chat about this graph"
-            icon={<Sparkles size={18} />}
-            onClick={() => workbench.open("chat")}
-          />
-          <IconButton
-            size="touch"
-            tooltipPlacement="top"
-            label="Focus mode"
-            icon={<Focus size={18} />}
-            pressed={focusMode}
-            onClick={() => setFocusMode((value) => !value)}
-          />
-          <IconButton
-            size="touch"
-            tooltipPlacement="top"
-            label="Shortcuts and gestures"
-            icon={<HelpCircle size={18} />}
-            onClick={() => workbench.toggle("help")}
-          />
-        </div>
+        // Mobile bottom tray (STO-607): the same MobileTabBar the studio
+        // shell uses for its global tabs, with canvas actions instead. The
+        // graph switcher lives in the header; the less frequent canvas
+        // actions sit behind More.
+        <MobileTabBar
+          aria-label="Graph actions"
+          tabs={[
+            { id: "graphs", label: "Graphs", icon: <Workflow />, href: "/graphs" },
+            {
+              id: "add",
+              label: "Add",
+              icon: <Plus />,
+              active: workbench.activePanel === "palette",
+              onClick: () => workbench.toggle("palette"),
+            },
+            {
+              id: "run",
+              label: "Run",
+              icon: <Play />,
+              active: workbench.activePanel === "run",
+              onClick: () => workbench.toggle("run"),
+            },
+            {
+              id: "chat",
+              label: "Chat",
+              icon: <Sparkles />,
+              active: workbench.activePanel === "chat",
+              onClick: () => workbench.open("chat"),
+            },
+            {
+              id: "more",
+              label: "More",
+              icon: <MoreHorizontal />,
+              hasPopup: "menu",
+              active: trayMenuAnchor !== null,
+              onClick: (event) => setTrayMenuAnchor(menuAnchorFor(event.currentTarget, "right", 240)),
+            },
+          ]}
+        />
+      )}
+      {trayMenuAnchor && (
+        <NodeContextMenu
+          x={trayMenuAnchor.x}
+          y={trayMenuAnchor.y}
+          width={240}
+          title="Canvas"
+          // Open above the tray; +48 also covers the title row the menu's height estimate leaves out.
+          bottomReserve={MOBILE_TAB_BAR_HEIGHT + 48}
+          onClose={() => setTrayMenuAnchor(null)}
+          actions={[
+            { label: "Focus mode", icon: <Focus size={14} />, checked: focusMode, onClick: () => setFocusMode((value) => !value) },
+            { label: "Workflow summary", icon: <ListChecks size={14} />, onClick: () => setMobileSummaryExpanded(true) },
+            {
+              label: "Releases",
+              icon: <Tag size={14} />,
+              checked: workbench.activePanel === "releases",
+              separatorBefore: true,
+              onClick: () => workbench.toggle("releases"),
+            },
+            {
+              label: "Routing lab",
+              icon: <FlaskConical size={14} />,
+              checked: workbench.activePanel === "routingLab",
+              onClick: () => workbench.toggle("routingLab"),
+            },
+            {
+              label: "Knowledge",
+              icon: <BookOpen size={14} />,
+              checked: workbench.activePanel === "knowledge",
+              onClick: () => workbench.toggle("knowledge"),
+            },
+            {
+              label: "Shortcuts and gestures",
+              icon: <HelpCircle size={14} />,
+              separatorBefore: true,
+              onClick: () => workbench.toggle("help"),
+            },
+          ]}
+        />
       )}
       </div>
 

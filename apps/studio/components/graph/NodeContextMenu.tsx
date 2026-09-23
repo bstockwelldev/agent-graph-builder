@@ -57,6 +57,7 @@ export function NodeContextMenu({
   searchPlaceholder = "Search…",
   emptyMessage = "No matches.",
   width = 220,
+  bottomReserve = 56,
 }: {
   x: number;
   y: number;
@@ -73,6 +74,8 @@ export function NodeContextMenu({
   /** Shown instead of the (empty) action list when search matches none. */
   emptyMessage?: string;
   width?: number;
+  /** Space kept clear below the menu, e.g. a mobile tab bar under it. */
+  bottomReserve?: number;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -127,7 +130,7 @@ export function NodeContextMenu({
     labelCount * 20 +
     (searchable ? ITEM_HEIGHT + spacing[2] : 0);
   const left = Math.min(x, window.innerWidth - width - 8);
-  const top = Math.min(y, window.innerHeight - estimatedHeight - 56);
+  const top = Math.min(y, window.innerHeight - estimatedHeight - bottomReserve);
 
   return (
     <>
