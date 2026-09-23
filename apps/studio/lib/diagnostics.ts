@@ -5,9 +5,29 @@ import { color } from "./graph-theme";
 import type { Diagnostic, EdgeKind } from "@bstockwelldev/agent-graph-sdk";
 
 export type CompileIssue = {
+  /** Worst severity among this object's diagnostics. */
   severity: "error" | "warning";
+  /** Message of the worst (first-seen, at that severity) diagnostic. */
   caption: string;
+  /** Every diagnostic message for this object, worst first -- the node
+   * card's badge shows the count and lists them all on hover, instead of
+   * one sentence truncated to 42 characters
+   * (studio-graph-workbench-redesign-plan.md, Slice 4). */
+  messages?: string[];
 };
+
+function mergeIssue(existing: CompileIssue | undefined, diagnostic: Diagnostic): CompileIssue {
+  if (!existing) {
+    return { severity: diagnostic.severity, caption: diagnostic.message, messages: [diagnostic.message] };
+  }
+  const escalates = diagnostic.severity === "error" && existing.severity === "warning";
+  const messages = escalates
+    ? [diagnostic.message, ...(existing.messages ?? [existing.caption])]
+    : [...(existing.messages ?? [existing.caption]), diagnostic.message];
+  return escalates
+    ? { severity: "error", caption: diagnostic.message, messages }
+    : { ...existing, messages };
+}
 
 export function buildIssueMaps(diagnostics: Diagnostic[]): {
   nodeIssues: Map<string, CompileIssue>;
@@ -17,18 +37,11 @@ export function buildIssueMaps(diagnostics: Diagnostic[]): {
   const edgeIssues = new Map<string, CompileIssue>();
 
   for (const diagnostic of diagnostics) {
-    const issue: CompileIssue = { severity: diagnostic.severity, caption: diagnostic.message };
     if (diagnostic.edge_id) {
-      const existing = edgeIssues.get(diagnostic.edge_id);
-      if (!existing || (diagnostic.severity === "error" && existing.severity === "warning")) {
-        edgeIssues.set(diagnostic.edge_id, issue);
-      }
+      edgeIssues.set(diagnostic.edge_id, mergeIssue(edgeIssues.get(diagnostic.edge_id), diagnostic));
     }
     if (diagnostic.node_id) {
-      const existing = nodeIssues.get(diagnostic.node_id);
-      if (!existing || (diagnostic.severity === "error" && existing.severity === "warning")) {
-        nodeIssues.set(diagnostic.node_id, issue);
-      }
+      nodeIssues.set(diagnostic.node_id, mergeIssue(nodeIssues.get(diagnostic.node_id), diagnostic));
     }
   }
 

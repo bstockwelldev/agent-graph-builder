@@ -73,18 +73,16 @@ export const nodeType = {
   router: { bg: "#281c2a", border: "#b060a8", accent: "#d88cc8", label: "#e8b8dc" },
   output: { bg: "#152420", border: "#2f9e5c", accent: "#3cb873", label: "#9eddb8" },
   // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
-  // (studio-consolidation program). Fully executable as of Phase 2, but no
-  // palette entry can create these yet (NodePalette.tsx has its own literal
-  // node-type list — Phase 4 wires the ported studio's picker instead) —
-  // deliberately muted/neutral rather than given a real accent color, since
-  // Phase 4 replaces this whole token system with the ported design system
-  // anyway.
-  guardrail: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
-  rubric: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
-  human_gate: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
-  tool_loop: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
-  code_exec: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
-  branch: { bg: "#1c1f24", border: "#3a3f4b", accent: "#5c6270", label: "#8b909c" },
+  // (studio-consolidation program). These six previously shared one muted
+  // grey palette, which made them indistinguishable on the canvas
+  // (studio-graph-workbench-redesign-plan.md, Slice 1). Each now has its
+  // own hue, tuned the same way as the six above (label on bg >= 4.5:1).
+  guardrail: { bg: "#2a1a1d", border: "#b04a5a", accent: "#e88a98", label: "#f3c0c8" },
+  rubric: { bg: "#1f2418", border: "#7a9a36", accent: "#b4d468", label: "#d8ebb0" },
+  human_gate: { bg: "#172330", border: "#3f86b8", accent: "#7cc0ec", label: "#bfe0f6" },
+  tool_loop: { bg: "#2a2014", border: "#c07a2c", accent: "#f0aa5c", label: "#f6d2a8" },
+  code_exec: { bg: "#1a1f2c", border: "#5a6aa8", accent: "#9aa8e0", label: "#cdd4f2" },
+  branch: { bg: "#162524", border: "#2f9a8c", accent: "#5fd0c0", label: "#abe7df" },
 } as const;
 
 /** Blueprint-style canvas pane — subtle paper tone over dark base. */
@@ -217,8 +215,18 @@ export const shell = {
     tooltip: 60,
   },
   motion: {
+    /** Micro feedback: hover/press, pill/badge changes. */
+    fast: 120,
+    /** Default: drawers, menus, graph focus pan/zoom. */
+    standard: 200,
+    /** Large layout moves (auto-arrange). */
+    slow: 320,
+    easing: "cubic-bezier(0.2, 0, 0, 1)",
+    /** Kept as an alias of `standard` for existing call sites. */
     drawerMs: 200,
   },
+  /** Graph header height (studio-graph-workbench-redesign-plan.md, Slice 2). */
+  headerHeight: 52,
   shadow: {
     drawer: "0 8px 24px rgba(0, 0, 0, 0.45)",
   },

@@ -264,4 +264,58 @@
       background: var(--surface-container);
     }
   }
+
+  /* Graph-kit focus ring + hover (studio-graph-workbench-redesign-plan.md,
+     Slice 1). Token-styled graph components use inline styles, which can't
+     express :hover / :focus-visible -- these classes cover that gap. */
+  .agb-focus-ring:focus-visible {
+    outline: 2px solid #8fbaff;
+    outline-offset: 2px;
+  }
+  .agb-hoverable:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
+  .agb-menu-item:not(:disabled):hover,
+  .agb-menu-item:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    outline: none;
+  }
+  .agb-inline-input {
+    border-color: transparent !important;
+    background: transparent !important;
+  }
+  .agb-inline-input:hover,
+  .agb-inline-input:focus {
+    border-color: #2f333d !important;
+    background: #20232b !important;
+  }
+
+  /* Node runtime motion: a restrained pulse on the running node's status
+     dot (review section 57 -- "communicate activity, not decorate it"). */
+  @keyframes agb-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .agb-pulse {
+    animation: agb-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes agb-dash {
+    to {
+      stroke-dashoffset: -20;
+    }
+  }
+  .agb-edge-active {
+    stroke-dasharray: 6 4;
+    animation: agb-dash 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .agb-pulse,
+    .agb-edge-active {
+      animation: none;
+    }
+  }
 }

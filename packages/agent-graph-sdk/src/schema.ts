@@ -68,6 +68,9 @@ export function fingerprintGraph(graph: GraphDefinition): string {
       type: node.type,
       position: node.position,
       config: node.config,
+      // Node names live in extensions.label (Slice 4) -- a rename must mark
+      // the graph dirty even though it's excluded from semantic fingerprints.
+      extensions: node.extensions ?? null,
     })),
     edges: graph.edges.map((edge) => ({
       id: edge.id,
@@ -168,11 +171,27 @@ function documentPayload(graph: GraphDefinition) {
   };
 }
 
+// Display-only keys inside a node's `extensions` bag -- mirrors
+// backend/app/fingerprint.py's _DISPLAY_ONLY_EXTENSION_KEYS. `label` is the
+// node's user-given name (studio-graph-workbench-redesign-plan.md, Slice
+// 4): renaming a node is cosmetic, like moving it.
+const DISPLAY_ONLY_EXTENSION_KEYS = new Set(["label"]);
+
+function semanticExtensions(extensions: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!extensions) return extensions;
+  const kept = Object.fromEntries(Object.entries(extensions).filter(([key]) => !DISPLAY_ONLY_EXTENSION_KEYS.has(key)));
+  // Python's `kept or None`: a bag holding only display keys is absent.
+  return Object.keys(kept).length > 0 ? kept : null;
+}
+
 function semanticPayload(graph: GraphDefinition) {
   const payload = documentPayload(graph);
   return {
     ...payload,
-    nodes: payload.nodes.map(({ position: _position, ...rest }) => rest),
+    nodes: payload.nodes.map(({ position: _position, ...rest }) => ({
+      ...rest,
+      extensions: semanticExtensions(rest.extensions as Record<string, unknown> | null),
+    })),
   };
 }
 

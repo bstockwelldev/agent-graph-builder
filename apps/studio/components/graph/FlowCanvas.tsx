@@ -8,6 +8,7 @@ import {
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeTypes,
   type Node,
   type NodeTypes,
   type OnEdgesChange,
@@ -21,12 +22,13 @@ import {
   useState,
   type CSSProperties,
   type Dispatch,
+  type MutableRefObject,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type SetStateAction,
 } from "react";
 import { useCanvasOrientation } from "@/hooks/useCanvasOrientation";
-import { layoutNodesWithDagre } from "@/layout/dagreLayout";
+import { handlesForRankDir, layoutNodesWithDagre, needsInitialLayout, type LayoutSpacing } from "@/layout/dagreLayout";
 import { applyEdgePointerAffordance } from "@/lib/diagnostics";
 import { shouldRunDagre } from "@/lib/graphAuthoring";
 import type { GraphNodeData } from "./nodes/GraphNodeView";
@@ -35,6 +37,12 @@ import { canFitView } from "@/lib/canvasFit";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { Button } from "./ui/Button";
 import { CanvasEdgeLegend } from "./CanvasEdgeLegend";
+import { LabeledEdge } from "./edges/LabeledEdge";
+
+// Studio-graph-workbench-redesign-plan.md, Slice 6: every edge renders
+// through LabeledEdge (chip labels, run-state styling) -- registered as the
+// "default" type so edges built without an explicit `type` pick it up.
+const EDGE_TYPES: EdgeTypes = { default: LabeledEdge };
 
 const FIT_VIEW_PADDING = 0.18;
 const FIT_VIEW_DEBOUNCE_MS = 150;
@@ -85,6 +93,22 @@ type FlowCanvasProps = {
    * behavior above. `nodeId`/`edgeId` are looked up in the current
    * nodes/edges at the moment `nonce` changes. */
   focusRequest?: { nodeId?: string | null; edgeId?: string | null; nonce: number } | null;
+  /** Layout menu (studio-graph-workbench-redesign-plan.md, Slice 3). */
+  spacing?: LayoutSpacing;
+  showMinimap?: boolean;
+  /** Bump to fit the whole graph into view (Layout menu → Fit view). */
+  fitViewNonce?: number;
+  /** Filled with a function returning the flow-space point at the center
+   * of the visible pane -- GraphEditor places new nodes there (Slice 5). */
+  viewportCenterRef?: MutableRefObject<(() => { x: number; y: number }) | null>;
+  /** Compact/mobile: drop the zoom Controls and edge legend, which
+   * otherwise sit under GraphEditor's bottom action bar (pinch-zoom covers
+   * zooming, and edge chips now label conditional/fallback edges). */
+  compact?: boolean;
+  /** Pixels of the pane covered by floating chrome (the graph header on
+   * top; the mobile action bar at the bottom). Fit-to-view keeps the graph
+   * clear of them instead of centering it underneath. */
+  fitInsets?: { top: number; bottom: number };
 };
 
 function FlowCanvasInner({
@@ -118,6 +142,12 @@ function FlowCanvasInner({
   onLiveAnnouncement,
   onClearLiveAnnouncement,
   focusRequest = null,
+  spacing = "standard",
+  showMinimap = true,
+  fitViewNonce = 0,
+  viewportCenterRef,
+  compact = false,
+  fitInsets,
 }: FlowCanvasProps) {
   const reactFlow = useReactFlow();
   const paneRef = useRef<HTMLDivElement>(null);
@@ -143,6 +173,16 @@ function FlowCanvasInner({
     clearLiveAnnouncement,
   } = useCanvasOrientation(paneRef, graphOrientation);
 
+  const insetTop = fitInsets?.top;
+  const insetBottom = fitInsets?.bottom;
+  const fitPadding = useMemo(
+    () =>
+      insetTop === undefined || insetBottom === undefined
+        ? FIT_VIEW_PADDING
+        : { top: `${insetTop}px` as const, bottom: `${insetBottom}px` as const, x: "6%" as const },
+    [insetTop, insetBottom],
+  );
+
   const runFitView = useCallback(
     (requestId: number) => {
       if (!canFitView(paneSize.width, paneSize.height)) return;
@@ -151,13 +191,13 @@ function FlowCanvasInner({
         window.requestAnimationFrame(() => {
           if (layoutRequestRef.current !== requestId) return;
           reactFlow.fitView({
-            padding: FIT_VIEW_PADDING,
+            padding: fitPadding,
             duration: reducedMotion ? 0 : shell.motion.drawerMs,
           });
         });
       });
     },
-    [paneSize.height, paneSize.width, reactFlow, reducedMotion],
+    [fitPadding, paneSize.height, paneSize.width, reactFlow, reducedMotion],
   );
 
   useEffect(() => {
@@ -210,22 +250,31 @@ function FlowCanvasInner({
     prevGraphIdRef.current = graphId;
     prevRelayoutNonceRef.current = relayoutNonce;
 
+    const initialLayoutNeeded = graphIdChanged ? needsInitialLayout(currentNodes, effectiveRankDir) : false;
     if (
       !shouldRunDagre({
         rankDirChanged,
         graphIdChanged,
         relayoutRequested,
         topologyChanged: false,
+        initialLayoutNeeded,
       })
     ) {
+      // A freshly opened graph with trustworthy saved positions keeps them
+      // (Slice 5) -- but handle sides still have to follow the effective
+      // direction, which only the dagre pass used to set.
+      if (graphIdChanged) {
+        const { source, target } = handlesForRankDir(effectiveRankDir);
+        setNodes((current) => current.map((node) => ({ ...node, sourcePosition: source, targetPosition: target })));
+      }
       return;
     }
 
     const requestId = layoutRequestRef.current + 1;
     layoutRequestRef.current = requestId;
 
-    const laidOut = layoutNodesWithDagre(currentNodes, currentEdges, effectiveRankDir);
-    const transition = reducedMotion ? undefined : `transform ${shell.motion.drawerMs}ms ease`;
+    const laidOut = layoutNodesWithDagre(currentNodes, currentEdges, effectiveRankDir, spacing);
+    const transition = reducedMotion ? undefined : `transform ${shell.motion.slow}ms ${shell.motion.easing}`;
 
     setNodes(
       laidOut.map((node) => ({
@@ -238,7 +287,27 @@ function FlowCanvasInner({
     );
 
     runFitView(requestId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- spacing is read at relayout time; changing it bumps relayoutNonce (GraphEditor), which is what triggers the pass
   }, [effectiveRankDir, graphId, hasNodes, relayoutNonce, reducedMotion, runFitView, setNodes]);
+
+  const lastFitViewNonceRef = useRef(fitViewNonce);
+  useEffect(() => {
+    if (lastFitViewNonceRef.current === fitViewNonce) return;
+    lastFitViewNonceRef.current = fitViewNonce;
+    runFitView(layoutRequestRef.current);
+  }, [fitViewNonce, runFitView]);
+
+  useEffect(() => {
+    if (!viewportCenterRef) return;
+    viewportCenterRef.current = () => {
+      const rect = paneRef.current?.getBoundingClientRect();
+      if (!rect) return { x: 0, y: 0 };
+      return reactFlow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 3 });
+    };
+    return () => {
+      viewportCenterRef.current = null;
+    };
+  }, [reactFlow, viewportCenterRef]);
 
   useEffect(() => {
     if (!graphId || nodes.length === 0) return;
@@ -320,11 +389,16 @@ function FlowCanvasInner({
             onConnectStart?.(event);
           }
         }}
+        // React Flow's default minZoom (0.5) clamped fitView for graphs
+        // wider than ~2x the pane (an 8-node chain), so "fit" left the ends
+        // of the graph off-screen under the docked panels.
+        minZoom={0.15}
         snapToGrid={authoringEnabled}
         snapGrid={[24, 24]}
         defaultEdgeOptions={{ interactionWidth: 24 }}
         nodesConnectable={authoringEnabled}
         nodeTypes={nodeTypes}
+        edgeTypes={EDGE_TYPES}
         onNodeClick={(_, node) => onNodeClick(node.id)}
         onNodeDoubleClick={(_, node) => {
           // Double-click/double-tap a node to zoom in on just it — the one
@@ -362,8 +436,8 @@ function FlowCanvasInner({
       >
         <Background variant={BackgroundVariant.Lines} gap={24} size={1} color={canvas.grid} />
         <Background variant={BackgroundVariant.Lines} gap={120} size={1} color={canvas.gridMajor} />
-        <Controls />
-        <MiniMap nodeStrokeWidth={2} maskColor="rgba(13, 21, 32, 0.75)" />
+        {!compact && <Controls />}
+        {showMinimap && <MiniMap nodeStrokeWidth={2} maskColor="rgba(13, 21, 32, 0.75)" pannable zoomable />}
       </ReactFlow>
       {noGraphSelected && !graphLoading && (
         <div style={canvasEmptyStateStyle} role="status">
@@ -388,7 +462,7 @@ function FlowCanvasInner({
         </div>
       )}
       {overlay}
-      <CanvasEdgeLegend visible={Boolean(graphId) && !graphLoading && !noGraphSelected} />
+      <CanvasEdgeLegend visible={Boolean(graphId) && !graphLoading && !noGraphSelected && !compact} />
     </div>
   );
 }

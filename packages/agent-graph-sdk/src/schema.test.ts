@@ -114,6 +114,35 @@ describe("documentFingerprint / semanticFingerprint", () => {
       "fa21e31b4554e37aade554411779cde27352719980c0fa1042c7d64508119a77",
     );
   });
+
+  // studio-graph-workbench-redesign-plan.md, Slice 4 -- same fixtures and
+  // digests as backend/tests/test_fingerprint.py's
+  // test_node_label_is_display_only / test_non_display_extensions_stay_semantic.
+  const labeledFixture = (extensions?: Record<string, unknown>): GraphDefinition => ({
+    id: "fixture_graph",
+    name: "Fixture",
+    entry_node_id: "n1",
+    orientation: "auto",
+    nodes: [{ id: "n1", type: "input", position: { x: 1, y: 2 }, config: { a: 1 }, ...(extensions ? { extensions } : {}) }],
+    edges: [],
+  });
+
+  it("treats a node's extensions.label as display-only, matching the backend", () => {
+    const named = labeledFixture({ label: "Named" });
+    expect(documentFingerprint(named)).toBe("617d974406f8ad35fc3004dc233d1cd7d66cfb2b5e49219cb1b61381ce74813f");
+    expect(semanticFingerprint(named)).toBe("fa21e31b4554e37aade554411779cde27352719980c0fa1042c7d64508119a77");
+    expect(semanticFingerprint(labeledFixture({ label: "Renamed" }))).toBe(semanticFingerprint(named));
+  });
+
+  it("keeps non-display extension keys semantic, matching the backend", () => {
+    expect(semanticFingerprint(labeledFixture({ label: "Named", keep: 1 }))).toBe(
+      "adf41fe788bda907e980bbbb35ad6a5f7503b835ba65eed0c872ed5da107febc",
+    );
+  });
+
+  it("fingerprintGraph (local dirty check) sees a rename", () => {
+    expect(fingerprintGraph(labeledFixture({ label: "A" }))).not.toBe(fingerprintGraph(labeledFixture({ label: "B" })));
+  });
 });
 
 // Studio-consolidation Phase 1 (docs/planning/features/studio-consolidation-plan.md):

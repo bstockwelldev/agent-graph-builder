@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { usePersistedCollapse } from "@/hooks/usePersistedCollapse";
 import { shell, spacing, typeScale } from "@/lib/graph-theme";
@@ -13,6 +13,10 @@ type CollapsibleSectionProps = {
   headerActions?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Uncontrolled sections only: each new value force-opens the section
+   * and scrolls it into view (e.g. the graph header's Run▾ menu jumping to
+   * "Run with fixture" -- studio-graph-workbench-redesign-plan.md, Slice 2). */
+  revealNonce?: number;
 };
 
 export function CollapsibleSection({
@@ -25,11 +29,21 @@ export function CollapsibleSection({
   headerActions,
   open: openProp,
   onOpenChange,
+  revealNonce,
 }: CollapsibleSectionProps) {
   const isControlled = openProp !== undefined;
   const persisted = usePersistedCollapse(sectionId, defaultOpen, !isControlled);
   const open = isControlled ? openProp : persisted.open;
   const contentId = `section-${sectionId}`;
+  const sectionRef = useRef<HTMLElement>(null);
+  const { setOpen } = persisted;
+
+  useEffect(() => {
+    if (revealNonce === undefined) return;
+    if (!isControlled) setOpen(true);
+    sectionRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per nonce
+  }, [revealNonce]);
 
   const handleToggle = () => {
     if (isControlled) {
@@ -40,7 +54,7 @@ export function CollapsibleSection({
   };
 
   return (
-    <section style={style}>
+    <section ref={sectionRef} style={style}>
       <div style={headerRowStyle}>
         <button
           type="button"

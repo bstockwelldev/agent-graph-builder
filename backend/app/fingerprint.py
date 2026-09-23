@@ -110,12 +110,31 @@ def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
     }
 
 
+# Display-only keys inside a node's `extensions` bag. `label` is the node's
+# user-given name (studio-graph-workbench-redesign-plan.md, Slice 4):
+# renaming a node is cosmetic, exactly like moving it, so it must not change
+# the semantic fingerprint or appear in semantic diffs. Mirrored by
+# packages/agent-graph-sdk/src/schema.ts's DISPLAY_ONLY_EXTENSION_KEYS.
+_DISPLAY_ONLY_EXTENSION_KEYS = frozenset({"label"})
+
+
+def _semantic_extensions(extensions: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not extensions:
+        return extensions
+    kept = {k: v for k, v in extensions.items() if k not in _DISPLAY_ONLY_EXTENSION_KEYS}
+    # An extensions bag holding only display keys is semantically absent —
+    # so naming a previously-unnamed node leaves the fingerprint unchanged.
+    return kept or None
+
+
 def _semantic_payload(graph: GraphDefinition) -> dict[str, Any]:
     # Excludes node.position (canvas layout) — "moving a node must not
-    # invalidate runtime reproducibility" (design doc, Fingerprint section).
+    # invalidate runtime reproducibility" (design doc, Fingerprint section)
+    # — and display-only extension keys (the node's user-given name).
     payload = _document_payload(graph)
     for node in payload["nodes"]:
         node.pop("position", None)
+        node["extensions"] = _semantic_extensions(node["extensions"])
     return payload
 
 

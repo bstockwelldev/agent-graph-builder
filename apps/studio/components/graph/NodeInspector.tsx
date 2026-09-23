@@ -96,6 +96,9 @@ export function NodeInspector({
   onPolicyExceptionCreated,
   fullWidth = false,
   focusTab = null,
+  userLabel = "",
+  derivedLabel = "",
+  onLabelChange,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -121,6 +124,12 @@ export function NodeInspector({
    * {node.id}` at the call site), but `focusTab` itself doesn't change
    * identity just because the mount did. */
   focusTab?: { tab: string; nonce: number; nodeId: string } | null;
+  /** Node naming (studio-graph-workbench-redesign-plan.md, Slice 4): the
+   * user's name for this node (persisted as `extensions.label`), and the
+   * config-derived title shown when it's blank. */
+  userLabel?: string;
+  derivedLabel?: string;
+  onLabelChange?: (label: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState("configure");
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
@@ -138,6 +147,16 @@ export function NodeInspector({
         {NODE_TYPE_TAXONOMY[node.type].title}
       </div>
       <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2] }}>{node.id}</div>
+      {onLabelChange && (
+        <Field label="Name">
+          <TextInput
+            value={userLabel}
+            placeholder={derivedLabel}
+            aria-label="Node name"
+            onChange={(e) => onLabelChange(e.target.value)}
+          />
+        </Field>
+      )}
       <IssueList issues={issues} />
 
       <Tabs tabs={NODE_INSPECTOR_TABS} activeId={activeTab} onChange={setActiveTab} />
