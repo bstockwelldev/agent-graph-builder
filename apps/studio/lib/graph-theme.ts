@@ -43,11 +43,34 @@ export const surface = {
   raised: color.neutral[800],
   border: color.neutral[700],
   borderStrong: color.neutral[600],
+  // Wave 2.5 (studio-graph-workbench-redesign-plan.md, "Inspector & Run
+  // console v2"): inputs sit in a well *darker* than the panel, and field
+  // groups on a card slightly *lighter* than it -- the old inputs used
+  // `raised` (lighter) with a near-invisible border, ~1.2:1 against the
+  // panel, so they read as flat boxes rather than places to type.
+  inset: "#0f1116",
+  card: "#1d2027",
+} as const;
+
+/** Wave 2.5 border trio (see `surface.inset`). `default` is >= 3:1 against
+ * `surface.inset` so input edges meet WCAG 1.4.11 non-text contrast. */
+export const border = {
+  subtle: "#2a2e37",
+  default: "#646b7c",
+  focus: color.primary[500],
 } as const;
 
 export const text = {
   primary: color.neutral[50],
   muted: color.neutral[100],
+  /** Helper/secondary text as a real colour (>= 4.5:1 on panel and card),
+   * replacing the `opacity: 0.6` dimming the panels used to rely on. */
+  secondary: "#aab0bc",
+} as const;
+
+/** Wave 2.5 control heights. */
+export const control = {
+  height: { sm: 28, md: 36 },
 } as const;
 
 /** Status colors, one per run/node lifecycle state. */

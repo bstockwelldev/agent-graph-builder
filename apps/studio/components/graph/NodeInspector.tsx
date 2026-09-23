@@ -1,5 +1,20 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Braces,
+  ChevronDown,
+  Copy,
+  CornerDownRight,
+  History,
+  MoreHorizontal,
+  Play,
+  Settings2,
+  Shield,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import type {
@@ -11,53 +26,42 @@ import type {
   NodeTrace,
   NodeType,
   PolicyException,
+  ToolDefinition,
 } from "@bstockwelldev/agent-graph-sdk";
 import {
-  accentSurface,
+  border,
   color,
   fontFamily,
-  localType,
   nodeType as nodeTypeAccents,
   radius,
-  shell,
   spacing,
+  status as statusColor,
   surface,
   text,
-  typeScale,
 } from "@/lib/graph-theme";
 import { client } from "@/lib/api-client";
+import { partitionDiagnosticsByField } from "@/lib/diagnostics";
 import { GenuiSurfaceView } from "@/components/genui/genui-renderer";
 import { tryParseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
-import { CollapsibleSection } from "./ui/CollapsibleSection";
-import { Select, TextArea, TextInput } from "./ui/fields";
+import { Combobox, type ComboboxOption } from "./ui/Combobox";
+import { Field, FieldIssues } from "./ui/Field";
+import { Group } from "./ui/Group";
+import { IconButton } from "./ui/IconButton";
+import { IconTabs, type IconTab } from "./ui/IconTabs";
+import { NumberStepper } from "./ui/NumberStepper";
+import { PanelFrame, PanelHeader } from "./ui/PanelFrame";
+import { SegmentedControl } from "./ui/SegmentedControl";
+import { TemplateEditor } from "./ui/TemplateEditor";
+import { Toggle } from "./ui/Toggle";
+import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { JsonEditor } from "./ui/JsonEditor";
 import { NodeHistoryTab } from "./NodeHistoryTab";
-import { Tabs } from "./ui/Tabs";
-
-function IssueList({ issues }: { issues: Diagnostic[] }) {
-  if (issues.length === 0) return null;
-  return (
-    <div style={{ marginBottom: spacing[3] }}>
-      {issues.map((issue, index) => (
-        <div
-          key={`${issue.code}-${index}`}
-          style={{
-            ...typeScale.caption,
-            color: issue.severity === "error" ? accentSurface.destructive.text : color.warning[500],
-            marginBottom: spacing[1],
-            lineHeight: "16px",
-          }}
-        >
-          {issue.message}
-        </div>
-      ))}
-    </div>
-  );
-}
+import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
+import { NODE_TYPE_ICONS } from "./nodeTypeIcons";
 
 export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): GraphEdge {
   const kind = (patch.kind ?? edge.kind) as EdgeKind;
@@ -65,25 +69,47 @@ export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): G
   return { ...edge, kind, condition };
 }
 
-const NODE_INSPECTOR_TABS = [
-  { id: "configure", label: "Configure" },
-  { id: "io", label: "I/O" },
-  { id: "policy", label: "Policy" },
-  { id: "run", label: "Run" },
-  // Wave 2 (studio-graph-workbench-redesign-plan.md): the node's metrics
-  // and recent executions across runs, not just the loaded run's trace.
-  { id: "history", label: "History" },
-  // Raw JSON config editor (studio-config-editor-and-console-plan.md §6).
-  { id: "raw", label: "Raw" },
-];
+/** Config fields each node type's Configure form renders -- the fields
+ * inline diagnostics can attach to (Wave 2.5). Anything else stays in the
+ * form's top banner. */
+const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
+  input: ["variableName"],
+  prompt: ["template"],
+  llm: ["provider", "model", "systemPrompt"],
+  tool: ["toolName", "inputVariable"],
+  router: ["routes"],
+  output: [],
+  guardrail: ["allowUrls"],
+  rubric: ["rubricFailOnFindings"],
+  branch: ["content", "routes"],
+  tool_loop: ["provider", "model", "systemPrompt", "maxToolIterations"],
+  code_exec: ["content", "codeExecLanguage", "toolName"],
+  human_gate: ["content", "genuiCheckpointSurfaceJson"],
+};
+
+const EDGE_KIND_OPTIONS = (["sequence", "conditional", "default"] as const).map((value) => ({
+  value,
+  label: value === "sequence" ? "Always" : value === "conditional" ? "If match" : "Fallback",
+  title: EDGE_KIND_TAXONOMY[value].summary,
+}));
+
+const STATUS_WORD: Record<string, string> = {
+  running: "Running",
+  succeeded: "Succeeded",
+  failed: "Failed",
+  paused: "Paused",
+};
 
 /**
- * Phase 10 Slice B (docs/planning/features/studio-shell-ux-gap-analysis.md,
- * "Selection dock rebuild"): Configure/I-O/Policy/Run tabs on the node
- * inspector, per `studio-ux-revision-plan.md` Section 6. `GraphEditor.tsx`
- * remounts this component on node-selection change (`key={node.id}`), so
- * `activeTab` resets to "configure" whenever a different node is selected
- * rather than needing its own reset effect.
+ * Node details panel -- "Inspector v2" (studio-graph-workbench-redesign-plan.md,
+ * Wave 2.5 / STO-606). Identity lives in the header (type chip, inline-
+ * editable name, id · last-run status · issue count, and actions), sections
+ * are icon tabs with counts, configuration is grouped into cards with
+ * purpose-built inputs (combobox, template editor, toggle, stepper,
+ * segmented control), and diagnostics render under the field they concern.
+ *
+ * `GraphEditor.tsx` remounts this component on node-selection change
+ * (`key={node.id}`), so `activeTab` resets per node without its own effect.
  */
 export function NodeInspector({
   node,
@@ -96,9 +122,9 @@ export function NodeInspector({
   onEdgeChange,
   onDelete,
   onDuplicate,
+  onRunFromHere,
   onOpenRunPanel,
   onPolicyExceptionCreated,
-  fullWidth = false,
   focusTab = null,
   userLabel = "",
   derivedLabel = "",
@@ -106,6 +132,7 @@ export function NodeInspector({
   historyRefreshKey = null,
   onInspectRun,
   onTabChange,
+  templateVariables = [],
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -113,27 +140,25 @@ export function NodeInspector({
   outgoingEdges?: GraphEdge[];
   /** Edges targeting this node, for the I/O tab's input-port cross-reference. */
   incomingEdges?: GraphEdge[];
-  /** This node's most recent execution, for the Run tab. */
+  /** This node's most recent execution, for the Run tab and header status. */
   selectedTrace?: NodeTrace | null;
   onConfigChange: (config: Record<string, unknown>) => void;
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
   onDuplicate?: () => void;
+  onRunFromHere?: () => void;
   onOpenRunPanel?: () => void;
   /** Called after a policy exception is created/deleted from the Policy tab,
    * so the caller can re-validate and pick up the diagnostic change. */
   onPolicyExceptionCreated?: () => void;
+  /** Kept for call-site compatibility; the frame is always full-width now. */
   fullWidth?: boolean;
   /** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
-   * force-open a specific tab (e.g. "io" for a contract diagnostic). Guarded
-   * by `nodeId` so a stale request from a previously-selected node can never
-   * apply to this one — this component remounts on node change (`key=
-   * {node.id}` at the call site), but `focusTab` itself doesn't change
-   * identity just because the mount did. */
+   * force-open a specific tab. Guarded by `nodeId` so a stale request from a
+   * previously-selected node can never apply to this one. */
   focusTab?: { tab: string; nonce: number; nodeId: string } | null;
-  /** Node naming (studio-graph-workbench-redesign-plan.md, Slice 4): the
-   * user's name for this node (persisted as `extensions.label`), and the
-   * config-derived title shown when it's blank. */
+  /** Node naming: the user's name (persisted as `extensions.label`) and the
+   * config-derived title shown as the placeholder when it's blank. */
   userLabel?: string;
   derivedLabel?: string;
   onLabelChange?: (label: string) => void;
@@ -143,6 +168,9 @@ export function NodeInspector({
   onInspectRun?: (runId: string) => void;
   /** Reports tab changes so GraphEditor can mirror them into the URL. */
   onTabChange?: (tab: string) => void;
+  /** Variables `{…}` can reference in this node's templates (run inputs +
+   * upstream), for highlighting and autocomplete. */
+  templateVariables?: readonly string[];
 }) {
   const [activeTab, setActiveTabState] = useState("configure");
   const setActiveTab = (tab: string) => {
@@ -150,34 +178,140 @@ export function NodeInspector({
     onTabChange?.(tab);
   };
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
-  const accent = nodeTypeAccents[node.type]?.accent ?? color.primary[600];
+  const tokens = nodeTypeAccents[node.type];
+  const Icon = NODE_TYPE_ICONS[node.type];
+  const taxonomy = NODE_TYPE_TAXONOMY[node.type];
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (focusTab && focusTab.nodeId === node.id) setActiveTab(focusTab.tab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on nonce/nodeId change only, not on every node.id re-render
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on nonce/nodeId change only
   }, [focusTab?.nonce, focusTab?.nodeId, node.id]);
 
-  return (
-    <div style={panelStyle(fullWidth)}>
-      <div style={{ borderTop: `3px solid ${accent}`, margin: `-${shell.panelPadding}px -${shell.panelPadding}px ${spacing[3]}px` }} />
-      <div style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[1] - 2 }}>
-        {NODE_TYPE_TAXONOMY[node.type].title}
-      </div>
-      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2] }}>{node.id}</div>
-      {onLabelChange && (
-        <Field label="Name">
-          <TextInput
+  const portIssues = issues.filter((issue) => issue.port_id);
+  const policyIssues = issues.filter((issue) => issue.category === "policy");
+  const errorCount = issues.filter((issue) => issue.severity === "error").length;
+  const warningCount = issues.length - errorCount;
+  const traceStatus = selectedTrace?.status;
+
+  const tabs: IconTab[] = [
+    { id: "configure", label: "Config", icon: <Settings2 size={14} /> },
+    { id: "io", label: "I/O", icon: <ArrowLeftRight size={14} />, count: portIssues.length, countTone: "warning" },
+    { id: "policy", label: "Policy", icon: <Shield size={14} />, count: policyIssues.length, countTone: "error" },
+    { id: "run", label: "Run", icon: <Play size={14} /> },
+    { id: "history", label: "History", icon: <History size={14} />, iconOnly: true },
+    { id: "raw", label: "Raw JSON", icon: <Braces size={14} />, iconOnly: true },
+  ];
+
+  const header = (
+    <PanelHeader
+      icon={
+        <span
+          title={taxonomy.title}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 36,
+            height: 36,
+            flexShrink: 0,
+            borderRadius: radius.lg,
+            border: `1px solid ${tokens.border}`,
+            background: tokens.bg,
+            color: tokens.accent,
+          }}
+        >
+          <Icon size={18} aria-hidden="true" />
+        </span>
+      }
+      title={
+        onLabelChange ? (
+          <input
             value={userLabel}
             placeholder={derivedLabel}
             aria-label="Node name"
-            onChange={(e) => onLabelChange(e.target.value)}
+            onChange={(event) => onLabelChange(event.target.value)}
+            className="agb-inline-input agb-focus-ring"
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              margin: "-3px 0 -3px -6px",
+              padding: "2px 6px",
+              borderRadius: radius.md,
+              border: "1px solid transparent",
+              color: text.primary,
+              fontSize: 15,
+              fontWeight: 650,
+              lineHeight: "22px",
+            }}
           />
-        </Field>
-      )}
-      <IssueList issues={issues} />
+        ) : (
+          derivedLabel
+        )
+      }
+      subtitle={
+        <>
+          <span style={{ color: tokens.label, fontWeight: 600 }}>{taxonomy.title.replace(/ node$/i, "")}</span>
+          <span aria-hidden="true">·</span>
+          <code style={{ fontFamily: fontFamily.mono, fontSize: 11 }}>{node.id}</code>
+          {traceStatus && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: statusColor[traceStatus] }}>
+              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 999, background: statusColor[traceStatus] }} />
+              {STATUS_WORD[traceStatus] ?? traceStatus}
+            </span>
+          )}
+          {issues.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("configure")}
+              className="agb-focus-ring"
+              style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: 0, border: "none", background: "transparent", cursor: "pointer", fontSize: 12, color: errorCount ? color.error[500] : color.warning[500] }}
+            >
+              {errorCount ? <XCircle size={12} aria-hidden="true" /> : <AlertTriangle size={12} aria-hidden="true" />}
+              {errorCount ? `${errorCount} error${errorCount === 1 ? "" : "s"}` : `${warningCount} warning${warningCount === 1 ? "" : "s"}`}
+            </button>
+          )}
+        </>
+      }
+      actions={
+        <>
+          {onRunFromHere && node.type !== "input" && (
+            <IconButton label="Run from here" icon={<Play size={15} />} onClick={onRunFromHere} tooltipPlacement="bottom" />
+          )}
+          {onDuplicate && <IconButton label="Duplicate" icon={<Copy size={15} />} onClick={onDuplicate} tooltipPlacement="bottom" />}
+          <IconButton
+            ref={moreRef}
+            label="More node actions"
+            icon={<MoreHorizontal size={16} />}
+            aria-haspopup="menu"
+            onClick={() => moreRef.current && setMenuAnchor(menuAnchorFor(moreRef.current, "right", 200))}
+            tooltipPlacement="bottom"
+          />
+          {menuAnchor && (
+            <NodeContextMenu
+              x={menuAnchor.x}
+              y={menuAnchor.y}
+              width={200}
+              title="Node"
+              onClose={() => setMenuAnchor(null)}
+              actions={[
+                ...(onOpenRunPanel ? [{ label: "Open Run panel", icon: <Play size={14} />, onClick: onOpenRunPanel }] : []),
+                { label: "Delete node", icon: <Trash2 size={14} />, tone: "destructive" as const, onClick: onDelete, separatorBefore: Boolean(onOpenRunPanel) },
+              ]}
+            />
+          )}
+        </>
+      }
+    />
+  );
 
-      <Tabs tabs={NODE_INSPECTOR_TABS} activeId={activeTab} onChange={setActiveTab} />
-
+  return (
+    <PanelFrame
+      aria-label="Node details"
+      header={header}
+      tabs={<IconTabs aria-label="Node sections" tabs={tabs} activeId={activeTab} onChange={setActiveTab} />}
+    >
       {activeTab === "configure" && (
         <ConfigureTab
           node={node}
@@ -186,38 +320,83 @@ export function NodeInspector({
           outgoingEdges={outgoingEdges}
           onEdgeChange={onEdgeChange}
           set={set}
+          templateVariables={templateVariables}
         />
       )}
       {activeTab === "io" && <IoTab node={node} issues={issues} incomingEdges={incomingEdges} outgoingEdges={outgoingEdges} />}
       {activeTab === "policy" && (
-        <PolicyTab
-          graphId={graphId}
-          nodeId={node.id}
-          issues={issues}
-          onPolicyExceptionCreated={onPolicyExceptionCreated}
-        />
+        <PolicyTab graphId={graphId} nodeId={node.id} issues={issues} onPolicyExceptionCreated={onPolicyExceptionCreated} />
       )}
       {activeTab === "run" && <RunTab selectedTrace={selectedTrace} onOpenRunPanel={onOpenRunPanel} />}
       {activeTab === "history" &&
         (graphId ? (
           <NodeHistoryTab graphId={graphId} nodeId={node.id} refreshKey={historyRefreshKey} onInspectRun={onInspectRun} />
         ) : (
-          <div style={{ ...typeScale.caption, opacity: 0.6 }}>Save the graph to see this node&apos;s history.</div>
+          <Muted>Save the graph to see this node&apos;s history.</Muted>
         ))}
-      {activeTab === "raw" && <JsonEditor value={node.config} onApply={onConfigChange} />}
+      {activeTab === "raw" && (
+        <Group title="Raw config" icon={<Braces size={13} />}>
+          <JsonEditor value={node.config} onApply={onConfigChange} />
+        </Group>
+      )}
+    </PanelFrame>
+  );
+}
 
-      <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[3] }}>
-        {onDuplicate && (
-          <Button variant="secondary" style={{ minHeight: 44 }} onClick={onDuplicate}>
-            Duplicate
-          </Button>
-        )}
-        <Button variant="destructive" style={{ minHeight: 44 }} onClick={onDelete}>
-          Delete node
-        </Button>
-      </div>
+function Muted({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return <div style={{ fontSize: 12, lineHeight: "18px", color: text.secondary, ...style }}>{children}</div>;
+}
+
+function IntentBlurb({ nodeType }: { nodeType: NodeType }) {
+  const taxonomy = NODE_TYPE_TAXONOMY[nodeType];
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: spacing[3], fontSize: 12, lineHeight: "18px", color: text.secondary }}>
+      {taxonomy.summary}{" "}
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="agb-focus-ring"
+        style={{ display: "inline-flex", alignItems: "center", gap: 2, padding: 0, border: "none", background: "transparent", color: color.primary[500], cursor: "pointer", fontSize: 12 }}
+      >
+        {open ? "Less" : "Learn more"}
+        <ChevronDown size={12} aria-hidden="true" style={{ transform: open ? "rotate(180deg)" : undefined }} />
+      </button>
+      {open && <p style={{ margin: `${spacing[1]}px 0 0`, color: text.muted }}>{taxonomy.details}</p>}
     </div>
   );
+}
+
+const BUILTIN_TOOLS: ComboboxOption[] = [
+  { value: "lookup_topic", label: "lookup_topic", description: "Demo topic lookup", group: "Built-in" },
+  { value: "web_search", label: "web_search", description: "Web search", group: "Built-in" },
+  { value: "calculator", label: "calculator", description: "Arithmetic", group: "Built-in" },
+];
+
+function useToolOptions(enabled: boolean): ComboboxOption[] {
+  const [registered, setRegistered] = useState<ToolDefinition[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    client.tools
+      .list()
+      .then((tools) => {
+        if (!cancelled) setRegistered(tools);
+      })
+      .catch(() => {
+        // Registry unavailable: built-ins still work.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+  return [
+    ...BUILTIN_TOOLS,
+    ...registered
+      .filter((tool) => !BUILTIN_TOOLS.some((builtin) => builtin.value === tool.id))
+      .map((tool) => ({ value: tool.id, label: tool.id, description: tool.description || undefined, group: "Registry" })),
+  ];
 }
 
 function ConfigureTab({
@@ -227,6 +406,7 @@ function ConfigureTab({
   outgoingEdges,
   onEdgeChange,
   set,
+  templateVariables,
 }: {
   node: GraphNode;
   graphId: string | null;
@@ -234,210 +414,179 @@ function ConfigureTab({
   outgoingEdges: GraphEdge[];
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   set: (key: string, value: unknown) => void;
+  templateVariables: readonly string[];
 }) {
+  const { byField, rest } = partitionDiagnosticsByField(
+    issues.filter((issue) => !issue.edge_id),
+    RENDERED_FIELDS[node.type],
+  );
+  const fieldIssues = (key: string) => byField[key] ?? [];
+  const toolOptions = useToolOptions(node.type === "tool");
+  const str = (key: string, fallback = "") => (node.config[key] as string | undefined) ?? fallback;
+  const vars = [...new Set([...templateVariables, "upstream"])];
+
   return (
     <div>
       <IntentBlurb nodeType={node.type} />
+      {rest.length > 0 && (
+        <div role="alert" style={{ marginBottom: spacing[3], padding: spacing[2], borderRadius: radius.lg, border: `1px solid ${rest.some((i) => i.severity === "error") ? color.error[700] : color.warning[700]}`, background: "rgba(226, 100, 90, 0.06)" }}>
+          <FieldIssues issues={rest} />
+        </div>
+      )}
 
       {node.type === "input" && (
-        <Field label="Variable name">
-          <TextInput
-            value={(node.config.variableName as string) ?? ""}
-            onChange={(e) => set("variableName", e.target.value)}
-          />
-        </Field>
+        <Group title="Input">
+          <Field label="Variable name" hint="The key this node reads from the run input. The Run panel shows one field per input variable." issues={fieldIssues("variableName")}>
+            {(id) => <TextInput id={id} value={str("variableName")} style={{ fontFamily: fontFamily.mono }} onChange={(e) => set("variableName", e.target.value)} />}
+          </Field>
+        </Group>
       )}
 
       {node.type === "prompt" && (
-        <Field label="Template (use {question}, {upstream}, and any run variable)">
-          <TextArea
-            style={{ height: 120, fontFamily: fontFamily.mono }}
-            value={(node.config.template as string) ?? ""}
-            onChange={(e) => set("template", e.target.value)}
-          />
-        </Field>
+        <Group title="Template">
+          <Field label="Prompt template" hint="Use {variables} from the run input, or {upstream} for the previous node's output." meta={`${str("template").length} chars`} issues={fieldIssues("template")}>
+            {(id) => <TemplateEditor id={id} aria-label="Prompt template" title="Prompt template" value={str("template")} onChange={(v) => set("template", v)} variables={vars} rows={6} />}
+          </Field>
+        </Group>
       )}
 
-      {node.type === "llm" && (
+      {(node.type === "llm" || node.type === "tool_loop") && (
         <>
-          <ProviderModelPicker
-            graphId={graphId}
-            provider={(node.config.provider as ChatProvider) ?? "ollama"}
-            model={(node.config.model as string) ?? "qwen2.5:3b"}
-            onProviderChange={(provider) => set("provider", provider)}
-            onModelChange={(model) => set("model", model)}
-          />
-          <Field label="System prompt">
-            <TextArea
-              style={{ height: 80 }}
-              value={(node.config.systemPrompt as string) ?? ""}
-              onChange={(e) => set("systemPrompt", e.target.value)}
+          <Group title="Model">
+            <ProviderModelPicker
+              graphId={graphId}
+              provider={(node.config.provider as ChatProvider) ?? "ollama"}
+              model={str("model", "qwen2.5:3b")}
+              onProviderChange={(provider) => set("provider", provider)}
+              onModelChange={(model) => set("model", model)}
             />
-          </Field>
+            <FieldIssues issues={[...fieldIssues("provider"), ...fieldIssues("model")]} />
+          </Group>
+          <Group title="Instructions">
+            <Field label="System prompt" meta={`${str("systemPrompt").length} chars`} issues={fieldIssues("systemPrompt")}>
+              {(id) => (
+                <TemplateEditor id={id} aria-label="System prompt" title="System prompt" value={str("systemPrompt")} onChange={(v) => set("systemPrompt", v)} variables={vars} rows={4} placeholder="Optional — how the model should behave" />
+              )}
+            </Field>
+            {node.type === "tool_loop" && (
+              <Field label="Max tool iterations" hint="Upper bound on tool-call rounds (1–64)." issues={fieldIssues("maxToolIterations")}>
+                {(id) => (
+                  <NumberStepper id={id} aria-label="Max tool iterations" value={Number(node.config.maxToolIterations ?? 4)} min={1} max={64} onChange={(v) => set("maxToolIterations", v)} />
+                )}
+              </Field>
+            )}
+          </Group>
         </>
       )}
 
       {node.type === "tool" && (
-        <>
-          <Field label="Tool">
-            <Select
-              value={(node.config.toolName as string) ?? "lookup_topic"}
-              onChange={(e) => set("toolName", e.target.value)}
-            >
-              <option value="lookup_topic">lookup_topic</option>
-            </Select>
+        <Group title="Tool">
+          <Field label="Tool" issues={fieldIssues("toolName")}>
+            {(id) => (
+              <Combobox id={id} aria-label="Tool" value={str("toolName", "lookup_topic")} options={toolOptions} onChange={(v) => set("toolName", v)} searchPlaceholder="Search tools…" />
+            )}
           </Field>
-          <Field label="Input variable">
-            <TextInput
-              value={(node.config.inputVariable as string) ?? "question"}
-              onChange={(e) => set("inputVariable", e.target.value)}
-            />
+          <Field label="Input variable" hint="The variable passed to the tool as its input." issues={fieldIssues("inputVariable")}>
+            {(id) => (
+              <Combobox
+                id={id}
+                aria-label="Input variable"
+                value={str("inputVariable", "question")}
+                options={templateVariables.map((name) => ({ value: name, label: name }))}
+                onChange={(v) => set("inputVariable", v)}
+                allowCustom
+                searchPlaceholder="Variable name…"
+              />
+            )}
           </Field>
-        </>
+        </Group>
       )}
 
-      {node.type === "router" && (
-        <div style={{ marginBottom: spacing[3] }}>
-          <TaxonomyTooltip
-            title={ROUTER_RULES_TAXONOMY.title}
-            summary={ROUTER_RULES_TAXONOMY.summary}
-            details={ROUTER_RULES_TAXONOMY.details}
-          >
-            <div style={{ ...localType.label, opacity: 0.6, marginBottom: spacing[2] }}>Outgoing edges</div>
-          </TaxonomyTooltip>
-          {outgoingEdges.length === 0 ? (
-            <div style={{ ...typeScale.caption, opacity: 0.75, lineHeight: "18px" }}>
-              Connect edges from this router on the canvas to define branches.
-            </div>
-          ) : (
-            outgoingEdges.map((edge) => {
-              const edgeIssues = issues.filter((issue) => issue.edge_id === edge.id);
-              return (
-                <RouterEdgeRow
-                  key={edge.id}
-                  edge={edge}
-                  issues={edgeIssues}
-                  onChange={(patch) => onEdgeChange?.(edge.id, patch)}
-                />
-              );
-            })
+      {(node.type === "router" || node.type === "branch") && (
+        <Group
+          title={`Routes · ${outgoingEdges.length}`}
+          action={
+            <TaxonomyTooltip layout="inline" title={ROUTER_RULES_TAXONOMY.title} summary={ROUTER_RULES_TAXONOMY.summary} details={ROUTER_RULES_TAXONOMY.details}>
+              <span />
+            </TaxonomyTooltip>
+          }
+        >
+          {node.type === "branch" && (
+            <Field label="Match content" hint="Substring gate on the upstream value." issues={fieldIssues("content")}>
+              {(id) => <TextInput id={id} value={str("content")} onChange={(e) => set("content", e.target.value)} />}
+            </Field>
           )}
-        </div>
+          <FieldIssues issues={fieldIssues("routes")} />
+          {outgoingEdges.length === 0 ? (
+            <Muted>Connect edges from this node on the canvas to define routes.</Muted>
+          ) : (
+            outgoingEdges.map((edge) => (
+              <RouterEdgeRow
+                key={edge.id}
+                edge={edge}
+                issues={issues.filter((issue) => issue.edge_id === edge.id)}
+                onChange={(patch) => onEdgeChange?.(edge.id, patch)}
+              />
+            ))
+          )}
+        </Group>
       )}
 
       {node.type === "output" && (
-        <div style={{ ...typeScale.caption, opacity: 0.75 }}>
-          No configuration -- returns whatever reaches it as the run result.
-        </div>
+        <Group title="Output">
+          <Muted>No configuration — whatever reaches this node becomes the run result.</Muted>
+        </Group>
       )}
 
-      {/* Absorbed from micro-ui-agent-builder's FlowStep vocabulary
-          (studio-consolidation Phase 1/2). Field names match
-          backend/app/node_configs.py's typed models exactly, not MUI's
-          flowStepSchema — the two diverged during the port (see the Phase
-          4d "as-built" notes: no `content` on guardrail/rubric, no
-          `toolChoice` on tool_loop). */}
-
       {node.type === "guardrail" && (
-        <Checkbox
-          label="Allow URLs in content"
-          checked={Boolean(node.config.allowUrls)}
-          onChange={(checked) => set("allowUrls", checked)}
-        />
+        <Group title="Rules">
+          <Toggle label="Allow URLs in content" description="When off, content containing URLs is blocked." checked={Boolean(node.config.allowUrls)} onChange={(v) => set("allowUrls", v)} />
+          <FieldIssues issues={fieldIssues("allowUrls")} />
+        </Group>
       )}
 
       {node.type === "rubric" && (
-        <Checkbox
-          label="Fail the node on rubric findings"
-          checked={Boolean(node.config.rubricFailOnFindings)}
-          onChange={(checked) => set("rubricFailOnFindings", checked)}
-        />
-      )}
-
-      {node.type === "branch" && (
-        <Field label="Content (substring gate on the upstream value)">
-          <TextArea
-            style={{ height: 80 }}
-            value={(node.config.content as string) ?? ""}
-            onChange={(e) => set("content", e.target.value)}
-          />
-        </Field>
-      )}
-
-      {node.type === "tool_loop" && (
-        <>
-          <ProviderModelPicker
-            graphId={graphId}
-            provider={(node.config.provider as ChatProvider) ?? "ollama"}
-            model={(node.config.model as string) ?? "qwen2.5:3b"}
-            onProviderChange={(provider) => set("provider", provider)}
-            onModelChange={(model) => set("model", model)}
-          />
-          <Field label="System prompt">
-            <TextArea
-              style={{ height: 80 }}
-              value={(node.config.systemPrompt as string) ?? ""}
-              onChange={(e) => set("systemPrompt", e.target.value)}
-            />
-          </Field>
-          <Field label="Max tool iterations (1-64)">
-            <TextInput
-              type="number"
-              min={1}
-              max={64}
-              value={String(node.config.maxToolIterations ?? 4)}
-              onChange={(e) => set("maxToolIterations", Number(e.target.value))}
-            />
-          </Field>
-        </>
+        <Group title="Rules">
+          <Toggle label="Fail on findings" description="When on, any rubric finding fails this node (and the run)." checked={Boolean(node.config.rubricFailOnFindings)} onChange={(v) => set("rubricFailOnFindings", v)} />
+          <FieldIssues issues={fieldIssues("rubricFailOnFindings")} />
+        </Group>
       )}
 
       {node.type === "code_exec" && (
-        <>
-          <Field label="Contract / content">
-            <TextArea
-              style={{ height: 100, fontFamily: fontFamily.mono }}
-              value={(node.config.content as string) ?? ""}
-              onChange={(e) => set("content", e.target.value)}
+        <Group title="Code">
+          <Field label="Language" issues={fieldIssues("codeExecLanguage")}>
+            <SegmentedControl
+              aria-label="Language"
+              value={str("codeExecLanguage", "python") as "python" | "javascript" | "bash"}
+              onChange={(v) => set("codeExecLanguage", v)}
+              options={[
+                { value: "python", label: "Python" },
+                { value: "javascript", label: "JavaScript" },
+                { value: "bash", label: "Bash" },
+              ]}
             />
           </Field>
-          <Field label="Language">
-            <Select
-              value={(node.config.codeExecLanguage as string) ?? "python"}
-              onChange={(e) => set("codeExecLanguage", e.target.value)}
-            >
-              <option value="python">python</option>
-              <option value="javascript">javascript</option>
-              <option value="bash">bash</option>
-            </Select>
+          <Field label="Contract / content" meta={`${str("content").length} chars`} issues={fieldIssues("content")}>
+            {(id) => <TemplateEditor id={id} aria-label="Contract / content" value={str("content")} onChange={(v) => set("content", v)} variables={vars} rows={5} />}
           </Field>
-          <Field label="Tool name (optional sandbox executor)">
-            <TextInput
-              value={(node.config.toolName as string) ?? ""}
-              onChange={(e) => set("toolName", e.target.value)}
-            />
+          <Field label="Sandbox executor tool" hint="Optional tool that runs the code." issues={fieldIssues("toolName")}>
+            {(id) => <TextInput id={id} value={str("toolName")} placeholder="None" onChange={(e) => set("toolName", e.target.value)} />}
           </Field>
-        </>
+        </Group>
       )}
 
       {node.type === "human_gate" && (
-        <>
-          <Field label="Content (shown at the approval checkpoint)">
-            <TextArea
-              style={{ height: 100 }}
-              value={(node.config.content as string) ?? ""}
-              onChange={(e) => set("content", e.target.value)}
-            />
+        <Group title="Checkpoint">
+          <Field label="Content" hint="Shown to the approver at the checkpoint." issues={fieldIssues("content")}>
+            {(id) => <TemplateEditor id={id} aria-label="Checkpoint content" value={str("content")} onChange={(v) => set("content", v)} variables={vars} rows={4} />}
           </Field>
-          <Field label="GenUI checkpoint surface (JSON, optional)">
-            <TextArea
-              style={{ height: 100, fontFamily: fontFamily.mono }}
-              value={(node.config.genuiCheckpointSurfaceJson as string) ?? ""}
-              onChange={(e) => set("genuiCheckpointSurfaceJson", e.target.value)}
-            />
+          <Field label="GenUI surface (JSON)" hint="Optional schema-driven UI shown at the checkpoint." issues={fieldIssues("genuiCheckpointSurfaceJson")}>
+            {(id) => (
+              <TextArea id={id} style={{ height: 110, fontFamily: fontFamily.mono, fontSize: 12 }} value={str("genuiCheckpointSurfaceJson")} placeholder='{"type": "Stack", …}' onChange={(e) => set("genuiCheckpointSurfaceJson", e.target.value)} />
+            )}
           </Field>
-          <GenuiCheckpointPreview raw={(node.config.genuiCheckpointSurfaceJson as string) ?? ""} />
-        </>
+          <GenuiCheckpointPreview raw={str("genuiCheckpointSurfaceJson")} />
+        </Group>
       )}
     </div>
   );
@@ -462,43 +611,42 @@ function IoTab({
   const outputPorts = outputPortsFor(node);
   // Mirrors backend/app/ports.py's default_input_port/default_output_port:
   // an edge with no explicit target_port/source_port binds to the first-
-  // listed port, not a literal "input"/"output" id (router/branch's default
-  // output port is "passthrough", not "output").
+  // listed port (router/branch's default output port is "passthrough").
   const defaultInputPortId = inputPorts[0]?.id;
   const defaultOutputPortId = outputPorts[0]?.id;
 
   return (
     <div>
-      <div style={{ ...localType.label, opacity: 0.6, marginBottom: spacing[2] }}>Input ports</div>
-      {inputPorts.length === 0 ? (
-        <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] }}>None.</div>
-      ) : (
-        inputPorts.map((port) => (
-          <PortRow
-            key={port.id}
-            port={port}
-            connectedEdges={incomingEdges.filter((edge) => (edge.target_port ?? defaultInputPortId) === port.id)}
-            edgeLabel={(edge) => `from ${edge.source}`}
-            issues={issues.filter((issue) => issue.port_id === port.id)}
-          />
-        ))
-      )}
-      <div style={{ ...localType.label, opacity: 0.6, marginTop: spacing[3], marginBottom: spacing[2] }}>
-        Output ports
-      </div>
-      {outputPorts.length === 0 ? (
-        <div style={{ ...typeScale.caption, opacity: 0.6 }}>None.</div>
-      ) : (
-        outputPorts.map((port) => (
-          <PortRow
-            key={port.id}
-            port={port}
-            connectedEdges={outgoingEdges.filter((edge) => (edge.source_port ?? defaultOutputPortId) === port.id)}
-            edgeLabel={(edge) => `to ${edge.target}`}
-            issues={issues.filter((issue) => issue.port_id === port.id)}
-          />
-        ))
-      )}
+      <Group title="Inputs" icon={<ArrowLeftRight size={13} />}>
+        {inputPorts.length === 0 ? (
+          <Muted>None — this is an entry node.</Muted>
+        ) : (
+          inputPorts.map((port) => (
+            <PortRow
+              key={port.id}
+              port={port}
+              connectedEdges={incomingEdges.filter((edge) => (edge.target_port ?? defaultInputPortId) === port.id)}
+              edgeLabel={(edge) => `from ${edge.source}`}
+              issues={issues.filter((issue) => issue.port_id === port.id)}
+            />
+          ))
+        )}
+      </Group>
+      <Group title="Outputs" icon={<CornerDownRight size={13} />}>
+        {outputPorts.length === 0 ? (
+          <Muted>None — this is a terminal node.</Muted>
+        ) : (
+          outputPorts.map((port) => (
+            <PortRow
+              key={port.id}
+              port={port}
+              connectedEdges={outgoingEdges.filter((edge) => (edge.source_port ?? defaultOutputPortId) === port.id)}
+              edgeLabel={(edge) => `to ${edge.target}`}
+              issues={issues.filter((issue) => issue.port_id === port.id)}
+            />
+          ))
+        )}
+      </Group>
     </div>
   );
 }
@@ -515,25 +663,17 @@ function PortRow({
   issues: Diagnostic[];
 }) {
   return (
-    <div
-      style={{
-        marginBottom: spacing[2],
-        padding: spacing[2],
-        borderRadius: radius.lg,
-        border: `1px solid ${surface.borderStrong}`,
-        background: surface.raised,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
-        <span style={{ ...typeScale.small, fontWeight: 600 }}>{port.name}</span>
-        <span style={{ ...typeScale.caption, opacity: 0.6 }}>{portKindLabel(port.contract.kind)}</span>
+    <div style={{ padding: `${spacing[2]}px 0`, borderTop: `1px solid ${border.subtle}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: spacing[2] }}>
+        <code style={{ fontFamily: fontFamily.mono, fontSize: 12.5, fontWeight: 600, color: text.primary }}>{port.name}</code>
+        <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 999, border: `1px solid ${border.subtle}`, color: text.muted }}>
+          {portKindLabel(port.contract.kind)}
+        </span>
       </div>
-      <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1] - 2 }}>
-        {connectedEdges.length === 0
-          ? "Not connected on canvas."
-          : connectedEdges.map(edgeLabel).join(", ")}
-      </div>
-      <IssueList issues={issues} />
+      <Muted style={{ marginTop: 2 }}>
+        {connectedEdges.length === 0 ? "Not connected" : connectedEdges.map(edgeLabel).join(", ")}
+      </Muted>
+      <FieldIssues issues={issues} />
     </div>
   );
 }
@@ -580,13 +720,7 @@ function PolicyTab({
     setError(null);
     try {
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const created = await client.createPolicyException(
-        graphId,
-        diagnostic.code,
-        expiresAt,
-        nodeId,
-        "Waived from Studio",
-      );
+      const created = await client.createPolicyException(graphId, diagnostic.code, expiresAt, nodeId, "Waived from Studio");
       setExceptions((current) => [...current, created]);
       onPolicyExceptionCreated?.();
     } catch (err) {
@@ -613,84 +747,50 @@ function PolicyTab({
 
   const policyIssues = issues.filter((issue) => issue.category === "policy");
 
-  if (!graphId) {
-    return (
-      <div style={{ ...typeScale.caption, opacity: 0.6 }}>Save the graph to manage policy exceptions.</div>
-    );
-  }
+  if (!graphId) return <Muted>Save the graph to manage policy exceptions.</Muted>;
 
   return (
     <div>
-      <div style={{ ...localType.label, opacity: 0.6, marginBottom: spacing[2] }}>Policy diagnostics</div>
-      {policyIssues.length === 0 ? (
-        <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] }}>
-          No policy diagnostics on this node.
-        </div>
-      ) : (
-        policyIssues.map((issue, index) => {
-          const key = `${issue.code}-${index}`;
-          const waivable = issue.blocking;
-          return (
-            <div key={key} style={{ marginBottom: spacing[2] }}>
-              <div
-                style={{
-                  ...typeScale.caption,
-                  color: issue.severity === "error" ? accentSurface.destructive.text : color.warning[500],
-                }}
-              >
-                {issue.message}
+      <Group title="Policy diagnostics" icon={<Shield size={13} />}>
+        {policyIssues.length === 0 ? (
+          <Muted>No policy diagnostics on this node.</Muted>
+        ) : (
+          policyIssues.map((issue, index) => {
+            const key = `${issue.code}-${index}`;
+            return (
+              <div key={key} style={{ padding: `${spacing[2]}px 0`, borderTop: index ? `1px solid ${border.subtle}` : "none" }}>
+                <FieldIssues issues={[issue]} />
+                {issue.blocking && (
+                  <Button variant="secondary" disabled={busyKey === key} onClick={() => void handleWaive(issue, key)} style={{ marginTop: spacing[2], fontSize: 12 }}>
+                    {busyKey === key ? "Waiving…" : "Waive for 30 days"}
+                  </Button>
+                )}
               </div>
-              {waivable && (
-                <Button
-                  variant="secondary"
-                  disabled={busyKey === key}
-                  onClick={() => void handleWaive(issue, key)}
-                  style={{ marginTop: spacing[1] - 2, minHeight: shell.touchTarget.min }}
-                >
-                  {busyKey === key ? "Waiving…" : "Waive (30 days)"}
-                </Button>
-              )}
+            );
+          })
+        )}
+      </Group>
+      <Group title="Active exceptions">
+        {loading ? (
+          <Muted>Loading…</Muted>
+        ) : exceptions.length === 0 ? (
+          <Muted>No exceptions on this node.</Muted>
+        ) : (
+          exceptions.map((exception, index) => (
+            <div key={exception.id} style={{ display: "flex", alignItems: "center", gap: spacing[2], padding: `${spacing[2]}px 0`, borderTop: index ? `1px solid ${border.subtle}` : "none" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <code style={{ fontFamily: fontFamily.mono, fontSize: 12, fontWeight: 600 }}>{exception.policy_code}</code>
+                <Muted>Expires {new Date(exception.expires_at).toLocaleDateString()}</Muted>
+              </div>
+              <Button variant="ghost" disabled={busyKey === exception.id} onClick={() => void handleRevoke(exception.id)} style={{ fontSize: 12 }}>
+                {busyKey === exception.id ? "Revoking…" : "Revoke"}
+              </Button>
             </div>
-          );
-        })
-      )}
-
-      <div style={{ ...localType.label, opacity: 0.6, marginTop: spacing[3], marginBottom: spacing[2] }}>
-        Active exceptions
-      </div>
-      {loading ? (
-        <div style={{ ...typeScale.caption, opacity: 0.6 }}>Loading…</div>
-      ) : exceptions.length === 0 ? (
-        <div style={{ ...typeScale.caption, opacity: 0.6 }}>No exceptions on this node.</div>
-      ) : (
-        exceptions.map((exception) => (
-          <div
-            key={exception.id}
-            style={{
-              marginBottom: spacing[2],
-              padding: spacing[2],
-              borderRadius: radius.lg,
-              border: `1px solid ${surface.borderStrong}`,
-              background: surface.raised,
-            }}
-          >
-            <div style={{ ...typeScale.small, fontWeight: 600 }}>{exception.policy_code}</div>
-            <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1] - 2 }}>
-              Expires {new Date(exception.expires_at).toLocaleDateString()}
-            </div>
-            <Button
-              variant="secondary"
-              disabled={busyKey === exception.id}
-              onClick={() => void handleRevoke(exception.id)}
-              style={{ marginTop: spacing[1], minHeight: shell.touchTarget.min }}
-            >
-              {busyKey === exception.id ? "Revoking…" : "Revoke"}
-            </Button>
-          </div>
-        ))
-      )}
+          ))
+        )}
+      </Group>
       {error && (
-        <div role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[1] }}>
+        <div role="alert" style={{ fontSize: 12, color: color.error[500] }}>
           {error}
         </div>
       )}
@@ -705,63 +805,64 @@ function formatTraceDuration(trace: NodeTrace): string | null {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-function RunTab({
-  selectedTrace,
-  onOpenRunPanel,
-}: {
-  selectedTrace: NodeTrace | null;
-  onOpenRunPanel?: () => void;
-}) {
+function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | null; onOpenRunPanel?: () => void }) {
   if (!selectedTrace) {
     return (
-      <div>
-        <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2], lineHeight: "18px" }}>
-          No trace yet for this node — run the graph to see its most recent execution here.
-        </div>
+      <Group title="Last execution">
+        <Muted style={{ marginBottom: spacing[2] }}>No trace yet — run the graph to see this node&apos;s most recent execution.</Muted>
         {onOpenRunPanel && (
-          <Button variant="secondary" onClick={onOpenRunPanel}>
-            Open Run panel
+          <Button variant="secondary" onClick={onOpenRunPanel} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <Play size={13} aria-hidden="true" /> Open Run panel
           </Button>
         )}
-      </div>
+      </Group>
     );
   }
 
   const duration = formatTraceDuration(selectedTrace);
+  const tone = statusColor[selectedTrace.status];
   return (
     <div>
-      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[2] }}>
-        {selectedTrace.status}
-        {duration ? ` · ${duration}` : ""}
-      </div>
-      <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
-      <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
-      <div style={{ ...typeScale.caption, opacity: 0.6 }}>Output</div>
-      <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
-      {selectedTrace.error && (
-        <div style={{ ...typeScale.caption, color: accentSurface.destructive.text }}>{selectedTrace.error}</div>
-      )}
-      {onOpenRunPanel && (
-        <Button variant="secondary" style={{ marginTop: spacing[2] }} onClick={onOpenRunPanel}>
-          Open Run panel
-        </Button>
-      )}
+      <Group
+        title="Last execution"
+        action={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: tone, fontWeight: 600 }}>
+            <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 999, background: tone }} />
+            {STATUS_WORD[selectedTrace.status] ?? selectedTrace.status}
+            {duration && <span style={{ color: text.secondary, fontWeight: 400 }}>· {duration}</span>}
+          </span>
+        }
+      >
+        <Field label="Input">
+          <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
+        </Field>
+        <Field label="Output">
+          <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
+        </Field>
+        {selectedTrace.error && (
+          <div role="alert" style={{ fontSize: 12, color: color.error[500], overflowWrap: "anywhere" }}>
+            {selectedTrace.error}
+          </div>
+        )}
+      </Group>
     </div>
   );
 }
 
 const preStyle: CSSProperties = {
-  ...typeScale.caption,
+  margin: 0,
+  fontSize: 12,
+  lineHeight: "18px",
   fontFamily: fontFamily.mono,
-  background: surface.raised,
-  border: `1px solid ${surface.borderStrong}`,
+  background: surface.inset,
+  border: `1px solid ${border.subtle}`,
   borderRadius: radius.lg,
   padding: spacing[2],
-  marginBottom: spacing[2],
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
-  maxHeight: 240,
+  maxHeight: 220,
   overflowY: "auto",
+  color: text.primary,
 };
 
 export function EdgeInspector({
@@ -769,8 +870,6 @@ export function EdgeInspector({
   issues = [],
   onChange,
   onDelete,
-  fullWidth = false,
-  reducedMotion = false,
 }: {
   edge: GraphEdge;
   issues?: Diagnostic[];
@@ -779,55 +878,64 @@ export function EdgeInspector({
   fullWidth?: boolean;
   reducedMotion?: boolean;
 }) {
+  const [tab, setTab] = useState("configure");
   const kindTaxonomy = EDGE_KIND_TAXONOMY[edge.kind];
-
   return (
-    <div style={panelStyle(fullWidth)}>
-      <CollapsibleSection sectionId="inspector-edge" title="Configure edge" reducedMotion={reducedMotion}>
-      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[3] - 2 }}>
-        {edge.source} → {edge.target}
-      </div>
-      <IssueList issues={issues} />
-
-      <Field
-        label={
-          <TaxonomyTooltip title={kindTaxonomy.title} summary={kindTaxonomy.summary} details={kindTaxonomy.details}>
-            <span>Kind</span>
-          </TaxonomyTooltip>
-        }
-      >
-        <Select value={edge.kind} onChange={(e) => onChange({ kind: e.target.value as GraphEdge["kind"] })}>
-          <option value="sequence">{EDGE_KIND_TAXONOMY.sequence.title}</option>
-          <option value="conditional">{EDGE_KIND_TAXONOMY.conditional.title}</option>
-          <option value="default">{EDGE_KIND_TAXONOMY.default.title}</option>
-        </Select>
-      </Field>
-
-      {edge.kind === "conditional" && (
-        <Field label="Condition (substring of previous LLM output, not the Prompt template)">
-          <TextInput value={edge.condition ?? ""} onChange={(e) => onChange({ condition: e.target.value })} />
-        </Field>
-      )}
-
-      <Button variant="destructive" style={{ marginTop: spacing[2], minHeight: 44 }} onClick={onDelete}>
-        Delete edge
-      </Button>
-      </CollapsibleSection>
-
-      {/* Raw JSON config editor (studio-config-editor-and-console-plan.md
-          §6): scoped to kind/condition only, the same fields "Configure
-          edge" above edits — patchFlowEdgeData only ever applies those two
-          from a patch, so exposing more here would let an edit look
-          accepted while silently doing nothing. */}
-      <CollapsibleSection sectionId="inspector-edge-raw" title="Raw" reducedMotion={reducedMotion}>
-        <JsonEditor
-          value={{ kind: edge.kind, condition: edge.condition ?? null }}
-          onApply={(next) => onChange(next)}
-          parse={parseEdgeRawConfig}
-          format={formatEdgeRawConfig}
+    <PanelFrame
+      aria-label="Edge details"
+      header={
+        <PanelHeader
+          icon={
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: radius.lg, border: `1px solid ${border.default}`, background: surface.card, color: text.muted }}>
+              <CornerDownRight size={18} aria-hidden="true" />
+            </span>
+          }
+          title="Edge"
+          subtitle={
+            <code style={{ fontFamily: fontFamily.mono, fontSize: 11 }}>
+              {edge.source} → {edge.target}
+            </code>
+          }
+          actions={<IconButton label="Delete edge" tone="destructive" icon={<Trash2 size={15} />} onClick={onDelete} tooltipPlacement="bottom" />}
         />
-      </CollapsibleSection>
-    </div>
+      }
+      tabs={
+        <IconTabs
+          aria-label="Edge sections"
+          activeId={tab}
+          onChange={setTab}
+          tabs={[
+            { id: "configure", label: "Config", icon: <Settings2 size={14} /> },
+            { id: "raw", label: "Raw JSON", icon: <Braces size={14} />, iconOnly: true },
+          ]}
+        />
+      }
+    >
+      {tab === "configure" ? (
+        <Group title="Routing">
+          <Field label="When to follow" hint={kindTaxonomy.details}>
+            <SegmentedControl aria-label="Edge kind" value={edge.kind} options={EDGE_KIND_OPTIONS} onChange={(kind) => onChange({ kind })} />
+          </Field>
+          {edge.kind === "conditional" && (
+            <Field label="Match text" hint="Followed when the previous LLM output contains this text (not the prompt template).">
+              {(id) => <TextInput id={id} value={edge.condition ?? ""} placeholder="e.g. technical" onChange={(e) => onChange({ condition: e.target.value })} />}
+            </Field>
+          )}
+          <FieldIssues issues={issues} />
+        </Group>
+      ) : (
+        // Scoped to kind/condition only -- patchFlowEdgeData only applies
+        // those two from a patch (studio-config-editor-and-console-plan.md §6).
+        <Group title="Raw" icon={<Braces size={13} />}>
+          <JsonEditor
+            value={{ kind: edge.kind, condition: edge.condition ?? null }}
+            onApply={(next) => onChange(next)}
+            parse={parseEdgeRawConfig}
+            format={formatEdgeRawConfig}
+          />
+        </Group>
+      )}
+    </PanelFrame>
   );
 }
 
@@ -840,50 +948,24 @@ function RouterEdgeRow({
   issues: Diagnostic[];
   onChange: (patch: Partial<GraphEdge>) => void;
 }) {
-  const kindTaxonomy = EDGE_KIND_TAXONOMY[edge.kind];
-
   return (
-    <div
-      style={{
-        marginBottom: spacing[2],
-        padding: spacing[2],
-        borderRadius: radius.lg,
-        border: `1px solid ${surface.borderStrong}`,
-        background: surface.raised,
-      }}
-    >
-      <div style={{ ...typeScale.caption, opacity: 0.75, marginBottom: spacing[1] }}>
-        → {edge.target}
+    <div style={{ padding: `${spacing[2]}px 0`, borderTop: `1px solid ${border.subtle}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: spacing[2], fontSize: 12, color: text.muted }}>
+        <CornerDownRight size={13} aria-hidden="true" />
+        <code style={{ fontFamily: fontFamily.mono, color: text.primary }}>{edge.target}</code>
       </div>
-      <IssueList issues={issues} />
-      <Field
-        label={
-          <TaxonomyTooltip title={kindTaxonomy.title} summary={kindTaxonomy.summary} details={kindTaxonomy.details}>
-            <span>Kind</span>
-          </TaxonomyTooltip>
-        }
-      >
-        <Select value={edge.kind} onChange={(event) => onChange({ kind: event.target.value as GraphEdge["kind"] })}>
-          <option value="sequence">{EDGE_KIND_TAXONOMY.sequence.title}</option>
-          <option value="conditional">{EDGE_KIND_TAXONOMY.conditional.title}</option>
-          <option value="default">{EDGE_KIND_TAXONOMY.default.title}</option>
-        </Select>
-      </Field>
+      <SegmentedControl aria-label={`Route to ${edge.target}`} value={edge.kind} options={EDGE_KIND_OPTIONS} onChange={(kind) => onChange({ kind })} />
       {edge.kind === "conditional" && (
-        <Field label="Condition">
-          <TextInput value={edge.condition ?? ""} onChange={(event) => onChange({ condition: event.target.value })} />
-        </Field>
+        <TextInput
+          aria-label={`Match text for ${edge.target}`}
+          value={edge.condition ?? ""}
+          placeholder="Match text, e.g. technical"
+          onChange={(event) => onChange({ condition: event.target.value })}
+          style={{ marginTop: spacing[2] }}
+        />
       )}
+      <FieldIssues issues={issues} />
     </div>
-  );
-}
-
-function IntentBlurb({ nodeType }: { nodeType: NodeType }) {
-  const taxonomy = NODE_TYPE_TAXONOMY[nodeType];
-  return (
-    <p style={{ ...typeScale.caption, opacity: 0.8, lineHeight: "18px", margin: `0 0 ${spacing[3]}px` }}>
-      {taxonomy.details}
-    </p>
   );
 }
 
@@ -891,51 +973,8 @@ function GenuiCheckpointPreview({ raw }: { raw: string }) {
   const surfaceValue = tryParseGenuiSurface(raw);
   if (!surfaceValue) return null;
   return (
-    <div style={{ marginBottom: spacing[3] }}>
-      <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Live preview</div>
+    <Field label="Live preview">
       <GenuiSurfaceView surface={surfaceValue} />
-    </div>
+    </Field>
   );
-}
-
-function Checkbox({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[3] }}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 16, height: 16 }}
-      />
-      <span style={{ ...typeScale.caption, opacity: 0.85 }}>{label}</span>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <div style={{ marginBottom: spacing[3] }}>
-      <label style={{ display: "block", ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function panelStyle(fullWidth: boolean): CSSProperties {
-  return {
-    width: "100%",
-    height: "100%",
-    padding: shell.panelPadding,
-    background: surface.panel,
-    color: text.primary,
-    overflowY: "auto",
-  };
 }

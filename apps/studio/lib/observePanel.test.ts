@@ -6,7 +6,6 @@ import {
   LIVE_EVENT_LOG_EMPTY,
   eventLogEmptyMessage,
   formatRunResult,
-  nextExclusiveOpenId,
   resolveEventLogEvents,
 } from "./observePanel";
 
@@ -17,16 +16,6 @@ const event = (sequence: number): PlatformEvent => ({
   run_id: "run-1",
   node_id: "router_1",
   payload: {},
-});
-
-describe("nextExclusiveOpenId", () => {
-  it("opens B and closes A", () => {
-    expect(nextExclusiveOpenId("observe-status", "observe-trace")).toBe("observe-trace");
-  });
-
-  it("collapses the open section when it is clicked again", () => {
-    expect(nextExclusiveOpenId("observe-events", "observe-events")).toBeNull();
-  });
 });
 
 describe("resolveEventLogEvents", () => {

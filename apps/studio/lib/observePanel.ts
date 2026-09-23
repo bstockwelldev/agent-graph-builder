@@ -1,9 +1,5 @@
 import type { PlatformEvent } from "@bstockwelldev/agent-graph-sdk";
 
-export const OBSERVE_SECTION_IDS = ["observe-status", "observe-trace", "observe-events", "observe-history"] as const;
-export type ObserveSectionId = (typeof OBSERVE_SECTION_IDS)[number];
-export const OBSERVE_OPEN_STORAGE_KEY = "observe-open";
-
 export const LIVE_EVENT_LOG_EMPTY = "No events yet. Run the graph to stream node lifecycle events here.";
 export const INSPECTED_EVENT_LOG_EMPTY = "Events were not recorded for this inspected run.";
 export const INSPECT_LOAD_FAIL = "Could not load this run. Retry.";
@@ -49,14 +45,6 @@ export function formatRunResult(result: unknown): FormattedRunResult {
   }
 
   return { kind: "text", text: String(result) };
-}
-
-export function nextExclusiveOpenId(current: string | null, clicked: string): string | null {
-  return current === clicked ? null : clicked;
-}
-
-export function isObserveSectionId(value: string | null): value is ObserveSectionId {
-  return OBSERVE_SECTION_IDS.some((id) => id === value);
 }
 
 export function resolveEventLogEvents(liveEvents: PlatformEvent[], summaryEvents?: PlatformEvent[]): PlatformEvent[] {

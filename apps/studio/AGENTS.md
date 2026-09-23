@@ -17,7 +17,7 @@ is token-styled: inline `style={{...}}` objects built from
 `lib/graph-theme.ts`'s design tokens (`color`, `spacing`, `radius`,
 `surface`, `text`, `typeScale`, `shell`, …), not Tailwind classes. Its
 own small UI kit lives in `components/graph/ui/` (`Button`,
-`CollapsibleSection`, `Tabs`, `fields`, …) — reach for those first, or
+`CollapsibleSection`, `IconTabs`, `Field`, `Combobox`, `fields`, …) — reach for those first, or
 add to that kit, before reaching for `components/ui/*`.
 
 **`components/ui/*`, `components/studio/*`, and everything under
@@ -29,9 +29,10 @@ Tailwind + shadcn, wrapping `@base-ui/react` primitives (`Dialog`,
 component should not import from `components/ui/*`, and vice versa.
 When a `components/graph/*` component needs something a shadcn
 primitive already provides, either build a small token-styled
-equivalent in `components/graph/ui/` (`Tabs.tsx` did this instead of
-using shadcn's `Tabs`) or reuse an existing token-styled component for
-a new purpose (the Run split-button's dropdown in `RunPanel.tsx` reuses
+equivalent in `components/graph/ui/` (`IconTabs.tsx` and `Combobox.tsx`
+did this instead of using shadcn's `Tabs` and `Select`) or reuse an
+existing token-styled component for a new purpose (the Run console's
+`⋯` menu in `RunPanel.tsx` reuses
 `NodeContextMenu.tsx` — a cursor-anchored action list — anchored to a
 trigger's bounding rect instead, rather than pulling in the unused
 shadcn `DropdownMenu`).

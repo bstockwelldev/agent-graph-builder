@@ -1,13 +1,35 @@
-import type { CSSProperties, RefObject } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Bug,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FlaskConical,
+  Hammer,
+  History,
+  KeyRound,
+  List,
+  Loader2,
+  MoreHorizontal,
+  Play,
+  RotateCcw,
+  ScanSearch,
+  ShieldCheck,
+  SkipForward,
+  TextCursorInput,
+  X,
+  XCircle,
+} from "lucide-react";
 import { client } from "@/lib/api-client";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
 import {
   INSPECT_LOAD_FAIL,
-  OBSERVE_OPEN_STORAGE_KEY,
   RUN_RESULT_EMPTY,
   TRACE_MISSING,
   TRACE_SELECT_NODE,
@@ -15,6 +37,7 @@ import {
   formatRunResult,
   resolveEventLogEvents,
 } from "@/lib/observePanel";
+import { formatRunInputs, recentInputValues } from "@/lib/runInputs";
 import type {
   ChatProvider,
   Diagnostic,
@@ -24,35 +47,71 @@ import type {
   RunSummary,
   SimulateResult,
 } from "@bstockwelldev/agent-graph-sdk";
-import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
-import { useExclusiveCollapse } from "@/hooks/usePersistedCollapse";
-import { accentSurface, color, fontFamily, localType, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
-import { NodeContextMenu, type NodeContextMenuAction } from "./NodeContextMenu";
+import { accentSurface, border, color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
+import { ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
 import { RunWaterfall } from "./RunWaterfall";
-import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
-import { CollapsibleSection } from "./ui/CollapsibleSection";
-import { SectionHeader } from "./ui/SectionHeader";
-import { Skeleton, SkeletonBlock } from "./ui/Skeleton";
-import { PasswordInput, Select, TextArea } from "./ui/fields";
+import { Field } from "./ui/Field";
+import { Group } from "./ui/Group";
+import { IconButton } from "./ui/IconButton";
+import { IconTabs, type IconTab } from "./ui/IconTabs";
+import { PanelFrame, PanelHeader } from "./ui/PanelFrame";
+import { SkeletonBlock } from "./ui/Skeleton";
+import { TemplateEditor } from "./ui/TemplateEditor";
+import { PasswordInput, TextArea } from "./ui/fields";
 
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
+const DEFAULT_QUESTION = "How does a database index work?";
 
 export type RunSelection = {
   provider: ChatProvider;
   model?: string;
 };
 
-function formatDuration(trace: NodeTrace): string | null {
-  if (!trace.completed_at) return null;
-  const ms = new Date(trace.completed_at).getTime() - new Date(trace.started_at).getTime();
-  if (ms < 0) return null;
+/** The run's input values, one per input-node variable (Wave 2.5). */
+export type RunInput = Record<string, string>;
+
+type ObserveTab = "status" | "waterfall" | "trace" | "events" | "history" | "issues";
+
+/**
+ * Legacy section ids (the header's Run▾ menu, the Validate chip, `/runs`
+ * redirects, `?section=`) → where they live in the v2 console. The Observe
+ * accordions became tabs; "run-simulate" is the fixture group; and
+ * "run-controls" focuses the first input field.
+ */
+export function observeTabForSection(sectionId: string): ObserveTab | null {
+  switch (sectionId) {
+    case "observe-status":
+      return "status";
+    case "observe-waterfall":
+      return "waterfall";
+    case "observe-trace":
+      return "trace";
+    case "observe-events":
+      return "events";
+    case "observe-history":
+      return "history";
+    case "run-diagnostics":
+      return "issues";
+    default:
+      return null;
+  }
+}
+
+function msBetween(start?: string | null, end?: string | null): number | null {
+  if (!start || !end) return null;
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  return Number.isFinite(ms) && ms >= 0 ? ms : null;
+}
+
+function formatMs(ms: number | null): string | null {
+  if (ms === null) return null;
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
 function formatRunLabel(run: RunSummary): string {
-  const question = String(run.input?.question ?? "").trim();
-  const snippet = question.length > 36 ? `${question.slice(0, 33)}…` : question || run.run_id;
+  const snippet = formatRunInputs(run.input, 48) || run.run_id;
   const when = run.started_at ? new Date(run.started_at).toLocaleString() : "";
   return when ? `${snippet} · ${when}` : snippet;
 }
@@ -61,24 +120,67 @@ function diagnosticKey(diagnostic: Diagnostic, index: number): string {
   return `${diagnostic.code}-${diagnostic.node_id ?? ""}-${diagnostic.edge_id ?? ""}-${index}`;
 }
 
-function traceTitle(selectedTrace: NodeTrace | null): string {
-  if (!selectedTrace) return "Node trace";
-  const duration = formatDuration(selectedTrace);
-  return `Node trace: ${selectedTrace.node_id} (${selectedTrace.status}${duration ? ` · ${duration}` : ""})`;
+function shortModel(model: string): string {
+  const tail = model.split("/").pop() ?? model;
+  return tail.length > 18 ? `${tail.slice(0, 17)}…` : tail;
+}
+
+const STATUS_TONE: Record<string, string> = {
+  succeeded: color.success[500],
+  failed: color.error[500],
+  running: color.primary[500],
+  queued: text.secondary,
+};
+
+function StatusPill({ status }: { status: string }) {
+  const tone = STATUS_TONE[status] ?? text.secondary;
+  const Icon = status === "succeeded" ? CheckCircle2 : status === "failed" ? XCircle : status === "running" ? Loader2 : Clock;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "2px 8px",
+        borderRadius: 999,
+        border: `1px solid ${tone}55`,
+        background: `${tone}1a`,
+        color: tone,
+        fontSize: 11,
+        fontWeight: 650,
+        lineHeight: "16px",
+        textTransform: "capitalize",
+      }}
+    >
+      <Icon size={12} aria-hidden="true" className={status === "running" ? "animate-spin" : undefined} />
+      {status}
+    </span>
+  );
+}
+
+function Muted({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return <div style={{ fontSize: 12, lineHeight: "18px", color: text.secondary, ...style }}>{children}</div>;
+}
+
+function EmptyState({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: spacing[2], padding: `${spacing[6]}px ${spacing[3]}px`, textAlign: "center", fontSize: 12, lineHeight: "18px", color: text.secondary }}>
+      <span aria-hidden="true" style={{ display: "inline-flex", padding: 10, borderRadius: 999, background: surface.card, border: `1px solid ${border.subtle}` }}>
+        {icon}
+      </span>
+      <span>{children}</span>
+    </div>
+  );
 }
 
 function RunResultDisplay({ result }: { result: unknown }) {
   const formatted = formatRunResult(result);
   if (formatted.kind === "empty") {
-    return (
-      <div role="status" style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[2] - 2, lineHeight: "18px" }}>
-        {RUN_RESULT_EMPTY}
-      </div>
-    );
+    return <Muted style={{ marginTop: spacing[2] }}>{RUN_RESULT_EMPTY}</Muted>;
   }
   if (formatted.kind === "json") {
     return (
-      <pre data-testid="run-result-json" style={{ ...preStyle, ...localType.ui, marginTop: spacing[2] - 2 }}>
+      <pre data-testid="run-result-json" style={{ ...preStyle, marginTop: spacing[2] }}>
         {formatted.text}
       </pre>
     );
@@ -86,24 +188,16 @@ function RunResultDisplay({ result }: { result: unknown }) {
   return (
     <div
       data-testid="run-result-text"
-      style={{
-        ...resultBlockStyle,
-        ...localType.ui,
-        marginTop: spacing[2] - 2,
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-      }}
+      style={{ marginTop: spacing[2], fontSize: 13, lineHeight: "20px", whiteSpace: "pre-wrap", wordBreak: "break-word", overflowX: "auto" }}
     >
       {formatted.text}
     </div>
   );
 }
 
-// Phase 10 Slice A — inline replacement for the standalone
-// `/runs/[graphId]` page's SnapshotDialog: same fields (source, fingerprint,
-// release id, node/edge counts, embedded resource count, captured-at), just
-// rendered in the HUD instead of a route the user has to leave the canvas
-// to reach.
+// Phase 10 Slice A — inline replacement for the retired `/runs/[graphId]`
+// SnapshotDialog: source, fingerprint, release id, node/edge counts,
+// embedded resource count, captured-at.
 function RunSnapshotDisplay({ snapshot, error }: { snapshot: RunGraphSnapshot | null; error: string | null }) {
   if (error) {
     return (
@@ -113,54 +207,40 @@ function RunSnapshotDisplay({ snapshot, error }: { snapshot: RunGraphSnapshot | 
     );
   }
   if (!snapshot) return null;
+  const mono: CSSProperties = { fontFamily: fontFamily.mono, wordBreak: "break-all" };
   return (
-    <div
-      style={{
-        ...typeScale.caption,
-        marginTop: spacing[1],
-        padding: spacing[2],
-        borderRadius: radius.lg,
-        border: `1px solid ${surface.border}`,
-        background: surface.raised,
-        lineHeight: "18px",
-      }}
-    >
+    <div style={{ marginTop: spacing[2], padding: spacing[2], borderRadius: radius.lg, border: `1px solid ${border.subtle}`, background: surface.inset, fontSize: 12, lineHeight: "18px" }}>
       <div style={{ fontWeight: 600 }}>{snapshot.source === "release" ? "Release" : "Draft snapshot"}</div>
-      <div style={{ opacity: 0.75, fontFamily: fontFamily.mono, wordBreak: "break-all" }}>
-        fingerprint: {snapshot.graph_fingerprint}
-      </div>
-      {snapshot.release_id && (
-        <div style={{ opacity: 0.75, fontFamily: fontFamily.mono, wordBreak: "break-all" }}>
-          release: {snapshot.release_id}
-        </div>
-      )}
+      <Muted style={mono}>fingerprint: {snapshot.graph_fingerprint}</Muted>
+      {snapshot.release_id && <Muted style={mono}>release: {snapshot.release_id}</Muted>}
       {snapshot.graph ? (
-        <div style={{ marginTop: spacing[1] - 2 }}>
+        <div style={{ marginTop: 4 }}>
           <div>{snapshot.graph.name}</div>
-          <div style={{ opacity: 0.75 }}>
+          <Muted>
             {snapshot.graph.nodes.length} nodes · {snapshot.graph.edges.length} edges
-          </div>
+          </Muted>
         </div>
       ) : (
-        <div style={{ opacity: 0.75, marginTop: spacing[1] - 2 }}>
-          Release-sourced — the full graph and its resolved resource bindings are stored on the release itself,
-          not duplicated here.
-        </div>
+        <Muted style={{ marginTop: 4 }}>
+          Release-sourced — the full graph and its resolved resource bindings are stored on the release itself, not
+          duplicated here.
+        </Muted>
       )}
-      {snapshot.resource_snapshots && (
-        <div style={{ opacity: 0.75 }}>
-          Resources embedded: {Object.keys(snapshot.resource_snapshots).length}
-        </div>
-      )}
-      <div style={{ opacity: 0.75, marginTop: spacing[1] - 2 }}>
-        Captured: {new Date(snapshot.created_at).toLocaleString()}
-      </div>
+      {snapshot.resource_snapshots && <Muted>Resources embedded: {Object.keys(snapshot.resource_snapshots).length}</Muted>}
+      <Muted style={{ marginTop: 4 }}>Captured: {new Date(snapshot.created_at).toLocaleString()}</Muted>
     </div>
   );
 }
 
+/**
+ * Run console (studio-graph-workbench-redesign-plan.md, Wave 2.5 "Inspector
+ * & Run console v2"). One labeled input per input-node variable, the model
+ * behind a provider chip, a sticky action bar with one primary Run, and the
+ * Observe accordions reworked into icon tabs with counts.
+ */
 export function RunPanel({
   graphId,
+  inputVariables = ["question"],
   diagnostics,
   diagnosticsSectionRef,
   providerBlockMessage,
@@ -184,38 +264,36 @@ export function RunPanel({
   inspectLoadError = false,
   onRetryInspect,
   compiling = false,
-  layout = "rail",
-  reducedMotion = false,
   sectionRequest = null,
   runFromNodeRequest = null,
   onRunFromNodeRequestHandled,
   onCaptureDataset,
 }: {
   graphId: string | null;
+  /** The graph's input variables (lib/runInputs.ts `runInputVariables`):
+   * the console renders one field per variable. */
+  inputVariables?: readonly string[];
   diagnostics: Diagnostic[];
   diagnosticsSectionRef?: RefObject<HTMLDivElement | null>;
   providerBlockMessage?: string | null;
   inspectionRunId?: string | null;
   onExitInspection?: () => void;
   onCompile: (selection: RunSelection) => Promise<void> | void;
-  onRun: (question: string, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
+  onRun: (input: RunInput, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
   /** Phase 10 Slice C, "Run from selected node" — mocks every ancestor of
    * `nodeId` with a null placeholder so the run skips straight to it. */
   onRunFromNode?: (
     nodeId: string,
-    question: string,
+    input: RunInput,
     provider: ChatProvider,
     model?: string,
     apiKey?: string,
   ) => Promise<void> | void;
-  /** Phase 10 Slice C, "A real, labeled Validate action" — re-runs
-   * diagnostics against the current canvas state without registering a
+  /** Re-runs diagnostics against the current canvas without registering a
    * runnable artifact the way Compile does. */
   onValidate?: () => Promise<void> | void;
   onDiagnosticClick: (diagnostic: Diagnostic) => void;
-  /** P2, "Cross-cutting policy overlays" — called after a policy exception
-   * is created from the Waive button below, so the caller can re-validate
-   * and pick up the now-non-blocking diagnostic. */
+  /** Called after a policy exception is created from the Waive button. */
   onPolicyExceptionCreated?: () => void;
   runSummary: RunSummary | null;
   runHistory: RunSummary[];
@@ -224,250 +302,74 @@ export function RunPanel({
   events: PlatformEvent[];
   selectedTrace: NodeTrace | null;
   selectedNodeId?: string | null;
-  /** Historical run waterfall (studio-ux-gap-remediation-plan.md §2): every
-   * trace for the currently-inspected/live run, keyed by node id. */
+  /** Every trace for the currently-inspected/live run, keyed by node id. */
   nodeTraces?: Record<string, NodeTrace>;
-  /** Bidirectional canvas link for the waterfall — pans/selects the node a
-   * waterfall bar represents, reusing the same focus mechanism diagnostics
-   * clicks use. */
+  /** Pans/selects a node on the canvas (waterfall bars, event rows). */
   onFocusNode?: (nodeId: string) => void;
   inspectLoadError?: boolean;
   onRetryInspect?: () => void;
   compiling?: boolean;
+  /** Kept for call-site compatibility; the console always fills its slot. */
   layout?: "rail" | "drawer";
   reducedMotion?: boolean;
-  /** Graph header Run▾ menu / Validate chip (studio-graph-workbench-redesign-plan.md,
-   * Slice 2): open and reveal a section. Keyed by `nonce`. */
+  /** Header Run▾ menu / Validate chip: reveal a section. Keyed by `nonce`. */
   sectionRequest?: { sectionId: string; nonce: number } | null;
-  /** Node toolbar "Run from here" (Slice 4): run from this node with the
-   * panel's current inputs, once per `nonce`. */
+  /** Node toolbar "Run from here": run from this node with the console's
+   * current inputs, once per `nonce`. */
   runFromNodeRequest?: { nodeId: string; nonce: number } | null;
   onRunFromNodeRequestHandled?: () => void;
-  /** Wave 2: capture the selected history runs as a Routing Lab dataset
-   * (moved here from the retired /runs/[graphId] page). The caller renders
-   * the dialog -- it's a shadcn Dialog, which this token-styled panel must
-   * not import (apps/studio/AGENTS.md). */
+  /** Capture the selected history runs as a Routing Lab dataset. The caller
+   * renders the (shadcn) dialog; this token-styled panel must not. */
   onCaptureDataset?: (runs: RunSummary[]) => void;
 }) {
-  const [selectedRunIds, setSelectedRunIds] = useState<ReadonlySet<string>>(new Set());
-  const toggleRunSelected = (runId: string) =>
-    setSelectedRunIds((current) => {
-      const next = new Set(current);
-      if (next.has(runId)) next.delete(runId);
-      else next.add(runId);
-      return next;
+  // ---- inputs -------------------------------------------------------------
+  const variablesKey = inputVariables.join("\u0000");
+  const [inputs, setInputs] = useState<RunInput>(() =>
+    Object.fromEntries(inputVariables.map((name) => [name, name === "question" ? DEFAULT_QUESTION : ""])),
+  );
+  // New variables get a field; values for removed ones are kept (so
+  // renaming a variable back doesn't lose what was typed) but not sent.
+  useEffect(() => {
+    setInputs((current) => {
+      const missing = inputVariables.filter((name) => !(name in current));
+      if (missing.length === 0) return current;
+      return { ...current, ...Object.fromEntries(missing.map((name) => [name, ""])) };
     });
-  const [question, setQuestion] = useState("How does a database index work?");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the variable list's contents
+  }, [variablesKey]);
+  const runInput = useMemo<RunInput>(
+    () => Object.fromEntries(inputVariables.map((name) => [name, inputs[name] ?? ""])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the variable list's contents
+    [inputs, variablesKey],
+  );
+  const inputsRef = useRef<HTMLDivElement>(null);
+  const [recentMenu, setRecentMenu] = useState<{ variable: string; x: number; y: number } | null>(null);
+
+  // ---- provider / model -----------------------------------------------------
   const [provider, setProvider] = useState<ChatProvider>("stub");
   const [selectedModel, setSelectedModel] = useState<string>("");
-  const [modelOptions, setModelOptions] = useState<Array<{ id: string; label: string }>>([]);
-  const [modelCatalogMessage, setModelCatalogMessage] = useState("");
-  const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [apiKeyLabel, setApiKeyLabel] = useState("API key");
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
-
-  // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph
-  // stubbing") — fills the studio-ux-revision-plan.md Section 9 "Run with
-  // fixture" slot. Self-contained (own client call + state), matching how
-  // ReleasesPanel.tsx manages its own release calls rather than routing
-  // through GraphEditor.tsx's onCompile/onRun props — simulate never
-  // touches live run state (runSummary/runHistory), so there's nothing to
-  // lift.
-  const [fixtureInputText, setFixtureInputText] = useState('{"question": "How does a database index work?"}');
-  const [fixtureNodeOutputsText, setFixtureNodeOutputsText] = useState("{}");
-  const [simulating, setSimulating] = useState(false);
-  const [simulateError, setSimulateError] = useState<string | null>(null);
-  const [simulateResult, setSimulateResult] = useState<SimulateResult | null>(null);
-
-  // P1 rollout plan, Slice C ("Historical replay") — fills the
-  // studio-ux-revision-plan.md "Replay run" slot. Shares SimulateResult's
-  // shape with the fixture section above (same run+traces response), but
-  // keeps its own state/result display so replaying a past run never
-  // overwrites an in-progress fixture simulation, or vice versa.
-  const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
-  const [replayError, setReplayError] = useState<string | null>(null);
-  const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
-
-  // Phase 10 Slice A ("Studio shell UX remediation" — see
-  // docs/planning/features/studio-shell-ux-gap-analysis.md): closes the
-  // one real capability gap the standalone `/runs/[graphId]` page had over
-  // this panel's own run history — viewing a run's pinned RunGraphSnapshot
-  // (design doc, "Run history: labels the release or draft snapshot used;
-  // opening it presents the exact snapshot in read-only inspection mode").
-  const [snapshotRunId, setSnapshotRunId] = useState<string | null>(null);
-  const [snapshotLoading, setSnapshotLoading] = useState(false);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<RunGraphSnapshot | null>(null);
-
-  // P2, "Cross-cutting policy overlays" — waives a blocking `category:
-  // "policy"` diagnostic with a fixed 30-day exception. Self-contained,
-  // same pattern as simulate/replay above.
-  const [waivingKey, setWaivingKey] = useState<string | null>(null);
-  const [waiveError, setWaiveError] = useState<string | null>(null);
-
-  const handleWaive = useCallback(
-    async (diagnostic: Diagnostic, key: string) => {
-      if (!graphId) return;
-      setWaivingKey(key);
-      setWaiveError(null);
-      try {
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        await client.createPolicyException(
-          graphId,
-          diagnostic.code,
-          expiresAt,
-          diagnostic.node_id ?? undefined,
-          "Waived from Studio",
-        );
-        onPolicyExceptionCreated?.();
-      } catch (err) {
-        setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
-      } finally {
-        setWaivingKey(null);
-      }
-    },
-    [graphId, onPolicyExceptionCreated],
-  );
-
-  const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
-
-  // Slice 2: observe-* sections are one exclusive (controlled) group --
-  // open via openSection; run-* sections are independently persisted, so
-  // they're force-opened via CollapsibleSection's revealNonce instead.
-  // (This also fixes the pre-existing "Run with fixture…" menu item, which
-  // called openSection on an uncontrolled section and so did nothing when
-  // that section had been collapsed.)
-  const [revealRequest, setRevealRequest] = useState<{ sectionId: string; nonce: number } | null>(null);
-  const revealSection = useCallback(
-    (sectionId: string) => {
-      if (sectionId.startsWith("observe-")) openSection(sectionId);
-      setRevealRequest({ sectionId, nonce: Date.now() });
-    },
-    [openSection],
-  );
-  const revealNonceFor = (sectionId: string) =>
-    revealRequest?.sectionId === sectionId ? revealRequest.nonce : undefined;
-  useEffect(() => {
-    if (sectionRequest) revealSection(sectionRequest.sectionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request nonce
-  }, [sectionRequest?.nonce]);
-
-  // Phase 10 Slice C ("A real, labeled Validate action"): self-contained
-  // loading state around the caller-supplied onValidate, same pattern as
-  // Compile/Run's own disabled-while-busy handling above.
-  const [validating, setValidating] = useState(false);
-  const handleValidate = useCallback(async () => {
-    setValidating(true);
-    try {
-      await onValidate?.();
-    } finally {
-      setValidating(false);
-    }
-  }, [onValidate]);
-
-  const running = runSummary?.status === "queued" || runSummary?.status === "running";
-  const summary = validationSummary(diagnostics);
-  const inspecting = Boolean(inspectionRunId && runSummary);
-  const showModelSelect = showModelCatalog(provider);
+  const sendsModel = showModelCatalog(provider) || provider === "openai_compat";
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
-
-  // Phase 10 Slice C ("Consolidate Run into a split-button model" +
-  // "Debug run"): a trigger-anchored dropdown reusing NodeContextMenu's
-  // existing "plain action list at an {x,y} point" component (Phase 7)
-  // instead of the unused shadcn DropdownMenu in components/ui — that
-  // primitive is Tailwind-styled and would mix styling systems inside
-  // this token-styled (lib/graph-theme.ts) panel, the same reason
-  // ui/Tabs.tsx avoided shadcn's Tabs in Slice B.
-  const [runMenuAnchor, setRunMenuAnchor] = useState<{ x: number; y: number } | null>(null);
-  const runMenuActions: NodeContextMenuAction[] = [
-    ...(selectedNodeId && onRunFromNode
-      ? [
-          {
-            label: "Run from selected node",
-            title: "Runs downstream of this node only — upstream nodes are stubbed with empty values, not replayed.",
-            onClick: () =>
-              void onRunFromNode(
-                selectedNodeId,
-                question,
-                provider,
-                showModelSelect ? selectedModel || undefined : undefined,
-                showApiKeyField ? apiKey.trim() || undefined : undefined,
-              ),
-          },
-        ]
-      : []),
-    { label: "Run with fixture…", onClick: () => revealSection("run-simulate") },
-    {
-      label: "Debug run",
-      onClick: () => {
-        revealSection("observe-events");
-        void onRun(
-          question,
-          provider,
-          showModelSelect ? selectedModel || undefined : undefined,
-          showApiKeyField ? apiKey.trim() || undefined : undefined,
-        );
-      },
-    },
-  ];
-
-  // Node toolbar "Run from here" (Slice 4) -- consumed once per nonce, then
-  // cleared by the caller so a later remount of this panel can't replay it.
-  useEffect(() => {
-    if (!runFromNodeRequest || !onRunFromNode) return;
-    revealSection("observe-status");
-    void onRunFromNode(
-      runFromNodeRequest.nodeId,
-      question,
-      provider,
-      showModelSelect ? selectedModel || undefined : undefined,
-      showApiKeyField ? apiKey.trim() || undefined : undefined,
-    );
-    onRunFromNodeRequestHandled?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request nonce, with the inputs as they are at that moment
-  }, [runFromNodeRequest?.nonce]);
-
-  const displayedEvents = resolveEventLogEvents(events, runSummary?.events);
-  const isRail = layout === "rail";
-  const lastFocusedRunIdRef = useRef<string | undefined>(undefined);
-  const lastFocusedTraceIdRef = useRef<string | undefined>(undefined);
+  const modelArg = sendsModel ? selectedModel || undefined : undefined;
+  const apiKeyArg = showApiKeyField ? apiKey.trim() || undefined : undefined;
 
   useEffect(() => {
-    const runId = runSummary?.run_id;
-    if (lastFocusedRunIdRef.current === undefined) {
-      lastFocusedRunIdRef.current = runId;
-      return;
-    }
-    if (runId && runId !== lastFocusedRunIdRef.current) {
-      openSection("observe-status");
-    }
-    lastFocusedRunIdRef.current = runId;
-  }, [openSection, runSummary?.run_id]);
-
-  useEffect(() => {
-    const nodeId = selectedTrace?.node_id;
-    if (lastFocusedTraceIdRef.current === undefined) {
-      lastFocusedTraceIdRef.current = nodeId;
-      return;
-    }
-    if (nodeId && nodeId !== lastFocusedTraceIdRef.current) {
-      openSection("observe-trace");
-    }
-    lastFocusedTraceIdRef.current = nodeId;
-  }, [openSection, selectedTrace?.node_id]);
+    if (providerBlockMessage) setModelSettingsOpen(true);
+  }, [providerBlockMessage]);
 
   useEffect(() => {
     setApiKey("");
-
     if (!showApiKeyField) {
       setApiKeyLabel("API key");
       setApiKeyEnvVar("");
       setApiKeyConfigured(false);
       return;
     }
-
     let cancelled = false;
     client
       .providerCredentials(provider)
@@ -488,57 +390,137 @@ export function RunPanel({
         });
         setApiKeyConfigured(false);
       });
-
     return () => {
       cancelled = true;
     };
   }, [provider, showApiKeyField, graphId]);
 
-  useEffect(() => {
-    if (!showModelSelect) {
-      setModelOptions([]);
-      setSelectedModel("");
-      setModelCatalogMessage("");
-      setModelCatalogLoading(false);
-      return;
+  // ---- observe tabs -------------------------------------------------------
+  const [activeTab, setActiveTab] = useState<ObserveTab>("status");
+  const observeRef = useRef<HTMLDivElement | null>(null);
+
+  // ---- fixture simulation (P1 Slice B) ------------------------------------
+  // Self-contained: simulate never touches live run state, so nothing to lift.
+  const [fixtureOpen, setFixtureOpen] = useState(false);
+  const fixtureRef = useRef<HTMLDivElement>(null);
+  const [fixtureInputText, setFixtureInputText] = useState("");
+  const [fixtureInputEdited, setFixtureInputEdited] = useState(false);
+  const [fixtureNodeOutputsText, setFixtureNodeOutputsText] = useState("{}");
+  const [simulating, setSimulating] = useState(false);
+  const [simulateError, setSimulateError] = useState<string | null>(null);
+  const [simulateResult, setSimulateResult] = useState<SimulateResult | null>(null);
+
+  const openFixture = useCallback(() => {
+    setFixtureOpen(true);
+    // Defaults to the console's current inputs until the user edits the JSON.
+    if (!fixtureInputEdited) setFixtureInputText(JSON.stringify(runInput, null, 2));
+    window.requestAnimationFrame(() => fixtureRef.current?.scrollIntoView({ block: "nearest" }));
+  }, [fixtureInputEdited, runInput]);
+
+  // ---- historical replay (P1 Slice C) + snapshots (Phase 10 Slice A) -------
+  const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
+  const [snapshotRunId, setSnapshotRunId] = useState<string | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<RunGraphSnapshot | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<ReadonlySet<string>>(new Set());
+  const toggleRunSelected = (runId: string) =>
+    setSelectedRunIds((current) => {
+      const next = new Set(current);
+      if (next.has(runId)) next.delete(runId);
+      else next.add(runId);
+      return next;
+    });
+
+  // ---- policy waivers (P2) --------------------------------------------------
+  const [waivingKey, setWaivingKey] = useState<string | null>(null);
+  const [waiveError, setWaiveError] = useState<string | null>(null);
+  const handleWaive = useCallback(
+    async (diagnostic: Diagnostic, key: string) => {
+      if (!graphId) return;
+      setWaivingKey(key);
+      setWaiveError(null);
+      try {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await client.createPolicyException(graphId, diagnostic.code, expiresAt, diagnostic.node_id ?? undefined, "Waived from Studio");
+        onPolicyExceptionCreated?.();
+      } catch (err) {
+        setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
+      } finally {
+        setWaivingKey(null);
+      }
+    },
+    [graphId, onPolicyExceptionCreated],
+  );
+
+  const [validating, setValidating] = useState(false);
+  const handleValidate = useCallback(async () => {
+    setValidating(true);
+    try {
+      await onValidate?.();
+    } finally {
+      setValidating(false);
     }
+  }, [onValidate]);
 
-    let cancelled = false;
-    setModelCatalogLoading(true);
-    client
-      .listProviderModels(provider, graphId ?? undefined)
-      .then((catalog) => {
-        if (cancelled) return;
-        setModelOptions(catalog.models);
-        setModelCatalogMessage(catalog.message);
-        setSelectedModel((current) => {
-          if (current && catalog.models.some((option) => option.id === current)) {
-            return current;
-          }
-          return catalog.models[0]?.id ?? "";
-        });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        console.error("Failed to load provider models:", err);
-        logConsoleEntry({
-          severity: "error",
-          source: "Provider",
-          message: `Failed to load provider models: ${err instanceof Error ? err.message : String(err)}`,
-          graphId: graphId ?? undefined,
-        });
-        setModelOptions([]);
-        setSelectedModel("");
-        setModelCatalogMessage("Could not load model catalog.");
-      })
-      .finally(() => {
-        if (!cancelled) setModelCatalogLoading(false);
-      });
+  const running = runSummary?.status === "queued" || runSummary?.status === "running";
+  const busy = running || compiling;
+  const summary = validationSummary(diagnostics);
+  const inspecting = Boolean(inspectionRunId && runSummary);
+  // GraphEditor also "inspects" the run it just started (so the canvas shows
+  // its traces); only call it out when it's an earlier run from history.
+  const inspectingEarlierRun = inspecting && !running && runHistory[0]?.run_id !== inspectionRunId;
+  const displayedEvents = resolveEventLogEvents(events, runSummary?.events);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [graphId, provider, showModelSelect]);
+  const run = useCallback(() => {
+    if (busy) return;
+    void onRun(runInput, provider, modelArg, apiKeyArg);
+  }, [apiKeyArg, busy, modelArg, onRun, provider, runInput]);
+
+  const revealSection = useCallback(
+    (sectionId: string) => {
+      const tab = observeTabForSection(sectionId);
+      if (tab) {
+        setActiveTab(tab);
+        window.requestAnimationFrame(() => observeRef.current?.scrollIntoView({ block: "nearest" }));
+      } else if (sectionId === "run-simulate") {
+        openFixture();
+      } else if (sectionId === "run-controls") {
+        window.requestAnimationFrame(() => inputsRef.current?.querySelector("textarea")?.focus());
+      }
+    },
+    [openFixture],
+  );
+  useEffect(() => {
+    if (sectionRequest) revealSection(sectionRequest.sectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request nonce
+  }, [sectionRequest?.nonce]);
+
+  // Node toolbar "Run from here" -- consumed once per nonce, then cleared by
+  // the caller so a later remount of this panel can't replay it.
+  useEffect(() => {
+    if (!runFromNodeRequest || !onRunFromNode) return;
+    setActiveTab("status");
+    void onRunFromNode(runFromNodeRequest.nodeId, runInput, provider, modelArg, apiKeyArg);
+    onRunFromNodeRequestHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request nonce, with the inputs as they are at that moment
+  }, [runFromNodeRequest?.nonce]);
+
+  // A new run shows its status; picking a traced node shows its trace.
+  const lastRunIdRef = useRef<string | undefined>(runSummary?.run_id);
+  useEffect(() => {
+    const runId = runSummary?.run_id;
+    if (runId && runId !== lastRunIdRef.current) setActiveTab("status");
+    lastRunIdRef.current = runId;
+  }, [runSummary?.run_id]);
+  const lastTraceIdRef = useRef<string | undefined>(selectedTrace?.node_id);
+  useEffect(() => {
+    const nodeId = selectedTrace?.node_id;
+    if (nodeId && nodeId !== lastTraceIdRef.current) setActiveTab("trace");
+    lastTraceIdRef.current = nodeId;
+  }, [selectedTrace?.node_id]);
 
   const handleSimulate = useCallback(async () => {
     if (!graphId) return;
@@ -547,8 +529,7 @@ export function RunPanel({
     try {
       const input = JSON.parse(fixtureInputText || "{}") as Record<string, unknown>;
       const node_outputs = JSON.parse(fixtureNodeOutputsText || "{}") as Record<string, unknown>;
-      const result = await client.simulateGraph(graphId, { input, node_outputs });
-      setSimulateResult(result);
+      setSimulateResult(await client.simulateGraph(graphId, { input, node_outputs }));
     } catch (err) {
       setSimulateError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -560,8 +541,7 @@ export function RunPanel({
     setReplayingRunId(runId);
     setReplayError(null);
     try {
-      const result = await client.replayRun(runId);
-      setReplayResult(result);
+      setReplayResult(await client.replayRun(runId));
     } catch (err) {
       setReplayError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -569,377 +549,445 @@ export function RunPanel({
     }
   }, []);
 
-  const handleViewSnapshot = useCallback(async (runId: string) => {
-    if (snapshotRunId === runId) {
-      setSnapshotRunId(null);
-      return;
-    }
-    setSnapshotRunId(runId);
-    setSnapshotLoading(true);
-    setSnapshotError(null);
-    setSnapshot(null);
-    try {
-      const loaded = await client.getRunGraphSnapshot(runId);
-      setSnapshot(loaded);
-    } catch (err) {
-      setSnapshotError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSnapshotLoading(false);
-    }
-  }, [snapshotRunId]);
+  const handleViewSnapshot = useCallback(
+    async (runId: string) => {
+      if (snapshotRunId === runId) {
+        setSnapshotRunId(null);
+        return;
+      }
+      setSnapshotRunId(runId);
+      setSnapshotLoading(true);
+      setSnapshotError(null);
+      setSnapshot(null);
+      try {
+        setSnapshot(await client.getRunGraphSnapshot(runId));
+      } catch (err) {
+        setSnapshotError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSnapshotLoading(false);
+      }
+    },
+    [snapshotRunId],
+  );
+
+  // ---- overflow menu ------------------------------------------------------
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [moreAnchor, setMoreAnchor] = useState<{ x: number; y: number } | null>(null);
+  const moreActions: NodeContextMenuAction[] = [
+    {
+      label: compiling ? "Compiling…" : "Compile",
+      icon: <Hammer size={14} />,
+      disabled: busy,
+      onClick: () => void onCompile({ provider, model: modelArg }),
+    },
+    {
+      label: "Debug run",
+      icon: <Bug size={14} />,
+      title: "Runs and opens the live event log.",
+      disabled: busy,
+      onClick: () => {
+        setActiveTab("events");
+        run();
+      },
+    },
+    ...(selectedNodeId && onRunFromNode
+      ? [
+          {
+            label: "Run from selected node",
+            icon: <SkipForward size={14} />,
+            title: "Runs downstream of this node only — upstream nodes are stubbed with empty values, not replayed.",
+            disabled: busy,
+            onClick: () => void onRunFromNode(selectedNodeId, runInput, provider, modelArg, apiKeyArg),
+          },
+        ]
+      : []),
+    { label: "Run with fixture…", icon: <FlaskConical size={14} />, separatorBefore: true, onClick: openFixture },
+  ];
+
+  // ---- header -------------------------------------------------------------
+  const chipLabel = sendsModel && selectedModel ? shortModel(selectedModel) : providerLabel(provider);
+  const header = (
+    <PanelHeader
+      icon={
+        <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: radius.lg, background: `${color.primary[500]}1f`, color: color.primary[500], flexShrink: 0 }}>
+          <Play size={16} />
+        </span>
+      }
+      title="Run"
+      subtitle={
+        <button
+          type="button"
+          onClick={() => setActiveTab("issues")}
+          className="agb-focus-ring"
+          title="Show validation issues"
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: 0, border: "none", background: "transparent", cursor: "pointer", fontSize: 12, color: summary.errors ? color.error[500] : summary.warnings ? color.warning[500] : color.success[500] }}
+        >
+          {summary.errors ? <XCircle size={12} aria-hidden="true" /> : summary.warnings ? <AlertTriangle size={12} aria-hidden="true" /> : <ShieldCheck size={12} aria-hidden="true" />}
+          {summary.label}
+        </button>
+      }
+      actions={
+        <button
+          type="button"
+          aria-expanded={modelSettingsOpen}
+          aria-controls="run-model-settings"
+          aria-label={`Model: ${providerLabel(provider)}${sendsModel && selectedModel ? ` · ${selectedModel}` : ""}. Change model settings`}
+          title="Model settings for this run"
+          onClick={() => setModelSettingsOpen((open) => !open)}
+          className="agb-focus-ring agb-hoverable"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, maxWidth: 170, padding: "0 8px 0 10px", borderRadius: 999, border: `1px solid ${modelSettingsOpen ? border.focus : border.default}`, background: surface.inset, color: text.primary, fontSize: 12, fontWeight: 550, cursor: "pointer" }}
+        >
+          <ProviderDot provider={provider} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chipLabel}</span>
+          <ChevronDown size={13} aria-hidden="true" style={{ flexShrink: 0, color: text.secondary, transform: modelSettingsOpen ? "rotate(180deg)" : undefined }} />
+        </button>
+      }
+    />
+  );
+
+  // ---- footer (primary action bar) ------------------------------------------
+  const footer = (
+    <div style={{ display: "flex", alignItems: "center", gap: spacing[2] }}>
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="agb-focus-ring"
+        aria-keyshortcuts="Meta+Enter Control+Enter"
+        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: radius.lg, border: `1px solid ${color.primary[600]}`, background: color.primary[700], color: text.primary, fontSize: 14, fontWeight: 650, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.7 : 1 }}
+      >
+        {running || compiling ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+        {running ? "Running…" : compiling ? "Preparing…" : "Run"}
+        {!busy && (
+          <kbd aria-hidden="true" style={{ marginLeft: 2, padding: "1px 5px", borderRadius: 4, background: "rgba(255,255,255,0.14)", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>
+            ⌘↵
+          </kbd>
+        )}
+      </button>
+      {onValidate && (
+        <button
+          type="button"
+          onClick={() => void handleValidate()}
+          disabled={validating}
+          className="agb-focus-ring agb-hoverable"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 40, padding: "0 12px", borderRadius: radius.lg, border: `1px solid ${border.default}`, background: surface.card, color: text.primary, fontSize: 13, fontWeight: 550, cursor: "pointer" }}
+        >
+          {validating ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={15} aria-hidden="true" />}
+          {validating ? "Validating…" : "Validate"}
+        </button>
+      )}
+      <IconButton
+        ref={moreRef}
+        label="More run options"
+        icon={<MoreHorizontal size={17} />}
+        aria-haspopup="menu"
+        tooltipPlacement="top"
+        style={{ width: 40, height: 40, border: `1px solid ${border.default}`, background: surface.card }}
+        onClick={() => moreRef.current && setMoreAnchor(menuAnchorFor(moreRef.current, "right", 240))}
+      />
+      {moreAnchor && (
+        <NodeContextMenu
+          x={moreAnchor.x}
+          y={moreAnchor.y}
+          width={240}
+          title="Run"
+          actions={moreActions}
+          onClose={() => setMoreAnchor(null)}
+        />
+      )}
+    </div>
+  );
+
+  // ---- observe tabs -------------------------------------------------------
+  const tabs: IconTab[] = [
+    { id: "status", label: "Status", icon: <Activity size={14} /> },
+    { id: "waterfall", label: "Waterfall", icon: <BarChart3 size={14} />, iconOnly: true },
+    { id: "trace", label: "Trace", icon: <ScanSearch size={14} />, iconOnly: true },
+    { id: "events", label: "Events", icon: <List size={14} />, count: displayedEvents.length },
+    { id: "history", label: "History", icon: <History size={14} />, count: runHistory.length, iconOnly: true },
+    {
+      id: "issues",
+      label: "Issues",
+      icon: <AlertTriangle size={14} />,
+      count: diagnostics.length,
+      countTone: summary.errors ? "error" : summary.warnings ? "warning" : "neutral",
+    },
+  ];
 
   return (
-    <div style={containerStyle(layout)}>
-      <div data-testid="execute-group" style={executeGroupStyle}>
-        <CollapsibleSection sectionId="run-controls" title="Execute" reducedMotion={reducedMotion} revealNonce={revealNonceFor("run-controls")}>
-          <TextArea
-            rows={4}
-            style={{ minHeight: 96, resize: "vertical" }}
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="User question (fed into the Input node)"
-            disabled={running || compiling}
-          />
-          <div style={{ marginTop: spacing[2] }}>
-            <TaxonomyTooltip
-              layout="inline"
-              title={PROVIDER_TAXONOMY[provider]?.title ?? "Model provider"}
-              summary={PROVIDER_TAXONOMY[provider]?.summary ?? "Chat provider for LLM nodes"}
-              details={PROVIDER_TAXONOMY[provider]?.details ?? "Select which backend executes LLM nodes at run time."}
-            >
-              <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Model provider</div>
-            </TaxonomyTooltip>
-            <p style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", margin: `0 0 ${spacing[1]}px` }}>
-              This run overrides all LLM nodes when you Compile or Run. Each LLM still stores a node default.
-            </p>
-            <Select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as ChatProvider)}
-              disabled={running || compiling}
-            >
-              <option value="stub">Stub (offline)</option>
-              <option value="groq">Groq</option>
-              <option value="google">Google Gemini</option>
-              <option value="azure">Azure OpenAI</option>
-              <option value="ollama">Ollama (local LLM)</option>
-              <option value="openai_compat">OpenAI-compatible (HTTP)</option>
-            </Select>
-          </div>
-          {showApiKeyField && (
-            <div style={{ marginTop: spacing[2] }}>
-              <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>
-                {apiKeyLabel}
-                {apiKeyEnvVar ? ` (${apiKeyEnvVar})` : ""}
-                {apiKeyConfigured ? " -- configured on server, leave blank to use it" : ""}
-              </div>
-              <PasswordInput
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={apiKeyConfigured ? "Leave blank to use the server's key, or override here" : `Enter ${apiKeyEnvVar || "API key"}`}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={running || compiling}
-              />
-            </div>
-          )}
-          {showModelSelect && (
-            <div style={{ marginTop: spacing[2] }}>
-              <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Model</div>
-              {modelCatalogLoading ? (
-                <Skeleton height={36} style={{ borderRadius: radius.lg }} />
-              ) : (
-                <Select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  disabled={modelOptions.length === 0 || running || compiling}
-                >
-                  {modelOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              )}
-              {modelCatalogMessage && !modelCatalogLoading && (
-                <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[1], lineHeight: "16px" }}>
-                  {modelCatalogMessage}
-                </div>
-              )}
-            </div>
-          )}
-          {providerBlockMessage && (
-            <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
-              {providerBlockMessage}
-            </div>
-          )}
-          {running && (
-            <div style={{ marginTop: spacing[2] }} aria-busy="true" aria-label="Run in progress">
-              <SkeletonBlock lines={2} gap={spacing[1]} />
-            </div>
-          )}
-          <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[2] }}>
-            <Button variant="secondary" disabled={compiling || running} onClick={() => void onCompile({ provider, model: showModelSelect ? selectedModel || undefined : undefined })} style={{ minHeight: shell.touchTarget.min }}>
-              {compiling ? "Compiling…" : "Compile"}
-            </Button>
-            {onValidate && (
-              <Button variant="secondary" disabled={validating} onClick={() => void handleValidate()} style={{ minHeight: shell.touchTarget.min }}>
-                {validating ? "Validating…" : "Validate"}
-              </Button>
-            )}
-            <Button
-              variant="primary"
-              disabled={running || compiling}
-              style={{ minHeight: shell.touchTarget.min }}
-              onClick={() =>
-                void onRun(
-                  question,
-                  provider,
-                  showModelSelect ? selectedModel || undefined : undefined,
-                  showApiKeyField ? apiKey.trim() || undefined : undefined,
-                )
-              }
-            >
-              {running ? "Running…" : "Run"}
-            </Button>
-            <Button
-              variant="primary"
-              disabled={running || compiling}
-              aria-label="More run options"
-              style={{ minHeight: shell.touchTarget.min, padding: `0 ${spacing[1]}px` }}
-              onClick={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setRunMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
+    <PanelFrame aria-label="Run console" header={header} footer={footer}>
+      {modelSettingsOpen && (
+        <div id="run-model-settings">
+          <Group
+            title="Model"
+            icon={<ProviderDot provider={provider} />}
+            action={<IconButton label="Close model settings" icon={<X size={14} />} onClick={() => setModelSettingsOpen(false)} style={{ width: 26, height: 26 }} />}
+          >
+            <Muted style={{ marginBottom: spacing[2] }}>Overrides every LLM node for this run. Each LLM node keeps its own default.</Muted>
+            <ProviderModelPicker
+              graphId={graphId}
+              provider={provider}
+              model={selectedModel}
+              onProviderChange={(next) => {
+                setProvider(next);
+                setSelectedModel("");
               }}
-            >
-              <ChevronDown className="size-4" />
-            </Button>
-            {runMenuAnchor && (
-              <NodeContextMenu
-                x={runMenuAnchor.x}
-                y={runMenuAnchor.y}
-                title="Run"
-                actions={runMenuActions}
-                onClose={() => setRunMenuAnchor(null)}
-              />
+              onModelChange={setSelectedModel}
+              disabled={busy}
+            />
+            {showApiKeyField && (
+              <Field
+                label={
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <KeyRound size={12} aria-hidden="true" />
+                    {apiKeyLabel}
+                  </span>
+                }
+                hint={apiKeyEnvVar ? `Server variable: ${apiKeyEnvVar}` : undefined}
+                meta={apiKeyConfigured ? <span style={{ color: color.success[500] }}>Configured on server</span> : undefined}
+              >
+                {(id) => (
+                  <PasswordInput
+                    id={id}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={apiKeyConfigured ? "Leave blank to use the server's key" : `Enter ${apiKeyEnvVar || "API key"}`}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={busy}
+                  />
+                )}
+              </Field>
             )}
-          </div>
-        </CollapsibleSection>
+          </Group>
+        </div>
+      )}
+      {providerBlockMessage && (
+        <div role="alert" style={alertStyle}>
+          <XCircle size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+          {providerBlockMessage}
+        </div>
+      )}
 
-        {/* Collapsed by default (Wave 2 visual QA): expanded, it pushed the
-            Observe region (status, history) down to ~100px of scroll area.
-            The header's Run▾ menu reveals it on demand. */}
-        <CollapsibleSection
-          sectionId="run-simulate"
-          title="Run with fixture"
-          defaultOpen={false}
-          reducedMotion={reducedMotion}
-          revealNonce={revealNonceFor("run-simulate")}
-        >
-          <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
-            Simulates against the saved graph with no live tool or model calls — always uses the offline stub
-            provider, plus any per-node outputs you stub below.
-          </div>
-          <div style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>Input (JSON)</div>
-          <TextArea
-            rows={2}
-            style={{ minHeight: 48, resize: "vertical", fontFamily: fontFamily.mono }}
-            value={fixtureInputText}
-            onChange={(e) => setFixtureInputText(e.target.value)}
-            disabled={simulating}
-          />
-          <div style={{ ...typeScale.caption, opacity: 0.6, marginTop: spacing[2], marginBottom: spacing[1] }}>
-            Node output overrides (JSON: node id → mocked value)
-          </div>
-          <TextArea
-            rows={2}
-            style={{ minHeight: 48, resize: "vertical", fontFamily: fontFamily.mono }}
-            value={fixtureNodeOutputsText}
-            onChange={(e) => setFixtureNodeOutputsText(e.target.value)}
-            placeholder='{"tool_lookup": "a recorded answer"}'
-            disabled={simulating}
-          />
-          <div style={{ marginTop: spacing[2] }}>
-            <Button variant="secondary" disabled={!graphId || simulating} onClick={() => void handleSimulate()} style={{ minHeight: shell.touchTarget.min }}>
+      {inspectingEarlierRun && runSummary && (
+        <div style={{ ...alertStyle, color: text.primary, background: `${color.primary[500]}14`, borderColor: `${color.primary[500]}40`, alignItems: "center" }}>
+          <History size={14} aria-hidden="true" style={{ flexShrink: 0, color: color.primary[500] }} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Inspecting an earlier run
+            {runSummary.started_at && <Muted>{new Date(runSummary.started_at).toLocaleString()}</Muted>}
+          </span>
+          {onExitInspection && (
+            <Button variant="secondary" onClick={onExitInspection} style={{ fontSize: 12, padding: "4px 10px" }}>
+              Exit inspection
+            </Button>
+          )}
+        </div>
+      )}
+
+      <div ref={inputsRef}>
+        <Group title={inputVariables.length > 1 ? `Inputs · ${inputVariables.length}` : "Input"} icon={<TextCursorInput size={13} />}>
+          {inputVariables.map((variable, index) => {
+            const recent = recentInputValues(runHistory, variable);
+            return (
+              <Field
+                key={variable}
+                label={<code style={{ fontFamily: fontFamily.mono, fontSize: 12 }}>{variable}</code>}
+                meta={
+                  recent.length > 0 ? (
+                    <button
+                      type="button"
+                      aria-haspopup="menu"
+                      aria-label={`Recent values for ${variable}`}
+                      className="agb-focus-ring agb-hoverable"
+                      onClick={(event) => setRecentMenu({ variable, ...menuAnchorFor(event.currentTarget, "right", 280) })}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: radius.md, border: "none", background: "transparent", color: text.secondary, fontSize: 11, cursor: "pointer" }}
+                    >
+                      <RotateCcw size={11} aria-hidden="true" />
+                      Recent
+                    </button>
+                  ) : undefined
+                }
+              >
+                {(id) => (
+                  <div style={{ marginBottom: index === inputVariables.length - 1 ? -spacing[3] : 0 }}>
+                    <TemplateEditor
+                      id={id}
+                      plain
+                      rows={inputVariables.length > 1 ? 2 : 3}
+                      value={inputs[variable] ?? ""}
+                      onChange={(value) => setInputs((current) => ({ ...current, [variable]: value }))}
+                      placeholder={variable === "question" ? "Ask the graph something…" : `Value for {${variable}}`}
+                      onSubmit={run}
+                      title={`Input: ${variable}`}
+                    />
+                  </div>
+                )}
+              </Field>
+            );
+          })}
+        </Group>
+      </div>
+      {recentMenu && (
+        <NodeContextMenu
+          x={recentMenu.x}
+          y={recentMenu.y}
+          width={280}
+          title={`Recent · ${recentMenu.variable}`}
+          onClose={() => setRecentMenu(null)}
+          actions={recentInputValues(runHistory, recentMenu.variable).map((value) => ({
+            label: value.length > 42 ? `${value.slice(0, 41)}…` : value,
+            title: value,
+            onClick: () => setInputs((current) => ({ ...current, [recentMenu.variable]: value })),
+          }))}
+        />
+      )}
+
+      {fixtureOpen && (
+        <div ref={fixtureRef}>
+          <Group
+            title="Run with fixture"
+            icon={<FlaskConical size={13} />}
+            action={<IconButton label="Close fixture simulation" icon={<X size={14} />} onClick={() => setFixtureOpen(false)} style={{ width: 26, height: 26 }} />}
+          >
+            <Muted style={{ marginBottom: spacing[2] }}>
+              Simulates the saved graph with no live tool or model calls — always the offline stub provider, plus any
+              per-node outputs you stub below.
+            </Muted>
+            <Field label="Input (JSON)">
+              {(id) => (
+                <TextArea
+                  id={id}
+                  rows={3}
+                  style={{ fontFamily: fontFamily.mono, fontSize: 12 }}
+                  value={fixtureInputText}
+                  onChange={(e) => {
+                    setFixtureInputText(e.target.value);
+                    setFixtureInputEdited(true);
+                  }}
+                  disabled={simulating}
+                />
+              )}
+            </Field>
+            <Field label="Node output overrides (JSON: node id → mocked value)">
+              {(id) => (
+                <TextArea
+                  id={id}
+                  rows={2}
+                  style={{ fontFamily: fontFamily.mono, fontSize: 12 }}
+                  value={fixtureNodeOutputsText}
+                  onChange={(e) => setFixtureNodeOutputsText(e.target.value)}
+                  placeholder='{"tool_lookup": "a recorded answer"}'
+                  disabled={simulating}
+                />
+              )}
+            </Field>
+            <Button variant="secondary" disabled={!graphId || simulating} onClick={() => void handleSimulate()} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <FlaskConical size={14} aria-hidden="true" />
               {simulating ? "Simulating…" : "Simulate"}
             </Button>
-          </div>
-          {simulateError && (
-            <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
-              {simulateError}
-            </div>
-          )}
-          {simulateResult && (
-            <div style={{ marginTop: spacing[2] }}>
-              <div style={typeScale.caption}>
-                {simulateResult.run.run_id} — <b>{simulateResult.run.status}</b>
-              </div>
-              {simulateResult.traces.map((trace) => (
-                <div
-                  key={trace.node_id}
-                  style={{ ...typeScale.caption, opacity: 0.75, marginTop: spacing[1], fontFamily: fontFamily.mono }}
-                >
-                  {trace.node_id}: {JSON.stringify(trace.output)}
+            {simulateError && <div role="alert" style={{ ...alertStyle, marginTop: spacing[2], marginBottom: 0 }}>{simulateError}</div>}
+            {simulateResult && (
+              <div style={{ marginTop: spacing[2] }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                  <StatusPill status={simulateResult.run.status} />
+                  <code style={{ fontFamily: fontFamily.mono, color: text.secondary }}>{simulateResult.run.run_id}</code>
                 </div>
-              ))}
-            </div>
-          )}
-        </CollapsibleSection>
-
-        <div ref={diagnosticsSectionRef} style={{ marginTop: spacing[2] }} tabIndex={-1} aria-live="polite" aria-label={`Graph validation: ${summary.label}`}>
-          <CollapsibleSection
-            sectionId="run-diagnostics"
-            revealNonce={revealNonceFor("run-diagnostics")}
-            title="Diagnostics"
-            defaultOpen={diagnostics.length > 0}
-            reducedMotion={reducedMotion}
-          >
-            {diagnostics.length === 0 ? (
-              <div role="status" style={{ ...typeScale.caption, color: color.success[500], lineHeight: "18px" }}>
-                No issues — graph is ready to compile.
-              </div>
-            ) : (
-              diagnostics.map((diagnostic, index) => {
-                const clickable = Boolean(diagnostic.node_id || diagnostic.edge_id);
-                const key = diagnosticKey(diagnostic, index);
-                const content = (
-                  <>
-                    <span style={{ fontWeight: 600 }}>{diagnostic.severity === "error" ? "Error" : "Warning"}</span>
-                    {": "}
-                    {diagnostic.message}
-                  </>
-                );
-                // P2, "Cross-cutting policy overlays" — only a blocking
-                // policy diagnostic is waivable; a warning is already
-                // non-blocking, and structural/contract diagnostics have
-                // no exception mechanism.
-                const waivable = diagnostic.category === "policy" && diagnostic.blocking && Boolean(graphId);
-                const diagnosticNode = !clickable ? (
-                  <div
-                    style={{
-                      ...typeScale.caption,
-                      color: diagnostic.severity === "error" ? accentSurface.destructive.text : color.warning[500],
-                      marginBottom: waivable ? 0 : spacing[1],
-                      lineHeight: "16px",
-                    }}
-                  >
-                    {content}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onDiagnosticClick(diagnostic)}
-                    style={{ ...diagnosticButtonStyle(diagnostic.severity), marginBottom: waivable ? 0 : spacing[1] }}
-                  >
-                    {content}
-                  </button>
-                );
-                if (!waivable) {
-                  return <div key={key}>{diagnosticNode}</div>;
-                }
-                return (
-                  <div key={key} style={{ marginBottom: spacing[1] }}>
-                    {diagnosticNode}
-                    <Button
-                      variant="secondary"
-                      disabled={waivingKey === key}
-                      onClick={() => void handleWaive(diagnostic, key)}
-                      style={{ marginTop: spacing[1] - 2, minHeight: shell.touchTarget.min }}
-                    >
-                      {waivingKey === key ? "Waiving…" : "Waive (30 days)"}
-                    </Button>
-                  </div>
-                );
-              })
-            )}
-            {waiveError && (
-              <div role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[1] }}>
-                {waiveError}
+                {simulateResult.traces.map((trace) => (
+                  <Muted key={trace.node_id} style={{ marginTop: 4, fontFamily: fontFamily.mono }}>
+                    {trace.node_id}: {JSON.stringify(trace.output)}
+                  </Muted>
+                ))}
               </div>
             )}
-          </CollapsibleSection>
+          </Group>
         </div>
-      </div>
+      )}
 
-      <div data-testid="observe-group" style={observeGroupStyle(isRail)}>
-        <SectionHeader>Observe</SectionHeader>
+      {/* The diagnostics focus target (GraphEditor's focusDiagnostics): it
+          wraps the whole Observe region, and focusing it directly opens the
+          Issues tab. */}
+      <div
+        ref={(el) => {
+          observeRef.current = el;
+          if (diagnosticsSectionRef) diagnosticsSectionRef.current = el;
+        }}
+        tabIndex={-1}
+        aria-label={`Graph validation: ${summary.label}`}
+        onFocus={(event) => {
+          if (event.target === event.currentTarget) setActiveTab("issues");
+        }}
+        style={{ outline: "none", scrollMarginTop: spacing[2] }}
+      >
+        <div style={{ margin: `0 -${spacing[3]}px ${spacing[3]}px`, padding: `0 ${spacing[1]}px` }}>
+          <IconTabs aria-label="Observe" idPrefix="observe" tabs={tabs} activeId={activeTab} onChange={(id) => setActiveTab(id as ObserveTab)} />
+        </div>
         {inspectLoadError && (
-          <div role="alert" style={inspectFailStyle}>
-            <div>{INSPECT_LOAD_FAIL}</div>
+          <div role="alert" style={alertStyle}>
+            <span style={{ flex: 1 }}>{INSPECT_LOAD_FAIL}</span>
             {onRetryInspect && (
-              <Button variant="secondary" onClick={onRetryInspect} style={{ marginTop: spacing[2], minHeight: shell.touchTarget.min }}>
+              <Button variant="secondary" onClick={onRetryInspect} style={{ fontSize: 12, padding: "4px 10px" }}>
                 Retry
               </Button>
             )}
           </div>
         )}
-        <div data-testid="observe-scroller" style={observeScrollerStyle(isRail)}>
-          <CollapsibleSection
-            sectionId="observe-status"
-            title="Run status"
-            open={openId === "observe-status"}
-            onOpenChange={() => toggleSection("observe-status")}
-            reducedMotion={reducedMotion}
-          >
-            {!runSummary ? (
-              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-                No run to inspect yet. Compile and run to see status here.
-              </div>
+        <div role="tabpanel" id={`observe-panel-${activeTab}`} aria-labelledby={`observe-tab-${activeTab}`} aria-live={activeTab === "events" ? "polite" : undefined}>
+          {activeTab === "status" &&
+            (!runSummary ? (
+              <EmptyState icon={<Play size={18} color={color.primary[500]} />}>
+                No run yet. Fill in the {inputVariables.length > 1 ? "inputs" : "input"} and press <b style={{ color: text.primary }}>Run</b> (⌘↵).
+              </EmptyState>
             ) : (
-              <>
-                {inspecting && (
-                  <div style={{ ...typeScale.caption, lineHeight: "16px", marginBottom: spacing[2] }}>
-                    Inspecting run · <b>{runSummary.status}</b>
-                    {runSummary.started_at ? ` · ${new Date(runSummary.started_at).toLocaleString()}` : ""}
-                    {runSummary.input?.question != null && (
-                      <div style={{ opacity: 0.75, marginTop: spacing[1] }}>Question: {String(runSummary.input.question)}</div>
-                    )}
-                    {runSummary.provider && (
-                      <div style={{ opacity: 0.75, marginTop: spacing[1] }}>Provider: {runSummary.provider}</div>
-                    )}
-                    {onExitInspection && (
-                      <Button variant="secondary" onClick={onExitInspection} style={{ width: "100%", marginTop: spacing[2] }}>
-                        Exit inspection
-                      </Button>
-                    )}
-                  </div>
-                )}
-                <div style={typeScale.caption}>
-                  {runSummary.run_id} — <b>{runSummary.status}</b>
+              <Group>
+                <div style={{ display: "flex", alignItems: "center", gap: spacing[2], flexWrap: "wrap" }}>
+                  <StatusPill status={runSummary.status} />
+                  {formatMs(msBetween(runSummary.started_at, runSummary.completed_at)) && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: text.secondary }}>
+                      <Clock size={12} aria-hidden="true" />
+                      {formatMs(msBetween(runSummary.started_at, runSummary.completed_at))}
+                    </span>
+                  )}
+                  {runSummary.provider && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: text.secondary }}>
+                      <ProviderDot provider={runSummary.provider} size={7} />
+                      {providerLabel(runSummary.provider)}
+                    </span>
+                  )}
+                  <code title={runSummary.run_id} style={{ marginLeft: "auto", fontFamily: fontFamily.mono, fontSize: 11, color: text.secondary, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {runSummary.run_id}
+                  </code>
                 </div>
-                {(runSummary.status === "queued" || runSummary.status === "running") && (
-                  <div style={{ marginTop: spacing[2] - 2 }} aria-busy="true" aria-label="Generating result">
-                    <SkeletonBlock lines={3} gap={spacing[1]} />
-                  </div>
+                {runSummary.input && Object.keys(runSummary.input).length > 0 && (
+                  <dl style={{ margin: `${spacing[2]}px 0 0`, display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", fontSize: 12, lineHeight: "18px" }}>
+                    {Object.entries(runSummary.input).map(([key, value]) => (
+                      <div key={key} style={{ display: "contents" }}>
+                        <dt style={{ fontFamily: fontFamily.mono, color: text.secondary }}>{key}</dt>
+                        <dd style={{ margin: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={String(value)}>
+                          {typeof value === "string" ? value : JSON.stringify(value)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                 )}
-                {runSummary.status === "succeeded" && <RunResultDisplay result={runSummary.result} />}
-                {runSummary.status === "failed" && runSummary.error && (
-                  <div
-                    role="alert"
-                    style={{
-                      ...typeScale.caption,
-                      color: accentSurface.destructive.text,
-                      marginTop: spacing[2] - 2,
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {runSummary.error}
-                  </div>
-                )}
-              </>
-            )}
-          </CollapsibleSection>
+                <div style={{ borderTop: `1px solid ${border.subtle}`, marginTop: spacing[2], paddingTop: 2 }}>
+                  {running && (
+                    <div style={{ marginTop: spacing[2] }} aria-busy="true" aria-label="Generating result">
+                      <SkeletonBlock lines={3} gap={spacing[1]} />
+                    </div>
+                  )}
+                  {runSummary.status === "succeeded" && <RunResultDisplay result={runSummary.result} />}
+                  {runSummary.status === "failed" && runSummary.error && (
+                    <div role="alert" style={{ ...alertStyle, marginTop: spacing[2], marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                      {runSummary.error}
+                    </div>
+                  )}
+                </div>
+              </Group>
+            ))}
 
-          <CollapsibleSection
-            sectionId="observe-waterfall"
-            title="Waterfall"
-            open={openId === "observe-waterfall"}
-            onOpenChange={() => toggleSection("observe-waterfall")}
-            reducedMotion={reducedMotion}
-          >
-            {!runSummary ? (
-              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-                No run to inspect yet. Compile and run to see timing here.
-              </div>
+          {activeTab === "waterfall" &&
+            (!runSummary ? (
+              <EmptyState icon={<BarChart3 size={18} />}>No run to inspect yet. Run the graph to see node timing here.</EmptyState>
             ) : (
               <RunWaterfall
                 nodeTraces={nodeTraces}
@@ -948,314 +996,305 @@ export function RunPanel({
                 selectedNodeId={selectedNodeId}
                 onFocusNode={onFocusNode}
               />
-            )}
-          </CollapsibleSection>
+            ))}
 
-          <CollapsibleSection
-            sectionId="observe-trace"
-            title={traceTitle(selectedTrace)}
-            open={openId === "observe-trace"}
-            onOpenChange={() => toggleSection("observe-trace")}
-            reducedMotion={reducedMotion}
-          >
-            {!selectedNodeId ? (
-              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-                {TRACE_SELECT_NODE}
-              </div>
+          {activeTab === "trace" &&
+            (!selectedNodeId ? (
+              <EmptyState icon={<ScanSearch size={18} />}>{TRACE_SELECT_NODE}</EmptyState>
             ) : !selectedTrace ? (
-              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-                {TRACE_MISSING}
-              </div>
-            ) : (
-              <div>
-                <div style={{ ...typeScale.caption, opacity: 0.6 }}>Input</div>
-                <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
-                <div style={{ ...typeScale.caption, opacity: 0.6 }}>Output</div>
-                <pre style={preStyle}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
-                {selectedTrace.error && (
-                  <div style={{ ...typeScale.caption, color: accentSurface.destructive.text }}>{selectedTrace.error}</div>
-                )}
-              </div>
-            )}
-          </CollapsibleSection>
-
-          <div aria-live="polite" aria-relevant="additions">
-            <CollapsibleSection
-              sectionId="observe-events"
-              revealNonce={revealNonceFor("observe-events")}
-              title="Event log"
-              open={openId === "observe-events"}
-              onOpenChange={() => toggleSection("observe-events")}
-              reducedMotion={reducedMotion}
-            >
-              {displayedEvents.length === 0 ? (
-                <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-                  {eventLogEmptyMessage(inspecting)}
-                </div>
-              ) : (
-                displayedEvents.map((e) =>
-                  // Wave 2: node events focus their node on the canvas
-                  // ("run events focus corresponding nodes", review §82).
-                  e.node_id && onFocusNode ? (
-                    <button
-                      key={e.sequence}
-                      type="button"
-                      className="agb-focus-ring agb-hoverable"
-                      onClick={() => onFocusNode(e.node_id!)}
-                      title={`Focus ${e.node_id} on the canvas`}
-                      style={eventRowStyle}
-                    >
-                      <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type} ·{" "}
-                      <span style={{ color: color.primary[500] }}>{e.node_id}</span>
-                    </button>
-                  ) : (
-                    <div key={e.sequence} style={{ ...eventRowStyle, cursor: "default" }}>
-                      <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
-                      {e.node_id ? ` · ${e.node_id}` : ""}
-                    </div>
-                  ),
-                )
-              )}
-            </CollapsibleSection>
-          </div>
-
-          <CollapsibleSection
-            sectionId="observe-history"
-              revealNonce={revealNonceFor("observe-history")}
-            title="Run history"
-            open={openId === "observe-history"}
-            onOpenChange={() => toggleSection("observe-history")}
-            reducedMotion={reducedMotion}
-          >
-            {runHistoryLoading ? (
-              <SkeletonBlock lines={2} gap={spacing[2]} />
-            ) : runHistory.length === 0 ? (
-              <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
-                No runs yet for this graph. Compile and run to see history here.
-              </div>
+              <EmptyState icon={<ScanSearch size={18} />}>{TRACE_MISSING}</EmptyState>
             ) : (
               <>
-              {onCaptureDataset && (
                 <div style={{ display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
-                  <label style={{ ...typeScale.caption, display: "flex", alignItems: "center", gap: spacing[1], cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      aria-label="Select all runs"
-                      checked={selectedRunIds.size > 0 && selectedRunIds.size === runHistory.length}
-                      onChange={() =>
-                        setSelectedRunIds((current) =>
-                          current.size === runHistory.length ? new Set() : new Set(runHistory.map((run) => run.run_id)),
-                        )
-                      }
-                    />
-                    All
-                  </label>
-                  <Button
-                    variant="secondary"
-                    disabled={selectedRunIds.size === 0}
-                    onClick={() => onCaptureDataset(runHistory.filter((run) => selectedRunIds.has(run.run_id)))}
-                    style={{ marginLeft: "auto", ...typeScale.caption }}
-                  >
-                    {selectedRunIds.size > 0 ? `Save ${selectedRunIds.size} as dataset` : "Select runs to save as dataset"}
-                  </Button>
+                  <code style={{ fontFamily: fontFamily.mono, fontSize: 12, fontWeight: 600 }}>{selectedTrace.node_id}</code>
+                  <StatusPill status={selectedTrace.status} />
+                  {formatMs(msBetween(selectedTrace.started_at, selectedTrace.completed_at)) && (
+                    <Muted>{formatMs(msBetween(selectedTrace.started_at, selectedTrace.completed_at))}</Muted>
+                  )}
                 </div>
-              )}
-              {runHistory.map((run) => {
-                const active = inspectionRunId ? run.run_id === inspectionRunId : runSummary?.run_id === run.run_id;
-                return (
-                  <div key={run.run_id} style={{ marginBottom: spacing[2], display: "flex", gap: spacing[2], alignItems: "flex-start" }}>
-                    {onCaptureDataset && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Select run ${run.run_id}`}
-                        checked={selectedRunIds.has(run.run_id)}
-                        onChange={() => toggleRunSelected(run.run_id)}
-                        style={{ marginTop: spacing[3] }}
-                      />
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => onSelectRun(run.run_id)}
-                      style={{
-                        ...historyButtonStyle,
-                        marginBottom: 0,
-                        borderColor: active ? color.primary[600] : surface.borderStrong,
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: spacing[2] }}>
-                        <span style={{ fontWeight: 600 }}>{run.status}</span>
-                        <span style={{ display: "flex", gap: spacing[1], opacity: 0.6 }}>
-                          {/* P0 graph foundation, Slice D: labels whether this
-                              run came from a published release (immune to
-                              later draft edits) or the draft as it stood at
-                              run time — design doc, "Run history: labels the
-                              release or draft snapshot used." */}
-                          {run.source === "release" && (
-                            <span title={run.graph_release_id ?? undefined}>release</span>
-                          )}
-                          {run.provider && <span>{run.provider}</span>}
-                        </span>
+                <Group title="Input">
+                  <pre style={{ ...preStyle, margin: 0 }}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
+                </Group>
+                <Group title="Output">
+                  <pre style={{ ...preStyle, margin: 0 }}>{JSON.stringify(selectedTrace.output, null, 2)}</pre>
+                </Group>
+                {selectedTrace.error && <div role="alert" style={alertStyle}>{selectedTrace.error}</div>}
+              </>
+            ))}
+
+          {activeTab === "events" &&
+            (displayedEvents.length === 0 ? (
+              <EmptyState icon={<List size={18} />}>{eventLogEmptyMessage(inspecting)}</EmptyState>
+            ) : (
+              <Group flush>
+                <div style={{ padding: spacing[1] }}>
+                  {displayedEvents.map((e) =>
+                    // Node events focus their node on the canvas.
+                    e.node_id && onFocusNode ? (
+                      <button
+                        key={e.sequence}
+                        type="button"
+                        className="agb-focus-ring agb-hoverable"
+                        onClick={() => onFocusNode(e.node_id!)}
+                        title={`Focus ${e.node_id} on the canvas`}
+                        style={eventRowStyle}
+                      >
+                        <span style={{ color: text.secondary, minWidth: 24 }}>{e.sequence}</span>
+                        <span>{e.event_type}</span>
+                        <span style={{ marginLeft: "auto", color: color.primary[500] }}>{e.node_id}</span>
+                      </button>
+                    ) : (
+                      <div key={e.sequence} style={{ ...eventRowStyle, cursor: "default" }}>
+                        <span style={{ color: text.secondary, minWidth: 24 }}>{e.sequence}</span>
+                        <span>{e.event_type}</span>
+                        {e.node_id && <span style={{ marginLeft: "auto", color: text.secondary }}>{e.node_id}</span>}
                       </div>
-                      <div style={{ ...typeScale.caption, opacity: 0.75, textAlign: "left", marginTop: spacing[1] }}>
-                        {formatRunLabel(run)}
-                      </div>
-                    </button>
-                    <div style={{ display: "flex", gap: spacing[1], marginTop: spacing[1] }}>
-                      {run.status === "succeeded" && (
-                        <Button
-                          variant="secondary"
-                          disabled={replayingRunId !== null}
-                          onClick={() => void handleReplay(run.run_id)}
-                          style={{ minHeight: shell.touchTarget.min }}
-                        >
-                          {replayingRunId === run.run_id ? "Replaying…" : "Replay"}
-                        </Button>
-                      )}
+                    ),
+                  )}
+                </div>
+              </Group>
+            ))}
+
+          {activeTab === "history" && (
+            <>
+              {runHistoryLoading ? (
+                <SkeletonBlock lines={2} gap={spacing[2]} />
+              ) : runHistory.length === 0 ? (
+                <EmptyState icon={<History size={18} />}>No runs yet for this graph. Run it to build a history here.</EmptyState>
+              ) : (
+                <>
+                  {onCaptureDataset && (
+                    <div style={{ display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: text.secondary, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          aria-label="Select all runs"
+                          checked={selectedRunIds.size > 0 && selectedRunIds.size === runHistory.length}
+                          onChange={() =>
+                            setSelectedRunIds((current) =>
+                              current.size === runHistory.length ? new Set() : new Set(runHistory.map((item) => item.run_id)),
+                            )
+                          }
+                        />
+                        All
+                      </label>
                       <Button
                         variant="secondary"
-                        disabled={snapshotLoading && snapshotRunId === run.run_id}
-                        onClick={() => void handleViewSnapshot(run.run_id)}
-                        style={{ minHeight: shell.touchTarget.min }}
+                        disabled={selectedRunIds.size === 0}
+                        onClick={() => onCaptureDataset(runHistory.filter((item) => selectedRunIds.has(item.run_id)))}
+                        style={{ marginLeft: "auto", fontSize: 12, padding: "4px 10px" }}
                       >
-                        {snapshotRunId === run.run_id
-                          ? snapshotLoading
-                            ? "Loading…"
-                            : "Hide snapshot"
-                          : "View snapshot"}
+                        {selectedRunIds.size > 0 ? `Save ${selectedRunIds.size} as dataset` : "Select runs to save as dataset"}
                       </Button>
                     </div>
-                    {snapshotRunId === run.run_id && (
-                      <RunSnapshotDisplay snapshot={snapshot} error={snapshotError} />
-                    )}
+                  )}
+                  {runHistory.map((item) => {
+                    const active = inspectionRunId ? item.run_id === inspectionRunId : runSummary?.run_id === item.run_id;
+                    return (
+                      <div key={item.run_id} style={{ display: "flex", gap: spacing[2], alignItems: "flex-start", marginBottom: spacing[2] }}>
+                        {onCaptureDataset && (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select run ${item.run_id}`}
+                            checked={selectedRunIds.has(item.run_id)}
+                            onChange={() => toggleRunSelected(item.run_id)}
+                            style={{ marginTop: 14 }}
+                          />
+                        )}
+                        <div style={{ flex: 1, minWidth: 0, borderRadius: radius.lg, border: `1px solid ${active ? color.primary[600] : border.subtle}`, background: surface.card }}>
+                          <button type="button" className="agb-focus-ring agb-hoverable" onClick={() => onSelectRun(item.run_id)} style={historyButtonStyle}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <StatusPill status={item.status} />
+                              {item.source === "release" && (
+                                <span title={item.graph_release_id ?? undefined} style={{ fontSize: 11, color: text.secondary }}>
+                                  release
+                                </span>
+                              )}
+                              {item.provider && (
+                                <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: text.secondary }}>
+                                  <ProviderDot provider={item.provider} size={6} />
+                                  {providerLabel(item.provider)}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ marginTop: 4, fontSize: 12, lineHeight: "16px", color: text.secondary, textAlign: "left" }}>{formatRunLabel(item)}</div>
+                          </button>
+                          <div style={{ display: "flex", gap: 2, padding: `0 ${spacing[1]}px ${spacing[1]}px` }}>
+                            {item.status === "succeeded" && (
+                              <SmallAction icon={<RotateCcw size={12} />} disabled={replayingRunId !== null} onClick={() => void handleReplay(item.run_id)}>
+                                {replayingRunId === item.run_id ? "Replaying…" : "Replay"}
+                              </SmallAction>
+                            )}
+                            <SmallAction icon={<ScanSearch size={12} />} disabled={snapshotLoading && snapshotRunId === item.run_id} onClick={() => void handleViewSnapshot(item.run_id)}>
+                              {snapshotRunId === item.run_id ? (snapshotLoading ? "Loading…" : "Hide snapshot") : "View snapshot"}
+                            </SmallAction>
+                          </div>
+                          {snapshotRunId === item.run_id && (
+                            <div style={{ padding: `0 ${spacing[2]}px ${spacing[2]}px` }}>
+                              <RunSnapshotDisplay snapshot={snapshot} error={snapshotError} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+              {replayError && <div role="alert" style={alertStyle}>{replayError}</div>}
+              {replayResult && (
+                <Group title="Replay (read-only)" icon={<RotateCcw size={13} />}>
+                  <StatusPill status={replayResult.run.status} />
+                  {replayResult.traces.map((trace) => (
+                    <Muted key={trace.node_id} style={{ marginTop: 4, fontFamily: fontFamily.mono }}>
+                      {trace.node_id}: {JSON.stringify(trace.output)}
+                    </Muted>
+                  ))}
+                </Group>
+              )}
+            </>
+          )}
+
+          {activeTab === "issues" && (
+            <div aria-live="polite">
+              {diagnostics.length === 0 ? (
+                <EmptyState icon={<ShieldCheck size={18} color={color.success[500]} />}>
+                  <span style={{ color: color.success[500] }}>No issues — graph is ready to compile.</span>
+                </EmptyState>
+              ) : (
+                diagnostics.map((diagnostic, index) => {
+                  const key = diagnosticKey(diagnostic, index);
+                  const clickable = Boolean(diagnostic.node_id || diagnostic.edge_id);
+                  const isError = diagnostic.severity === "error";
+                  const Icon = isError ? XCircle : AlertTriangle;
+                  const body = (
+                    <>
+                      <Icon size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 600 }}>{isError ? "Error" : "Warning"}</span>: {diagnostic.message}
+                        {diagnostic.remediation && <span style={{ display: "block", color: text.secondary, marginTop: 2 }}>{diagnostic.remediation}</span>}
+                        {(diagnostic.node_id || diagnostic.edge_id) && (
+                          <code style={{ display: "block", marginTop: 2, fontFamily: fontFamily.mono, fontSize: 11, color: text.secondary }}>
+                            {diagnostic.node_id ?? diagnostic.edge_id}
+                          </code>
+                        )}
+                      </span>
+                    </>
+                  );
+                  // Only a blocking policy diagnostic is waivable.
+                  const waivable = diagnostic.category === "policy" && diagnostic.blocking && Boolean(graphId);
+                  return (
+                    <div key={key} style={{ marginBottom: spacing[2] }}>
+                      {clickable ? (
+                        <button type="button" className="agb-focus-ring agb-hoverable" onClick={() => onDiagnosticClick(diagnostic)} style={diagnosticStyle(diagnostic.severity, true)}>
+                          {body}
+                        </button>
+                      ) : (
+                        <div style={diagnosticStyle(diagnostic.severity, false)}>{body}</div>
+                      )}
+                      {waivable && (
+                        <Button variant="secondary" disabled={waivingKey === key} onClick={() => void handleWaive(diagnostic, key)} style={{ marginTop: 4, fontSize: 12, padding: "4px 10px" }}>
+                          {waivingKey === key ? "Waiving…" : "Waive (30 days)"}
+                        </Button>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
-              </>
-            )}
-            {replayError && (
-              <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
-                {replayError}
-              </div>
-            )}
-            {replayResult && (
-              <div style={{ marginTop: spacing[2] }}>
-                <div style={typeScale.caption}>
-                  Replay of node outputs, read-only — <b>{replayResult.run.status}</b>
-                </div>
-                {replayResult.traces.map((trace) => (
-                  <div
-                    key={trace.node_id}
-                    style={{ ...typeScale.caption, opacity: 0.75, marginTop: spacing[1], fontFamily: fontFamily.mono }}
-                  >
-                    {trace.node_id}: {JSON.stringify(trace.output)}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CollapsibleSection>
+                  );
+                })
+              )}
+              {waiveError && <div role="alert" style={alertStyle}>{waiveError}</div>}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </PanelFrame>
   );
 }
 
-function diagnosticButtonStyle(severity: Diagnostic["severity"]): CSSProperties {
+function SmallAction({ icon, children, onClick, disabled }: { icon: ReactNode; children: ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="agb-focus-ring agb-hoverable"
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 28, padding: "0 8px", borderRadius: radius.md, border: "none", background: "transparent", color: text.secondary, fontSize: 12, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1 }}
+    >
+      <span aria-hidden="true" style={{ display: "inline-flex" }}>{icon}</span>
+      {children}
+    </button>
+  );
+}
+
+function diagnosticStyle(severity: Diagnostic["severity"], clickable: boolean): CSSProperties {
+  const isError = severity === "error";
   return {
-    display: "block",
+    display: "flex",
+    gap: 8,
+    alignItems: "flex-start",
     width: "100%",
-    marginBottom: spacing[1],
-    padding: spacing[2],
+    padding: `${spacing[2]}px ${spacing[2] + 2}px`,
     borderRadius: radius.lg,
-    border: `1px solid ${severity === "error" ? accentSurface.destructive.border : color.warning[700]}`,
-    background: severity === "error" ? accentSurface.destructive.bg : surface.raised,
-    color: severity === "error" ? accentSurface.destructive.text : color.warning[500],
-    cursor: "pointer",
+    border: `1px solid ${isError ? accentSurface.destructive.border : `${color.warning[500]}55`}`,
+    background: isError ? accentSurface.destructive.bg : `${color.warning[500]}12`,
+    color: isError ? accentSurface.destructive.text : color.warning[500],
+    cursor: clickable ? "pointer" : "default",
     textAlign: "left",
-    ...typeScale.caption,
-    lineHeight: "16px",
+    fontSize: 12,
+    lineHeight: "17px",
   };
 }
 
-const containerStyle = (layout: "rail" | "drawer"): CSSProperties => ({
-  width: "100%",
-  height: layout === "rail" ? "100%" : "auto",
-  minHeight: 0,
-  borderLeft: layout === "drawer" ? undefined : `1px solid ${surface.border}`,
-  background: surface.panel,
-  color: text.primary,
+const alertStyle: CSSProperties = {
   display: "flex",
-  flexDirection: "column",
-  overflow: layout === "rail" ? "hidden" : "visible",
-});
-
-const executeGroupStyle: CSSProperties = {
-  padding: shell.panelPadding,
-  borderBottom: `1px solid ${surface.border}`,
-  flexShrink: 0,
-};
-
-const observeGroupStyle = (isRail: boolean): CSSProperties => ({
-  padding: shell.panelPadding,
-  flex: isRail ? 1 : undefined,
-  minHeight: isRail ? 0 : undefined,
-  display: "flex",
-  flexDirection: "column",
-  borderBottom: "none",
-});
-
-const observeScrollerStyle = (isRail: boolean): CSSProperties => ({
-  flex: isRail ? 1 : undefined,
-  minHeight: isRail ? 0 : undefined,
-  overflowY: isRail ? "auto" : "visible",
-});
-
-const resultBlockStyle: CSSProperties = {
-  overflowX: "auto",
-};
-
-const inspectFailStyle: CSSProperties = {
-  ...typeScale.caption,
+  gap: 8,
+  alignItems: "flex-start",
+  marginBottom: spacing[3],
+  padding: `${spacing[2]}px ${spacing[2] + 2}px`,
+  borderRadius: radius.lg,
+  border: `1px solid ${accentSurface.destructive.border}`,
+  background: accentSurface.destructive.bg,
   color: accentSurface.destructive.text,
-  marginBottom: spacing[2],
-  lineHeight: "18px",
+  fontSize: 12,
+  lineHeight: "17px",
 };
 
 const eventRowStyle: CSSProperties = {
-  display: "block",
+  display: "flex",
+  gap: 8,
+  alignItems: "baseline",
   width: "100%",
   textAlign: "left",
-  padding: "1px 4px",
-  marginBottom: spacing[1] - 1,
+  padding: "4px 8px",
   border: "none",
   borderRadius: radius.md,
   background: "transparent",
   color: text.primary,
   cursor: "pointer",
-  ...typeScale.caption,
   fontFamily: fontFamily.mono,
+  fontSize: 11.5,
+  lineHeight: "16px",
 };
 
 const preStyle: CSSProperties = {
-  ...typeScale.caption,
-  background: surface.page,
+  fontFamily: fontFamily.mono,
+  fontSize: 12,
+  lineHeight: "18px",
+  background: surface.inset,
+  border: `1px solid ${border.subtle}`,
   padding: spacing[2],
   borderRadius: radius.lg,
   overflowX: "auto",
-  marginTop: 2,
-  marginBottom: spacing[2],
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  margin: `${spacing[1]}px 0 ${spacing[2]}px`,
 };
 
 const historyButtonStyle: CSSProperties = {
   display: "block",
   width: "100%",
-  minHeight: shell.touchTarget.min,
-  marginBottom: spacing[2],
-  padding: spacing[2],
-  borderRadius: radius.lg,
-  border: `1px solid ${surface.borderStrong}`,
-  background: surface.raised,
+  padding: `${spacing[2]}px ${spacing[2] + 2}px ${spacing[1]}px`,
+  border: "none",
+  borderRadius: `${radius.lg}px ${radius.lg}px 0 0`,
+  background: "transparent",
   color: text.primary,
   cursor: "pointer",
   textAlign: "left",
