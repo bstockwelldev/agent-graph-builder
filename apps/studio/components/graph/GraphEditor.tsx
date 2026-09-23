@@ -471,6 +471,25 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [nodes, edges, graphId, graphName, graphOrientation],
   );
 
+  // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
+  // publish the current graph/selection/run into the workbench so ChatPanel
+  // (a global panel rendered outside this tree) can attach it to messages.
+  // `getGraph` stays a live closure over `buildGraphDefinition` so the
+  // snapshot reflects the canvas at send time, dirty or not.
+  useEffect(() => {
+    if (!graphId) return;
+    workbench.setGraphContext({
+      graphId,
+      graphName,
+      getGraph: buildGraphDefinition,
+      selectedNodeId,
+      selectedEdgeId,
+      runId: inspectionRunId ?? runSummary?.run_id ?? null,
+    });
+    return () => workbench.setGraphContext(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphId, graphName, buildGraphDefinition, selectedNodeId, selectedEdgeId, inspectionRunId, runSummary?.run_id]);
+
   const semanticFingerprint = useMemo(() => {
     if (nodes.length === 0) return "";
     try {

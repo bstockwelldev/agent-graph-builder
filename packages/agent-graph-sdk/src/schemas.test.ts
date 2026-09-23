@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentProfileSchema,
   capabilityMatrixSchema,
+  chatContextSchema,
   chatSessionSchema,
   diagnosticSchema,
   edgeTransformSchema,
@@ -47,6 +48,37 @@ describe("graphDefinitionSchema", () => {
       edges: [],
     };
     expect(graphDefinitionSchema.safeParse(graph).success).toBe(false);
+  });
+});
+
+// Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596).
+describe("chatContextSchema", () => {
+  it("accepts an empty context", () => {
+    expect(chatContextSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("round-trips a full context including an inline graph", () => {
+    const context = {
+      graph: {
+        id: "g1",
+        name: "Demo",
+        entry_node_id: "n1",
+        nodes: [{ id: "n1", type: "input", position: { x: 0, y: 0 }, config: {} }],
+        edges: [],
+      },
+      graph_id: "g1",
+      selected_node_id: "n1",
+      selected_edge_id: null,
+      run_id: "run_1",
+    };
+    const result = chatContextSchema.safeParse(context);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.graph?.name).toBe("Demo");
+  });
+
+  it("rejects a graph that fails graphDefinitionSchema", () => {
+    const context = { graph: { id: "g1", nodes: [{ type: "not_a_real_type" }] } };
+    expect(chatContextSchema.safeParse(context).success).toBe(false);
   });
 });
 

@@ -109,6 +109,20 @@ export const graphDefinitionSchema = z.object({
   updated_at: z.string().nullish(),
 });
 
+// Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
+// sent alongside a chat message so the backend can build a system prompt
+// from the studio's current graph/selection/run state. All fields
+// optional and mirrored 1:1 with the backend's ChatContext
+// (backend/app/chat_context.py) — an empty/omitted context reproduces the
+// pre-existing behavior exactly.
+export const chatContextSchema = z.object({
+  graph: graphDefinitionSchema.nullish(),
+  graph_id: z.string().nullish(),
+  selected_node_id: z.string().nullish(),
+  selected_edge_id: z.string().nullish(),
+  run_id: z.string().nullish(),
+});
+
 export const diagnosticSchema = z.object({
   severity: z.enum(["error", "warning"]),
   code: z.string(),

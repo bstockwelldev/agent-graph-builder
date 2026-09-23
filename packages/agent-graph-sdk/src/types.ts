@@ -8,6 +8,7 @@ import type {
   analyticsTotalsSchema,
   capabilityEntrySchema,
   capabilityMatrixSchema,
+  chatContextSchema,
   chatMessageSchema,
   chatProviderSchema,
   chatSessionSchema,
@@ -165,6 +166,7 @@ export type ResourceVersionIndexEntry = z.infer<typeof resourceVersionIndexEntry
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatSession = z.infer<typeof chatSessionSchema>;
+export type ChatContext = z.infer<typeof chatContextSchema>;
 
 /**
  * Run analytics / spend estimation (studio-consolidation Phase 5 — see

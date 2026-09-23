@@ -39,6 +39,7 @@ import type {
   AgentProfile,
   AnalyticsDashboardPayload,
   CapabilityMatrix,
+  ChatContext,
   ChatProvider,
   ChatSession,
   CompileResult,
@@ -531,11 +532,15 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // ChatSession is a stored resource like the others above (free CRUD),
     // plus one bespoke non-CRUD method for actually sending a message.
     chatSessions: resourceClient<ChatSession>(baseUrl, "chat-sessions", chatSessionSchema),
-    sendChatMessage: (sessionId: string, content: string) =>
+    // `context` (studio-ux-gap-remediation-plan.md §3, STO-596): optional,
+    // so every existing caller (and any caller with no graph open) is
+    // unaffected — omitting it reproduces the pre-existing behavior
+    // exactly.
+    sendChatMessage: (sessionId: string, content: string, context?: ChatContext) =>
       jsonFetch<ChatSession>(
         baseUrl,
         `/api/chat-sessions/${sessionId}/messages`,
-        { method: "POST", body: JSON.stringify({ content }) },
+        { method: "POST", body: JSON.stringify({ content, context }) },
         chatSessionSchema,
       ),
   };

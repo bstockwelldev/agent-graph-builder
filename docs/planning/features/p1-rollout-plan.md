@@ -1,19 +1,26 @@
 ---
 title: P1 rollout plan — simulation, replay, diffs, routing, and reusable assets
-status: proposed
+status: shipped
 capability: p1-rollout
 depends_on:
   - p0-graph-foundation-design-plan.md
   - graph-native-control-plane-plan.md
   - studio-ux-revision-plan.md
 linear_issue: none
-last_updated: 2026-09-20
+last_updated: 2026-09-22
 ---
 
 # P1 rollout plan
 
-> **Status:** Proposed. Sequences the P1 follow-on work the P0 graph
-> foundation deliberately deferred; does not itself implement any of it.
+> **Status:** Shipped, confirmed 2026-09-22. All five tracks (Slices A-D plus
+> the parallel entity-registry track) are implemented and tested:
+> `fingerprint.py`/`releases.py`/`ReleasesPanel.tsx` (diffs), `simulate.py`
+> (simulation), `replay.py` (replay), `routing_lab.py`/`RoutingLabPanel.tsx`
+> (routing lab), `resource_versions.py`/`resource-version-history.tsx`
+> (entity registry) — see `docs/planning/roadmap.md`'s Phase 9 for the
+> per-slice evidence and named gaps (no counterfactual replay modes,
+> routing-lab compares graph-vs-graph only, `/runs` pages not yet migrated
+> into a HUD panel).
 
 ## Context
 

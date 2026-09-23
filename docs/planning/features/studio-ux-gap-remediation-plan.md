@@ -233,19 +233,36 @@ active graph, selected node/edge, open run, or open diagnostic.
 
 ### Acceptance criteria
 
-- [ ] When a graph is open, Chat's context strip reflects the active
+**Status: implemented 2026-09-22.** Built server-side rather than as
+client-only prompt injection, so prompt construction/truncation/testing
+lives in one place (`backend/app/chat_context.py`'s
+`build_chat_system_prompt`, 10 unit tests) and the context always
+reflects the live in-canvas graph (a function, not a stale saved
+snapshot) rather than the last-saved graph. `WorkbenchProvider` gained
+`graphContext`/`setGraphContext` (a superset of the spec's proposed
+fields: `graphId`, `graphName`, `getGraph`, `selectedNodeId`,
+`selectedEdgeId`, `runId`); `GraphEditor` publishes it on every relevant
+change and clears it on unmount so non-graph routes show no context.
+
+- [x] When a graph is open, Chat's context strip reflects the active
       graph's name.
-- [ ] When a node/edge is selected on the canvas, Chat's context strip
+- [x] When a node/edge is selected on the canvas, Chat's context strip
       updates to reflect it.
-- [ ] Asking a context-dependent question (e.g. "why is this node
+- [x] Asking a context-dependent question (e.g. "why is this node
       failing") without naming the node/graph explicitly still gets a
       context-aware response, because current selection was injected
-      into the request.
-- [ ] Opening Chat from a diagnostic or run carries that context through
+      into the request. The backend prompt includes the selected node's
+      config, its validation diagnostics, and (with an open run) failing
+      node traces.
+- [x] Opening Chat from a diagnostic or run carries that context through
       automatically, the same way `chatSessionId` context already works
-      today via the command palette.
-- [ ] No change to the underlying `sendChatMessage`/session persistence
-      contract.
+      today via the command palette — diagnostic/waterfall clicks call
+      the existing `focusNode()`, which sets `selectedNodeId`, which the
+      new effect republishes into `graphContext` continuously.
+- [x] No change to the underlying `sendChatMessage`/session persistence
+      contract. `context` is a new optional third argument/request field;
+      omitting it (the pre-existing call shape) is unchanged, and the
+      context is never written into `session.messages`.
 
 ---
 
