@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Sidebar } from "lucide-react";
 
 import { StudioAuthSection } from "@/components/studio/studio-auth-section";
-import { StudioNav } from "@/components/studio/studio-nav";
+import { isResourceRoute, ResourceTabs, StudioNav, StudioRail } from "@/components/studio/studio-nav";
 import { StudioNavProvider } from "@/components/studio/studio-nav-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -88,18 +88,21 @@ export function StudioShell({
             </div>
           </SheetContent>
         </Sheet>
+        {/* Wave 2 (studio-graph-workbench-redesign-plan.md): a 72px icon
+            rail -- Graphs · Resources · Analytics -- replaces the 240px
+            sidebar of nine items. The graph canvas still hides it entirely
+            (the graph header's back button is its way out). */}
         <aside
           className={cn(
-            "bg-sidebar text-sidebar-foreground shrink-0 flex-col gap-6 border-r border-sidebar-border px-4 py-6",
+            "bg-sidebar text-sidebar-foreground shrink-0 flex-col items-center gap-4 border-r border-sidebar-border py-4",
             // Graph canvas: keep aside fully hidden at all breakpoints — base `md:flex` would
             // otherwise override `hidden` at md+ and duplicate the Sheet nav.
-            graphCanvas ? "hidden" : "hidden w-56 md:flex md:w-60",
+            graphCanvas ? "hidden" : "hidden w-[72px] md:flex",
           )}
           aria-label="Studio navigation"
           aria-hidden={graphCanvas}
         >
-          <StudioNav pathname={safePathname} />
-          <StudioAuthSection />
+          <StudioRail pathname={safePathname} footer={<StudioAuthSection compact />} />
         </aside>
         <div className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <header
@@ -135,6 +138,7 @@ export function StudioShell({
                     : "mx-auto w-full max-w-6xl px-4 py-4 sm:px-5 sm:py-6 md:px-6",
               )}
             >
+              {isResourceRoute(safePathname) && <ResourceTabs pathname={safePathname} />}
               {children}
             </div>
           </main>

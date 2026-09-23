@@ -88,6 +88,9 @@ import type { EdgeRunState } from "./edges/LabeledEdge";
 import { findFreePosition, type LayoutSpacing } from "@/layout/dagreLayout";
 import { cn } from "@/lib/utils";
 import { shell } from "@/lib/graph-theme";
+import { parseGraphUrlState, serializeGraphUrlState } from "@/lib/graphUrlState";
+import { WORKBENCH_PANELS } from "@/components/workbench/panels";
+import { CaptureDatasetDialog } from "@/components/studio/capture-dataset-dialog";
 
 // Layout-menu view preferences (studio-graph-workbench-redesign-plan.md,
 // Slice 3) -- per viewer, not per graph, so they live in localStorage
@@ -314,6 +317,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // Screen-reader announcements from the canvas (orientation changes) --
   // previously passed as no-op stubs, so they were silently dropped.
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
+  // Wave 2: RunPanel's history multi-select → dataset capture dialog
+  // (ported from the retired /runs/[graphId] page).
+  const [captureRuns, setCaptureRuns] = useState<RunSummary[] | null>(null);
+  // Wave 2 URL state (lib/graphUrlState.ts): the node inspector's active
+  // tab, mirrored into `?tab=`; and whether this graph's URL state has been
+  // applied yet (writes are held until then so they can't wipe the link).
+  const [inspectorTab, setInspectorTab] = useState<string | null>(null);
+  const urlStateAppliedRef = useRef<string | null>(null);
   const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const workbench = useWorkbench();
@@ -443,6 +454,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [refreshRunHistory]);
 
   useEffect(() => {
+    // Wave 2 URL state: a deep link's own panel/selection wins over the
+    // default-open Run panel (a ?node= link should show that node's dock,
+    // which the Run panel would otherwise cover).
+    const fromUrl = parseGraphUrlState(window.location.search);
+    if (fromUrl.panel && fromUrl.panel in WORKBENCH_PANELS) {
+      workbench.open(fromUrl.panel as WorkbenchPanelId);
+      return;
+    }
+    if (fromUrl.node || fromUrl.edge) return;
     if (isDesktopViewport() && workbench.activePanel === null) workbench.open("run");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once at mount only, guarded above
   }, []);
@@ -564,12 +584,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       selectedNodeId,
       selectedEdgeId,
       runId: inspectionRunId ?? runSummary?.run_id ?? null,
+      focusNode: (nodeId, tab) => focusNodeRef.current(nodeId, tab),
+      inspectRun: (runId) => inspectRunRef.current(runId),
     });
     return () => workbench.setGraphContext(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphId, graphName, buildGraphDefinition, selectedNodeId, selectedEdgeId, inspectionRunId, runSummary?.run_id]);
 
   const paintedFingerprintRef = useRef("");
+  const focusNodeRef = useRef<(nodeId: string, tab?: string) => void>(() => {});
+  const inspectRunRef = useRef<(runId: string) => void>(() => {});
   const semanticFingerprintRef = useRef("");
   const semanticFingerprint = useMemo(() => {
     if (nodes.length === 0) return "";
@@ -1289,6 +1313,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [edges, runGraph],
   );
 
+  // Stable handles for graphContext's navigation actions (published in an
+  // effect declared earlier than these callbacks).
+  focusNodeRef.current = focusNode;
+  inspectRunRef.current = (runId: string) => void handleSelectHistoricalRun(runId);
+
   // Header Run▾ menu / Validate chip → a specific RunPanel section
   // (studio-graph-workbench-redesign-plan.md, Slice 2).
   const openRunSection = useCallback(
@@ -1339,6 +1368,93 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }),
     [deleteNodeById, duplicateNode, focusNode, workbench],
   );
+
+  // Wave 2 URL state -- apply once per graph, after its nodes load: select +
+  // pan to ?node (opening ?tab) or ?edge, paint ?run onto the canvas, and
+  // reveal a one-shot ?section of the Run panel (the retired /runs/[graphId]
+  // page redirects here with section=observe-history).
+  useEffect(() => {
+    if (!graphId || loading || urlStateAppliedRef.current === graphId) return;
+    urlStateAppliedRef.current = graphId;
+    const state = parseGraphUrlState(window.location.search);
+    // The pan/zoom waits out the load-time layout + whole-graph fit
+    // (FlowCanvas's rAF and 150ms-debounced fitView), which would
+    // otherwise land after it and zoom straight back out.
+    const LOAD_FIT_SETTLE_MS = 400;
+    if (state.node && nodes.some((node) => node.id === state.node)) {
+      const nodeId = state.node;
+      setSelectedNodeId(nodeId);
+      setSelectedEdgeId(null);
+      window.setTimeout(() => focusNode(nodeId, state.tab ?? undefined), LOAD_FIT_SETTLE_MS);
+    } else if (state.edge && edges.some((edge) => edge.id === state.edge)) {
+      const edgeId = state.edge;
+      setSelectedEdgeId(edgeId);
+      setSelectedNodeId(null);
+      window.setTimeout(() => setFocusRequest({ edgeId, nonce: Date.now() }), LOAD_FIT_SETTLE_MS);
+    }
+    if (state.run) void handleSelectHistoricalRun(state.run);
+    if (state.section && state.panel === "run") {
+      setRunSectionRequest({ sectionId: state.section as RunPanelSectionId, nonce: Date.now() });
+    }
+    // `section` is one-shot: drop it now that it's been applied, or it
+    // would re-open that section on every reload.
+    if (state.section) {
+      const cleaned = serializeGraphUrlState(state, window.location.search);
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${cleaned}${window.location.hash}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per loaded graph
+  }, [graphId, loading, nodes.length]);
+
+  // Programmatic selection (diagnostics, waterfall, event log, analytics,
+  // URL deep links) set selectedNodeId/selectedEdgeId but not React Flow's
+  // own `selected` flags, so the card's selection ring and NodeToolbar
+  // never appeared for them. Mirror our selection into React Flow's.
+  useEffect(() => {
+    setNodes((nds) => {
+      let changed = false;
+      const next = nds.map((node) => {
+        const selected = node.id === selectedNodeId;
+        if (Boolean(node.selected) === selected) return node;
+        changed = true;
+        return { ...node, selected };
+      });
+      return changed ? next : nds;
+    });
+    setEdges((eds) => {
+      let changed = false;
+      const next = eds.map((edge) => {
+        const selected = edge.id === selectedEdgeId;
+        if (Boolean(edge.selected) === selected) return edge;
+        changed = true;
+        return { ...edge, selected };
+      });
+      return changed ? next : eds;
+    });
+  }, [selectedNodeId, selectedEdgeId, setNodes, setEdges]);
+
+  // Inspector tab resets with the selection (NodeInspector remounts per node).
+  useEffect(() => {
+    setInspectorTab(null);
+  }, [selectedNodeId]);
+
+  // ...and mirror selection/run/panel back into the URL (replaceState: no
+  // history entry per click, no navigation, no re-render).
+  useEffect(() => {
+    if (!graphId || urlStateAppliedRef.current !== graphId) return;
+    const next = serializeGraphUrlState(
+      {
+        node: selectedNodeId,
+        edge: selectedEdgeId,
+        tab: inspectorTab,
+        run: inspectionRunId,
+        panel: workbench.activePanel,
+      },
+      window.location.search,
+    );
+    if (next !== window.location.search) {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${next}${window.location.hash}`);
+    }
+  }, [graphId, selectedNodeId, selectedEdgeId, inspectorTab, inspectionRunId, workbench.activePanel]);
 
   // ⌘S / Ctrl+S saves (new with the header's Save button, Slice 2). Runs
   // even from inside inputs -- saving while editing a field is the point.
@@ -1414,6 +1530,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onOpenRunPanel={() => workbench.open("run")}
       onPolicyExceptionCreated={refreshDiagnostics}
       focusTab={inspectorTabRequest}
+      onTabChange={setInspectorTab}
+      historyRefreshKey={runSummary ? `${runSummary.run_id}:${runSummary.status}` : null}
+      onInspectRun={(runId) => void handleSelectHistoricalRun(runId)}
       userLabel={selectedNode.data.userLabel ?? ""}
       derivedLabel={labelFor(selectedNode.data.nodeType, selectedNode.data.config)}
       onLabelChange={(value) => {
@@ -1802,6 +1921,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           sectionRequest={runSectionRequest}
           runFromNodeRequest={runFromNodeRequest}
           onRunFromNodeRequestHandled={() => setRunFromNodeRequest(null)}
+          onCaptureDataset={setCaptureRuns}
           reducedMotion={workbench.reducedMotion}
           inspectLoadError={inspectLoadError}
           onRetryInspect={() => {
@@ -1884,6 +2004,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             {validationLabel}
           </span>
         </button>
+      )}
+      {graphId && (
+        <CaptureDatasetDialog
+          open={captureRuns !== null}
+          onOpenChange={(open) => {
+            if (!open) setCaptureRuns(null);
+          }}
+          graphId={graphId}
+          runs={captureRuns ?? []}
+        />
       )}
     </div>
   );

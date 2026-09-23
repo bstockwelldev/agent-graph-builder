@@ -189,6 +189,7 @@ export function RunPanel({
   sectionRequest = null,
   runFromNodeRequest = null,
   onRunFromNodeRequestHandled,
+  onCaptureDataset,
 }: {
   graphId: string | null;
   diagnostics: Diagnostic[];
@@ -242,7 +243,20 @@ export function RunPanel({
    * panel's current inputs, once per `nonce`. */
   runFromNodeRequest?: { nodeId: string; nonce: number } | null;
   onRunFromNodeRequestHandled?: () => void;
+  /** Wave 2: capture the selected history runs as a Routing Lab dataset
+   * (moved here from the retired /runs/[graphId] page). The caller renders
+   * the dialog -- it's a shadcn Dialog, which this token-styled panel must
+   * not import (apps/studio/AGENTS.md). */
+  onCaptureDataset?: (runs: RunSummary[]) => void;
 }) {
+  const [selectedRunIds, setSelectedRunIds] = useState<ReadonlySet<string>>(new Set());
+  const toggleRunSelected = (runId: string) =>
+    setSelectedRunIds((current) => {
+      const next = new Set(current);
+      if (next.has(runId)) next.delete(runId);
+      else next.add(runId);
+      return next;
+    });
   const [question, setQuestion] = useState("How does a database index work?");
   const [provider, setProvider] = useState<ChatProvider>("stub");
   const [selectedModel, setSelectedModel] = useState<string>("");
@@ -711,7 +725,16 @@ export function RunPanel({
           </div>
         </CollapsibleSection>
 
-        <CollapsibleSection sectionId="run-simulate" title="Run with fixture" reducedMotion={reducedMotion} revealNonce={revealNonceFor("run-simulate")}>
+        {/* Collapsed by default (Wave 2 visual QA): expanded, it pushed the
+            Observe region (status, history) down to ~100px of scroll area.
+            The header's Run▾ menu reveals it on demand. */}
+        <CollapsibleSection
+          sectionId="run-simulate"
+          title="Run with fixture"
+          defaultOpen={false}
+          reducedMotion={reducedMotion}
+          revealNonce={revealNonceFor("run-simulate")}
+        >
           <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
             Simulates against the saved graph with no live tool or model calls — always uses the offline stub
             provider, plus any per-node outputs you stub below.
@@ -970,12 +993,28 @@ export function RunPanel({
                   {eventLogEmptyMessage(inspecting)}
                 </div>
               ) : (
-                displayedEvents.map((e) => (
-                  <div key={e.sequence} style={{ ...typeScale.caption, marginBottom: spacing[1] - 1, fontFamily: fontFamily.mono }}>
-                    <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
-                    {e.node_id ? ` · ${e.node_id}` : ""}
-                  </div>
-                ))
+                displayedEvents.map((e) =>
+                  // Wave 2: node events focus their node on the canvas
+                  // ("run events focus corresponding nodes", review §82).
+                  e.node_id && onFocusNode ? (
+                    <button
+                      key={e.sequence}
+                      type="button"
+                      className="agb-focus-ring agb-hoverable"
+                      onClick={() => onFocusNode(e.node_id!)}
+                      title={`Focus ${e.node_id} on the canvas`}
+                      style={eventRowStyle}
+                    >
+                      <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type} ·{" "}
+                      <span style={{ color: color.primary[500] }}>{e.node_id}</span>
+                    </button>
+                  ) : (
+                    <div key={e.sequence} style={{ ...eventRowStyle, cursor: "default" }}>
+                      <span style={{ opacity: 0.5 }}>[{e.sequence}]</span> {e.event_type}
+                      {e.node_id ? ` · ${e.node_id}` : ""}
+                    </div>
+                  ),
+                )
               )}
             </CollapsibleSection>
           </div>
@@ -995,10 +1034,46 @@ export function RunPanel({
                 No runs yet for this graph. Compile and run to see history here.
               </div>
             ) : (
-              runHistory.map((run) => {
+              <>
+              {onCaptureDataset && (
+                <div style={{ display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
+                  <label style={{ ...typeScale.caption, display: "flex", alignItems: "center", gap: spacing[1], cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all runs"
+                      checked={selectedRunIds.size > 0 && selectedRunIds.size === runHistory.length}
+                      onChange={() =>
+                        setSelectedRunIds((current) =>
+                          current.size === runHistory.length ? new Set() : new Set(runHistory.map((run) => run.run_id)),
+                        )
+                      }
+                    />
+                    All
+                  </label>
+                  <Button
+                    variant="secondary"
+                    disabled={selectedRunIds.size === 0}
+                    onClick={() => onCaptureDataset(runHistory.filter((run) => selectedRunIds.has(run.run_id)))}
+                    style={{ marginLeft: "auto", ...typeScale.caption }}
+                  >
+                    {selectedRunIds.size > 0 ? `Save ${selectedRunIds.size} as dataset` : "Select runs to save as dataset"}
+                  </Button>
+                </div>
+              )}
+              {runHistory.map((run) => {
                 const active = inspectionRunId ? run.run_id === inspectionRunId : runSummary?.run_id === run.run_id;
                 return (
-                  <div key={run.run_id} style={{ marginBottom: spacing[2] }}>
+                  <div key={run.run_id} style={{ marginBottom: spacing[2], display: "flex", gap: spacing[2], alignItems: "flex-start" }}>
+                    {onCaptureDataset && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select run ${run.run_id}`}
+                        checked={selectedRunIds.has(run.run_id)}
+                        onChange={() => toggleRunSelected(run.run_id)}
+                        style={{ marginTop: spacing[3] }}
+                      />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
                     <button
                       type="button"
                       onClick={() => onSelectRun(run.run_id)}
@@ -1053,9 +1128,11 @@ export function RunPanel({
                     {snapshotRunId === run.run_id && (
                       <RunSnapshotDisplay snapshot={snapshot} error={snapshotError} />
                     )}
+                    </div>
                   </div>
                 );
-              })
+              })}
+              </>
             )}
             {replayError && (
               <div style={{ ...typeScale.caption, color: accentSurface.destructive.text, marginTop: spacing[2], lineHeight: "16px" }}>
@@ -1143,6 +1220,21 @@ const inspectFailStyle: CSSProperties = {
   color: accentSurface.destructive.text,
   marginBottom: spacing[2],
   lineHeight: "18px",
+};
+
+const eventRowStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "1px 4px",
+  marginBottom: spacing[1] - 1,
+  border: "none",
+  borderRadius: radius.md,
+  background: "transparent",
+  color: text.primary,
+  cursor: "pointer",
+  ...typeScale.caption,
+  fontFamily: fontFamily.mono,
 };
 
 const preStyle: CSSProperties = {

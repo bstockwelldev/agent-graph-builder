@@ -173,7 +173,7 @@ Full sequencing, exit gates, and UX constraints in [p1-rollout-plan.md](features
 4. ~~**Slice D — Routing policy lab.**~~ Dataset-driven route comparison; depends on Slice B's execution engine. Shipped: `routing_lab.py`, `RoutingLabPanel.tsx`, `test_routing_lab.py`. Compares graph-vs-graph only, not against a release.
 5. ~~**Parallel track — versioned reusable entity registry.**~~ Lower priority than A–D; no slice depends on it. Shipped: `resource_versions.py`, `resource-version-history.tsx`, `test_resource_versions.py`.
 
-All P1 UI ships as canvas-anchored HUD/rail/drawer panels (`apps/studio/components/workbench/panels.ts`), never a new standalone route. **Named gap:** `/runs` and `/runs/[graphId]` remain standalone pages — not fully migrated into a HUD panel.
+All P1 UI ships as canvas-anchored HUD/rail/drawer panels (`apps/studio/components/workbench/panels.ts`), never a new standalone route. ~~**Named gap:** `/runs` and `/runs/[graphId]` remain standalone pages.~~ Closed 2026-09-23 by Phase 11 Wave 2 — both now redirect into the graph's Run panel.
 
 ### Phase 10 — Studio shell UX remediation (P1–P2) — Shipped
 
@@ -186,12 +186,12 @@ Full gap table and rationale in [studio-shell-ux-gap-analysis.md](features/studi
 
 Large-graph complexity management (subgraphs, collapse/expand, dependency search, graph health score — named in `graph-native-control-plane-plan.md`) is explicitly out of this phase's slices and is follow-on work tracked separately. The knowledge-base UI, previously listed alongside it, has since shipped.
 
-### Phase 11 — Graph-native workspace redesign (P1–P2) — Wave 1 shipped
+### Phase 11 — Graph-native workspace redesign (P1–P2) — Waves 1–2 shipped
 
 Full audit, slices, and acceptance criteria in [studio-graph-workbench-redesign-plan.md](features/studio-graph-workbench-redesign-plan.md) — the third-party "Deep UI/UX Design Review"'s remaining change sets, re-audited against code 2026-09-23 (its diagnostics/waterfall/Chat items were already covered by [studio-ux-gap-remediation-plan.md](features/studio-ux-gap-remediation-plan.md)).
 
 1. ~~**Wave 1 — Graph workbench + rich nodes.**~~ **Shipped 2026-09-23.** Single-row graph-first header (Validate chip, Run▾, icon tools, `···` overflow; ⌘S), one Layout menu (direction/spacing/minimap), rich node cards (status pill + issue badge, richer summaries, I/O row, NodeToolbar, hover preview, stale state, user-given names via `extensions.label` excluded from semantic fingerprints), shared node geometry + saved-position-preserving layout, and a `LabeledEdge` whose animation means "executing". Linear: [STO-602](https://linear.app/stockwise-productions-prototypes/issue/STO-602).
-2. **Wave 2 — IA + selection model.** Icon nav rail with one Resources entry, URL state (`?node/?run/?panel`), NodeInspector History/Performance tabs, graph-scoped analytics with per-node backend rollups, retire `/runs` pages. Linear: [STO-603](https://linear.app/stockwise-productions-prototypes/issue/STO-603).
+2. ~~**Wave 2 — IA + selection model.**~~ **Shipped 2026-09-23.** 72px icon rail (Graphs · Resources · Analytics) + `/resources` hub + resource tab strip; graph-route URL state (`?node/?tab/?edge/?run/?panel`); NodeInspector History tab; graph-scoped Analytics panel over new per-node backend rollups (`node_analytics.py`); `/runs` pages retired into the Run panel (multi-select dataset capture, clickable event log) with redirects. Linear: [STO-603](https://linear.app/stockwise-productions-prototypes/issue/STO-603).
 3. **Wave 3 — Motion + accessibility.** Drawers slide, menus originate from triggers, Escape closes panels + focus trap, `reducedMotion` threaded to every panel, focus rings across the graph kit. Linear: [STO-604](https://linear.app/stockwise-productions-prototypes/issue/STO-604).
 4. **Wave 4 — Resource binding + inspector consolidation.** Node↔registry references (cross-language contract), reverse "used by" API, one resource inspector replacing five duplicated page shells. Linear: [STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605).
 

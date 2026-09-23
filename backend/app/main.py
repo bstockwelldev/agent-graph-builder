@@ -16,6 +16,7 @@ from starlette.requests import Request
 from . import runtime, storage
 from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
+from .node_analytics import GraphAnalytics, NodeExecution, get_graph_analytics, get_node_history
 from .chat_context import ChatContext, build_chat_system_prompt
 from .datasets import DatasetBuildError, build_dataset_from_runs
 from .demo_graph import build_demo_graph
@@ -693,6 +694,24 @@ def list_all_runs() -> list[RunSummary]:
 @app.get("/api/analytics")
 def get_analytics() -> AnalyticsDashboardPayload:
     return get_analytics_dashboard()
+
+
+@app.get("/api/graphs/{graph_id}/analytics")
+def get_graph_analytics_route(graph_id: str, window: int = 50) -> GraphAnalytics:
+    """Graph-scoped rollup with per-node metrics (studio-graph-workbench-
+    redesign-plan.md, Wave 2) -- backs the analytics panel's graph scope
+    and the node inspector's History tab."""
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return get_graph_analytics(graph_id, run_window=max(1, min(window, 200)))
+
+
+@app.get("/api/graphs/{graph_id}/nodes/{node_id}/history")
+def get_node_history_route(graph_id: str, node_id: str, limit: int = 20) -> list[NodeExecution]:
+    """One node's most recent executions, newest first (Wave 2)."""
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return get_node_history(graph_id, node_id, limit=max(1, min(limit, 100)))
 
 
 @app.get("/api/providers/{provider}/ready")

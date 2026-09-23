@@ -41,7 +41,12 @@ export function CollapsibleSection({
   useEffect(() => {
     if (revealNonce === undefined) return;
     if (!isControlled) setOpen(true);
-    sectionRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+    // Deferred past the open/expand render (and any sibling sections
+    // collapsing), otherwise the scroll targets a pre-layout position.
+    const timer = window.setTimeout(() => {
+      sectionRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per nonce
   }, [revealNonce]);
 

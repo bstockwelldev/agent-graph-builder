@@ -13,8 +13,8 @@ last_updated: 2026-09-23
 # Graph workspace redesign
 
 > **Status:** Wave 1 shipped 2026-09-23 ([STO-602](https://linear.app/stockwise-productions-prototypes/issue/STO-602)).
-> Waves 2–4 are open backlog:
-> - [STO-603](https://linear.app/stockwise-productions-prototypes/issue/STO-603)
+> Wave 2 shipped 2026-09-23 ([STO-603](https://linear.app/stockwise-productions-prototypes/issue/STO-603)).
+> Waves 3–4 are open backlog:
 > - [STO-604](https://linear.app/stockwise-productions-prototypes/issue/STO-604)
 > - [STO-605](https://linear.app/stockwise-productions-prototypes/issue/STO-605)
 
@@ -228,14 +228,75 @@ Spacing and the minimap setting are per-viewer preferences stored in `localStora
 
 ---
 
-## Wave 2: IA + selection model (open, [STO-603](https://linear.app/stockwise-productions-prototypes/issue/STO-603))
+## Wave 2: IA + selection model — shipped ([STO-603](https://linear.app/stockwise-productions-prototypes/issue/STO-603))
 
-- **Icon nav rail** (56–72px) with a single Resources entry. Today `studio-nav.tsx` has 9 top-level items in a 240px column.
-- **URL state** (`?node`, `?run`, `?panel`, `?tab`) so graph context can be deep-linked and restored.
-- **NodeInspector tabs:** History (the node's recent runs) and Performance.
-- **Graph-scoped analytics:** per-node backend rollups in `analytics.py`, with clickable metrics.
-- **Retire `/runs` and `/runs/[graphId]`,** after porting dataset capture and multi-select into RunPanel history.
-- **A clickable RunPanel event log.**
+Review §7, §25, §29–31, §36–38, §62–64.
+
+### What shipped
+
+**Graph/node analytics backend (`backend/app/node_analytics.py`)**
+- `GET /api/graphs/{id}/analytics?window=` rolls up a graph's recent runs:
+  - run counts, success rate, P95 run latency, token and spend totals;
+  - per node: executions, success rate, avg and P95 latency from the node's own trace timestamps, and the last run and last error;
+  - nodes are sorted slowest first, so slow nodes are easy to identify.
+- `GET /api/graphs/{id}/nodes/{node}/history` lists a node's recent executions.
+- Aggregation is pure (`build_graph_analytics`, `build_node_history`) with 6 tests. The SDK gained `getGraphAnalytics` and `getNodeHistory` with typed schemas.
+
+**NodeInspector History tab (`NodeHistoryTab.tsx`)**
+- Shows success, executions, avg and P95 latency, and the recent executions.
+- Clicking a row paints that run onto the canvas.
+- It refetches when a run finishes.
+
+**Graph-scoped Analytics panel**
+- With a graph open, the panel defaults to **This graph**: stat cards and a per-node table, with **Workspace** one toggle away.
+- A node row focuses the node and opens its History tab. A "run" link inspects that run.
+- Unhealthy nodes (success rate under 80% with failures) are flagged.
+- Workspace rows link to their graph.
+- The panel navigates back into the graph through two new `StudioGraphContext` actions, `focusNode` and `inspectRun`.
+
+**URL state (`lib/graphUrlState.ts`)**
+- The graph route mirrors `?node`/`?tab` or `?edge`, `?run` and `?panel` via `history.replaceState`, so a reload or a shared link restores the exact context.
+- `?section` is one-shot: it reveals a Run panel section, then drops.
+- Deep links wait out the load-time fit before panning.
+- A deep link's panel or selection wins over the default-open Run panel.
+
+**Runs retired as a destination**
+- RunPanel run history gained multi-select and "Save N as dataset", which opens the existing `CaptureDatasetDialog`, rendered by GraphEditor because it's shadcn.
+- The event log's node events are clickable and focus the node.
+- `/runs` redirects to `/graphs`.
+- `/runs/{graphId}` redirects to `/graphs/{graphId}?panel=run&section=observe-history`.
+
+**Navigation**
+- A 72px icon rail (Graphs · Resources · Analytics) with a compact account menu replaces the 240px, nine-item sidebar.
+- A new `/resources` hub (discovery cards).
+- A resource-type tab strip on every resource page.
+- The mobile sheet lists the resource types under Resources.
+- The command palette groups follow suit, and Runs is gone.
+
+**Found in visual QA and fixed**
+- Canvas selection now mirrors programmatic selection. Diagnostics, waterfall, event-log, analytics and deep-link focus previously set our selection state but not React Flow's `selected` flag, so the selection ring and NodeToolbar never appeared for them.
+- Floating workbench panels are opaque. The docked dock's text bled through the 82% glass.
+- The inspector's tab strip scrolls instead of clipping its sixth tab.
+- "Run with fixture" is collapsed by default. Expanded, it squeezed the Observe region (status, history) to about 100px.
+- Section reveal scrolls after layout settles.
+
+### Acceptance criteria
+- [x] Nav is an icon rail, and resources are grouped under one entry (`studio-nav.test.tsx`).
+- [x] Reloading or sharing a URL restores the selected node, run and panel (`graphUrlState.test.ts`, plus the Playwright deep link `?node=llm_classify&tab=history`).
+- [x] A node's recent runs and metrics are visible from its inspector (`NodeHistoryTab.test.tsx`, verified live).
+- [x] The analytics panel scopes to the open graph, and metric rows navigate (`AnalyticsPanel.test.tsx`; live: a row click focused the node and updated the URL).
+- [x] Nothing is available only on `/runs`: dataset capture, snapshots and history all live in the Run panel, and the pages redirect (live: the redirect landed on Run history, and the capture dialog opened with 2 selected runs).
+- [x] Run events focus their nodes (live: an event-log click focused `llm_classify` and updated the URL).
+
+**Verification**
+- Studio: `vitest` 193/193.
+- Backend: 434/434.
+- SDK: 97/97.
+- `tsc` and `eslint` clean (one pre-existing warning).
+- Root build passes.
+- Playwright on a live stub backend: resources hub, prompts with tabs (desktop and mobile), deep-link History, graph-scoped analytics plus row click, `/runs` redirect, dataset dialog, and event-log focus.
+
+**Not in wave 2:** `/analytics` stays as the workspace-wide page (the rail's Analytics entry). It's a legitimate cross-graph view, not duplicated graph context.
 
 ## Wave 3: Motion + accessibility (open, [STO-604](https://linear.app/stockwise-productions-prototypes/issue/STO-604))
 

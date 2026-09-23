@@ -35,6 +35,7 @@ import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Select, TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { JsonEditor } from "./ui/JsonEditor";
+import { NodeHistoryTab } from "./NodeHistoryTab";
 import { Tabs } from "./ui/Tabs";
 
 function IssueList({ issues }: { issues: Diagnostic[] }) {
@@ -69,6 +70,9 @@ const NODE_INSPECTOR_TABS = [
   { id: "io", label: "I/O" },
   { id: "policy", label: "Policy" },
   { id: "run", label: "Run" },
+  // Wave 2 (studio-graph-workbench-redesign-plan.md): the node's metrics
+  // and recent executions across runs, not just the loaded run's trace.
+  { id: "history", label: "History" },
   // Raw JSON config editor (studio-config-editor-and-console-plan.md §6).
   { id: "raw", label: "Raw" },
 ];
@@ -99,6 +103,9 @@ export function NodeInspector({
   userLabel = "",
   derivedLabel = "",
   onLabelChange,
+  historyRefreshKey = null,
+  onInspectRun,
+  onTabChange,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -130,8 +137,18 @@ export function NodeInspector({
   userLabel?: string;
   derivedLabel?: string;
   onLabelChange?: (label: string) => void;
+  /** History tab (Wave 2): refetch when this changes (e.g. a run finished). */
+  historyRefreshKey?: string | null;
+  /** History tab row click: inspect that run on the canvas. */
+  onInspectRun?: (runId: string) => void;
+  /** Reports tab changes so GraphEditor can mirror them into the URL. */
+  onTabChange?: (tab: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState("configure");
+  const [activeTab, setActiveTabState] = useState("configure");
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    onTabChange?.(tab);
+  };
   const set = (key: string, value: unknown) => onConfigChange({ ...node.config, [key]: value });
   const accent = nodeTypeAccents[node.type]?.accent ?? color.primary[600];
 
@@ -181,6 +198,12 @@ export function NodeInspector({
         />
       )}
       {activeTab === "run" && <RunTab selectedTrace={selectedTrace} onOpenRunPanel={onOpenRunPanel} />}
+      {activeTab === "history" &&
+        (graphId ? (
+          <NodeHistoryTab graphId={graphId} nodeId={node.id} refreshKey={historyRefreshKey} onInspectRun={onInspectRun} />
+        ) : (
+          <div style={{ ...typeScale.caption, opacity: 0.6 }}>Save the graph to see this node&apos;s history.</div>
+        ))}
       {activeTab === "raw" && <JsonEditor value={node.config} onApply={onConfigChange} />}
 
       <div style={{ display: "flex", gap: spacing[2], marginTop: spacing[3] }}>

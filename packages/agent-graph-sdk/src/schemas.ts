@@ -538,6 +538,42 @@ export const analyticsDashboardPayloadSchema = z.object({
   by_graph: z.array(analyticsGraphRowSchema),
 });
 
+// Graph/node-scoped analytics (studio-graph-workbench-redesign-plan.md,
+// Wave 2 -- backend/app/node_analytics.py).
+export const nodeMetricsSchema = z.object({
+  node_id: z.string(),
+  node_type: z.string(),
+  executions: z.number(),
+  succeeded: z.number(),
+  failed: z.number(),
+  success_rate: z.number().nullable(),
+  avg_duration_ms: z.number().nullable(),
+  p95_duration_ms: z.number().nullable(),
+  last_run_id: z.string().nullable(),
+  last_run_at: z.string().nullable(),
+  last_error: z.string().nullable(),
+});
+
+export const graphAnalyticsSchema = z.object({
+  graph_id: z.string(),
+  run_window: z.number(),
+  totals: analyticsTotalsSchema,
+  succeeded_runs: z.number(),
+  failed_runs: z.number(),
+  success_rate: z.number().nullable(),
+  p95_duration_ms: z.number().nullable(),
+  nodes: z.array(nodeMetricsSchema),
+});
+
+export const nodeExecutionSchema = z.object({
+  run_id: z.string(),
+  run_status: z.string(),
+  status: z.string(),
+  started_at: z.string().nullable(),
+  duration_ms: z.number().nullable(),
+  error: z.string().nullable(),
+});
+
 /**
  * P2, "Cross-cutting policy overlays" (see
  * docs/planning/roadmap.md's Strategic Roadmap Addendum and

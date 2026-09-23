@@ -21,6 +21,11 @@ export type StudioGraphContext = {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   runId: string | null;
+  /** Wave 2 (studio-graph-workbench-redesign-plan.md): global panels
+   * (Analytics) navigate back into the open graph -- select + pan to a
+   * node, or paint a run onto the canvas -- without a route change. */
+  focusNode?: (nodeId: string, tab?: string) => void;
+  inspectRun?: (runId: string) => void;
 };
 
 // Studio-consolidation Phase 8 — promotes the drawer mechanism (ShellDrawer/
