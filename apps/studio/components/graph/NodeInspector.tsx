@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Copy,
   CornerDownRight,
+  ExternalLink,
   History,
   MoreHorizontal,
   Play,
@@ -18,6 +19,7 @@ import {
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import type {
+  BindableResourceKind,
   ChatProvider,
   EdgeKind,
   GraphEdge,
@@ -44,6 +46,7 @@ import { partitionDiagnosticsByField } from "@/lib/diagnostics";
 import { GenuiSurfaceView } from "@/components/genui/genui-renderer";
 import { tryParseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
+import { ResourceBindingField } from "./ResourceBindingField";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { Combobox, type ComboboxOption } from "./ui/Combobox";
@@ -74,15 +77,15 @@ export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): G
  * form's top banner. */
 const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   input: ["variableName"],
-  prompt: ["template"],
-  llm: ["provider", "model", "systemPrompt"],
+  prompt: ["promptId", "template"],
+  llm: ["llmProfileId", "provider", "model", "systemPromptId", "systemPrompt"],
   tool: ["toolName", "inputVariable"],
   router: ["routes"],
   output: [],
   guardrail: ["allowUrls"],
   rubric: ["rubricFailOnFindings"],
   branch: ["content", "routes"],
-  tool_loop: ["provider", "model", "systemPrompt", "maxToolIterations"],
+  tool_loop: ["llmProfileId", "provider", "model", "systemPromptId", "systemPrompt", "maxToolIterations"],
   code_exec: ["content", "codeExecLanguage", "toolName"],
   human_gate: ["content", "genuiCheckpointSurfaceJson"],
 };
@@ -133,6 +136,7 @@ export function NodeInspector({
   onInspectRun,
   onTabChange,
   templateVariables = [],
+  onOpenResource,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -171,6 +175,9 @@ export function NodeInspector({
   /** Variables `{…}` can reference in this node's templates (run inputs +
    * upstream), for highlighting and autocomplete. */
   templateVariables?: readonly string[];
+  /** Wave 4a: open a bound registry resource for editing (the studio's
+   * resource panel) without leaving the canvas. */
+  onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
 }) {
   const [activeTab, setActiveTabState] = useState("configure");
   const setActiveTab = (tab: string) => {
@@ -321,6 +328,7 @@ export function NodeInspector({
           onEdgeChange={onEdgeChange}
           set={set}
           templateVariables={templateVariables}
+          onOpenResource={onOpenResource}
         />
       )}
       {activeTab === "io" && <IoTab node={node} issues={issues} incomingEdges={incomingEdges} outgoingEdges={outgoingEdges} />}
@@ -407,6 +415,7 @@ function ConfigureTab({
   onEdgeChange,
   set,
   templateVariables,
+  onOpenResource,
 }: {
   node: GraphNode;
   graphId: string | null;
@@ -415,6 +424,7 @@ function ConfigureTab({
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   set: (key: string, value: unknown) => void;
   templateVariables: readonly string[];
+  onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
 }) {
   const { byField, rest } = partitionDiagnosticsByField(
     issues.filter((issue) => !issue.edge_id),
@@ -444,30 +454,59 @@ function ConfigureTab({
 
       {node.type === "prompt" && (
         <Group title="Template">
-          <Field label="Prompt template" hint="Use {variables} from the run input, or {upstream} for the previous node's output." meta={`${str("template").length} chars`} issues={fieldIssues("template")}>
-            {(id) => <TemplateEditor id={id} aria-label="Prompt template" title="Prompt template" value={str("template")} onChange={(v) => set("template", v)} variables={vars} rows={6} />}
-          </Field>
+          <ResourceBindingField
+            kind="prompts"
+            label="Prompt template"
+            value={str("promptId") || undefined}
+            onChange={(id) => set("promptId", id)}
+            onOpen={onOpenResource}
+            issues={fieldIssues("promptId")}
+            variables={vars}
+          >
+            <Field label="Prompt template" hint="Use {variables} from the run input, or {upstream} for the previous node's output." meta={`${str("template").length} chars`} issues={fieldIssues("template")}>
+              {(id) => <TemplateEditor id={id} aria-label="Prompt template" title="Prompt template" value={str("template")} onChange={(v) => set("template", v)} variables={vars} rows={6} />}
+            </Field>
+          </ResourceBindingField>
         </Group>
       )}
 
       {(node.type === "llm" || node.type === "tool_loop") && (
         <>
           <Group title="Model">
-            <ProviderModelPicker
-              graphId={graphId}
-              provider={(node.config.provider as ChatProvider) ?? "ollama"}
-              model={str("model", "qwen2.5:3b")}
-              onProviderChange={(provider) => set("provider", provider)}
-              onModelChange={(model) => set("model", model)}
-            />
-            <FieldIssues issues={[...fieldIssues("provider"), ...fieldIssues("model")]} />
+            <ResourceBindingField
+              kind="llm_profiles"
+              label="Model"
+              value={str("llmProfileId") || undefined}
+              onChange={(id) => set("llmProfileId", id)}
+              onOpen={onOpenResource}
+              issues={fieldIssues("llmProfileId")}
+            >
+              <ProviderModelPicker
+                graphId={graphId}
+                provider={(node.config.provider as ChatProvider) ?? "ollama"}
+                model={str("model", "qwen2.5:3b")}
+                onProviderChange={(provider) => set("provider", provider)}
+                onModelChange={(model) => set("model", model)}
+              />
+              <FieldIssues issues={[...fieldIssues("provider"), ...fieldIssues("model")]} />
+            </ResourceBindingField>
           </Group>
           <Group title="Instructions">
-            <Field label="System prompt" meta={`${str("systemPrompt").length} chars`} issues={fieldIssues("systemPrompt")}>
-              {(id) => (
-                <TemplateEditor id={id} aria-label="System prompt" title="System prompt" value={str("systemPrompt")} onChange={(v) => set("systemPrompt", v)} variables={vars} rows={4} placeholder="Optional — how the model should behave" />
-              )}
-            </Field>
+            <ResourceBindingField
+              kind="prompts"
+              label="System prompt"
+              value={str("systemPromptId") || undefined}
+              onChange={(id) => set("systemPromptId", id)}
+              onOpen={onOpenResource}
+              issues={fieldIssues("systemPromptId")}
+              variables={vars}
+            >
+              <Field label="System prompt" meta={`${str("systemPrompt").length} chars`} issues={fieldIssues("systemPrompt")}>
+                {(id) => (
+                  <TemplateEditor id={id} aria-label="System prompt" title="System prompt" value={str("systemPrompt")} onChange={(v) => set("systemPrompt", v)} variables={vars} rows={4} placeholder="Optional — how the model should behave" />
+                )}
+              </Field>
+            </ResourceBindingField>
             {node.type === "tool_loop" && (
               <Field label="Max tool iterations" hint="Upper bound on tool-call rounds (1–64)." issues={fieldIssues("maxToolIterations")}>
                 {(id) => (
@@ -483,7 +522,19 @@ function ConfigureTab({
         <Group title="Tool">
           <Field label="Tool" issues={fieldIssues("toolName")}>
             {(id) => (
-              <Combobox id={id} aria-label="Tool" value={str("toolName", "lookup_topic")} options={toolOptions} onChange={(v) => set("toolName", v)} searchPlaceholder="Search tools…" />
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Combobox id={id} aria-label="Tool" value={str("toolName", "lookup_topic")} options={toolOptions} onChange={(v) => set("toolName", v)} searchPlaceholder="Search tools…" />
+                </div>
+                {onOpenResource && !BUILTIN_TOOLS.some((tool) => tool.value === str("toolName", "lookup_topic")) && (
+                  <IconButton
+                    label="Open tool"
+                    icon={<ExternalLink size={15} />}
+                    onClick={() => onOpenResource("tools", str("toolName"))}
+                    style={{ width: 36, height: 36, border: `1px solid ${border.default}`, background: surface.card, flexShrink: 0 }}
+                  />
+                )}
+              </div>
             )}
           </Field>
           <Field label="Input variable" hint="The variable passed to the tool as its input." issues={fieldIssues("inputVariable")}>

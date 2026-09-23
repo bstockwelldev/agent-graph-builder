@@ -450,6 +450,18 @@ export const llmProfileSchema = z.object({
   description: z.string().nullish(),
 });
 
+/** One node that references a registry resource (Wave 4a "used by",
+ * `GET /api/{path}/{id}/usages`). `via` marks indirect use: an MCP server
+ * reached through a bound tool (`"tools:<id>"`). */
+export const resourceUsageSchema = z.object({
+  graph_id: z.string(),
+  graph_name: z.string(),
+  node_id: z.string(),
+  node_type: z.string(),
+  field: z.string(),
+  via: z.string().nullish(),
+});
+
 /**
  * P1 rollout plan, parallel track ("Versioned reusable entity registry" —
  * see docs/planning/features/p1-rollout-plan.md and

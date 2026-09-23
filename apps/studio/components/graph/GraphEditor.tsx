@@ -16,6 +16,7 @@ import { Focus, HelpCircle, Play, Plus, Sparkles, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
+  nodeBindings,
   type ChatProvider,
   type Diagnostic,
   type EdgeKind,
@@ -52,10 +53,11 @@ import {
   isCoachVisible,
   isEditableKeyboardTarget,
 } from "@/lib/graphAuthoring";
-import { defaultConfig, labelFor, nodeLabel, withUserLabel } from "@/lib/nodeDefaults";
+import { boundTitleFor, defaultConfig, labelFor, nodeLabel, withUserLabel } from "@/lib/nodeDefaults";
 import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
 import { computeAncestorNodeIds } from "@/lib/runFromNode";
 import { runInputVariables } from "@/lib/runInputs";
+import { RESOURCE_PANEL, ResourceNamesProvider, useResourceNamesMap } from "./resourceBindings";
 import { computeFocusNodeIds } from "@/lib/graphFocus";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
 import {
@@ -1496,6 +1498,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     ? edges.filter((edge) => edge.target === selectedNode.id).map(toGraphEdge)
     : [];
   const selectedTrace = selectedNodeId ? nodeTraces[selectedNodeId] ?? null : null;
+  // Wave 4a: registry names for bound node cards (loaded only when the
+  // graph has library bindings).
+  const hasLibraryBindings = nodes.some((node) =>
+    nodeBindings(node.data.nodeType, node.data.config).some((binding) => binding.kind !== "tools"),
+  );
+  const resourceNames = useResourceNamesMap(hasLibraryBindings);
   const showEmptyCoach = isCoachVisible(graphId, coachDismissed, nodes, edges);
   const authoringCoachStep = coachStep(nodes, edges);
 
@@ -1531,6 +1539,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDuplicate={() => duplicateNode(selectedNode.id)}
       onOpenRunPanel={() => workbench.open("run")}
       onRunFromHere={() => canvasActions.runFromNode(selectedNode.id)}
+      onOpenResource={(kind, resourceId) => workbench.open(RESOURCE_PANEL[kind], { resourceId })}
       templateVariables={runInputVariables(nodes)}
       onPolicyExceptionCreated={refreshDiagnostics}
       focusTab={inspectorTabRequest}
@@ -1538,7 +1547,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       historyRefreshKey={runSummary ? `${runSummary.run_id}:${runSummary.status}` : null}
       onInspectRun={(runId) => void handleSelectHistoricalRun(runId)}
       userLabel={selectedNode.data.userLabel ?? ""}
-      derivedLabel={labelFor(selectedNode.data.nodeType, selectedNode.data.config)}
+      derivedLabel={
+        boundTitleFor(selectedNode.data.nodeType, selectedNode.data.config, resourceNames) ??
+        labelFor(selectedNode.data.nodeType, selectedNode.data.config)
+      }
       onLabelChange={(value) => {
         recordMutation();
         setNodes((nds) =>
@@ -1594,6 +1606,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     );
 
   return (
+    <ResourceNamesProvider value={resourceNames}>
     <div data-graph-surface="" className="relative flex min-h-0 flex-1 overflow-hidden">
       {/* Node palette — reserved-space docked column (fixing a real reported
           bug): a floating panel has no relation to node positions, so it
@@ -2021,5 +2034,6 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         />
       )}
     </div>
+    </ResourceNamesProvider>
   );
 }

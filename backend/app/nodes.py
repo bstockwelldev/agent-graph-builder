@@ -138,6 +138,41 @@ def _resolve_resource(ctx: ExecContext, kind: str, resource_id: str) -> dict[str
     return storage.get_resource(kind, resource_id)
 
 
+def _bound_field(ctx: ExecContext, node: GraphNode, field: str, kind: str, attr: str) -> Any:
+    """Wave 4a registry binding (backend/app/bindings.py): the `attr` of the
+    resource `node.config[field]` points at, through the release-aware
+    `_resolve_resource` -- or None when the field is unbound. Compile
+    already blocks an unresolved binding (UNRESOLVED_RESOURCE_BINDING), so a
+    missing resource here means it was deleted mid-flight: fail loudly
+    rather than silently falling back to stale inline config."""
+    resource_id = node.config.get(field)
+    if not isinstance(resource_id, str) or not resource_id.strip():
+        return None
+    resource = _resolve_resource(ctx, kind, resource_id)
+    if resource is None:
+        raise ValueError(
+            f"{node.type.value} node {node.id!r}: {field}: {kind} {resource_id!r} not found"
+        )
+    return resource.get(attr)
+
+
+def _prompt_template(ctx: ExecContext, node: GraphNode) -> str:
+    bound = _bound_field(ctx, node, "promptId", "prompts", "body")
+    return bound if bound is not None else node.config.get("template", "{question}")
+
+
+def _system_prompt(ctx: ExecContext, node: GraphNode) -> str | None:
+    bound = _bound_field(ctx, node, "systemPromptId", "prompts", "body")
+    return bound if bound is not None else node.config.get("systemPrompt")
+
+
+def _node_model(ctx: ExecContext, node: GraphNode) -> str | None:
+    # A bound LLM profile supplies the node's model; the run-level model
+    # override (runtime.py chat_model_factory) still wins over it.
+    bound = _bound_field(ctx, node, "llmProfileId", "llm_profiles", "model")
+    return bound if bound else node.config.get("model")
+
+
 def get_upstream_output(node: GraphNode, state: dict[str, Any], graph: GraphDefinition) -> Any:
     """Return the output of whichever incoming edge's source node actually ran.
 
@@ -164,7 +199,7 @@ async def compute_input(node: GraphNode, state: dict[str, Any], ctx: ExecContext
 
 
 async def compute_prompt(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
-    template = node.config.get("template", "{question}")
+    template = _prompt_template(ctx, node)
     upstream = get_upstream_output(node, state, ctx.graph)
     format_kwargs = {**state["variables"], "upstream": upstream}
     try:
@@ -176,8 +211,8 @@ async def compute_prompt(node: GraphNode, state: dict[str, Any], ctx: ExecContex
 
 async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
     upstream = get_upstream_output(node, state, ctx.graph)
-    system_prompt = node.config.get("systemPrompt")
-    model = node.config.get("model")
+    system_prompt = _system_prompt(ctx, node)
+    model = _node_model(ctx, node)
     chat_model = ctx.chat_model_factory(model)
     # RAG augmentation (studio-consolidation Phase 5): a no-op unless
     # ctx.graph has an uploaded knowledge base (see knowledge.py) — degrades
@@ -465,8 +500,8 @@ def _parse_tool_call(response: str) -> str | None:
 
 async def compute_tool_loop(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
     upstream = get_upstream_output(node, state, ctx.graph)
-    base_system_prompt = node.config.get("systemPrompt")
-    model = node.config.get("model")
+    base_system_prompt = _system_prompt(ctx, node)
+    model = _node_model(ctx, node)
     max_iterations = int(node.config.get("maxToolIterations", 1))
     chat_model = ctx.chat_model_factory(model)
 

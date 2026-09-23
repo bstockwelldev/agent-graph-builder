@@ -16,7 +16,7 @@ from starlette.requests import Request
 from . import runtime, storage
 from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
-from .node_analytics import GraphAnalytics, NodeExecution, get_graph_analytics, get_node_history
+from .bindings import resource_usages
 from .chat_context import ChatContext, build_chat_system_prompt
 from .datasets import DatasetBuildError, build_dataset_from_runs
 from .demo_graph import build_demo_graph
@@ -56,6 +56,7 @@ from .models import (
     PublishResourceVersionResponse,
     ReleaseDiff,
     ReleaseRunRequest,
+    ResourceUsage,
     ResourceVersion,
     RoutingComparison,
     RoutingLabReport,
@@ -66,6 +67,7 @@ from .models import (
     RunSummary,
     SimulateResult,
 )
+from .node_analytics import GraphAnalytics, NodeExecution, get_graph_analytics, get_node_history
 from .policies import (
     create_policy_exception,
     delete_policy_exception,
@@ -554,6 +556,25 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
             raise HTTPException(status_code=400, detail=f"{kind} id mismatch between path and body")
         storage.save_resource(kind, resource_id, payload)
         return payload
+
+    @app.get(
+        f"/api/{path}/{{resource_id}}/usages",
+        name=f"usages_{kind}",
+        operation_id=f"usages_{kind}",
+    )
+    def resource_usages_route(resource_id: str) -> list[ResourceUsage]:
+        # Wave 4a "used by": every draft graph node bound to this resource
+        # (bindings.py). Not 404 for an unknown id -- a deleted resource can
+        # still have dangling references worth listing.
+        tools = (
+            {tool["id"]: tool for tool in storage.list_resources("tools")}
+            if kind == "mcp_servers"
+            else None
+        )
+        return [
+            ResourceUsage.model_validate(usage)
+            for usage in resource_usages(storage.list_graphs(), kind, resource_id, tools)
+        ]
 
     @app.delete(
         f"/api/{path}/{{resource_id}}", name=f"delete_{kind}", operation_id=f"delete_{kind}"

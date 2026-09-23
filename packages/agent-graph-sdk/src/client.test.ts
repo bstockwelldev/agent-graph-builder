@@ -67,6 +67,19 @@ describe("createAgentGraphClient resource CRUD", () => {
     expect(init.method).toBe("PUT");
   });
 
+  it("llmProfiles.usages fetches GET /api/llm-profiles/{id}/usages (Wave 4a)", async () => {
+    const usages = [
+      { graph_id: "g", graph_name: "G", node_id: "llm_1", node_type: "llm", field: "llmProfileId", via: null },
+    ];
+    fetchMock.mockResolvedValueOnce(jsonResponse(usages));
+
+    const client = createAgentGraphClient({ baseUrl });
+    const result = await client.llmProfiles.usages("lp_fast");
+
+    expect(result).toEqual(usages);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${baseUrl}/api/llm-profiles/lp_fast/usages`);
+  });
+
   it("prompts.versions.publish POSTs to /api/prompts/{id}/versions", async () => {
     const response = {
       version: {

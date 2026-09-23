@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
-import type { ResourceVersionIndexEntry } from "@bstockwelldev/agent-graph-sdk";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ResourceUsage, ResourceVersionIndexEntry } from "@bstockwelldev/agent-graph-sdk";
 
 import { useResourceList } from "@/hooks/use-resource-list";
 import { StudioConfirmDialog } from "@/components/studio/studio-confirm-dialog";
+import { ResourceUsageList } from "@/components/studio/resource-usage-list";
 import { ResourceVersionHistory } from "@/components/studio/resource-version-history";
+import { useWorkbench } from "./WorkbenchProvider";
 import {
   StudioCardDeleteIconButton,
   StudioCardEditIconButton,
@@ -58,6 +60,8 @@ export function ResourceBrowserPanel<T extends ResourceLike>({
     create: (resource: T) => Promise<T>;
     update: (resource: T) => Promise<T>;
     delete: (id: string) => Promise<{ deleted: boolean }>;
+    /** Wave 4a "used by" (GET /api/{kind}/{id}/usages). */
+    usages?: (id: string) => Promise<ResourceUsage[]>;
     versions: {
       publish: (resourceId: string) => Promise<{ created: boolean }>;
       list: (resourceId: string) => Promise<ResourceVersionIndexEntry[]>;
@@ -85,6 +89,20 @@ export function ResourceBrowserPanel<T extends ResourceLike>({
   const [editing, setEditing] = useState<T | null>(null);
   const [form, setFormState] = useState<Partial<T>>({});
   const [deleteTarget, setDeleteTarget] = useState<T | null>(null);
+
+  // Wave 4a: opened from a node's "Open" button with `{ resourceId }` --
+  // jump straight to that resource's editor, once per open.
+  const workbench = useWorkbench();
+  const requestedId = (workbench.panelContext as { resourceId?: string } | null)?.resourceId;
+  const handledRequestRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!requestedId || loading || handledRequestRef.current === workbench.panelContext) return;
+    const item = items.find((candidate) => candidate.id === requestedId);
+    if (!item) return;
+    handledRequestRef.current = workbench.panelContext;
+    openEdit(item);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEdit only sets state
+  }, [items, loading, requestedId, workbench.panelContext]);
 
   function setForm(patch: Partial<T>) {
     setFormState((prev) => ({ ...prev, ...patch }));
@@ -204,6 +222,13 @@ export function ResourceBrowserPanel<T extends ResourceLike>({
           </DialogHeader>
           <div className="space-y-3">
             {renderFields(form, setForm, editing)}
+            {editing && resourceClient.usages ? (
+              <ResourceUsageList
+                resourceId={editing.id}
+                loadUsages={resourceClient.usages}
+                onNavigate={() => setEditorOpen(false)}
+              />
+            ) : null}
             {editing ? (
               <ResourceVersionHistory resourceId={editing.id} versionsClient={resourceClient.versions} />
             ) : null}

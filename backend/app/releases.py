@@ -14,18 +14,13 @@ from typing import Any
 from uuid import uuid4
 
 from . import storage
-from .builtin_tools import BUILTIN_TOOL_IDS
+from .bindings import node_bindings
 from .compiler import validate_graph
 from .events import now_iso
 from .fingerprint import diff_graphs, release_document_fingerprint, release_semantic_fingerprint
-from .models import Diagnostic, GraphDefinition, GraphRelease, NodeType, ReleaseDiff
+from .models import Diagnostic, GraphDefinition, GraphRelease, ReleaseDiff
 from .policies import evaluate_release_governance
 from .resource_models import ToolDefinition
-
-# The original POC demo tool — like the two builtins, it's code, not a
-# stored resource (see compiler.py's _KNOWN_TOOL_IDS), so it never needs a
-# resource_snapshots entry.
-_DEMO_TOOL_ID = "lookup_topic"
 
 
 class ReleasePublishBlocked(Exception):
@@ -52,32 +47,14 @@ def resolve_resource_snapshots(
     snapshots: dict[str, dict[str, Any]] = {}
     diagnostics: list[Diagnostic] = []
 
+    # Wave 4a: every registry binding (bindings.py) -- prompts and LLM
+    # profiles as well as tools. Code tools (lookup_topic, builtins) are
+    # skipped by node_bindings.
     for node in graph.nodes:
-        if node.type != NodeType.TOOL:
-            continue
-        tool_name = node.config.get("toolName")
-        if tool_name is None or tool_name == _DEMO_TOOL_ID or tool_name in BUILTIN_TOOL_IDS:
-            continue
-
-        resource = storage.get_resource("tools", tool_name)
-        if resource is None:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    category="capability",
-                    code="RELEASE_RESOURCE_UNRESOLVED",
-                    node_id=node.id,
-                    message=f"Tool node {node.id!r} references unresolved tool {tool_name!r}",
-                    blocking=True,
-                )
-            )
-            continue
-        snapshots[f"tools:{tool_name}"] = copy.deepcopy(resource)
-
-        tool_def = ToolDefinition.model_validate(resource)
-        if tool_def.mcp_server_id:
-            server = storage.get_resource("mcp_servers", tool_def.mcp_server_id)
-            if server is None:
+        for binding in node_bindings(node):
+            resource = storage.get_resource(binding.kind, binding.resource_id)
+            if resource is None:
+                noun = "tool" if binding.kind == "tools" else binding.kind
                 diagnostics.append(
                     Diagnostic(
                         severity="error",
@@ -85,20 +62,54 @@ def resolve_resource_snapshots(
                         code="RELEASE_RESOURCE_UNRESOLVED",
                         node_id=node.id,
                         message=(
-                            f"Tool node {node.id!r} (tool {tool_name!r}) references unresolved "
-                            f"MCP server {tool_def.mcp_server_id!r}"
+                            f"{node.type.value.capitalize()} node {node.id!r} references "
+                            f"unresolved {noun} {binding.resource_id!r}"
                         ),
                         blocking=True,
                     )
                 )
-            else:
-                snapshots[f"mcp_servers:{tool_def.mcp_server_id}"] = copy.deepcopy(server)
+                continue
+            snapshots[f"{binding.kind}:{binding.resource_id}"] = copy.deepcopy(resource)
+            if binding.kind == "tools":
+                _snapshot_tool_server(
+                    node.id, binding.resource_id, resource, snapshots, diagnostics
+                )
 
     knowledge = storage.get_resource("knowledge", graph.id)
     if knowledge is not None:
         snapshots[f"knowledge:{graph.id}"] = copy.deepcopy(knowledge)
 
     return snapshots, diagnostics
+
+
+def _snapshot_tool_server(
+    node_id: str,
+    tool_name: str,
+    resource: dict[str, Any],
+    snapshots: dict[str, dict[str, Any]],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """A registered tool's MCP-server hop: snapshot the server it dispatches to."""
+    tool_def = ToolDefinition.model_validate(resource)
+    if not tool_def.mcp_server_id:
+        return
+    server = storage.get_resource("mcp_servers", tool_def.mcp_server_id)
+    if server is None:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                category="capability",
+                code="RELEASE_RESOURCE_UNRESOLVED",
+                node_id=node_id,
+                message=(
+                    f"Tool node {node_id!r} (tool {tool_name!r}) references unresolved "
+                    f"MCP server {tool_def.mcp_server_id!r}"
+                ),
+                blocking=True,
+            )
+        )
+        return
+    snapshots[f"mcp_servers:{tool_def.mcp_server_id}"] = copy.deepcopy(server)
 
 
 def publish_release(

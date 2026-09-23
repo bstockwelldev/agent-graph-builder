@@ -442,6 +442,19 @@ class RoutingComparison(BaseModel):
 
 # P1 rollout plan, parallel track ("Versioned reusable entity registry") —
 # an immutable snapshot of a stored resource's payload at publish time.
+class ResourceUsage(BaseModel):
+    """One node that references a registry resource (Wave 4a "used by",
+    backend/app/bindings.py `resource_usages`). `via` is set for indirect
+    use -- an MCP server reached through a bound tool (`"tools:<id>"`)."""
+
+    graph_id: str
+    graph_name: str
+    node_id: str
+    node_type: str
+    field: str
+    via: str | None = None
+
+
 # Deliberately narrower than a full entity registry: no branching, no
 # approvals, no "current version" pointer distinct from `resource`'s own
 # CRUD row — see resource_versions.py's module docstring.
