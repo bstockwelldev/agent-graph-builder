@@ -23,17 +23,30 @@ export function ConnectKindMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
   useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const menu = menuRef.current;
     menuRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCancel();
+        onCancelRef.current();
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      // Wave 3: return focus instead of dropping it on <body>.
+      const lost = !document.activeElement || document.activeElement === document.body || menu?.contains(document.activeElement);
+      if (lost && previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+    };
+  }, []);
+
+  const left = Math.min(x, window.innerWidth - 280);
+  const top = Math.min(y, window.innerHeight - 240);
 
   return (
     <>
@@ -56,10 +69,14 @@ export function ConnectKindMenu({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        data-graph-surface=""
+        className="agb-pop"
         style={{
           ...menuStyle,
-          left: Math.min(x, window.innerWidth - 280),
-          top: Math.min(y, window.innerHeight - 240),
+          left,
+          top,
+          // Emerge from the connection's drop point.
+          transformOrigin: `${Math.max(0, x - left)}px ${Math.max(0, y - top)}px`,
         }}
       >
         <div id={titleId} style={{ ...typeScale.small, fontWeight: 600, marginBottom: spacing[2] }}>

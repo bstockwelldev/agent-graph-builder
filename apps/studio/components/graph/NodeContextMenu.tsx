@@ -79,7 +79,14 @@ export function NodeContextMenu({
   const titleId = useId();
   const searchable = onSearchChange !== undefined;
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
+    // Wave 3: focus goes back to the trigger (or wherever it was) when the
+    // menu closes, instead of falling to <body>.
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const menu = menuRef.current;
     if (searchable) {
       searchInputRef.current?.focus();
     } else {
@@ -88,7 +95,7 @@ export function NodeContextMenu({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -102,8 +109,15 @@ export function NodeContextMenu({
       items[next]?.focus();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, searchable]);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      const lost = !document.activeElement || document.activeElement === document.body || menu?.contains(document.activeElement);
+      if (lost && previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+    };
+    // Mount-only: re-running on an unstable `onClose` would re-steal focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const groupCount = actions.filter((action) => action.separatorBefore).length;
   const labelCount = actions.filter((action) => action.groupLabel).length;
@@ -112,6 +126,8 @@ export function NodeContextMenu({
     groupCount * (spacing[2] + 1) +
     labelCount * 20 +
     (searchable ? ITEM_HEIGHT + spacing[2] : 0);
+  const left = Math.min(x, window.innerWidth - width - 8);
+  const top = Math.min(y, window.innerHeight - estimatedHeight - 56);
 
   return (
     <>
@@ -133,11 +149,16 @@ export function NodeContextMenu({
         role="menu"
         aria-labelledby={titleId}
         tabIndex={-1}
+        data-graph-surface=""
+        className="agb-pop"
         style={{
           ...menuStyle,
           width,
-          left: Math.min(x, window.innerWidth - width - 8),
-          top: Math.min(y, window.innerHeight - estimatedHeight - 56),
+          left,
+          top,
+          // Emerge from the anchor point (the trigger or the cursor), even
+          // when the menu was nudged to stay inside the viewport.
+          transformOrigin: `${Math.max(0, Math.min(width, x - left))}px ${Math.max(0, y - top)}px`,
         }}
       >
         <div id={titleId} style={{ ...typeScale.caption, opacity: 0.6, marginBottom: spacing[1] }}>

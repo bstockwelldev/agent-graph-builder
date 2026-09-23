@@ -59,7 +59,7 @@ export function Combobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; width: number; above: boolean } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
@@ -74,8 +74,9 @@ export function Combobox({
     const width = Math.max(rect.width, 220);
     const estimatedHeight = 320;
     const below = rect.bottom + 4;
-    const top = below + estimatedHeight > window.innerHeight - 8 ? Math.max(8, rect.top - estimatedHeight - 4) : below;
-    setPosition({ top, left: Math.min(rect.left, window.innerWidth - width - 8), width });
+    const above = below + estimatedHeight > window.innerHeight - 8;
+    const top = above ? Math.max(8, rect.top - estimatedHeight - 4) : below;
+    setPosition({ top, left: Math.min(rect.left, window.innerWidth - width - 8), width, above });
   }, [open]);
 
   useEffect(() => {
@@ -139,7 +140,11 @@ export function Combobox({
         createPortal(
           <>
             <div onMouseDown={() => close(false)} style={{ position: "fixed", inset: 0, zIndex: shell.zIndex.tooltip }} aria-hidden="true" />
-            <div style={{ ...popoverStyle, top: position?.top ?? -9999, left: position?.left ?? -9999, width: position?.width ?? 240 }}>
+            <div
+              data-graph-surface=""
+              className="agb-pop"
+              style={{ ...popoverStyle, top: position?.top ?? -9999, left: position?.left ?? -9999, width: position?.width ?? 240, transformOrigin: position?.above ? "bottom left" : "top left" }}
+            >
               <div style={{ position: "relative", padding: spacing[2], borderBottom: `1px solid ${border.subtle}` }}>
                 <Search size={14} aria-hidden="true" style={{ position: "absolute", left: 18, top: "50%", transform: "translateY(-50%)", color: text.secondary }} />
                 <input

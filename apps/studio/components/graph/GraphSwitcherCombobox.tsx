@@ -97,8 +97,8 @@ export function GraphSwitcherCombobox({
           />
           <div
             className={cn(
-              "absolute left-0 z-40 w-72 max-w-[calc(100vw-2rem)]",
-              openDirection === "up" ? "bottom-full mb-2" : "top-full mt-2",
+              "animate-in fade-in-0 zoom-in-95 absolute left-0 z-40 w-72 max-w-[calc(100vw-2rem)] duration-150",
+              openDirection === "up" ? "slide-in-from-bottom-1 bottom-full mb-2 origin-bottom-left" : "slide-in-from-top-1 top-full mt-2 origin-top-left",
             )}
           >
             <Command className="border border-border shadow-lg">

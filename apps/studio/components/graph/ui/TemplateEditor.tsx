@@ -10,6 +10,7 @@ import {
   suggestPlaceholders,
   templateSegments,
 } from "@/lib/templateEditor";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { IconButton } from "./IconButton";
 
 const FONT: CSSProperties = {
@@ -61,6 +62,10 @@ export function TemplateEditor({
   plain?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Wave 3: the expanded editor is modal -- trap focus, return it to the
+  // expand button on close.
+  useFocusTrap(dialogRef, expanded);
   return (
     <>
       <EditorSurface
@@ -79,15 +84,23 @@ export function TemplateEditor({
         typeof document !== "undefined" &&
         createPortal(
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={title ?? ariaLabel ?? "Edit template"}
+            data-graph-surface=""
+            className="agb-backdrop"
             onKeyDown={(event) => {
-              if (event.key === "Escape") setExpanded(false);
+              if (event.key === "Escape" && !event.defaultPrevented) {
+                // Handled here: don't also close the drawer/panel around it.
+                event.preventDefault();
+                event.stopPropagation();
+                setExpanded(false);
+              }
             }}
             style={{ position: "fixed", inset: 0, zIndex: shell.zIndex.drawer + 5, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5, 7, 10, 0.6)", padding: spacing[4] }}
           >
-            <div style={{ width: "min(880px, 100%)", maxHeight: "90vh", display: "flex", flexDirection: "column", gap: spacing[2], padding: spacing[4], borderRadius: radius.xl, border: `1px solid ${border.default}`, background: surface.panel, boxShadow: shadow[8] }}>
+            <div className="agb-pop" style={{ width: "min(880px, 100%)", maxHeight: "90vh", display: "flex", flexDirection: "column", gap: spacing[2], padding: spacing[4], borderRadius: radius.xl, border: `1px solid ${border.default}`, background: surface.panel, boxShadow: shadow[8] }}>
               <div style={{ display: "flex", alignItems: "center", gap: spacing[2] }}>
                 <Braces size={16} aria-hidden="true" style={{ color: color.primary[500] }} />
                 <div style={{ fontWeight: 600, flex: 1 }}>{title ?? ariaLabel ?? "Edit template"}</div>
@@ -225,6 +238,7 @@ function EditorSurface({
           rows={rows}
           placeholder={placeholder}
           aria-label={ariaLabel}
+          data-autofocus={autoFocus ? "" : undefined}
           aria-autocomplete={plain ? undefined : "list"}
           aria-controls={showSuggestions ? listboxId : undefined}
           aria-activedescendant={showSuggestions ? `${listboxId}-${activeIndex}` : undefined}
