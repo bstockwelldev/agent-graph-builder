@@ -28,9 +28,13 @@ export function Tabs({
       role="tablist"
       style={{
         display: "flex",
-        gap: spacing[1],
+        gap: 0,
         marginBottom: spacing[3],
         borderBottom: `1px solid ${surface.border}`,
+        // Six tabs since Wave 2's History tab -- scroll rather than clip the
+        // last one in the 320px dock.
+        overflowX: "auto",
+        scrollbarWidth: "none",
       }}
     >
       {tabs.map((tab) => {
@@ -44,7 +48,9 @@ export function Tabs({
             onClick={() => onChange(tab.id)}
             style={{
               ...localType.ui,
-              padding: `${spacing[2]}px ${spacing[2]}px`,
+              padding: `${spacing[2]}px ${spacing[2] - 1}px`,
+              flexShrink: 0,
+              whiteSpace: "nowrap",
               background: "transparent",
               border: "none",
               borderBottom: `2px solid ${active ? color.primary[600] : "transparent"}`,

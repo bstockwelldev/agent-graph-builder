@@ -32,12 +32,16 @@ import {
   routingLabReportSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
+  graphAnalyticsSchema,
+  nodeExecutionSchema,
   simulateResultSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 import type {
   AgentProfile,
   AnalyticsDashboardPayload,
+  GraphAnalytics,
+  NodeExecution,
   CapabilityMatrix,
   ChatContext,
   ChatProvider,
@@ -286,6 +290,23 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         "/api/analytics",
         undefined,
         analyticsDashboardPayloadSchema,
+      ),
+    /** Graph-scoped analytics with per-node rollups over the graph's most
+     * recent `window` runs (Wave 2 -- backend/app/node_analytics.py). */
+    getGraphAnalytics: (graphId: string, window?: number) =>
+      jsonFetch<GraphAnalytics>(
+        baseUrl,
+        `/api/graphs/${encodeURIComponent(graphId)}/analytics${window ? `?window=${window}` : ""}`,
+        undefined,
+        graphAnalyticsSchema,
+      ),
+    /** One node's most recent executions, newest first (Wave 2). */
+    getNodeHistory: (graphId: string, nodeId: string, limit?: number) =>
+      jsonFetch<NodeExecution[]>(
+        baseUrl,
+        `/api/graphs/${encodeURIComponent(graphId)}/nodes/${encodeURIComponent(nodeId)}/history${limit ? `?limit=${limit}` : ""}`,
+        undefined,
+        nodeExecutionSchema.array(),
       ),
     // Releases (P0 graph foundation, Slice C — see
     // docs/planning/features/p0-graph-foundation-design-plan.md, "Releases

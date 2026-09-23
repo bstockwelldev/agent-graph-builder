@@ -84,7 +84,13 @@ export function WorkbenchDrawer({
   // full-bleed canvas root does, so `absolute` would scroll away on
   // taller pages instead of floating in place.
   return (
-    <div className={`glass-panel ghost-border fixed z-20 rounded-2xl border ${className} ${dockedClassName}`}>
+    // `bg-popover` on top of glass-panel: a floating panel sits over the
+    // canvas AND the docked selection dock, whose text bled through the
+    // 82%-opaque glass (Wave 2 visual QA).
+    <div
+      className={`glass-panel ghost-border fixed z-30 rounded-2xl border shadow-2xl ${className} ${dockedClassName}`}
+      style={{ background: "var(--popover)" }}
+    >
       {children}
     </div>
   );

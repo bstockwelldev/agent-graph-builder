@@ -223,6 +223,59 @@ describe("createAgentGraphClient resource CRUD", () => {
     expect(result).toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/analytics`, expect.objectContaining({}));
   });
+
+  // Wave 2 (studio-graph-workbench-redesign-plan.md): graph/node-scoped analytics.
+  it("getGraphAnalytics fetches GET /api/graphs/{id}/analytics", async () => {
+    const payload = {
+      graph_id: "g1",
+      run_window: 2,
+      totals: {
+        invocations: 2,
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        estimated_usd: 0,
+        avg_duration_ms: 120,
+      },
+      succeeded_runs: 1,
+      failed_runs: 1,
+      success_rate: 0.5,
+      p95_duration_ms: 200,
+      nodes: [
+        {
+          node_id: "llm_1",
+          node_type: "llm",
+          executions: 2,
+          succeeded: 1,
+          failed: 1,
+          success_rate: 0.5,
+          avg_duration_ms: 90,
+          p95_duration_ms: 150,
+          last_run_id: "r2",
+          last_run_at: "2026-09-23T10:00:00Z",
+          last_error: "boom",
+        },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const result = await createAgentGraphClient({ baseUrl }).getGraphAnalytics("g1", 25);
+
+    expect(result).toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/graphs/g1/analytics?window=25`, expect.objectContaining({}));
+  });
+
+  it("getNodeHistory fetches GET /api/graphs/{id}/nodes/{node}/history", async () => {
+    const payload = [
+      { run_id: "r2", run_status: "failed", status: "failed", started_at: null, duration_ms: 150, error: "boom" },
+    ];
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload));
+
+    const result = await createAgentGraphClient({ baseUrl }).getNodeHistory("g1", "llm_1");
+
+    expect(result).toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/graphs/g1/nodes/llm_1/history`, expect.objectContaining({}));
+  });
 });
 
 // P0 graph foundation, Slice C (docs/planning/features/p0-graph-foundation-design-plan.md).

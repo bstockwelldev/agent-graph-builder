@@ -19,6 +19,7 @@ import type {
   edgeTransformSchema,
   fixtureDatasetSchema,
   fixtureSchema,
+  graphAnalyticsSchema,
   graphDefinitionSchema,
   graphEdgeSchema,
   graphNodeSchema,
@@ -33,6 +34,8 @@ import type {
   knowledgeUploadResponseSchema,
   llmProfileSchema,
   mcpServerConfigSchema,
+  nodeExecutionSchema,
+  nodeMetricsSchema,
   nodePositionSchema,
   nodeTraceSchema,
   nodeTypeSchema,
@@ -178,6 +181,10 @@ export type AnalyticsDailyPoint = z.infer<typeof analyticsDailyPointSchema>;
 export type AnalyticsGraphRow = z.infer<typeof analyticsGraphRowSchema>;
 export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
 export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayloadSchema>;
+// Graph/node-scoped analytics (Wave 2, backend/app/node_analytics.py).
+export type NodeMetrics = z.infer<typeof nodeMetricsSchema>;
+export type GraphAnalytics = z.infer<typeof graphAnalyticsSchema>;
+export type NodeExecution = z.infer<typeof nodeExecutionSchema>;
 
 // P2, "Cross-cutting policy overlays" (backend/app/policies.py).
 export type PolicyException = z.infer<typeof policyExceptionSchema>;
