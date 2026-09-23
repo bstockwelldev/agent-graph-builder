@@ -10,12 +10,19 @@ export type CanvasSnapshot = {
   graphOrientation: GraphOrientation;
 };
 
-export function flowEdgeLabel(kind: EdgeKind, condition: string | null | undefined): string {
+/**
+ * Edge chip text (studio-graph-workbench-redesign-plan.md, Slice 6).
+ * Sequence edges get no label: they're the default, most common kind, and
+ * the old "Always" label on every one of them cluttered dense graphs
+ * without adding information the legend doesn't already give.
+ */
+export function flowEdgeLabel(kind: EdgeKind, condition: string | null | undefined): string | null {
+  if (kind === "sequence") return null;
   if (kind === "conditional") {
     const match = condition?.trim();
-    return match ? `Match: ${match}` : EDGE_KIND_TAXONOMY.conditional.title;
+    return match ? `if: ${match}` : EDGE_KIND_TAXONOMY.conditional.title;
   }
-  return EDGE_KIND_TAXONOMY[kind].title;
+  return "fallback";
 }
 
 export function cloneCanvasSnapshot(
@@ -56,9 +63,15 @@ export function shouldRunDagre(input: {
   graphIdChanged: boolean;
   relayoutRequested: boolean;
   topologyChanged: boolean;
+  /** layout/dagreLayout.ts's needsInitialLayout for the loaded nodes. When
+   * false, a freshly opened graph keeps its saved positions instead of
+   * being re-laid-out (studio-graph-workbench-redesign-plan.md, Slice 5). */
+  initialLayoutNeeded?: boolean;
 }): boolean {
   void input.topologyChanged;
-  return input.rankDirChanged || input.graphIdChanged || input.relayoutRequested;
+  if (input.relayoutRequested) return true;
+  if (input.graphIdChanged) return input.initialLayoutNeeded ?? true;
+  return input.rankDirChanged;
 }
 
 function adjacency(edges: Edge[]): Map<string, string[]> {

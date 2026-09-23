@@ -120,3 +120,56 @@ def test_document_fingerprint_locks_the_hash_algorithm() -> None:
         semantic_fingerprint(graph)
         == "fa21e31b4554e37aade554411779cde27352719980c0fa1042c7d64508119a77"
     )
+
+
+def _labeled_fixture(extensions: dict | None) -> GraphDefinition:
+    return GraphDefinition(
+        id="fixture_graph",
+        name="Fixture",
+        entry_node_id="n1",
+        nodes=[
+            GraphNode(
+                id="n1",
+                type=NodeType.INPUT,
+                position=NodePosition(x=1, y=2),
+                config={"a": 1},
+                extensions=extensions,
+            )
+        ],
+        edges=[],
+        orientation="auto",
+    )
+
+
+def test_node_label_is_display_only() -> None:
+    """studio-graph-workbench-redesign-plan.md, Slice 4: a node's user-given
+    name (extensions.label) is cosmetic like its position — renaming changes
+    the document fingerprint but never the semantic one, and naming a
+    previously-unnamed node leaves the semantic fingerprint byte-identical.
+    Digests are shared with packages/agent-graph-sdk/src/schema.test.ts."""
+    unnamed = _labeled_fixture(None)
+    named = _labeled_fixture({"label": "Named"})
+    renamed = _labeled_fixture({"label": "Renamed"})
+
+    assert document_fingerprint(named) != document_fingerprint(unnamed)
+    assert document_fingerprint(named) != document_fingerprint(renamed)
+    assert semantic_fingerprint(named) == semantic_fingerprint(unnamed)
+    assert semantic_fingerprint(named) == semantic_fingerprint(renamed)
+    assert (
+        document_fingerprint(named)
+        == "617d974406f8ad35fc3004dc233d1cd7d66cfb2b5e49219cb1b61381ce74813f"
+    )
+    assert (
+        semantic_fingerprint(named)
+        == "fa21e31b4554e37aade554411779cde27352719980c0fa1042c7d64508119a77"
+    )
+
+
+def test_non_display_extensions_stay_semantic() -> None:
+    kept = _labeled_fixture({"label": "Named", "keep": 1})
+    assert semantic_fingerprint(kept) == semantic_fingerprint(_labeled_fixture({"keep": 1}))
+    assert semantic_fingerprint(kept) != semantic_fingerprint(_labeled_fixture(None))
+    assert (
+        semantic_fingerprint(kept)
+        == "adf41fe788bda907e980bbbb35ad6a5f7503b835ba65eed0c872ed5da107febc"
+    )

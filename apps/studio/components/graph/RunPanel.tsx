@@ -186,6 +186,9 @@ export function RunPanel({
   compiling = false,
   layout = "rail",
   reducedMotion = false,
+  sectionRequest = null,
+  runFromNodeRequest = null,
+  onRunFromNodeRequestHandled,
 }: {
   graphId: string | null;
   diagnostics: Diagnostic[];
@@ -232,6 +235,13 @@ export function RunPanel({
   compiling?: boolean;
   layout?: "rail" | "drawer";
   reducedMotion?: boolean;
+  /** Graph header Run▾ menu / Validate chip (studio-graph-workbench-redesign-plan.md,
+   * Slice 2): open and reveal a section. Keyed by `nonce`. */
+  sectionRequest?: { sectionId: string; nonce: number } | null;
+  /** Node toolbar "Run from here" (Slice 4): run from this node with the
+   * panel's current inputs, once per `nonce`. */
+  runFromNodeRequest?: { nodeId: string; nonce: number } | null;
+  onRunFromNodeRequestHandled?: () => void;
 }) {
   const [question, setQuestion] = useState("How does a database index work?");
   const [provider, setProvider] = useState<ChatProvider>("stub");
@@ -309,6 +319,27 @@ export function RunPanel({
 
   const { openId, openSection, toggleSection } = useExclusiveCollapse(OBSERVE_OPEN_STORAGE_KEY, "observe-status");
 
+  // Slice 2: observe-* sections are one exclusive (controlled) group --
+  // open via openSection; run-* sections are independently persisted, so
+  // they're force-opened via CollapsibleSection's revealNonce instead.
+  // (This also fixes the pre-existing "Run with fixture…" menu item, which
+  // called openSection on an uncontrolled section and so did nothing when
+  // that section had been collapsed.)
+  const [revealRequest, setRevealRequest] = useState<{ sectionId: string; nonce: number } | null>(null);
+  const revealSection = useCallback(
+    (sectionId: string) => {
+      if (sectionId.startsWith("observe-")) openSection(sectionId);
+      setRevealRequest({ sectionId, nonce: Date.now() });
+    },
+    [openSection],
+  );
+  const revealNonceFor = (sectionId: string) =>
+    revealRequest?.sectionId === sectionId ? revealRequest.nonce : undefined;
+  useEffect(() => {
+    if (sectionRequest) revealSection(sectionRequest.sectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request nonce
+  }, [sectionRequest?.nonce]);
+
   // Phase 10 Slice C ("A real, labeled Validate action"): self-contained
   // loading state around the caller-supplied onValidate, same pattern as
   // Compile/Run's own disabled-while-busy handling above.
@@ -353,11 +384,11 @@ export function RunPanel({
           },
         ]
       : []),
-    { label: "Run with fixture…", onClick: () => openSection("run-simulate") },
+    { label: "Run with fixture…", onClick: () => revealSection("run-simulate") },
     {
       label: "Debug run",
       onClick: () => {
-        openSection("observe-events");
+        revealSection("observe-events");
         void onRun(
           question,
           provider,
@@ -367,6 +398,22 @@ export function RunPanel({
       },
     },
   ];
+
+  // Node toolbar "Run from here" (Slice 4) -- consumed once per nonce, then
+  // cleared by the caller so a later remount of this panel can't replay it.
+  useEffect(() => {
+    if (!runFromNodeRequest || !onRunFromNode) return;
+    revealSection("observe-status");
+    void onRunFromNode(
+      runFromNodeRequest.nodeId,
+      question,
+      provider,
+      showModelSelect ? selectedModel || undefined : undefined,
+      showApiKeyField ? apiKey.trim() || undefined : undefined,
+    );
+    onRunFromNodeRequestHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request nonce, with the inputs as they are at that moment
+  }, [runFromNodeRequest?.nonce]);
 
   const displayedEvents = resolveEventLogEvents(events, runSummary?.events);
   const isRail = layout === "rail";
@@ -530,7 +577,7 @@ export function RunPanel({
   return (
     <div style={containerStyle(layout)}>
       <div data-testid="execute-group" style={executeGroupStyle}>
-        <CollapsibleSection sectionId="run-controls" title="Execute" reducedMotion={reducedMotion}>
+        <CollapsibleSection sectionId="run-controls" title="Execute" reducedMotion={reducedMotion} revealNonce={revealNonceFor("run-controls")}>
           <TextArea
             rows={4}
             style={{ minHeight: 96, resize: "vertical" }}
@@ -664,7 +711,7 @@ export function RunPanel({
           </div>
         </CollapsibleSection>
 
-        <CollapsibleSection sectionId="run-simulate" title="Run with fixture" reducedMotion={reducedMotion}>
+        <CollapsibleSection sectionId="run-simulate" title="Run with fixture" reducedMotion={reducedMotion} revealNonce={revealNonceFor("run-simulate")}>
           <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
             Simulates against the saved graph with no live tool or model calls — always uses the offline stub
             provider, plus any per-node outputs you stub below.
@@ -718,6 +765,7 @@ export function RunPanel({
         <div ref={diagnosticsSectionRef} style={{ marginTop: spacing[2] }} tabIndex={-1} aria-live="polite" aria-label={`Graph validation: ${summary.label}`}>
           <CollapsibleSection
             sectionId="run-diagnostics"
+            revealNonce={revealNonceFor("run-diagnostics")}
             title="Diagnostics"
             defaultOpen={diagnostics.length > 0}
             reducedMotion={reducedMotion}
@@ -911,6 +959,7 @@ export function RunPanel({
           <div aria-live="polite" aria-relevant="additions">
             <CollapsibleSection
               sectionId="observe-events"
+              revealNonce={revealNonceFor("observe-events")}
               title="Event log"
               open={openId === "observe-events"}
               onOpenChange={() => toggleSection("observe-events")}
@@ -933,6 +982,7 @@ export function RunPanel({
 
           <CollapsibleSection
             sectionId="observe-history"
+              revealNonce={revealNonceFor("observe-history")}
             title="Run history"
             open={openId === "observe-history"}
             onOpenChange={() => toggleSection("observe-history")}

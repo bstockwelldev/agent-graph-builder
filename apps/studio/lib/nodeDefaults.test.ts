@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
 
-import { defaultConfig, summaryFor } from "./nodeDefaults";
+import { defaultConfig, nodeLabel, summaryFor, templateVariables, withUserLabel } from "./nodeDefaults";
 
 describe("summaryFor", () => {
   it("shows the provider for llm and tool_loop nodes", () => {
@@ -28,12 +28,54 @@ describe("summaryFor", () => {
 
   it("returns null for node types with no second field worth surfacing", () => {
     expect(summaryFor("input", { variableName: "question" })).toBeNull();
-    expect(summaryFor("prompt", { template: "{question}" })).toBeNull();
     expect(summaryFor("router", {})).toBeNull();
-    expect(summaryFor("output", {})).toBeNull();
     expect(summaryFor("branch", { content: "yes" })).toBeNull();
     expect(summaryFor("code_exec", { codeExecLanguage: "python" })).toBeNull();
-    expect(summaryFor("human_gate", { content: "Approve?" })).toBeNull();
+  });
+
+  // studio-graph-workbench-redesign-plan.md, Slice 4 -- richer summaries.
+  it("lists prompt template variables", () => {
+    expect(summaryFor("prompt", { template: "Answer {question} about {topic}, {question}" })).toBe("vars: question, topic");
+    expect(summaryFor("prompt", { template: "no vars" })).toBeNull();
+  });
+
+  it("counts router routes when known", () => {
+    expect(summaryFor("router", {}, { routeCount: 3 })).toBe("3 routes");
+    expect(summaryFor("router", {}, { routeCount: 1 })).toBe("1 route");
+  });
+
+  it("describes output and content-bearing nodes", () => {
+    expect(summaryFor("output", {})).toBe("Final result");
+    expect(summaryFor("human_gate", { content: "Approve?" })).toBe("Approve?");
+    expect(summaryFor("code_exec", { content: "x".repeat(60) })).toHaveLength(40);
+  });
+
+  it("moves the title's config field into the summary when the user named the node", () => {
+    expect(summaryFor("llm", { provider: "groq", model: "llama-3" }, { hasUserLabel: true })).toBe("groq · llama-3");
+    expect(summaryFor("tool", { toolName: "lookup_topic", inputVariable: "q" }, { hasUserLabel: true })).toBe(
+      "lookup_topic · input: q",
+    );
+    expect(summaryFor("input", { variableName: "question" }, { hasUserLabel: true })).toBe("variable: question");
+  });
+});
+
+describe("templateVariables", () => {
+  it("extracts de-duplicated placeholders in order", () => {
+    expect(templateVariables("{a} {b} {a} {not valid}")).toEqual(["a", "b"]);
+  });
+});
+
+describe("nodeLabel / withUserLabel", () => {
+  it("prefers a non-blank user label over the derived one", () => {
+    expect(nodeLabel("llm", { model: "qwen" }, "Intent classifier")).toBe("Intent classifier");
+    expect(nodeLabel("llm", { model: "qwen" }, "  ")).toBe("qwen");
+    expect(nodeLabel("llm", { model: "qwen" })).toBe("qwen");
+  });
+
+  it("sets, trims, and removes the label without leaving an empty extensions object", () => {
+    expect(withUserLabel(undefined, " Classifier ")).toEqual({ label: "Classifier" });
+    expect(withUserLabel({ label: "Old" }, "")).toBeUndefined();
+    expect(withUserLabel({ label: "Old", other: 1 }, null)).toEqual({ other: 1 });
   });
 });
 

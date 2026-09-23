@@ -39,35 +39,94 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
   }
 }
 
-// Phase 10 Slice D ("Node cards: category label, title, and runtime
-// status are present; the summary line is not." --
-// docs/planning/features/studio-shell-ux-gap-analysis.md). `labelFor`
-// above already surfaces each type's single most distinguishing config
-// field as the card's title -- this is a genuinely SECOND field, shown
-// only for the types that have one worth surfacing; other types return
-// null (rendered as no summary line) rather than repeating the title or
-// inventing filler text.
-export function summaryFor(type: NodeType, config: Record<string, unknown>): string | null {
+// Node card summary line (Phase 10 Slice D, widened by
+// studio-graph-workbench-redesign-plan.md Slice 4 / review section 14: "a
+// node should communicate at rest its important configuration"). The
+// title already shows each type's single most distinguishing field
+// (`labelFor`) unless the user named the node -- in which case that field
+// moves down into this line so it isn't lost. Returns null rather than
+// filler text when there's genuinely nothing more to say.
+export type SummaryContext = {
+  /** The node has a user-given name, so `labelFor`'s field isn't the title. */
+  hasUserLabel?: boolean;
+  /** Outgoing edges from this node (router/branch route count). */
+  routeCount?: number;
+};
+
+const SNIPPET_MAX = 40;
+
+function snippet(value: unknown): string | null {
+  const textValue = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!textValue) return null;
+  return textValue.length > SNIPPET_MAX ? `${textValue.slice(0, SNIPPET_MAX - 1)}…` : textValue;
+}
+
+/** `{name}` placeholders in a prompt template, in order, de-duplicated. */
+export function templateVariables(template: string): string[] {
+  const seen = new Set<string>();
+  for (const match of template.matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) seen.add(match[1]);
+  return [...seen];
+}
+
+export function summaryFor(type: NodeType, config: Record<string, unknown>, context: SummaryContext = {}): string | null {
+  const { hasUserLabel = false, routeCount } = context;
   switch (type) {
-    case "llm":
-      return `via ${String(config.provider ?? "ollama")}`;
-    case "tool_loop":
-      return `via ${String(config.provider ?? "ollama")} · max ${String(config.maxToolIterations ?? 4)} iterations`;
-    case "tool":
-      return `input: ${String(config.inputVariable ?? "question")}`;
+    case "llm": {
+      const provider = String(config.provider ?? "ollama");
+      return hasUserLabel ? `${provider} · ${String(config.model ?? "model")}` : `via ${provider}`;
+    }
+    case "tool_loop": {
+      const iterations = `max ${String(config.maxToolIterations ?? 4)} iterations`;
+      return hasUserLabel
+        ? `${String(config.model ?? "model")} · ${iterations}`
+        : `via ${String(config.provider ?? "ollama")} · ${iterations}`;
+    }
+    case "tool": {
+      const input = `input: ${String(config.inputVariable ?? "question")}`;
+      return hasUserLabel ? `${String(config.toolName ?? "tool")} · ${input}` : input;
+    }
     case "guardrail":
       return config.allowUrls ? "Allows URLs" : "Blocks URLs";
     case "rubric":
       return config.rubricFailOnFindings ? "Fails run on findings" : "Findings don't fail the run";
-    case "input":
-    case "prompt":
+    case "prompt": {
+      const variables = templateVariables(String(config.template ?? ""));
+      if (variables.length > 0) return `vars: ${variables.join(", ")}`;
+      return hasUserLabel ? snippet(config.template) : null;
+    }
     case "router":
-    case "output":
     case "branch":
+      if (routeCount !== undefined && routeCount > 0) return `${routeCount} route${routeCount === 1 ? "" : "s"}`;
+      return type === "branch" && hasUserLabel ? snippet(config.content) : null;
+    case "input":
+      return hasUserLabel ? `variable: ${String(config.variableName ?? "question")}` : null;
+    case "output":
+      return "Final result";
     case "code_exec":
     case "human_gate":
-      return null;
+      return snippet(config.content);
   }
+}
+
+/** Node title: the user's name for it when set (stored on
+ * `node.extensions.label`), otherwise derived from config. */
+export function nodeLabel(type: NodeType, config: Record<string, unknown>, userLabel?: string | null): string {
+  const trimmed = userLabel?.trim();
+  return trimmed ? trimmed : labelFor(type, config);
+}
+
+/** Returns `extensions` with `label` set (or removed when blank), or
+ * `undefined` if nothing else is left -- so an unnamed node round-trips
+ * with no `extensions` at all, exactly as before naming existed. */
+export function withUserLabel(
+  extensions: Record<string, unknown> | null | undefined,
+  label: string | null | undefined,
+): Record<string, unknown> | undefined {
+  const next: Record<string, unknown> = { ...(extensions ?? {}) };
+  const trimmed = label?.trim();
+  if (trimmed) next.label = trimmed;
+  else delete next.label;
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 export function labelFor(type: NodeType, config: Record<string, unknown>): string {

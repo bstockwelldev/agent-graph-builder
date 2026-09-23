@@ -68,8 +68,17 @@ function getEntriesSnapshot(): ConsoleEntry[] {
   return entries;
 }
 
+// Must be a stable reference: a fresh `[]` per call made React warn "The
+// result of getServerSnapshot should be cached to avoid an infinite loop"
+// (surfaced as the Next.js dev "1 Issue" badge on every page).
+const EMPTY_ENTRIES: ConsoleEntry[] = [];
+
+function getServerEntriesSnapshot(): ConsoleEntry[] {
+  return EMPTY_ENTRIES;
+}
+
 export function useConsoleLog(): ConsoleEntry[] {
-  return useSyncExternalStore(subscribe, getEntriesSnapshot, () => []);
+  return useSyncExternalStore(subscribe, getEntriesSnapshot, getServerEntriesSnapshot);
 }
 
 /** Unread error/warning counts since the panel was last opened — the HUD

@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Focus, GitBranch, HelpCircle, Play, Plus, Tag, X } from "lucide-react";
+import { Focus, HelpCircle, Play, Plus, Sparkles, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -47,12 +47,11 @@ import {
   cloneCanvasSnapshot,
   coachStep,
   dismissCoach,
-  flowEdgeLabel,
   isCoachDismissed,
   isCoachVisible,
   isEditableKeyboardTarget,
 } from "@/lib/graphAuthoring";
-import { defaultConfig, labelFor } from "@/lib/nodeDefaults";
+import { defaultConfig, labelFor, nodeLabel, withUserLabel } from "@/lib/nodeDefaults";
 import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
 import { computeAncestorNodeIds } from "@/lib/runFromNode";
 import { computeFocusNodeIds } from "@/lib/graphFocus";
@@ -75,19 +74,52 @@ import { ConnectKindMenu } from "./ConnectKindMenu";
 import { NodeContextMenu } from "./NodeContextMenu";
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
-import { OrientationControl } from "./OrientationControl";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { ReleasesPanel } from "./ReleasesPanel";
 import { RoutingLabPanel } from "./RoutingLabPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
-import { GraphNodeView, type GraphNodeData } from "./nodes/GraphNodeView";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { GraphNodeView, type GraphNodeData, type NodeTraceSummary } from "./nodes/GraphNodeView";
+import { GraphHeader, type RunPanelSectionId } from "./GraphHeader";
+import { IconButton } from "./ui/IconButton";
+import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
+import type { EdgeRunState } from "./edges/LabeledEdge";
+import { findFreePosition, type LayoutSpacing } from "@/layout/dagreLayout";
 import { cn } from "@/lib/utils";
 import { shell } from "@/lib/graph-theme";
+
+// Layout-menu view preferences (studio-graph-workbench-redesign-plan.md,
+// Slice 3) -- per viewer, not per graph, so they live in localStorage
+// rather than the graph document. Every access is guarded: storage can be
+// unavailable (private mode, blocked site data) and the defaults must hold.
+const LAYOUT_SPACING_STORAGE_KEY = "agb.layout.spacing";
+const SHOW_MINIMAP_STORAGE_KEY = "agb.layout.showMinimap";
+
+function readStoredSpacing(): LayoutSpacing {
+  try {
+    const value = window.localStorage.getItem(LAYOUT_SPACING_STORAGE_KEY);
+    return value === "compact" || value === "relaxed" ? value : "standard";
+  } catch {
+    return "standard";
+  }
+}
+
+function readStoredShowMinimap(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_MINIMAP_STORAGE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Preference just won't persist -- not worth surfacing.
+  }
+}
 
 /** True when the viewport is wide enough for docked (non-drawer) panels. */
 function isDesktopViewport(): boolean {
@@ -154,22 +186,32 @@ function syncIdCounter(graph: GraphDefinition) {
 }
 
 function toFlowNode(n: GraphNode): Node<GraphNodeData> {
+  const userLabel = typeof n.extensions?.label === "string" ? n.extensions.label : undefined;
   return {
     id: n.id,
     type: n.type,
     position: n.position,
-    data: { nodeType: n.type, label: labelFor(n.type, n.config), config: n.config, status: "idle", compileIssue: null },
+    data: {
+      nodeType: n.type,
+      label: nodeLabel(n.type, n.config, userLabel),
+      userLabel,
+      extensions: n.extensions ?? undefined,
+      config: n.config,
+      status: "idle",
+      compileIssue: null,
+    },
   };
 }
 
+// Edge labels/animation are rendered by edges/LabeledEdge.tsx from `data`
+// (studio-graph-workbench-redesign-plan.md, Slice 6) -- no stock `label`,
+// and no kind-based `animated` (animation now means "executing").
 function toFlowEdge(e: GraphEdge): Edge {
   const { stroke, strokeWidth } = edgeStrokeForKind(e.kind);
   return {
     id: e.id,
     source: e.source,
     target: e.target,
-    label: flowEdgeLabel(e.kind, e.condition),
-    animated: e.kind === "conditional",
     style: { stroke, strokeWidth },
     data: { kind: e.kind, condition: e.condition ?? null },
   };
@@ -181,11 +223,28 @@ function createFlowEdge(connection: Connection, kind: EdgeKind, condition: strin
     id: nextId("e"),
     source: connection.source!,
     target: connection.target!,
-    label: flowEdgeLabel(kind, condition),
-    animated: kind === "conditional",
     style: { stroke, strokeWidth },
     data: { kind, condition },
   };
+}
+
+/** Hover-preview digest of a node's trace (Slice 4). */
+function traceSummaryFor(trace: NodeTrace): NodeTraceSummary {
+  const started = trace.started_at ? Date.parse(trace.started_at) : Number.NaN;
+  const completed = trace.completed_at ? Date.parse(trace.completed_at) : Number.NaN;
+  return {
+    status: trace.status,
+    durationMs: Number.isFinite(started) && Number.isFinite(completed) ? Math.max(0, completed - started) : null,
+    error: trace.error ?? null,
+  };
+}
+
+/** Number of outgoing conditional/fallback routes per node, for router
+ * summaries ("3 routes") on the node card. */
+function routeCounts(edges: Edge[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const edge of edges) counts.set(edge.source, (counts.get(edge.source) ?? 0) + 1);
+  return counts;
 }
 
 export function GraphEditor({ graphId }: { graphId: string }) {
@@ -236,6 +295,25 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const hudRef = useRef<HTMLDivElement | null>(null);
   const [hudBottom, setHudBottom] = useState<number | null>(null);
   const [relayoutNonce, setRelayoutNonce] = useState(0);
+  // Layout menu (studio-graph-workbench-redesign-plan.md, Slice 3). Read
+  // from storage after mount, not in the initializer, so server and first
+  // client render agree.
+  const [layoutSpacing, setLayoutSpacing] = useState<LayoutSpacing>("standard");
+  const [showMinimap, setShowMinimap] = useState(true);
+  useEffect(() => {
+    setLayoutSpacing(readStoredSpacing());
+    setShowMinimap(readStoredShowMinimap());
+  }, []);
+  const [fitViewNonce, setFitViewNonce] = useState(0);
+  const viewportCenterRef = useRef<(() => { x: number; y: number }) | null>(null);
+  // Header Run▾ menu and node toolbar → RunPanel (Slice 2/4): RunPanel owns
+  // its run inputs and only mounts while open, so requests are handed over
+  // as nonce-keyed props it consumes on mount/change.
+  const [runSectionRequest, setRunSectionRequest] = useState<{ sectionId: RunPanelSectionId; nonce: number } | null>(null);
+  const [runFromNodeRequest, setRunFromNodeRequest] = useState<{ nodeId: string; nonce: number } | null>(null);
+  // Screen-reader announcements from the canvas (orientation changes) --
+  // previously passed as no-op stubs, so they were silently dropped.
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const workbench = useWorkbench();
@@ -458,6 +536,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           type: n.data.nodeType,
           position: { x: n.position.x, y: n.position.y },
           config: n.data.config,
+          ...(n.data.extensions ? { extensions: n.data.extensions } : {}),
         })),
         edges: edges.map((e) => ({
           id: e.id,
@@ -490,6 +569,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphId, graphName, buildGraphDefinition, selectedNodeId, selectedEdgeId, inspectionRunId, runSummary?.run_id]);
 
+  const paintedFingerprintRef = useRef("");
+  const semanticFingerprintRef = useRef("");
   const semanticFingerprint = useMemo(() => {
     if (nodes.length === 0) return "";
     try {
@@ -498,6 +579,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       return "";
     }
   }, [buildGraphDefinition, nodes.length]);
+  semanticFingerprintRef.current = semanticFingerprint;
 
   const dirty = useMemo(() => {
     try {
@@ -651,9 +733,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           return {
             ...edge,
             data: { ...edge.data, kind, condition },
-            label: flowEdgeLabel(kind, condition),
             style: { stroke, strokeWidth },
-            animated: kind === "conditional",
           };
         }),
       );
@@ -684,13 +764,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       const node: Node<GraphNodeData> = {
         id,
         type,
-        position: position ?? { x: 200 + Math.random() * 400, y: 100 + Math.random() * 400 },
+        // Slice 5: the viewport center (or the clicked point), nudged to
+        // the first spot that doesn't overlap an existing card -- was a
+        // random position anywhere in a 400x400 box.
+        position: findFreePosition(nodes, position ?? viewportCenterRef.current?.() ?? { x: 200, y: 120 }),
         data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
       setNodes((current) => [...current, node]);
+      setSelectedNodeId(id);
+      setSelectedEdgeId(null);
       if (workbench.activePanel === "palette") workbench.close();
     },
-    [recordMutation, setNodes, workbench],
+    [nodes, recordMutation, setNodes, workbench],
   );
 
   // Right-click context menu (studio-consolidation Phase 7 — new scope, no
@@ -717,7 +802,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         ...source,
         id,
         selected: false,
-        position: { x: source.position.x + 40, y: source.position.y + 40 },
+        position: findFreePosition(nodes, { x: source.position.x + 40, y: source.position.y + 40 }),
         data: { ...source.data },
       };
       setNodes((current) => [...current, duplicate]);
@@ -821,25 +906,45 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       const path = buildExecutedPath(traces, routeDecisions, graphEdges, nodes.map((node) => node.id));
       const { nodeIssues } = buildIssueMaps(diagnostics);
 
+      paintedFingerprintRef.current = semanticFingerprintRef.current;
       setNodes((nds) =>
-        nds.map((node) => ({
-          ...node,
-          data: {
-            ...applyCompileIssueToNodeData(node.data, nodeIssues.get(node.id)),
-            status: traces[node.id]?.status ?? "idle",
-            inspectionDimmed: path.dimNodeIds.has(node.id),
-          },
-        })),
+        nds.map((node) => {
+          const trace = traces[node.id];
+          return {
+            ...node,
+            data: {
+              ...applyCompileIssueToNodeData(node.data, nodeIssues.get(node.id)),
+              status: trace?.status ?? "idle",
+              statusStale: false,
+              inspectionDimmed: path.dimNodeIds.has(node.id),
+              traceSummary: trace ? traceSummaryFor(trace) : null,
+            },
+          };
+        }),
       );
 
       setEdges((eds) =>
         eds.map((edge) => {
           const kind = (edge.data?.kind as EdgeKind) ?? "sequence";
           const { stroke, strokeWidth, opacity } = edgeStrokeForInspection(edge, path, kind);
+          const sourceRan = path.executedNodeIds.has(edge.source);
+          const targetStatus = traces[edge.target]?.status;
+          // Slice 6: animation now means "executing right now" -- only the
+          // edge into the currently running node moves; edges into a failed
+          // node read as failed.
+          const runState: EdgeRunState | undefined =
+            sourceRan && targetStatus === "running"
+              ? "active"
+              : sourceRan && targetStatus === "failed"
+                ? "failed"
+                : path.highlightEdgeIds.has(edge.id)
+                  ? "traversed"
+                  : undefined;
           return {
             ...edge,
             style: { stroke, strokeWidth, opacity },
-            animated: kind === "conditional" && path.highlightEdgeIds.has(edge.id),
+            animated: false,
+            data: { ...edge.data, runState },
           };
         }),
       );
@@ -851,9 +956,57 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     setInspectionRunId(null);
     setInspectionRouteDecisions([]);
     setNodeTraces({});
-    setNodes((nds) => nds.map((node) => ({ ...node, data: { ...node.data, status: "idle", inspectionDimmed: false } })));
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: { ...node.data, status: "idle", statusStale: false, inspectionDimmed: false, traceSummary: null },
+      })),
+    );
+    setEdges((eds) =>
+      eds.map((edge) => {
+        const { stroke, strokeWidth } = edgeStrokeForKind((edge.data?.kind as EdgeKind) ?? "sequence");
+        return { ...edge, style: { stroke, strokeWidth }, data: { ...edge.data, runState: undefined } };
+      }),
+    );
+    // Force a re-apply: applyDiagnosticsToCanvas skips when the issue maps
+    // haven't changed, but the edge styles were just reset above.
+    lastAppliedIssueFingerprintRef.current = "";
     applyDiagnosticsToCanvas(diagnostics);
-  }, [applyDiagnosticsToCanvas, diagnostics, setNodes]);
+  }, [applyDiagnosticsToCanvas, diagnostics, setEdges, setNodes]);
+
+  // Slice 4 "stale" state: once the graph is edited after a run was painted
+  // onto it, that run's node statuses describe a graph that no longer
+  // exists -- mark them rather than presenting them as current.
+  useEffect(() => {
+    if (!inspectionRunId || !paintedFingerprintRef.current) return;
+    const stale = semanticFingerprint !== paintedFingerprintRef.current;
+    setNodes((nds) => {
+      let changed = false;
+      const next = nds.map((node) => {
+        const nodeStale = stale && (node.data.status ?? "idle") !== "idle";
+        if ((node.data.statusStale ?? false) === nodeStale) return node;
+        changed = true;
+        return { ...node, data: { ...node.data, statusStale: nodeStale } };
+      });
+      return changed ? next : nds;
+    });
+  }, [inspectionRunId, semanticFingerprint, setNodes]);
+
+  // Router/branch "N routes" summaries (Slice 4).
+  useEffect(() => {
+    const counts = routeCounts(edges);
+    setNodes((nds) => {
+      let changed = false;
+      const next = nds.map((node) => {
+        if (node.data.nodeType !== "router" && node.data.nodeType !== "branch") return node;
+        const routeCount = counts.get(node.id) ?? 0;
+        if (node.data.routeCount === routeCount) return node;
+        changed = true;
+        return { ...node, data: { ...node.data, routeCount } };
+      });
+      return changed ? next : nds;
+    });
+  }, [edges, nodes.length, setNodes]);
 
   // Phase 10 Slice D, "Focus mode": recompute which nodes are outside the
   // selected node's ancestor/descendant closure whenever the mode, the
@@ -1136,10 +1289,79 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [edges, runGraph],
   );
 
+  // Header Run▾ menu / Validate chip → a specific RunPanel section
+  // (studio-graph-workbench-redesign-plan.md, Slice 2).
+  const openRunSection = useCallback(
+    (sectionId: RunPanelSectionId) => {
+      if (workbench.activePanel !== "run") workbench.open("run");
+      setRunSectionRequest({ sectionId, nonce: Date.now() });
+    },
+    [workbench],
+  );
+
+  const handleHeaderValidate = useCallback(() => {
+    void refreshDiagnostics();
+    openRunSection("run-diagnostics");
+  }, [openRunSection, refreshDiagnostics]);
+
+  const deleteNodeById = useCallback(
+    (nodeId: string) => {
+      recordMutation();
+      setNodes((current) => current.filter((node) => node.id !== nodeId));
+      setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+      setSelectedNodeId((current) => (current === nodeId ? null : current));
+    },
+    [recordMutation, setEdges, setNodes],
+  );
+
+  // Node toolbar + edge chip callbacks (Slices 4 and 6), provided to
+  // canvas-rendered components through CanvasActionsProvider.
+  const canvasActions = useMemo<CanvasActions>(
+    () => ({
+      editNode: (nodeId) => {
+        if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+        focusNode(nodeId, "configure");
+      },
+      runFromNode: (nodeId) => {
+        setSelectedNodeId(nodeId);
+        setSelectedEdgeId(null);
+        if (workbench.activePanel !== "run") workbench.open("run");
+        setRunFromNodeRequest({ nodeId, nonce: Date.now() });
+      },
+      duplicateNode,
+      focusNode: (nodeId) => setFocusRequest({ nodeId, nonce: Date.now() }),
+      deleteNode: deleteNodeById,
+      selectEdge: (edgeId) => {
+        setSelectedEdgeId(edgeId);
+        setSelectedNodeId(null);
+        if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+      },
+    }),
+    [deleteNodeById, duplicateNode, focusNode, workbench],
+  );
+
+  // ⌘S / Ctrl+S saves (new with the header's Save button, Slice 2). Runs
+  // even from inside inputs -- saving while editing a field is the point.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void handleSave();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleSave]);
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
   const hasSelection = Boolean(selectedNode || selectedEdge);
   const compactDockTop = (hudBottom ?? 96) + COMPACT_DOCK_TOP_GAP_PX;
+  // Keep fit-to-view clear of the floating header (and, on compact, the
+  // collapsed selection strip under it and the bottom action bar).
+  const fitInsetTop = (hudBottom ?? 76) + COMPACT_DOCK_TOP_GAP_PX + (workbench.isCompact ? 56 : 0);
+  const fitInsetBottom = workbench.isCompact ? COMPACT_DOCK_BOTTOM_RESERVE_PX : 32;
+  const fitInsets = useMemo(() => ({ top: fitInsetTop, bottom: fitInsetBottom }), [fitInsetTop, fitInsetBottom]);
   const toGraphEdge = (edge: Edge): GraphEdge => ({
     id: edge.id,
     source: edge.source,
@@ -1181,7 +1403,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setNodes((nds) =>
           nds.map((n) =>
             n.id === selectedNode.id
-              ? { ...n, data: { ...n.data, config, label: labelFor(n.data.nodeType, config) } }
+              ? { ...n, data: { ...n.data, config, label: nodeLabel(n.data.nodeType, config, n.data.userLabel) } }
               : n,
           ),
         );
@@ -1192,6 +1414,24 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onOpenRunPanel={() => workbench.open("run")}
       onPolicyExceptionCreated={refreshDiagnostics}
       focusTab={inspectorTabRequest}
+      userLabel={selectedNode.data.userLabel ?? ""}
+      derivedLabel={labelFor(selectedNode.data.nodeType, selectedNode.data.config)}
+      onLabelChange={(value) => {
+        recordMutation();
+        setNodes((nds) =>
+          nds.map((n) => {
+            if (n.id !== selectedNode.id) return n;
+            const extensions = withUserLabel(n.data.extensions, value);
+            // Keep the raw (untrimmed) value while typing so spaces aren't
+            // eaten mid-word; withUserLabel trims what's persisted.
+            const userLabel = value.trim() ? value : undefined;
+            return {
+              ...n,
+              data: { ...n.data, extensions, userLabel, label: nodeLabel(n.data.nodeType, n.data.config, userLabel) },
+            };
+          }),
+        );
+      }}
     />
   ) : selectedEdge ? (
     <EdgeInspector
@@ -1253,19 +1493,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           shrinks along with the canvas whenever a side panel reserves
           space, rather than continuing to span the original full width. */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* Floating top HUD */}
-      <div
-        ref={hudRef}
-        className="glass-panel ghost-border absolute left-4 right-4 top-4 z-20 flex flex-wrap items-center gap-3 rounded-2xl border p-3"
-      >
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push("/graphs")}
-        >
-          &larr; Graphs
-        </Button>
-        {!workbench.isCompact && (
+      {/* Graph-first header (studio-graph-workbench-redesign-plan.md,
+          Slice 2) -- replaces the old floating HUD of ~19 wrapping text
+          buttons. Still absolutely positioned over the canvas column, so
+          hudRef's measured bottom edge keeps positioning EmptyGraphCoach and
+          the compact selection dock below it. */}
+      <GraphHeader
+        hudRef={hudRef}
+        compact={workbench.isCompact}
+        graphSwitcher={
           <GraphSwitcherCombobox
             graphs={libraryGraphs}
             activeGraphId={graphId}
@@ -1274,110 +1510,62 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             onSelect={handleLibrarySelect}
             onOpenChange={handleGraphSwitcherOpenChange}
           />
-        )}
-        <Input
-          value={graphName}
-          onChange={(e) => setGraphName(e.target.value)}
-          aria-label="Graph name"
-          className="max-w-xs font-semibold"
-        />
-        <Button variant="synth" size="sm" disabled={!dirty || saving} onClick={() => void handleSave()}>
-          {saving ? "Saving…" : "Save"}
-        </Button>
-        {dirty && <Badge variant="outline">Unsaved</Badge>}
-        <Badge
-          variant="outline"
-          className={cn(validationLabel === "Ready" ? "text-emerald-400" : "text-amber-400")}
-        >
-          Validation: {validationLabel}
-        </Badge>
-        <Button variant="ghost" size="sm" onClick={handleExportGraph}>
-          Export JSON
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
-          Import JSON
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (file) void handleImportFile(file);
-          }}
-        />
-        {/* Orientation/Add node/Run/Help hidden on compact widths — the
-            latter three duplicate the bottom mobile action bar below, and
-            hiding them here is what stops the HUD from wrapping to 3-4 rows
-            and covering canvas nodes on narrow viewports (the same overlap
-            bug already fixed for the docked side panels, but on mobile it
-            was this HUD, not a side panel, causing it). */}
-        {!workbench.isCompact && (
-        <div className="ml-auto flex items-center gap-2">
-          <OrientationControl
-            value={graphOrientation}
-            onChange={(value) => {
-              recordMutation();
-              setGraphOrientation(value);
-            }}
-            onRelayout={() => {
-              recordMutation();
-              setRelayoutNonce((v) => v + 1);
-            }}
-          />
-          <Button variant="outline" size="sm" onClick={() => workbench.toggle("palette")}>
-            {workbench.activePanel === "palette" ? "Close palette" : "Add node"}
-          </Button>
-          <Button
-            variant={workbench.activePanel === "run" ? "synth" : "outline"}
-            size="sm"
-            onClick={() => workbench.toggle("run")}
-          >
-            {workbench.activePanel === "run" ? "Close run" : "Run"}
-          </Button>
-          <Button
-            variant={workbench.activePanel === "releases" ? "synth" : "outline"}
-            size="sm"
-            onClick={() => workbench.toggle("releases")}
-          >
-            {workbench.activePanel === "releases" ? "Close releases" : "Releases"}
-          </Button>
-          <Button
-            variant={workbench.activePanel === "routingLab" ? "synth" : "outline"}
-            size="sm"
-            onClick={() => workbench.toggle("routingLab")}
-          >
-            {workbench.activePanel === "routingLab" ? "Close routing lab" : "Routing lab"}
-          </Button>
-          <Button
-            variant={workbench.activePanel === "knowledge" ? "synth" : "outline"}
-            size="sm"
-            onClick={() => workbench.toggle("knowledge")}
-          >
-            {workbench.activePanel === "knowledge" ? "Close knowledge" : "Knowledge"}
-          </Button>
-          <Button
-            variant={focusMode ? "synth" : "outline"}
-            size="sm"
-            title="Dim nodes unrelated to the current selection"
-            onClick={() => setFocusMode((value) => !value)}
-          >
-            {focusMode ? "Focus: on" : "Focus"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Shortcuts and gestures"
-            title="Shortcuts and gestures (?)"
-            onClick={() => workbench.toggle("help")}
-          >
-            <HelpCircle className="size-4" />
-          </Button>
-        </div>
-        )}
-      </div>
+        }
+        graphName={graphName}
+        onGraphNameChange={setGraphName}
+        onBack={() => router.push("/graphs")}
+        dirty={dirty}
+        saving={saving}
+        onSave={() => void handleSave()}
+        diagnostics={diagnostics}
+        onValidate={handleHeaderValidate}
+        activePanel={workbench.activePanel}
+        onTogglePanel={(panel) => workbench.toggle(panel)}
+        onOpenRunSection={openRunSection}
+        focusMode={focusMode}
+        onToggleFocusMode={() => setFocusMode((value) => !value)}
+        onOpenChat={() => workbench.open("chat")}
+        layout={{
+          orientation: graphOrientation,
+          onOrientationChange: (value) => {
+            recordMutation();
+            setGraphOrientation(value);
+          },
+          onRelayout: () => {
+            recordMutation();
+            setRelayoutNonce((v) => v + 1);
+          },
+          onFitView: () => setFitViewNonce((v) => v + 1),
+          spacing: layoutSpacing,
+          onSpacingChange: (value) => {
+            setLayoutSpacing(value);
+            writeStored(LAYOUT_SPACING_STORAGE_KEY, value);
+            recordMutation();
+            setRelayoutNonce((v) => v + 1);
+          },
+          showMinimap,
+          onShowMinimapChange: (value) => {
+            setShowMinimap(value);
+            writeStored(SHOW_MINIMAP_STORAGE_KEY, String(value));
+          },
+        }}
+        onExport={handleExportGraph}
+        onImport={() => fileInputRef.current?.click()}
+        onShowShortcuts={() => workbench.toggle("help")}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void handleImportFile(file);
+        }}
+      />
 
       {saveError && (
         <div className="glass-panel ring-destructive/30 absolute left-4 top-20 z-20 max-w-sm rounded-lg p-3 ring-1">
@@ -1386,6 +1574,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       )}
 
       <div className="relative min-h-0 flex-1">
+        <CanvasActionsProvider value={canvasActions}>
         <FlowCanvas
           graphId={graphId}
           nodes={nodes}
@@ -1403,13 +1592,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           }}
           authoringEnabled
           nodeTypes={nodeTypes}
-          reducedMotion={false}
+          reducedMotion={workbench.reducedMotion}
           graphOrientation={graphOrientation}
           relayoutNonce={relayoutNonce}
           focusRequest={focusRequest}
-          liveAnnouncement=""
-          onLiveAnnouncement={() => {}}
-          onClearLiveAnnouncement={() => {}}
+          spacing={layoutSpacing}
+          showMinimap={showMinimap && !workbench.isCompact}
+          fitViewNonce={fitViewNonce}
+          viewportCenterRef={viewportCenterRef}
+          compact={workbench.isCompact}
+          fitInsets={fitInsets}
+          liveAnnouncement={liveAnnouncement}
+          onLiveAnnouncement={setLiveAnnouncement}
+          onClearLiveAnnouncement={() => setLiveAnnouncement("")}
           loadFailureVisible={Boolean(loadError) && nodes.length === 0}
           onRetryLoad={() => window.location.reload()}
           graphLoading={loading}
@@ -1459,6 +1654,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             setContextMenu({ kind: "pane", x, y, flowX, flowY });
           }}
         />
+        </CanvasActionsProvider>
       </div>
 
       {pendingConnection && (
@@ -1493,8 +1689,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           actions={
             contextMenu.kind === "node"
               ? [
+                  { label: "Edit configuration", onClick: () => canvasActions.editNode(contextMenu.nodeId) },
+                  { label: "Run from here", onClick: () => canvasActions.runFromNode(contextMenu.nodeId) },
                   { label: "Duplicate node", onClick: () => duplicateNode(contextMenu.nodeId) },
-                  { label: "Delete node", onClick: deleteSelection, tone: "destructive" },
+                  { label: "Delete node", onClick: deleteSelection, tone: "destructive", separatorBefore: true },
                 ]
               : contextMenu.kind === "edge"
                 ? [{ label: "Delete edge", onClick: deleteSelection, tone: "destructive" }]
@@ -1526,58 +1724,47 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             onSelect={handleLibrarySelect}
             onOpenChange={handleGraphSwitcherOpenChange}
           />
-          <Button
-            variant={workbench.activePanel === "palette" ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Add node"
+          {/* Graph-kit IconButtons (Slice 2): tooltips + pressed state, and
+              44px touch targets. Releases/Routing lab/Knowledge moved into
+              the header's ··· menu, making room for Chat. */}
+          <IconButton
+            size="touch"
+            tooltipPlacement="top"
+            label="Add node"
+            icon={<Plus size={18} />}
+            pressed={workbench.activePanel === "palette"}
             onClick={() => workbench.toggle("palette")}
-          >
-            <Plus className="size-4" />
-          </Button>
-          <Button
-            variant={workbench.activePanel === "run" ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Run"
+          />
+          <IconButton
+            size="touch"
+            tooltipPlacement="top"
+            label="Run"
+            icon={<Play size={18} />}
+            pressed={workbench.activePanel === "run"}
             onClick={() => workbench.toggle("run")}
-          >
-            <Play className="size-4" />
-          </Button>
-          <Button
-            variant={workbench.activePanel === "releases" ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Releases"
-            onClick={() => workbench.toggle("releases")}
-          >
-            <Tag className="size-4" />
-          </Button>
-          <Button
-            variant={workbench.activePanel === "routingLab" ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Routing lab"
-            onClick={() => workbench.toggle("routingLab")}
-          >
-            <GitBranch className="size-4" />
-          </Button>
-          <Button
-            variant={workbench.activePanel === "knowledge" ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Knowledge"
-            onClick={() => workbench.toggle("knowledge")}
-          >
-            <BookOpen className="size-4" />
-          </Button>
-          <Button
-            variant={focusMode ? "synth" : "ghost"}
-            size="icon-sm"
-            aria-label="Focus mode"
-            title="Dim nodes unrelated to the current selection"
+          />
+          <IconButton
+            size="touch"
+            tooltipPlacement="top"
+            label="Chat about this graph"
+            icon={<Sparkles size={18} />}
+            onClick={() => workbench.open("chat")}
+          />
+          <IconButton
+            size="touch"
+            tooltipPlacement="top"
+            label="Focus mode"
+            icon={<Focus size={18} />}
+            pressed={focusMode}
             onClick={() => setFocusMode((value) => !value)}
-          >
-            <Focus className="size-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Shortcuts and gestures" onClick={() => workbench.toggle("help")}>
-            <HelpCircle className="size-4" />
-          </Button>
+          />
+          <IconButton
+            size="touch"
+            tooltipPlacement="top"
+            label="Shortcuts and gestures"
+            icon={<HelpCircle size={18} />}
+            onClick={() => workbench.toggle("help")}
+          />
         </div>
       )}
       </div>
@@ -1612,6 +1799,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           selectedNodeId={selectedNodeId}
           nodeTraces={nodeTraces}
           onFocusNode={handleWaterfallFocusNode}
+          sectionRequest={runSectionRequest}
+          runFromNodeRequest={runFromNodeRequest}
+          onRunFromNodeRequestHandled={() => setRunFromNodeRequest(null)}
+          reducedMotion={workbench.reducedMotion}
           inspectLoadError={inspectLoadError}
           onRetryInspect={() => {
             const runId = lastInspectAttemptRef.current ?? inspectionRunId;
@@ -1660,18 +1851,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 all short of the backdrop tap above, which the sheet itself
                 mostly covered on shorter phones. */}
             <div className="flex justify-end p-2 pb-0">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Close"
+              <IconButton
+                size="touch"
+                label="Close"
+                icon={<X size={18} />}
                 onClick={() => {
                   setSelectedNodeId(null);
                   setSelectedEdgeId(null);
                   setMobileSummaryExpanded(false);
                 }}
-              >
-                <X className="size-4" />
-              </Button>
+              />
             </div>
             <div className="pb-[env(safe-area-inset-bottom)]">{selectionDockContent}</div>
           </div>

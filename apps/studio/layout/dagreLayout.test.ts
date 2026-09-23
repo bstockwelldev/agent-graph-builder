@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Edge, Node } from "@xyflow/react";
 
-import { layoutNodesWithDagre } from "./dagreLayout";
+import { findFreePosition, inferRankDir, layoutNodesWithDagre, needsInitialLayout } from "./dagreLayout";
+import { boxesOverlap, nodeBoxAt, NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "./nodeGeometry";
 
 // Regression test for "nodes overlap on page load": dagre only guarantees
 // non-overlap against the box size it's told each node is, and that size
@@ -10,8 +11,10 @@ import { layoutNodesWithDagre } from "./dagreLayout";
 // category/title/summary/status/compile-issue rows are all present). These
 // checks lay out nodes with layoutNodesWithDagre, then verify the REAL
 // card-sized bounding boxes (not the smaller assumed ones) don't overlap.
-const REAL_CARD_WIDTH = 256;
-const REAL_CARD_HEIGHT = 140;
+// Since studio-graph-workbench-redesign-plan.md Slice 5 the card's bounds
+// ARE these shared constants (GraphNodeView enforces them), not an estimate.
+const REAL_CARD_WIDTH = NODE_CARD_WIDTH;
+const REAL_CARD_HEIGHT = NODE_CARD_MAX_HEIGHT;
 
 function makeNode(id: string): Node {
   return { id, position: { x: 0, y: 0 }, data: {} };
@@ -87,5 +90,64 @@ describe("layoutNodesWithDagre", () => {
     const laidOut = layoutNodesWithDagre(nodes, [], "LR");
 
     assertNoOverlaps(laidOut);
+  });
+});
+
+describe("spacing presets", () => {
+  it("still never overlaps real cards at the tightest preset", () => {
+    const nodes = ["a", "b", "c", "d", "e"].map(makeNode);
+    const edges = [makeEdge("e1", "a", "b"), makeEdge("e2", "a", "c"), makeEdge("e3", "a", "d"), makeEdge("e4", "b", "e")];
+    assertNoOverlaps(layoutNodesWithDagre(nodes, edges, "LR", "compact"));
+    assertNoOverlaps(layoutNodesWithDagre(nodes, edges, "TB", "compact"));
+  });
+
+  it("spreads ranks further apart as spacing relaxes", () => {
+    const nodes = [makeNode("a"), makeNode("b")];
+    const edges = [makeEdge("e1", "a", "b")];
+    const gap = (spacing: "compact" | "standard" | "relaxed") => {
+      const [a, b] = layoutNodesWithDagre(nodes, edges, "LR", spacing);
+      return b.position.x - a.position.x;
+    };
+    expect(gap("compact")).toBeLessThan(gap("standard"));
+    expect(gap("standard")).toBeLessThan(gap("relaxed"));
+  });
+});
+
+describe("needsInitialLayout (keep saved positions on load)", () => {
+  const at = (x: number, y: number) => ({ position: { x, y } });
+
+  it("is false for an empty graph and for non-overlapping saved positions", () => {
+    expect(needsInitialLayout([])).toBe(false);
+    expect(needsInitialLayout([at(0, 0), at(400, 0), at(800, 200)])).toBe(false);
+  });
+
+  it("is true when every node sits at the origin (no saved layout)", () => {
+    expect(needsInitialLayout([at(0, 0), at(0, 0)])).toBe(true);
+    expect(needsInitialLayout([at(0, 0)])).toBe(true);
+  });
+
+  it("is true when any two cards overlap", () => {
+    expect(needsInitialLayout([at(0, 0), at(100, 40), at(900, 0)])).toBe(true);
+  });
+
+  it("is true when saved positions run along the other axis than the effective direction", () => {
+    const horizontal = [at(0, 0), at(400, 0), at(800, 0)];
+    expect(inferRankDir(horizontal)).toBe("LR");
+    expect(needsInitialLayout(horizontal, "LR")).toBe(false);
+    expect(needsInitialLayout(horizontal, "TB")).toBe(true);
+  });
+});
+
+describe("findFreePosition (new-node placement)", () => {
+  it("returns the preferred point when it's free", () => {
+    expect(findFreePosition([{ position: { x: 1000, y: 1000 } }], { x: 0, y: 0 })).toEqual({ x: 0, y: 0 });
+  });
+
+  it("steps to a non-overlapping spot when the preferred point is taken", () => {
+    const existing = [{ position: { x: 0, y: 0 } }, { position: { x: 0, y: 160 } }];
+    const placed = findFreePosition(existing, { x: 10, y: 10 });
+    for (const node of existing) {
+      expect(boxesOverlap(nodeBoxAt(placed), nodeBoxAt(node.position))).toBe(false);
+    }
   });
 });
