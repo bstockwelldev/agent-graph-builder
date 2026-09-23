@@ -133,9 +133,10 @@ export function TaxonomyTooltip({
           }
         }}
         onBlur={hide}
+        className="agb-focus-ring agb-hoverable"
         style={layout === "corner" ? cornerHelpButtonStyle : helpButtonStyle}
       >
-        <Info size={14} strokeWidth={2.25} aria-hidden="true" />
+        <Info size={14} strokeWidth={2} aria-hidden="true" />
       </button>
       {visible &&
         createPortal(
@@ -182,18 +183,21 @@ const layoutStyles: Record<TaxonomyTooltipLayout, CSSProperties> = {
   },
 };
 
+// Wave 2.5 ("Inspector & Run console v2"): a compact inline hint glyph,
+// not a 44px bordered button -- the old size made these help triggers the
+// loudest thing in every inspector/run field row (10 of them across the two
+// panels). The hit area stays generous via padding, the visual is 14px.
 const helpButtonStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  minWidth: shell.touchTarget.min,
-  minHeight: shell.touchTarget.min,
-  width: shell.touchTarget.min,
-  height: shell.touchTarget.min,
-  borderRadius: radius.lg,
-  border: `1px solid ${surface.borderStrong}`,
-  background: surface.raised,
-  color: text.muted,
+  width: 22,
+  height: 22,
+  padding: 0,
+  borderRadius: 999,
+  border: "none",
+  background: "transparent",
+  color: text.secondary,
   cursor: "help",
   flexShrink: 0,
 };

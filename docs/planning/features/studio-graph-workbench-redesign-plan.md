@@ -298,6 +298,123 @@ Review §7, §25, §29–31, §36–38, §62–64.
 
 **Not in wave 2:** `/analytics` stays as the workspace-wide page (the rail's Analytics entry). It's a legitimate cross-graph view, not duplicated graph context.
 
+## Wave 2.5: Inspector & Run console v2 — shipped ([STO-606](https://linear.app/stockwise-productions-prototypes/issue/STO-606))
+
+Waves 1 and 2 redesigned the header, the nodes, the rail and analytics. The two right-side panels, `NodeInspector.tsx` and `RunPanel.tsx`, still looked like the pre-redesign baseline. This wave brings them up to the same level. The user decided it should be its own wave, and that the Run console gets one field per input variable.
+
+### Problem audit
+
+- **Contrast.** Inputs used `surface.raised` with a near-invisible border, about 1.2:1 against the panel. Helper text was dimmed with `opacity: 0.6`.
+- **Layout.**
+  - Both panels were one flat accordion.
+  - In the Run panel, Run sat below a textarea, a provider select and a paragraph of explanation.
+  - Compile, Validate and Run carried equal weight.
+  - The inspector kept Duplicate and Delete at the bottom.
+- **Icons.** There were almost none. What there was: seven 44px ⓘ buttons in the inspector and three in the Run panel.
+- **Inputs.** Native `<select>` and raw textareas everywhere. The run input was hard-coded to `{question}`, even for graphs whose input nodes read other variables.
+
+### What shipped
+
+**Foundations** (`lib/graph-theme.ts`, `components/graph/ui/`)
+
+- **New tokens:**
+  - `surface.inset`: input wells, darker than the panel.
+  - `surface.card`: field groups.
+  - `border.subtle`, `border.default` and `border.focus`. `default` is 3.54:1 on `inset`, which meets WCAG 1.4.11.
+  - `text.secondary`: a real `#aab0bc`, about 8:1 on the panel, replacing opacity dimming.
+  - `control.height`.
+- **`fields.tsx`** restyled onto those tokens: 36px controls, a focus ring, and a visible placeholder. Every existing call site picks this up.
+- **New primitives, each with RTL tests:**
+
+  | Primitive | Behaviour |
+  | --- | --- |
+  | `Field` | Label, hint glyph, meta slot, and the field's own diagnostics inline, with remediation. |
+  | `Group` | Card with an uppercase caption. |
+  | `Toggle` | `role="switch"`. |
+  | `NumberStepper` | Stepper input. |
+  | `SegmentedControl` | Radiogroup with arrow keys. |
+  | `IconTabs` | Icon + label + count badge, with arrow/Home/End keys. |
+  | `Combobox` | Searchable, grouped, keyboard-driven, optional custom value. |
+  | `PanelFrame` / `PanelHeader` | Sticky header, tabs and footer around a scrolling body. |
+  | `TemplateEditor` | See below. |
+
+- **`TemplateEditor`** has no dependency. It overlays a transparent textarea on a mirrored backdrop:
+  - `{var}` tokens are highlighted, known ones in accent and unknown ones in warning;
+  - typing `{` opens autocomplete;
+  - ⌘/Ctrl+↵ submits;
+  - an expand dialog;
+  - a `plain` mode for free text.
+- **Retired:** `ui/Tabs.tsx`, `useExclusiveCollapse` and the observe-accordion constants.
+
+**Node Inspector v2** (`NodeInspector.tsx`)
+
+- **Header** (in `PanelFrame`):
+  - a type chip, using the shared `nodeTypeIcons.ts` map;
+  - an **inline-editable name**;
+  - a sub-line with type, id, last-run status and an issue count;
+  - actions: Run from here, Duplicate, and ⋯ (Open Run panel, Delete node).
+
+  The bottom Duplicate/Delete buttons are gone.
+- **Tabs** are `IconTabs`: Config, I/O, Policy, Run, History and Raw. I/O and Policy show count badges.
+- **The Config tab is grouped into cards**, one per concern:
+  - Model uses `ProviderModelPicker`, which is now two comboboxes with provider dots and a loading skeleton.
+  - Prompts use `TemplateEditor`.
+  - The tool is a combobox of built-ins plus the registry.
+  - Routes use a `SegmentedControl` for the edge kind plus a match input.
+  - Guardrail and rubric settings are `Toggle`s, and max iterations is a `NumberStepper`.
+  - The code language is a segmented control.
+- **Inline diagnostics.** `lib/diagnostics.ts` `partitionDiagnosticsByField` sends each issue to the field it names (the `"node 'x': field: msg"` format, plus code-based routes and tool mappings). Anything unmatched stays in a compact banner.
+- **Edge inspector** also moved to `PanelFrame`: a segmented kind control and a Config/Raw tab.
+- **Dock width.** The desktop selection dock went from `w-80` to `w-96`, matching the Run console.
+
+**Run console v2** (`RunPanel.tsx`)
+
+- **One field per input variable.** `lib/runInputs.ts` `runInputVariables(nodes)` returns the input nodes' distinct `variableName`s, falling back to `question`.
+  - Each field is a `plain` `TemplateEditor` with a **Recent** menu drawn from run history.
+  - ⌘↵ from any field runs.
+  - `onRun` and `onRunFromNode`, and `GraphEditor.runGraph`, now carry `Record<string, string>`; it used to be `{ question }`.
+  - No backend change was needed. `compute_input` already reads `raw_input[variableName]`, and a new runtime test proves two input nodes each get their own value.
+- **Header.** A "Ready / N errors" status that opens Issues, and a **provider chip** (dot + model). The chip reveals a Model card with the provider/model comboboxes and the API-key field.
+- **Sticky action bar.**
+  - A primary **Run** with a ⌘↵ hint and a spinner.
+  - A secondary **Validate**.
+  - A ⋯ menu: Compile, Debug run, Run from selected node, and Run with fixture…
+- **Observe is now `IconTabs`:** Status, Waterfall, Trace, Events (count), History (count) and Issues (count, coloured by severity).
+  - Status is a result card: status pill, duration, provider, the run's inputs, and the output or error.
+  - History rows show all of a run's inputs (`formatRunInputs`).
+  - The fixture simulator is a closable card that defaults its input JSON to the console's current values.
+- **Legacy section ids** (header Run▾, the Validate chip, `/runs` redirects, `?section=`) map to tabs through `observeTabForSection`. `run-simulate` opens the fixture card. The diagnostics focus target wraps Observe, and focusing it opens Issues.
+- **"Inspecting an earlier run" banner.** It only shows for a run picked from history. The run you just started is also "inspected" so the canvas shows its traces, but it isn't called out.
+
+### Acceptance criteria
+
+- [x] **Inputs meet 3:1 non-text contrast, and helper text uses a real colour.**
+  - `border.default` is 3.54:1 on `inset`. `text.secondary` is about 8:1.
+  - Playwright computed styles: unselected tab `rgb(170,176,188)`.
+- [x] **The inspector header carries the identity and actions, and there is no bottom Delete** (`NodeInspector.test.tsx`).
+- [x] **Diagnostics render under their field** (`diagnostics.test.ts` `partitionDiagnosticsByField`).
+- [x] **Selects are searchable comboboxes, and booleans, numbers and enums use purpose-built controls** (`primitives.test.tsx`).
+- [x] **Templates highlight known and unknown variables and autocomplete them** (`templateEditor.test.ts`). Live: `{topic}` and `{audience}` were known, `{tone}` unknown, and `{au` suggested `{audience}`.
+- [x] **The Run console renders one field per input variable, and ⌘↵ sends them all** (`RunPanel.test.tsx`; backend `test_each_input_node_reads_its_own_run_input_variable`). Live: the backend run input was `{"topic": "TCP handshakes", "audience": "ten-year-olds"}`.
+- [x] **Observe is tabbed with counts, and legacy section ids still land** (`RunPanel.test.tsx`).
+
+### Verification
+
+- **Studio:** `vitest` 217/217. (2 tests were removed along with the dead `nextExclusiveOpenId`.)
+- **Backend:** 435/435.
+- **Other gates:** `tsc` clean, `eslint` 0 errors (3 pre-existing warnings), root build passes.
+- **Playwright on a live stub backend** (desktop 1440×900 and mobile 390×844):
+  - demo graph: LLM and router inspectors;
+  - a seeded two-input graph (`topic` / `audience`): Run console fields, ⌘↵ run, result card, model card, History, prompt highlighting and autocomplete.
+
+**QA fixes made during the pass:**
+
+- The Observe and inspector tab strips overflowed. History is now icon-only with a count, and the dock is wider.
+- The empty-state copy wrapped around the bold "Run".
+- The "past run" banner showed for fresh runs.
+- The derived node title placeholder read as a hint.
+- `ProviderModelPicker` refetched the catalog, and reset a custom model, on every model change.
+
 ## Wave 3: Motion + accessibility (open, [STO-604](https://linear.app/stockwise-productions-prototypes/issue/STO-604))
 
 - **Drawers slide:** `ShellDrawer` returns null when closed, so its transition never runs.

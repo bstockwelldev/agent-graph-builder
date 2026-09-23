@@ -280,9 +280,30 @@
     background: rgba(255, 255, 255, 0.06);
     outline: none;
   }
+  /* Wave 2.5 inputs: focus ring on the inset field wells (fields.tsx). */
+  .agb-field:focus,
+  .agb-field:focus-visible {
+    outline: none;
+    border-color: #8fbaff !important;
+    box-shadow: 0 0 0 3px rgba(143, 186, 255, 0.2);
+  }
+  .agb-template-input::placeholder,
+  .agb-field::placeholder {
+    color: #7d8494;
+  }
+  .agb-field:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
   .agb-inline-input {
     border-color: transparent !important;
     background: transparent !important;
+  }
+  /* The derived node title shows as the placeholder until the user names
+     the node -- it *is* the title, so it reads as one, not as a hint. */
+  .agb-inline-input::placeholder {
+    color: #d4d8df;
+    opacity: 1;
   }
   .agb-inline-input:hover,
   .agb-inline-input:focus {

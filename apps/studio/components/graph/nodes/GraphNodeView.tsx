@@ -1,24 +1,13 @@
 import { Handle, NodeToolbar, Position, useConnection, type NodeProps } from "@xyflow/react";
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
-  Code2,
   Copy,
   Crosshair,
-  GitBranch,
-  GitFork,
-  ListChecks,
-  LogIn,
-  LogOut,
   PauseCircle,
-  PenLine,
   Play,
-  Repeat,
   Settings2,
-  ShieldCheck,
   Trash2,
-  Wrench,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -43,23 +32,11 @@ import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { summaryFor } from "@/lib/nodeDefaults";
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
 import { useCanvasActions } from "../canvasActions";
+import { NODE_TYPE_ICONS } from "../nodeTypeIcons";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { IconButton } from "../ui/IconButton";
 
-const ICONS: Record<NodeType, LucideIcon> = {
-  input: LogIn,
-  prompt: PenLine,
-  llm: Bot,
-  tool: Wrench,
-  router: GitBranch,
-  output: LogOut,
-  guardrail: ShieldCheck,
-  rubric: ListChecks,
-  human_gate: PauseCircle,
-  tool_loop: Repeat,
-  code_exec: Code2,
-  branch: GitFork,
-};
+const ICONS = NODE_TYPE_ICONS;
 
 export type NodeRunStatus = "idle" | "running" | "succeeded" | "failed" | "paused";
 

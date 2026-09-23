@@ -54,6 +54,7 @@ import {
 import { defaultConfig, labelFor, nodeLabel, withUserLabel } from "@/lib/nodeDefaults";
 import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
 import { computeAncestorNodeIds } from "@/lib/runFromNode";
+import { runInputVariables } from "@/lib/runInputs";
 import { computeFocusNodeIds } from "@/lib/graphFocus";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
 import {
@@ -1123,13 +1124,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // executors — see handleRunFromNode below.
   const runGraph = useCallback(
     async (opts: {
-      question: string;
+      input: Record<string, string>;
       provider: ChatProvider;
       model?: string;
       apiKey?: string;
       nodeOutputs?: Record<string, unknown>;
     }) => {
-      const { question, provider, model, apiKey, nodeOutputs } = opts;
+      const { input, provider, model, apiKey, nodeOutputs } = opts;
       setProviderBlockMessage(null);
       setCompiling(true);
       try {
@@ -1160,7 +1161,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setInspectionRouteDecisions([]);
         closeStreamRef.current?.();
 
-        const summary = await client.startRun(graph.id, { question }, provider, model, apiKey, nodeOutputs);
+        const summary = await client.startRun(graph.id, input, provider, model, apiKey, nodeOutputs);
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
 
@@ -1289,8 +1290,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   );
 
   const handleRun = useCallback(
-    (question: string, provider: ChatProvider, model?: string, apiKey?: string) =>
-      runGraph({ question, provider, model, apiKey }),
+    (input: Record<string, string>, provider: ChatProvider, model?: string, apiKey?: string) =>
+      runGraph({ input, provider, model, apiKey }),
     [runGraph],
   );
 
@@ -1298,17 +1299,17 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // `nodeId` with `null` so the run skips straight to it — a structural/
   // debugging pass, not a semantically meaningful run. If the graph's
   // input node is among those ancestors (the common case), its mocked
-  // output means `question` never actually reaches downstream nodes the
+  // output means the run input never actually reaches downstream nodes the
   // normal way; this deliberately does NOT attempt to replay a prior
   // run's real traced values for ancestors, which is a larger follow-up.
   const handleRunFromNode = useCallback(
-    (nodeId: string, question: string, provider: ChatProvider, model?: string, apiKey?: string) => {
+    (nodeId: string, input: Record<string, string>, provider: ChatProvider, model?: string, apiKey?: string) => {
       const ancestorIds = computeAncestorNodeIds(
         nodeId,
         edges.map((edge) => ({ source: edge.source, target: edge.target })),
       );
       const nodeOutputs = Object.fromEntries(ancestorIds.map((id) => [id, null]));
-      return runGraph({ question, provider, model, apiKey, nodeOutputs });
+      return runGraph({ input, provider, model, apiKey, nodeOutputs });
     },
     [edges, runGraph],
   );
@@ -1528,6 +1529,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDelete={deleteSelection}
       onDuplicate={() => duplicateNode(selectedNode.id)}
       onOpenRunPanel={() => workbench.open("run")}
+      onRunFromHere={() => canvasActions.runFromNode(selectedNode.id)}
+      templateVariables={runInputVariables(nodes)}
       onPolicyExceptionCreated={refreshDiagnostics}
       focusTab={inspectorTabRequest}
       onTabChange={setInspectorTab}
@@ -1897,6 +1900,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         <RunPanel
           layout="rail"
           graphId={graphId}
+          inputVariables={runInputVariables(nodes)}
           diagnostics={diagnostics}
           diagnosticsSectionRef={diagnosticsSectionRef}
           providerBlockMessage={providerBlockMessage}
@@ -1940,7 +1944,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         <KnowledgePanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
       {showSelectionDock && !workbench.isCompact && (
-        <div className="glass-panel ghost-border h-full min-h-0 w-80 shrink-0 overflow-y-auto border-l">
+        <div className="glass-panel ghost-border h-full min-h-0 w-96 shrink-0 overflow-y-auto border-l">
           {selectionDockContent}
         </div>
       )}

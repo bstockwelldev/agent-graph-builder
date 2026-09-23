@@ -131,3 +131,39 @@ export function applyCompileIssueToEdge(edge: Edge, issue: CompileIssue | undefi
     style: { ...edge.style, stroke, strokeWidth },
   };
 }
+
+/**
+ * Which config field a diagnostic concerns (Wave 2.5 inline diagnostics),
+ * or null when it isn't about one specific field. Backend typed-config
+ * errors are formatted `"<type> node '<id>': <field>[.<sub>]: <msg>"`
+ * (backend/app/compiler.py + node_configs.py `_format_error`); a few codes
+ * map to a field directly.
+ */
+export function fieldForDiagnostic(diagnostic: Pick<Diagnostic, "code" | "message">): string | null {
+  if (diagnostic.code === "UNSUPPORTED_TOOL_BINDING") return "toolName";
+  if (/_(NO_OUTGOING_EDGES|MISSING_FALLBACK|NO_CONDITIONAL_EDGES)$/.test(diagnostic.code)) return "routes";
+  const match = diagnostic.message.match(/node '[^']*': ([A-Za-z_][A-Za-z0-9_]*)(?:\.[^:]*)?: /);
+  return match ? match[1] : null;
+}
+
+/** Splits a node's diagnostics into per-field buckets (for the fields the
+ * current form actually renders) and the rest, which stay in the panel's
+ * top banner. Port-level (`port_id`) and policy issues are left out of the
+ * banner: they live on the I/O and Policy tabs, whose tab badges count them. */
+export function partitionDiagnosticsByField(
+  issues: Diagnostic[],
+  renderedFields: readonly string[],
+): { byField: Record<string, Diagnostic[]>; rest: Diagnostic[] } {
+  const rendered = new Set(renderedFields);
+  const byField: Record<string, Diagnostic[]> = {};
+  const rest: Diagnostic[] = [];
+  for (const issue of issues) {
+    const field = fieldForDiagnostic(issue);
+    if (field && rendered.has(field)) {
+      (byField[field] ??= []).push(issue);
+    } else if (!issue.port_id && issue.category !== "policy") {
+      rest.push(issue);
+    }
+  }
+  return { byField, rest };
+}

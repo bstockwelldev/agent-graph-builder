@@ -305,3 +305,41 @@ async def test_tool_loop_falls_back_to_final_answer_for_non_technical_question()
     summary = get_run_summary(run_id)
     assert summary.status == "succeeded"
     assert summary.result.startswith("[stub answer]")
+
+
+@pytest.mark.asyncio
+async def test_each_input_node_reads_its_own_run_input_variable() -> None:
+    """Studio Wave 2.5 (STO-606): the run console sends one value per input
+    variable, and each input node picks its own out of the run input."""
+    demo = build_demo_graph()
+    nodes = [
+        GraphNode(id="in_topic", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "topic"}),
+        GraphNode(
+            id="in_audience", type=NodeType.INPUT, position=NodePosition(x=0, y=0), config={"variableName": "audience"}
+        ),
+        GraphNode(
+            id="prompt_1",
+            type=NodeType.PROMPT,
+            position=NodePosition(x=0, y=0),
+            config={"template": "Explain {topic} to {audience}"},
+        ),
+        GraphNode(id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=0, y=0), config={}),
+    ]
+    edges = [
+        GraphEdge(id="e1", source="in_topic", target="in_audience"),
+        GraphEdge(id="e2", source="in_audience", target="prompt_1"),
+        GraphEdge(id="e3", source="prompt_1", target="output_1"),
+    ]
+    graph = demo.model_copy(update={"id": "graph_two_inputs", "nodes": nodes, "edges": edges, "entry_node_id": "in_topic"})
+    compiled = compile_graph(graph, "cwf_two_inputs")
+    assert compiled.ok, compiled.diagnostics
+    COMPILED_WORKFLOWS["cwf_two_inputs"] = graph
+    run_id, _bus = await start_run_inline("cwf_two_inputs", {"topic": "TCP", "audience": "kids"}, provider="stub")
+    from app.runtime import get_run_node_traces, get_run_summary
+
+    summary = get_run_summary(run_id)
+    assert summary.status == "succeeded", summary.error
+    traces = {t.node_id: t for t in get_run_node_traces(run_id)}
+    assert traces["in_topic"].output == "TCP"
+    assert traces["in_audience"].output == "kids"
+    assert traces["prompt_1"].output == "Explain TCP to kids"
