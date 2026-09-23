@@ -621,6 +621,49 @@ This is the contract tool bindings already had. Editing a bound prompt changes t
   - canvas → Open → Usage → focus the node;
   - mobile.
 
+## Wave 5: Mobile tab bar — shipped ([STO-607](https://linear.app/stockwise-productions-prototypes/issue/STO-607))
+
+One shared component, `components/navigation/mobile-tab-bar.tsx` (`MobileTabBar`).
+
+- **Styling.** Plain Tailwind + lucide, with no shadcn imports, so the token-styled graph route can use it too.
+- **Layout.** Fixed to the bottom, 64px (`MOBILE_TAB_BAR_HEIGHT`) plus the safe-area inset. Each tab is an icon over its label, with a pill behind the active icon. Targets are at least 44px.
+- **Semantics.**
+  - Link tabs set `aria-current="page"`.
+  - Toggle tabs set `aria-pressed`.
+  - Popup tabs set `aria-haspopup` / `aria-expanded`.
+- **Global tabs** (`studio-shell.tsx`, below `md`, not on the canvas route): **Graphs · Resources · Analytics · Chat · More**.
+  - The first three tabs derive from `STUDIO_RAIL_ITEMS` / `isRailItemActive`, so Resources is current on `/prompts`, `/tools` and the other resource pages.
+  - Chat toggles the workbench chat drawer.
+  - More opens the existing nav sheet. The top-bar hamburger is gone.
+  - `main` gets bottom padding so the last item clears the bar.
+  - The landmark is labelled "Studio tabs", distinct from the rail's "Studio".
+- **Canvas tray** (`GraphEditor.tsx`, `workbench.isCompact` = below 1100px): **Graphs · Add · Run · Chat · More**.
+  - Add and Run show as pressed while their drawers are open.
+  - More opens a `NodeContextMenu` with Focus mode, Workflow summary, Releases, Routing lab, Knowledge, and Shortcuts & gestures. It opens above the tray (the new `bottomReserve` prop).
+  - The graph switcher stays in the graph header.
+  - Drawers (z-50) and the selection dock (z-40) sit over the tray (z-30). The dock already reserves 96px at the bottom.
+
+**Verification**
+
+- Studio `vitest` 263/263 (new `mobile-tab-bar.test.tsx`), `tsc` clean, `eslint` 0 errors.
+- Backend 444/444.
+- Root build passes.
+- Playwright on a live stub backend:
+  - **390×844:**
+    - Graphs, Resources and Analytics are current on their routes.
+    - Chat shows as pressed and opens the drawer.
+    - More opens the sheet.
+    - There is no hamburger.
+    - The last list item sits above the bar.
+    - On the canvas, the global bar is absent and the tray is visible.
+    - Add and Run show as pressed.
+    - The More menu lists all six items. Its bottom is at 770 and the tray top at 779.
+    - Focus mode toggles to checked.
+    - Workflow summary opens.
+    - The node dock sits over the tray.
+  - **820×1180:** the global bar is hidden (the rail shows) and the canvas tray works.
+  - **1440:** no bar and no tray; unchanged.
+
 ## Related docs
 
 - [studio-ux-gap-remediation-plan.md](studio-ux-gap-remediation-plan.md): diagnostics, waterfall and Chat items from the same review.
