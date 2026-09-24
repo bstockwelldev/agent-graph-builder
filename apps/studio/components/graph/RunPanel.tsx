@@ -66,6 +66,7 @@ import { PanelFrame, PanelHeader } from "./ui/PanelFrame";
 import { SkeletonBlock } from "./ui/Skeleton";
 import { TemplateEditor } from "./ui/TemplateEditor";
 import { PasswordInput, TextArea } from "./ui/fields";
+import { errorDetail } from "@/lib/apiErrors";
 
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
 const DEFAULT_QUESTION = "How does a database index work?";
@@ -394,7 +395,7 @@ export function RunPanel({
         logConsoleEntry({
           severity: "error",
           source: "Provider",
-          message: `Failed to load provider credentials: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Failed to load provider credentials: ${errorDetail(err)}`,
           graphId: graphId ?? undefined,
         });
         setApiKeyConfigured(false);
@@ -541,7 +542,7 @@ export function RunPanel({
       const node_outputs = JSON.parse(fixtureNodeOutputsText || "{}") as Record<string, unknown>;
       setSimulateResult(await client.simulateGraph(graphId, { input, node_outputs }));
     } catch (err) {
-      setSimulateError(err instanceof Error ? err.message : String(err));
+      setSimulateError(errorDetail(err));
     } finally {
       setSimulating(false);
     }
@@ -554,7 +555,7 @@ export function RunPanel({
       setReplayResult(await client.replayRun(runId, request));
       setCounterfactualRunId(null);
     } catch (err) {
-      setReplayError(err instanceof Error ? err.message : String(err));
+      setReplayError(errorDetail(err));
     } finally {
       setReplayingRunId(null);
     }
@@ -573,7 +574,7 @@ export function RunPanel({
       try {
         setSnapshot(await client.getRunGraphSnapshot(runId));
       } catch (err) {
-        setSnapshotError(err instanceof Error ? err.message : String(err));
+        setSnapshotError(errorDetail(err));
       } finally {
         setSnapshotLoading(false);
       }

@@ -1,5 +1,7 @@
 import type { z } from "zod";
 
+import { createTransport, type RequestOptions, type Transport, type TransportOptions } from "./transport.js";
+
 import {
   agentProfileSchema,
   analyticsDashboardPayloadSchema,
@@ -96,34 +98,19 @@ import type {
   ToolDefinition,
 } from "./types.js";
 
-export type AgentGraphClientOptions = {
-  baseUrl?: string;
-};
+/** SDK 1/7: transport options (injectable fetch, headers/auth, timeout,
+ * retries, hooks) -- see transport.ts. */
+export type AgentGraphClientOptions = TransportOptions;
 
 /**
- * `schema` is optional so callers that don't (yet) have a Zod schema for a
- * given response can still use `jsonFetch` — but every method on
- * `createAgentGraphClient` below passes one, so in practice every response
- * this SDK returns is runtime-validated (studio-consolidation Phase 4f).
+ * Every client method's single HTTP entry point, now a thin shim over the
+ * client's `Transport` (SDK 1/7): headers merge instead of replacing
+ * Content-Type, failures reject with typed errors (errors.ts), idempotent
+ * requests retry. `schema` is optional, but every method below passes one,
+ * so every response this SDK returns is runtime-validated.
  */
-async function jsonFetch<T>(baseUrl: string, path: string, init?: RequestInit, schema?: z.ZodType<T>): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`${init?.method ?? "GET"} ${path} failed (${response.status}): ${body}`);
-  }
-  const data: unknown = await response.json();
-  if (!schema) {
-    return data as T;
-  }
-  const result = schema.safeParse(data);
-  if (!result.success) {
-    throw new Error(`${init?.method ?? "GET"} ${path} returned an unexpected shape: ${result.error.message}`);
-  }
-  return result.data;
+function jsonFetch<T>(transport: Transport, path: string, init?: Parameters<Transport["request"]>[1], schema?: z.ZodType<T>): Promise<T> {
+  return transport.request<T>(path, init, schema);
 }
 
 /**
@@ -132,24 +119,24 @@ async function jsonFetch<T>(baseUrl: string, path: string, init?: RequestInit, s
  * `_register_resource_routes` and resource_models.py). Each resource type
  * has an `id` field, so create/update both take the full object.
  */
-function resourceClient<T extends { id: string }>(baseUrl: string, path: string, schema: z.ZodType<T>) {
+function resourceClient<T extends { id: string }>(baseUrl: Transport, path: string, schema: z.ZodType<T>) {
   return {
     list: () => jsonFetch<T[]>(baseUrl, `/api/${path}`, undefined, schema.array()),
-    get: (id: string) => jsonFetch<T>(baseUrl, `/api/${path}/${id}`, undefined, schema),
+    get: (id: string) => jsonFetch<T>(baseUrl, `/api/${path}/${encodeURIComponent(id)}`, undefined, schema),
     create: (resource: T) =>
       jsonFetch<T>(baseUrl, `/api/${path}`, { method: "POST", body: JSON.stringify(resource) }, schema),
     update: (resource: T) =>
       jsonFetch<T>(
         baseUrl,
-        `/api/${path}/${resource.id}`,
+        `/api/${path}/${encodeURIComponent(resource.id)}`,
         { method: "PUT", body: JSON.stringify(resource) },
         schema,
       ),
     delete: (id: string) =>
-      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${id}`, { method: "DELETE" }, deletedSchema),
+      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/${path}/${encodeURIComponent(id)}`, { method: "DELETE" }, deletedSchema),
     /** Wave 4a "used by": draft graph nodes bound to this resource. */
     usages: (id: string) =>
-      jsonFetch<ResourceUsage[]>(baseUrl, `/api/${path}/${id}/usages`, undefined, resourceUsageSchema.array()),
+      jsonFetch<ResourceUsage[]>(baseUrl, `/api/${path}/${encodeURIComponent(id)}/usages`, undefined, resourceUsageSchema.array()),
   };
 }
 
@@ -160,44 +147,44 @@ function resourceClient<T extends { id: string }>(baseUrl: string, path: string,
  * mcp-servers, agents, and llm-profiles — never chat-sessions, which
  * backend/app/resource_versions.py's VERSIONABLE_RESOURCE_KINDS excludes.
  */
-function resourceVersionClient(baseUrl: string, path: string) {
+function resourceVersionClient(baseUrl: Transport, path: string) {
   return {
     publish: (resourceId: string) =>
       jsonFetch<PublishResourceVersionResponse>(
         baseUrl,
-        `/api/${path}/${resourceId}/versions`,
+        `/api/${path}/${encodeURIComponent(resourceId)}/versions`,
         { method: "POST" },
         publishResourceVersionResponseSchema,
       ),
     list: (resourceId: string) =>
       jsonFetch<ResourceVersionIndexEntry[]>(
         baseUrl,
-        `/api/${path}/${resourceId}/versions`,
+        `/api/${path}/${encodeURIComponent(resourceId)}/versions`,
         undefined,
         resourceVersionIndexEntrySchema.array(),
       ),
     get: (resourceId: string, versionId: string) =>
       jsonFetch<ResourceVersion>(
         baseUrl,
-        `/api/${path}/${resourceId}/versions/${versionId}`,
+        `/api/${path}/${encodeURIComponent(resourceId)}/versions/${encodeURIComponent(versionId)}`,
         undefined,
         resourceVersionSchema,
       ),
   };
 }
 
-export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
-  const baseUrl = options.baseUrl ?? "";
-
+/** The client's methods over one transport. `baseUrl` is kept as the
+ * parameter name so every call site reads as before. */
+function buildMethods(baseUrl: Transport) {
   return {
     listGraphs: () => jsonFetch<GraphDefinition[]>(baseUrl, "/api/graphs", undefined, graphDefinitionSchema.array()),
     listRuns: (graphId: string) =>
-      jsonFetch<RunSummary[]>(baseUrl, `/api/graphs/${graphId}/runs`, undefined, runSummarySchema.array()),
+      jsonFetch<RunSummary[]>(baseUrl, `/api/graphs/${encodeURIComponent(graphId)}/runs`, undefined, runSummarySchema.array()),
     /** Cross-graph run history (studio-consolidation Phase 5) — flagged as
      * a gap in Phase 4c's as-built notes; `listRuns` above stays the
      * per-graph route the Runs screen uses. */
     listAllRuns: () => jsonFetch<RunSummary[]>(baseUrl, "/api/runs", undefined, runSummarySchema.array()),
-    getRun: (runId: string) => jsonFetch<RunSummary>(baseUrl, `/api/runs/${runId}`, undefined, runSummarySchema),
+    getRun: (runId: string) => jsonFetch<RunSummary>(baseUrl, `/api/runs/${encodeURIComponent(runId)}`, undefined, runSummarySchema),
     createGraph: (name: string, template: "blank" | "demo") =>
       jsonFetch<GraphDefinition>(
         baseUrl,
@@ -206,18 +193,18 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         graphDefinitionSchema,
       ),
     getGraph: (id: string) =>
-      jsonFetch<GraphDefinition>(baseUrl, `/api/graphs/${id}`, undefined, graphDefinitionSchema),
+      jsonFetch<GraphDefinition>(baseUrl, `/api/graphs/${encodeURIComponent(id)}`, undefined, graphDefinitionSchema),
     saveGraph: (graph: GraphDefinition) =>
       jsonFetch<GraphDefinition>(
         baseUrl,
-        `/api/graphs/${graph.id}`,
+        `/api/graphs/${encodeURIComponent(graph.id)}`,
         { method: "PUT", body: JSON.stringify(graph) },
         graphDefinitionSchema,
       ),
     /** Added for studio-consolidation Phase 3 — graphs were previously
      * never deletable through this API. */
     deleteGraph: (id: string) =>
-      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/graphs/${id}`, { method: "DELETE" }, deletedSchema),
+      jsonFetch<{ deleted: boolean }>(baseUrl, `/api/graphs/${encodeURIComponent(id)}`, { method: "DELETE" }, deletedSchema),
     validateGraph: (graph: GraphDefinition, init?: { signal?: AbortSignal }) =>
       jsonFetch<CompileResult>(
         baseUrl,
@@ -226,7 +213,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         compileResultSchema,
       ),
     compileGraph: (id: string) =>
-      jsonFetch<CompileResult>(baseUrl, `/api/graphs/${id}/compile`, { method: "POST" }, compileResultSchema),
+      jsonFetch<CompileResult>(baseUrl, `/api/graphs/${encodeURIComponent(id)}/compile`, { method: "POST" }, compileResultSchema),
     startRun: (
       graphId: string,
       input: Record<string, unknown>,
@@ -255,7 +242,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         runSummarySchema,
       ),
     getRunNodeTraces: (runId: string) =>
-      jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${runId}/nodes`, undefined, nodeTraceSchema.array()),
+      jsonFetch<NodeTrace[]>(baseUrl, `/api/runs/${encodeURIComponent(runId)}/nodes`, undefined, nodeTraceSchema.array()),
     /**
      * P0 graph foundation, Slice D — the run's durable RunGraphSnapshot:
      * the exact graph (and, for a draft-sourced run, resolved resource
@@ -266,7 +253,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     getRunGraphSnapshot: (runId: string) =>
       jsonFetch<RunGraphSnapshot>(
         baseUrl,
-        `/api/runs/${runId}/snapshot`,
+        `/api/runs/${encodeURIComponent(runId)}/snapshot`,
         undefined,
         runGraphSnapshotSchema,
       ),
@@ -278,21 +265,21 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     resumeRun: (runId: string, approve = true, reason?: string) =>
       jsonFetch<RunSummary>(
         baseUrl,
-        `/api/runs/${runId}/resume`,
+        `/api/runs/${encodeURIComponent(runId)}/resume`,
         { method: "POST", body: JSON.stringify({ approve, reason }) },
         runSummarySchema,
       ),
     providerReady: (provider: ChatProvider) =>
       jsonFetch<{ ready: boolean; message: string }>(
         baseUrl,
-        `/api/providers/${provider}/ready`,
+        `/api/providers/${encodeURIComponent(provider)}/ready`,
         undefined,
         providerReadySchema,
       ),
     providerCredentials: (provider: ChatProvider) =>
       jsonFetch<ProviderCredentials>(
         baseUrl,
-        `/api/providers/${provider}/credentials`,
+        `/api/providers/${encodeURIComponent(provider)}/credentials`,
         undefined,
         providerCredentialsSchema,
       ),
@@ -300,7 +287,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       const query = graphId ? `?graph_id=${encodeURIComponent(graphId)}` : "";
       return jsonFetch<ProviderModelCatalog>(
         baseUrl,
-        `/api/providers/${provider}/models${query}`,
+        `/api/providers/${encodeURIComponent(provider)}/models${query}`,
         undefined,
         providerModelCatalogSchema,
       );
@@ -338,7 +325,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     publishRelease: (graphId: string, releaseNotes?: string, author?: string) =>
       jsonFetch<PublishReleaseResponse>(
         baseUrl,
-        `/api/graphs/${graphId}/releases`,
+        `/api/graphs/${encodeURIComponent(graphId)}/releases`,
         {
           method: "POST",
           body: JSON.stringify({ release_notes: releaseNotes, author }),
@@ -348,14 +335,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     listReleases: (graphId: string) =>
       jsonFetch<ReleaseIndexEntry[]>(
         baseUrl,
-        `/api/graphs/${graphId}/releases`,
+        `/api/graphs/${encodeURIComponent(graphId)}/releases`,
         undefined,
         releaseIndexEntrySchema.array(),
       ),
     getRelease: (graphId: string, releaseId: string) =>
       jsonFetch<GraphRelease>(
         baseUrl,
-        `/api/graphs/${graphId}/releases/${releaseId}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/releases/${encodeURIComponent(releaseId)}`,
         undefined,
         graphReleaseSchema,
       ),
@@ -364,7 +351,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     compileRelease: (releaseId: string) =>
       jsonFetch<CompileResult>(
         baseUrl,
-        `/api/graph-releases/${releaseId}/compile`,
+        `/api/graph-releases/${encodeURIComponent(releaseId)}/compile`,
         { method: "POST" },
         compileResultSchema,
       ),
@@ -377,7 +364,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     ) =>
       jsonFetch<RunSummary>(
         baseUrl,
-        `/api/graph-releases/${releaseId}/runs`,
+        `/api/graph-releases/${encodeURIComponent(releaseId)}/runs`,
         { method: "POST", body: JSON.stringify({ input, provider, model, api_key: apiKey }) },
         runSummarySchema,
       ),
@@ -386,12 +373,12 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // edge/router, port/contract, and resource_snapshots deltas).
     /** Wave 7a (STO-610): 0-100 health score for a draft graph (unsaved edits included). */
     getGraphHealth: (graphId: string, draft: GraphDefinition) =>
-      jsonFetch<GraphHealth>(baseUrl, `/api/graphs/${graphId}/health`, { method: "POST", body: JSON.stringify(draft) }, graphHealthSchema),
+      jsonFetch<GraphHealth>(baseUrl, `/api/graphs/${encodeURIComponent(graphId)}/health`, { method: "POST", body: JSON.stringify(draft) }, graphHealthSchema),
     /** Wave 7a (STO-610): what changing `nodeId` reaches, against a draft graph. */
     getNodeImpact: (graphId: string, nodeId: string, draft: GraphDefinition) =>
       jsonFetch<NodeImpact>(
         baseUrl,
-        `/api/graphs/${graphId}/nodes/${encodeURIComponent(nodeId)}/impact`,
+        `/api/graphs/${encodeURIComponent(graphId)}/nodes/${encodeURIComponent(nodeId)}/impact`,
         { method: "POST", body: JSON.stringify(draft) },
         nodeImpactSchema,
       ),
@@ -400,25 +387,25 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     extractSubgraph: (graphId: string, draft: GraphDefinition, request: { node_ids: string[]; name: string }) =>
       jsonFetch<SubgraphExtractResponse>(
         baseUrl,
-        `/api/graphs/${graphId}/extract-subgraph`,
+        `/api/graphs/${encodeURIComponent(graphId)}/extract-subgraph`,
         { method: "POST", body: JSON.stringify({ draft, ...request }) },
         subgraphExtractResponseSchema,
       ),
     /** Wave 7c: saved graphs whose subgraph nodes reference `graphId`. */
     getGraphUsedBy: (graphId: string) =>
-      jsonFetch<GraphUsedBy>(baseUrl, `/api/graphs/${graphId}/used-by`, undefined, graphUsedBySchema),
+      jsonFetch<GraphUsedBy>(baseUrl, `/api/graphs/${encodeURIComponent(graphId)}/used-by`, undefined, graphUsedBySchema),
     /** STO-609: diff from a release to a draft graph (e.g. the live canvas, unsaved edits included). */
     compareDraftToRelease: (releaseId: string, draft: GraphDefinition) =>
       jsonFetch<ReleaseDiff>(
         baseUrl,
-        `/api/graph-releases/${releaseId}/compare-draft`,
+        `/api/graph-releases/${encodeURIComponent(releaseId)}/compare-draft`,
         { method: "POST", body: JSON.stringify(draft) },
         releaseDiffSchema,
       ),
     compareReleases: (releaseId: string, otherReleaseId: string) =>
       jsonFetch<ReleaseDiff>(
         baseUrl,
-        `/api/graph-releases/${releaseId}/compare/${otherReleaseId}`,
+        `/api/graph-releases/${encodeURIComponent(releaseId)}/compare/${encodeURIComponent(otherReleaseId)}`,
         undefined,
         releaseDiffSchema,
       ),
@@ -429,14 +416,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     simulateGraph: (graphId: string, fixture: Fixture) =>
       jsonFetch<SimulateResult>(
         baseUrl,
-        `/api/graphs/${graphId}/simulate`,
+        `/api/graphs/${encodeURIComponent(graphId)}/simulate`,
         { method: "POST", body: JSON.stringify(fixture) },
         simulateResultSchema,
       ),
     simulateRelease: (releaseId: string, fixture: Fixture) =>
       jsonFetch<SimulateResult>(
         baseUrl,
-        `/api/graph-releases/${releaseId}/simulate`,
+        `/api/graph-releases/${encodeURIComponent(releaseId)}/simulate`,
         { method: "POST", body: JSON.stringify(fixture) },
         simulateResultSchema,
       ),
@@ -451,7 +438,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     replayRun: (runId: string, request?: ReplayRequest) =>
       jsonFetch<CounterfactualResult>(
         baseUrl,
-        `/api/runs/${runId}/replay`,
+        `/api/runs/${encodeURIComponent(runId)}/replay`,
         request ? { method: "POST", body: JSON.stringify(request) } : { method: "POST" },
         counterfactualResultSchema,
       ),
@@ -462,7 +449,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     runRoutingDataset: (graphId: string, dataset: Fixture[]) =>
       jsonFetch<RoutingLabReport>(
         baseUrl,
-        `/api/graphs/${graphId}/routing-lab/run`,
+        `/api/graphs/${encodeURIComponent(graphId)}/routing-lab/run`,
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingLabReportSchema,
       ),
@@ -470,14 +457,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     compareRoutingToRelease: (graphId: string, releaseId: string, dataset: Fixture[]) =>
       jsonFetch<RoutingComparison>(
         baseUrl,
-        `/api/graphs/${graphId}/routing-lab/compare-release/${releaseId}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/routing-lab/compare-release/${encodeURIComponent(releaseId)}`,
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingComparisonSchema,
       ),
     compareRoutingDatasets: (graphId: string, otherGraphId: string, dataset: Fixture[]) =>
       jsonFetch<RoutingComparison>(
         baseUrl,
-        `/api/graphs/${graphId}/routing-lab/compare/${otherGraphId}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/routing-lab/compare/${encodeURIComponent(otherGraphId)}`,
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingComparisonSchema,
       ),
@@ -495,7 +482,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     ) =>
       jsonFetch<PolicyException>(
         baseUrl,
-        `/api/graphs/${graphId}/policy-exceptions`,
+        `/api/graphs/${encodeURIComponent(graphId)}/policy-exceptions`,
         {
           method: "POST",
           body: JSON.stringify({
@@ -510,7 +497,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     listPolicyExceptions: (graphId: string) =>
       jsonFetch<PolicyException[]>(
         baseUrl,
-        `/api/graphs/${graphId}/policy-exceptions`,
+        `/api/graphs/${encodeURIComponent(graphId)}/policy-exceptions`,
         undefined,
         policyExceptionSchema.array(),
       ),
@@ -518,7 +505,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     updatePolicyException: (graphId: string, exceptionId: string, expiresAt: string, reason?: string) =>
       jsonFetch<PolicyException>(
         baseUrl,
-        `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/policy-exceptions/${encodeURIComponent(exceptionId)}`,
         { method: "PATCH", body: JSON.stringify({ expires_at: expiresAt, reason }) },
         policyExceptionSchema,
       ),
@@ -541,46 +528,46 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     getEffectivePolicies: (graphId?: string) =>
       jsonFetch<EffectivePolicyRule[]>(
         baseUrl,
-        graphId ? `/api/graphs/${graphId}/policies/effective` : "/api/policies/effective",
+        graphId ? `/api/graphs/${encodeURIComponent(graphId)}/policies/effective` : "/api/policies/effective",
         undefined,
         effectivePolicyRuleSchema.array(),
       ),
     getGraphPolicies: (graphId: string) =>
-      jsonFetch<PolicySettings>(baseUrl, `/api/graphs/${graphId}/policies`, undefined, policySettingsSchema),
+      jsonFetch<PolicySettings>(baseUrl, `/api/graphs/${encodeURIComponent(graphId)}/policies`, undefined, policySettingsSchema),
     saveGraphPolicies: (graphId: string, settings: Pick<PolicySettings, "rules">) =>
       jsonFetch<PolicySettings>(
         baseUrl,
-        `/api/graphs/${graphId}/policies`,
+        `/api/graphs/${encodeURIComponent(graphId)}/policies`,
         { method: "PUT", body: JSON.stringify({ rules: settings.rules }) },
         policySettingsSchema,
       ),
     deletePolicyException: (graphId: string, exceptionId: string) =>
       jsonFetch<{ deleted: boolean }>(
         baseUrl,
-        `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/policy-exceptions/${encodeURIComponent(exceptionId)}`,
         { method: "DELETE" },
         deletedSchema,
       ),
     // Knowledge base (studio-consolidation Phase 5, backend/app/knowledge.py):
-    // per-graph .txt/.md documents, chunked + embedded on upload. The upload
-    // sends `headers: {}` so `jsonFetch`'s JSON Content-Type default doesn't
-    // apply — the browser must set the multipart boundary itself.
+    // per-graph .txt/.md documents, chunked + embedded on upload. The
+    // transport only adds a JSON Content-Type for string bodies, so the
+    // runtime sets the multipart boundary for this FormData itself.
     getKnowledge: (graphId: string) =>
-      jsonFetch<KnowledgeSummary>(baseUrl, `/api/graphs/${graphId}/knowledge`, undefined, knowledgeSummarySchema),
+      jsonFetch<KnowledgeSummary>(baseUrl, `/api/graphs/${encodeURIComponent(graphId)}/knowledge`, undefined, knowledgeSummarySchema),
     uploadKnowledgeDocument: (graphId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
       return jsonFetch<KnowledgeUploadResponse>(
         baseUrl,
-        `/api/graphs/${graphId}/knowledge`,
-        { method: "POST", body: form, headers: {} },
+        `/api/graphs/${encodeURIComponent(graphId)}/knowledge`,
+        { method: "POST", body: form },
         knowledgeUploadResponseSchema,
       );
     },
     deleteKnowledgeDocument: (graphId: string, documentId: string) =>
       jsonFetch<KnowledgeDeleteResponse>(
         baseUrl,
-        `/api/graphs/${graphId}/knowledge/${documentId}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/knowledge/${encodeURIComponent(documentId)}`,
         { method: "DELETE" },
         knowledgeDeleteResponseSchema,
       ),
@@ -591,7 +578,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
       const query = documentId ? `?document_id=${encodeURIComponent(documentId)}` : "";
       return jsonFetch<KnowledgeLineageEntry[]>(
         baseUrl,
-        `/api/graphs/${graphId}/knowledge/lineage${query}`,
+        `/api/graphs/${encodeURIComponent(graphId)}/knowledge/lineage${query}`,
         undefined,
         knowledgeLineageEntrySchema.array(),
       );
@@ -601,7 +588,7 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     getRuntimeTargetCapabilities: (targetId: string) =>
       jsonFetch<CapabilityMatrix>(
         baseUrl,
-        `/api/runtime-targets/${targetId}/capabilities`,
+        `/api/runtime-targets/${encodeURIComponent(targetId)}/capabilities`,
         undefined,
         capabilityMatrixSchema,
       ),
@@ -663,14 +650,26 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     sendChatMessage: (sessionId: string, content: string, context?: ChatContext) =>
       jsonFetch<ChatSession>(
         baseUrl,
-        `/api/chat-sessions/${sessionId}/messages`,
+        `/api/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
         { method: "POST", body: JSON.stringify({ content, context }) },
         chatSessionSchema,
       ),
   };
 }
 
-export type AgentGraphClient = ReturnType<typeof createAgentGraphClient>;
+export type AgentGraphClient = ReturnType<typeof buildMethods> & {
+  /** SDK 1/7: the same client with per-call options applied to every call
+   * made through it -- e.g. `client.with({ signal }).getGraph(id)`. */
+  with(options: RequestOptions): AgentGraphClient;
+};
+
+function scopedClient(transport: Transport): AgentGraphClient {
+  return { ...buildMethods(transport), with: (options) => scopedClient(transport.with(options)) };
+}
+
+export function createAgentGraphClient(options: AgentGraphClientOptions = {}): AgentGraphClient {
+  return scopedClient(createTransport(options));
+}
 
 export function streamRunEvents(
   baseUrl: string,

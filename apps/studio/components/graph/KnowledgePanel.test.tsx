@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgePanel } from "./KnowledgePanel";
+import { AgentGraphApiError } from "@bstockwelldev/agent-graph-sdk";
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
@@ -93,7 +94,7 @@ describe("KnowledgePanel", () => {
   it("surfaces the backend's error detail when an upload fails", async () => {
     clientMock.getKnowledge.mockResolvedValue(empty);
     clientMock.uploadKnowledgeDocument.mockRejectedValue(
-      new Error('POST /api/graphs/g1/knowledge failed (503): {"detail":"No embedding provider configured"}'),
+      new AgentGraphApiError({ status: 503, method: "POST", path: "/api/graphs/g1/knowledge", url: "/api/graphs/g1/knowledge", body: JSON.stringify({ detail: "No embedding provider configured" }) }),
     );
     render(<KnowledgePanel graphId="g1" />);
     await screen.findByText(/No documents yet/);

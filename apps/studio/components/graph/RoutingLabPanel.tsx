@@ -12,6 +12,7 @@ import { Combobox } from "./ui/Combobox";
 import { SegmentedControl } from "./ui/SegmentedControl";
 import { SkeletonBlock } from "./ui/Skeleton";
 import { TextArea, TextInput } from "./ui/fields";
+import { errorDetail } from "@/lib/apiErrors";
 
 // P1 rollout plan, Slice D Studio UI
 // (docs/planning/features/p1-rollout-plan.md): runs a fixture dataset
@@ -137,7 +138,7 @@ export function RoutingLabPanel({
       const result = await client.runRoutingDataset(graphId, dataset);
       setReport(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorDetail(err));
     } finally {
       setRunning(false);
     }
@@ -160,7 +161,7 @@ export function RoutingLabPanel({
       setComparisonLabels(null);
       setComparison(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorDetail(err));
     } finally {
       setRunning(false);
     }

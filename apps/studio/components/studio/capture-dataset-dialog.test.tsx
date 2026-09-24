@@ -3,6 +3,7 @@ import type { RunSummary } from "@bstockwelldev/agent-graph-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CaptureDatasetDialog } from "./capture-dataset-dialog";
+import { AgentGraphApiError } from "@bstockwelldev/agent-graph-sdk";
 
 const { createFromRunsMock } = vi.hoisted(() => ({ createFromRunsMock: vi.fn() }));
 
@@ -86,7 +87,7 @@ describe("CaptureDatasetDialog", () => {
 
   it("shows the backend's error detail when saving fails", async () => {
     createFromRunsMock.mockRejectedValue(
-      new Error('POST /api/datasets/from-runs failed (422): {"detail":"Runs span multiple graphs"}'),
+      new AgentGraphApiError({ status: 422, method: "POST", path: "/api/datasets/from-runs", url: "/api/datasets/from-runs", body: JSON.stringify({ detail: "Runs span multiple graphs" }) }),
     );
     renderDialog([run("r1", "succeeded")]);
     fireEvent.click(screen.getByRole("button", { name: "Save dataset" }));
