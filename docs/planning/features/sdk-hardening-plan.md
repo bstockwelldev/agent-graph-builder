@@ -32,9 +32,9 @@ Every response is validated at runtime, which is a solid base.
 
 ## Phases
 
-### Phase 1 — Transport and typed errors (SDK 1/7, **High**)
+### Phase 1 — Transport and typed errors (SDK 1/7, **High**) — **Shipped**
 
-Linear STO-614 · GitHub #65. Non-breaking.
+Linear STO-614 · GitHub #65. Non-breaking. As-built notes follow the original scope below.
 
 - **Client options:** `createAgentGraphClient({ baseUrl, fetch?, headers? | getHeaders?(), timeoutMs?, retry?, onRequest?, onResponse? })`.
 - **`AgentGraphApiError`:** `status`, `method`, `path`, a typed `detail`, and `diagnostics` for 422 blocked payloads.
@@ -45,6 +45,51 @@ Linear STO-614 · GitHub #65. Non-breaking.
   - `encodeURIComponent` every path segment.
 - **Retries:** GET retries with backoff and jitter on network errors, 5xx and 429. Non-GET requests never retry by default.
 - **Studio:** `errorDetail()` is replaced by `AgentGraphApiError`.
+
+#### As built
+
+**Transport** (`src/transport.ts`)
+- `createAgentGraphClient({ baseUrl, fetch, headers, timeoutMs, retry, onRequest, onResponse })`. `headers` can be a value or a function; a function is awaited on every request, which suits auth tokens.
+- Headers are merged in this order: client, then scoped, then per call.
+- A JSON `Content-Type` is added only for string bodies. Callers no longer need the old `headers: {}` workaround to send `FormData`.
+- **Retries:**
+  - apply to GET, HEAD and OPTIONS only;
+  - trigger on network errors, 408, 429 and 5xx;
+  - use full-jitter exponential backoff and honour `Retry-After`;
+  - are never attempted after an abort.
+- Every interpolated path segment in `client.ts` is `encodeURIComponent`-ed. The `apiPath` / `apiQuery` helpers are exported.
+
+**Errors** (`src/errors.ts`)
+| Class | When |
+| --- | --- |
+| `AgentGraphError` | Base class for the rest. |
+| `AgentGraphApiError` | A non-2xx response. Carries `status`, `method`, `path`, `url`, `detail`, `diagnostics` and `body`. |
+| `AgentGraphResponseError` | The response didn't match its schema. |
+| `AgentGraphNetworkError` | The request failed before any response. |
+| `AgentGraphTimeoutError` | The request exceeded its timeout. |
+
+`errorText(e)` and `isAgentGraphApiError(e)` are exported too.
+
+**Decision: `client.with({ signal, timeoutMs, headers, retry })`, not a trailing option on every call**
+- `with` returns the same client, scoped to those options. This keeps the change non-breaking without touching about 65 positional signatures.
+- Keyword arguments are part of SDK 4/7.
+- `validateGraph(graph, { signal })` still works.
+
+**Studio**
+- `lib/apiErrors.ts` `errorDetail` / `blockingDiagnostics` replace the JSON-from-message parsing. `lib/knowledgePanel.ts` re-exports `errorDetail`, so existing imports keep working.
+- The Releases panel lists blocked-publish diagnostics individually, for example `RELEASE_SUBGRAPH_UNPUBLISHED`.
+- The RunPanel (simulate and replay), Routing lab and Releases panels show the backend's detail instead of raw JSON.
+- Adopting `client.with({ signal })` in panel loaders is left to `/react` in SDK 6/7.
+
+**Verification**
+- SDK: vitest 129/129, with 12 new tests in `transport.test.ts`.
+- Studio: vitest 310/310, including `apiErrors.test.ts`.
+- Backend: pytest 515/515.
+- Root build: green.
+- Playwright smoke:
+  - a blocked publish shows "Publish blocked by 1 issue" and lists the `RELEASE_SUBGRAPH_UNPUBLISHED` diagnostic;
+  - the extract dialog shows its 422 reason;
+  - with the backend down, the graph shows "failed to load" after about 2 s, including retries, and doesn't hang.
 
 ### Phase 4 — Run lifecycle and universal streaming (SDK 2/7, **High**)
 

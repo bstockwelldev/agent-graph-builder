@@ -1,7 +1,7 @@
 import type { KnowledgeLineageEntry } from "@bstockwelldev/agent-graph-sdk";
 import { describe, expect, it } from "vitest";
 
-import { errorDetail, summarizeLineageByDocument } from "./knowledgePanel";
+import { summarizeLineageByDocument } from "./knowledgePanel";
 
 function entry(overrides: Partial<KnowledgeLineageEntry>): KnowledgeLineageEntry {
   return {
@@ -17,27 +17,6 @@ function entry(overrides: Partial<KnowledgeLineageEntry>): KnowledgeLineageEntry
     ...overrides,
   };
 }
-
-describe("errorDetail", () => {
-  it("extracts the FastAPI detail from an SDK jsonFetch error", () => {
-    const error = new Error('POST /api/graphs/g1/knowledge failed (503): {"detail":"No embedding provider"}');
-    expect(errorDetail(error)).toBe("No embedding provider");
-  });
-
-  it("falls back to the raw message when the body isn't JSON", () => {
-    const error = new Error("POST /api/graphs/g1/knowledge failed (502): Bad Gateway");
-    expect(errorDetail(error)).toBe("POST /api/graphs/g1/knowledge failed (502): Bad Gateway");
-  });
-
-  it("falls back to the raw message when the JSON has no string detail", () => {
-    const error = new Error('POST /x failed (422): {"detail":[{"msg":"bad"}]}');
-    expect(errorDetail(error)).toBe('POST /x failed (422): {"detail":[{"msg":"bad"}]}');
-  });
-
-  it("stringifies non-Error values", () => {
-    expect(errorDetail("boom")).toBe("boom");
-  });
-});
 
 describe("summarizeLineageByDocument", () => {
   it("returns an empty list for no lineage", () => {

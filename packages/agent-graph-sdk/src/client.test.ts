@@ -600,7 +600,8 @@ describe("createAgentGraphClient knowledge base", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBeInstanceOf(FormData);
     expect((init.body as FormData).get("file")).toBeInstanceOf(File);
-    expect(init.headers).toEqual({});
+    // The runtime sets the multipart boundary; the SDK must not send JSON's.
+    expect(new Headers(init.headers).has("Content-Type")).toBe(false);
     expect(result.addedChunkCount).toBe(2);
   });
 

@@ -16,6 +16,7 @@ import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { SkeletonBlock } from "./ui/Skeleton";
 import { TextArea, TextInput } from "./ui/fields";
+import { blockingDiagnostics, errorDetail } from "@/lib/apiErrors";
 
 // P0 graph foundation, Slices C+D Studio UI
 // (docs/planning/features/p0-graph-foundation-design-plan.md): publishing
@@ -55,6 +56,7 @@ export function ReleasesPanel({
   const [author, setAuthor] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishBlockers, setPublishBlockers] = useState<Diagnostic[]>([]);
   const [lastResult, setLastResult] = useState<{ release: GraphRelease; created: boolean } | null>(null);
 
   const [releases, setReleases] = useState<ReleaseIndexEntry[]>([]);
@@ -83,7 +85,7 @@ export function ReleasesPanel({
       const loaded = await client.listReleases(graphId);
       setReleases([...loaded].sort((a, b) => b.created_at.localeCompare(a.created_at)));
     } catch (err) {
-      setReleasesError(err instanceof Error ? err.message : String(err));
+      setReleasesError(errorDetail(err));
     } finally {
       setReleasesLoading(false);
     }
@@ -96,6 +98,7 @@ export function ReleasesPanel({
   const handlePublish = useCallback(async () => {
     setPublishing(true);
     setPublishError(null);
+    setPublishBlockers([]);
     try {
       const result = await client.publishRelease(
         graphId,
@@ -106,11 +109,11 @@ export function ReleasesPanel({
       if (result.created) setReleaseNotes("");
       await refreshReleases();
     } catch (err) {
-      // client.ts's jsonFetch throws a plain Error whose message embeds the
-      // 422 body's JSON (message + diagnostics) as raw text — good enough
-      // to show verbatim here without a bespoke structured-error path for
-      // one endpoint.
-      setPublishError(err instanceof Error ? err.message : String(err));
+      // SDK 1/7: a blocked publish is a typed AgentGraphApiError whose
+      // `diagnostics` list each blocker (e.g. RELEASE_SUBGRAPH_UNPUBLISHED).
+      const blockers = blockingDiagnostics(err);
+      setPublishBlockers(blockers);
+      setPublishError(blockers.length > 0 ? `Publish blocked by ${blockers.length} issue${blockers.length === 1 ? "" : "s"}:` : errorDetail(err));
     } finally {
       setPublishing(false);
     }
@@ -157,7 +160,7 @@ export function ReleasesPanel({
         const diff = await client.compareDraftToRelease(releaseId, getDraftGraph());
         setDraftDiff({ releaseId, diff, loading: false, error: null });
       } catch (err) {
-        setDraftDiff({ releaseId, diff: null, loading: false, error: err instanceof Error ? err.message : String(err) });
+        setDraftDiff({ releaseId, diff: null, loading: false, error: errorDetail(err) });
       }
     },
     [getDraftGraph],
@@ -178,7 +181,7 @@ export function ReleasesPanel({
         if (!cancelled) setCompareDiff(diff);
       })
       .catch((err) => {
-        if (!cancelled) setCompareError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setCompareError(errorDetail(err));
       })
       .finally(() => {
         if (!cancelled) setCompareLoading(false);
@@ -222,7 +225,20 @@ export function ReleasesPanel({
               {publishing ? "Publishing…" : "Publish release"}
             </Button>
           </div>
-          {publishError && <div style={{ ...errorTextStyle, marginTop: spacing[2] }}>{publishError}</div>}
+          {publishError && (
+            <div role="alert" style={{ ...errorTextStyle, marginTop: spacing[2] }}>
+              {publishError}
+              {publishBlockers.length > 0 && (
+                <ul style={{ margin: `${spacing[1]}px 0 0`, paddingLeft: spacing[4] }}>
+                  {publishBlockers.map((diagnostic, index) => (
+                    <li key={`${diagnostic.code}-${index}`}>
+                      <code>{diagnostic.code}</code> {diagnostic.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {lastResult && (
             <div style={resultTextStyle}>
               {lastResult.created ? "Published " : "Already up to date — "}
