@@ -29,3 +29,16 @@ describe("computeFocusNodeIds", () => {
     expect(computeFocusNodeIds("d", edges)).toEqual(new Set(["a", "b", "c", "d"]));
   });
 });
+
+describe("computeFocusNodeIds direction", () => {
+  const edges = [
+    { source: "a", target: "b" },
+    { source: "b", target: "c" },
+    { source: "x", target: "b" },
+  ];
+  it("keeps one side only", () => {
+    expect(computeFocusNodeIds("b", edges, "downstream")).toEqual(new Set(["b", "c"]));
+    expect(computeFocusNodeIds("b", edges, "upstream")).toEqual(new Set(["a", "b", "x"]));
+    expect(computeFocusNodeIds("b", edges)).toEqual(new Set(["a", "b", "c", "x"]));
+  });
+});

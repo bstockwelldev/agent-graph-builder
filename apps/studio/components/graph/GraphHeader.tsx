@@ -2,6 +2,7 @@
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import {
+  Activity,
   AlertTriangle,
   BookOpen,
   CheckCircle2,
@@ -16,13 +17,15 @@ import {
   Play,
   Plus,
   Save,
+  Search,
   ShieldCheck,
   Sparkles,
   Tag,
   Upload,
   XCircle,
 } from "lucide-react";
-import type { Diagnostic, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import type { Diagnostic, GraphHealth, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import { HEALTH_BAND } from "@/lib/graphHealth";
 import { validationSummary } from "@/lib/diagnostics";
 import { color, radius, shell, spacing, status as statusColor, surface, text, typeScale } from "@/lib/graph-theme";
 import type { LayoutSpacing } from "@/layout/dagreLayout";
@@ -96,6 +99,8 @@ export function GraphHeader({
   onExport,
   onImport,
   onShowShortcuts,
+  health = null,
+  onOpenFind,
 }: {
   hudRef?: Ref<HTMLDivElement>;
   compact: boolean;
@@ -119,6 +124,9 @@ export function GraphHeader({
   onExport: () => void;
   onImport: () => void;
   onShowShortcuts: () => void;
+  /** Wave 7a (STO-610): health score chip + find-on-canvas entry. */
+  health?: Pick<GraphHealth, "score" | "band"> | null;
+  onOpenFind?: () => void;
 }) {
   const [menu, setMenu] = useState<{ id: MenuId; x: number; y: number } | null>(null);
   const runMenuRef = useRef<HTMLButtonElement>(null);
@@ -206,6 +214,14 @@ export function GraphHeader({
       checked: activePanel === "policies",
       onClick: () => onTogglePanel("policies"),
     },
+    ...(onOpenFind ? [{ label: "Find on canvas", icon: <Search size={14} />, shortcut: "⌘F", separatorBefore: true, onClick: onOpenFind }] : []),
+    {
+      label: health ? `Health · ${health.score}` : "Health",
+      icon: <Activity size={14} />,
+      checked: activePanel === "health",
+      separatorBefore: !onOpenFind,
+      onClick: () => onTogglePanel("health"),
+    },
     { label: "Export JSON", icon: <Download size={14} />, separatorBefore: true, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
     { label: "Shortcuts", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
@@ -268,6 +284,21 @@ export function GraphHeader({
             <span>{validationText}</span>
           </button>
         </HoverTooltip>
+        {health && !compact && (
+          <HoverTooltip content={`Graph health: ${HEALTH_BAND[health.band].label} — click for the breakdown`}>
+            <button
+              type="button"
+              onClick={() => onTogglePanel("health")}
+              className="agb-focus-ring agb-hoverable"
+              aria-label={`Graph health ${health.score} of 100 (${HEALTH_BAND[health.band].label})`}
+              aria-pressed={activePanel === "health"}
+              style={{ ...validateChipStyle("ok"), color: HEALTH_BAND[health.band].color, borderColor: HEALTH_BAND[health.band].color }}
+            >
+              <Activity size={14} aria-hidden="true" />
+              <span>{health.score}</span>
+            </button>
+          </HoverTooltip>
+        )}
         {!compact && (
           <div style={{ display: "inline-flex" }}>
             <IconButton
@@ -327,7 +358,7 @@ export function GraphHeader({
           icon={<MoreHorizontal size={18} />}
           aria-haspopup="menu"
           aria-expanded={menu?.id === "overflow"}
-          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies"}
+          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health"}
           onClick={() => openMenu("overflow", overflowMenuRef.current, "right")}
         />
       </div>

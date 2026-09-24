@@ -18,6 +18,8 @@ import {
   mcpServerConfigSchema,
   nodeTraceSchema,
   effectivePolicyRuleSchema,
+  graphHealthSchema,
+  nodeImpactSchema,
   policyExceptionSchema,
   policyRuleInfoSchema,
   policySettingsSchema,
@@ -65,6 +67,8 @@ import type {
   NodeTrace,
   PlatformEvent,
   EffectivePolicyRule,
+  GraphHealth,
+  NodeImpact,
   PolicyException,
   PolicyRuleInfo,
   PolicySettings,
@@ -376,6 +380,17 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // P1 rollout plan, Slice A ("Semantic release comparison") — a
     // categorized behavior-level diff between two releases (node config,
     // edge/router, port/contract, and resource_snapshots deltas).
+    /** Wave 7a (STO-610): 0-100 health score for a draft graph (unsaved edits included). */
+    getGraphHealth: (graphId: string, draft: GraphDefinition) =>
+      jsonFetch<GraphHealth>(baseUrl, `/api/graphs/${graphId}/health`, { method: "POST", body: JSON.stringify(draft) }, graphHealthSchema),
+    /** Wave 7a (STO-610): what changing `nodeId` reaches, against a draft graph. */
+    getNodeImpact: (graphId: string, nodeId: string, draft: GraphDefinition) =>
+      jsonFetch<NodeImpact>(
+        baseUrl,
+        `/api/graphs/${graphId}/nodes/${encodeURIComponent(nodeId)}/impact`,
+        { method: "POST", body: JSON.stringify(draft) },
+        nodeImpactSchema,
+      ),
     /** STO-609: diff from a release to a draft graph (e.g. the live canvas, unsaved edits included). */
     compareDraftToRelease: (releaseId: string, draft: GraphDefinition) =>
       jsonFetch<ReleaseDiff>(

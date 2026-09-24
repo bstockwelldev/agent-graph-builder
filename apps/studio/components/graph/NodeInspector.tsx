@@ -9,6 +9,7 @@ import {
   CornerDownRight,
   ExternalLink,
   History,
+  Radar,
   MoreHorizontal,
   Play,
   Settings2,
@@ -22,6 +23,7 @@ import type {
   BindableResourceKind,
   ChatProvider,
   EdgeKind,
+  GraphDefinition,
   GraphEdge,
   GraphNode,
   Diagnostic,
@@ -63,6 +65,7 @@ import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { JsonEditor } from "./ui/JsonEditor";
 import { NodeHistoryTab } from "./NodeHistoryTab";
+import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
 import { NODE_TYPE_ICONS } from "./nodeTypeIcons";
 
@@ -137,6 +140,10 @@ export function NodeInspector({
   onTabChange,
   templateVariables = [],
   onOpenResource,
+  getDraftGraph,
+  onSelectNode,
+  onOpenReleases,
+  onImpactHighlight,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -178,6 +185,12 @@ export function NodeInspector({
   /** Wave 4a: open a bound registry resource for editing (the studio's
    * resource panel) without leaving the canvas. */
   onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
+  /** Wave 7a (STO-610) Impact tab: the live canvas graph, navigation, and
+   * the canvas highlight for this node's downstream set. */
+  getDraftGraph?: () => GraphDefinition;
+  onSelectNode?: (nodeId: string) => void;
+  onOpenReleases?: () => void;
+  onImpactHighlight?: (nodeIds: string[] | null) => void;
 }) {
   const [activeTab, setActiveTabState] = useState("configure");
   const setActiveTab = (tab: string) => {
@@ -208,6 +221,7 @@ export function NodeInspector({
     { id: "policy", label: "Policy", icon: <Shield size={14} />, count: policyIssues.length, countTone: "error" },
     { id: "run", label: "Run", icon: <Play size={14} /> },
     { id: "history", label: "History", icon: <History size={14} />, iconOnly: true },
+    { id: "impact", label: "Impact", icon: <Radar size={14} />, iconOnly: true },
     { id: "raw", label: "Raw JSON", icon: <Braces size={14} />, iconOnly: true },
   ];
 
@@ -341,6 +355,21 @@ export function NodeInspector({
           <NodeHistoryTab graphId={graphId} nodeId={node.id} refreshKey={historyRefreshKey} onInspectRun={onInspectRun} />
         ) : (
           <Muted>Save the graph to see this node&apos;s history.</Muted>
+        ))}
+      {activeTab === "impact" &&
+        (graphId && getDraftGraph ? (
+          <NodeImpactTab
+            graphId={graphId}
+            nodeId={node.id}
+            getDraftGraph={getDraftGraph}
+            refreshKey={historyRefreshKey}
+            onSelectNode={onSelectNode}
+            onOpenResource={onOpenResource}
+            onOpenReleases={onOpenReleases}
+            onHighlight={onImpactHighlight}
+          />
+        ) : (
+          <Muted>Save the graph to see this node&apos;s impact.</Muted>
         ))}
       {activeTab === "raw" && (
         <Group title="Raw config" icon={<Braces size={13} />}>

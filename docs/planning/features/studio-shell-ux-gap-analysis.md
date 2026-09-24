@@ -93,7 +93,7 @@ leaving them as an implicit backlog.
 
 | Gap | Evidence |
 | --- | --- |
-| No large-graph complexity management | `graph-native-control-plane-plan.md` names this as its own strategic pillar — subgraphs with typed interfaces, collapse/expand, dependency search, blast-radius analysis, multiple graph views, a graph health score. Nothing in `studio-ux-revision-plan.md` covers it, and nothing in `apps/studio` implements any part of it. This is a distinct, larger body of work, not a Tier 1/2 remediation item — recommend it stays its own future design pass, the same way `p1-rollout-plan.md` explicitly deferred P2's areas rather than folding them in. |
+| No large-graph complexity management | **Update 2026-09-24:** designed in [large-graph-complexity-plan.md](large-graph-complexity-plan.md), and wave 7a (find, dependencies, blast radius, health score) has shipped. Groups and subgraphs follow. — `graph-native-control-plane-plan.md` names this as its own strategic pillar — subgraphs with typed interfaces, collapse/expand, dependency search, blast-radius analysis, multiple graph views, a graph health score. Nothing in `studio-ux-revision-plan.md` covers it, and nothing in `apps/studio` implements any part of it. This is a distinct, larger body of work, not a Tier 1/2 remediation item — recommend it stays its own future design pass, the same way `p1-rollout-plan.md` explicitly deferred P2's areas rather than folding them in. |
 
 ## Documentation hygiene note
 

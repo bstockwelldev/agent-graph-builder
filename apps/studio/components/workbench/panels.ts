@@ -11,6 +11,7 @@ export type WorkbenchPanelId =
   | "routingLab"
   | "knowledge"
   | "policies"
+  | "health"
   | "chat"
   | "agents"
   | "prompts"
@@ -50,6 +51,8 @@ export const WORKBENCH_PANELS: Record<
   // STO-608: this graph's policy overrides and time-boxed exceptions (the
   // workspace defaults live on /policies).
   policies: { title: "Policies", hotkey: null, scope: "graph" },
+  // Wave 7a (STO-610): the graph health score's breakdown.
+  health: { title: "Health", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
   chat: { title: "Chat", hotkey: "mod+shift+c", scope: "global" },
   agents: { title: "Agents", hotkey: null, scope: "global" },

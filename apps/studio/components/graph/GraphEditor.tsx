@@ -10,9 +10,9 @@ import {
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, FlaskConical, Focus, HelpCircle, ListChecks, MoreHorizontal, Play, Plus, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
+import { Activity, BookOpen, FlaskConical, Focus, HelpCircle, ListChecks, MoreHorizontal, Play, Plus, Search, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -22,6 +22,7 @@ import {
   type EdgeKind,
   type GraphDefinition,
   type GraphEdge,
+  type GraphHealth,
   type GraphNode,
   type GraphOrientation,
   type NodeTrace,
@@ -58,7 +59,7 @@ import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
 import { computeAncestorNodeIds } from "@/lib/runFromNode";
 import { runInputVariables } from "@/lib/runInputs";
 import { RESOURCE_PANEL, ResourceNamesProvider, useResourceNamesMap } from "./resourceBindings";
-import { computeFocusNodeIds } from "@/lib/graphFocus";
+import { computeFocusNodeIds, type FocusDirection } from "@/lib/graphFocus";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
 import {
   failedUnavailableRunSummary,
@@ -81,6 +82,8 @@ import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
+import { FindBar } from "./FindBar";
+import { HealthPanel } from "./HealthPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { PolicyPanel } from "./PolicyPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
@@ -138,7 +141,7 @@ function isDesktopViewport(): boolean {
 // The node/edge inspector (and, when nothing is selected, the workflow
 // summary) shares its HUD slot with these four panels (see
 // showSelectionDock below), gating the dock's own render.
-const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge", "policies"]);
+const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge", "policies", "health"]);
 
 // Compact/mobile selection dock positioning. The dock used to anchor at a
 // hardcoded `top-24` (96px) regardless of the HUD's actual rendered
@@ -283,6 +286,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // users need broad context" -- it only dims anything once a node is
   // both selected AND this is on (see the effect below).
   const [focusMode, setFocusMode] = useState(false);
+  // Large-graph complexity, Wave 7a (STO-610): find-on-canvas matches, the
+  // Impact tab's downstream highlight, and a directional dependency view.
+  // Each keeps its node set lit and dims the rest (see the effect below).
+  const [findOpen, setFindOpen] = useState(false);
+  const [findMatches, setFindMatches] = useState<string[] | null>(null);
+  const [impactHighlight, setImpactHighlight] = useState<string[] | null>(null);
+  const [dependencyView, setDependencyView] = useState<{ nodeId: string; direction: FocusDirection } | null>(null);
+  const [health, setHealth] = useState<GraphHealth | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [savedFingerprint, setSavedFingerprint] = useState("");
   const [saving, setSaving] = useState(false);
@@ -678,6 +691,35 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }
   }, [buildGraphDefinition, graphId]);
 
+  // Wave 7a (STO-610): the health score follows diagnostics (which already
+  // re-validate on every semantic edit), debounced so typing doesn't spam it.
+  const refreshHealth = useCallback(() => {
+    if (!graphId) return;
+    let graph: GraphDefinition;
+    try {
+      graph = buildGraphDefinition();
+    } catch {
+      return;
+    }
+    setHealthLoading(true);
+    client
+      .getGraphHealth(graphId, graph)
+      .then((result) => {
+        setHealth(result);
+        setHealthError(null);
+      })
+      .catch((err: unknown) => setHealthError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setHealthLoading(false));
+  }, [buildGraphDefinition, graphId]);
+
+  useEffect(() => {
+    if (!graphId || nodes.length === 0) return;
+    const timer = window.setTimeout(refreshHealth, 600);
+    return () => window.clearTimeout(timer);
+    // Recompute when validation results change (they track semantic edits).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnostics, graphId]);
+
   const applyDiagnosticsToCanvas = useCallback(
     (nextDiagnostics: Diagnostic[]) => {
       const fingerprint = `${graphId}:${fingerprintIssueMaps(nextDiagnostics)}`;
@@ -845,6 +887,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableKeyboardTarget(event.target)) return;
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setFindOpen(true);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         const current = getCanvasSnapshot();
@@ -1045,7 +1092,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // selection, or the graph shape changes. Clears dimming entirely when
   // focus mode is off or nothing is selected.
   useEffect(() => {
-    const focusSet = focusMode && selectedNodeId ? computeFocusNodeIds(selectedNodeId, edges) : null;
+    const focusSet = findMatches
+      ? new Set(findMatches)
+      : impactHighlight
+        ? new Set(impactHighlight)
+        : dependencyView
+          ? computeFocusNodeIds(dependencyView.nodeId, edges, dependencyView.direction)
+          : focusMode && selectedNodeId
+            ? computeFocusNodeIds(selectedNodeId, edges)
+            : null;
     setNodes((nds) =>
       nds.map((node) => {
         const focusDimmed = focusSet !== null && !focusSet.has(node.id);
@@ -1053,7 +1108,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         return { ...node, data: { ...node.data, focusDimmed } };
       }),
     );
-  }, [focusMode, selectedNodeId, edges, setNodes]);
+  }, [focusMode, selectedNodeId, edges, setNodes, findMatches, impactHighlight, dependencyView]);
 
   useEffect(() => {
     if (!inspectionRunId) return;
@@ -1546,6 +1601,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onOpenResource={(kind, resourceId) => workbench.open(RESOURCE_PANEL[kind], { resourceId })}
       templateVariables={runInputVariables(nodes)}
       onPolicyExceptionCreated={refreshDiagnostics}
+      getDraftGraph={buildGraphDefinition}
+      onSelectNode={(nodeId) => focusNode(nodeId)}
+      onOpenReleases={() => workbench.open("releases")}
+      onImpactHighlight={setImpactHighlight}
       focusTab={inspectorTabRequest}
       onTabChange={setInspectorTab}
       historyRefreshKey={runSummary ? `${runSummary.run_id}:${runSummary.status}` : null}
@@ -1692,6 +1751,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         onExport={handleExportGraph}
         onImport={() => fileInputRef.current?.click()}
         onShowShortcuts={() => workbench.toggle("help")}
+        health={health}
+        onOpenFind={() => setFindOpen(true)}
       />
       <input
         ref={fileInputRef}
@@ -1751,6 +1812,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           noGraphSelected={false}
           selectedEdgeId={selectedEdgeId}
           overlay={
+            <>
             <EmptyGraphCoach
               visible={showEmptyCoach}
               step={authoringCoachStep}
@@ -1760,6 +1822,30 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 setCoachDismissed(true);
               }}
             />
+              {(findOpen || dependencyView) && (
+                <div style={{ position: "absolute", top: (hudBottom ?? 76) + 8 + (workbench.isCompact ? 56 : 0), left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, zIndex: 15, pointerEvents: "none" }}>
+                  {findOpen && (
+                    <div style={{ pointerEvents: "auto" }}>
+                      <FindBar
+                        nodes={nodes}
+                        onFocusNode={(nodeId) => focusNode(nodeId)}
+                        onMatchesChange={setFindMatches}
+                        onClose={() => setFindOpen(false)}
+                      />
+                    </div>
+                  )}
+                  {dependencyView && (
+                    <div role="status" className="glass-panel" style={dependencyChipStyle}>
+                      {dependencyView.direction === "upstream" ? "Upstream of" : dependencyView.direction === "downstream" ? "Downstream of" : "Dependencies of"}{" "}
+                      <span style={{ fontFamily: "ui-monospace, monospace" }}>{dependencyView.nodeId}</span>
+                      <button type="button" className="agb-focus-ring" onClick={() => setDependencyView(null)} style={dependencyChipButtonStyle}>
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           }
           onNodeClick={(nodeId) => {
             setSelectedNodeId(nodeId);
@@ -1832,6 +1918,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                   { label: "Edit configuration", onClick: () => canvasActions.editNode(contextMenu.nodeId) },
                   { label: "Run from here", onClick: () => canvasActions.runFromNode(contextMenu.nodeId) },
                   { label: "Duplicate node", onClick: () => duplicateNode(contextMenu.nodeId) },
+                  {
+                    label: "Show upstream",
+                    separatorBefore: true,
+                    onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "upstream" }),
+                  },
+                  { label: "Show downstream", onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "downstream" }) },
+                  { label: "Show all dependencies", onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "both" }) },
                   { label: "Delete node", onClick: deleteSelection, tone: "destructive", separatorBefore: true },
                 ]
               : contextMenu.kind === "edge"
@@ -1932,6 +2025,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               onClick: () => workbench.toggle("policies"),
             },
             {
+              label: "Find on canvas",
+              icon: <Search size={14} />,
+              separatorBefore: true,
+              onClick: () => setFindOpen(true),
+            },
+            {
+              label: health ? `Health · ${health.score}` : "Health",
+              icon: <Activity size={14} />,
+              checked: workbench.activePanel === "health",
+              onClick: () => workbench.toggle("health"),
+            },
+            {
               label: "Shortcuts and gestures",
               icon: <HelpCircle size={14} />,
               separatorBefore: true,
@@ -1997,6 +2102,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="health" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+        <HealthPanel
+          layout="rail"
+          health={health}
+          loading={healthLoading}
+          error={healthError}
+          onRefresh={refreshHealth}
+          onFocusNode={(nodeId) => focusNode(nodeId)}
+        />
       </WorkbenchDrawer>
       {showSelectionDock && !workbench.isCompact && (
         <div className="glass-panel ghost-border h-full min-h-0 w-96 shrink-0 overflow-y-auto border-l">
@@ -2078,3 +2193,25 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     </ResourceNamesProvider>
   );
 }
+
+const dependencyChipStyle: CSSProperties = {
+  pointerEvents: "auto",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "4px 6px 4px 12px",
+  borderRadius: 999,
+  fontSize: 12,
+  color: "#e8eaed",
+  border: "1px solid rgba(143, 186, 255, 0.45)",
+};
+
+const dependencyChipButtonStyle: CSSProperties = {
+  background: "rgba(143, 186, 255, 0.15)",
+  color: "#8fbaff",
+  border: "none",
+  borderRadius: 999,
+  padding: "2px 10px",
+  fontSize: 12,
+  cursor: "pointer",
+};

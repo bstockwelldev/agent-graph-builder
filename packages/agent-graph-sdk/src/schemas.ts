@@ -757,3 +757,40 @@ export const knowledgeDeleteResponseSchema = z.object({
   ok: z.boolean(),
   ...knowledgeSummaryFields,
 });
+
+/**
+ * Large-graph complexity, Wave 7a (STO-610): the graph health score
+ * (backend/app/graph_health.py) and a node's blast radius
+ * (backend/app/impact.py). Both are computed against a draft graph.
+ */
+export const healthItemSchema = z.object({
+  node_id: z.string().nullish(),
+  edge_id: z.string().nullish(),
+  message: z.string(),
+});
+export const healthFactorSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  deduction: z.number(),
+  max: z.number(),
+  items: z.array(healthItemSchema),
+  note: z.string().nullish(),
+});
+export const graphHealthSchema = z.object({
+  graph_id: z.string(),
+  score: z.number(),
+  band: z.enum(["healthy", "attention", "at_risk"]),
+  factors: z.array(healthFactorSchema),
+  computed_at: z.string(),
+});
+export const nodeImpactSchema = z.object({
+  node_id: z.string(),
+  downstream: z.array(z.string()),
+  outputs_reached: z.array(z.string()),
+  routers_downstream: z.array(z.string()),
+  upstream_count: z.number(),
+  bindings: z.array(z.object({ field: z.string(), kind: z.string(), resource_id: z.string() })),
+  runs: z.object({ executions: z.number(), last_run_id: z.string().nullish(), last_run_at: z.string().nullish() }),
+  releases: z.array(z.object({ release_id: z.string(), created_at: z.string(), changed_since: z.boolean() })),
+  datasets: z.array(z.object({ dataset_id: z.string(), name: z.string() })),
+});

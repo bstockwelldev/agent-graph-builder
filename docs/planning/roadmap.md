@@ -105,7 +105,7 @@ This addendum is the forward roadmap for the product after consolidation. It int
 | **P2** | **Collaboration, comments, approvals, review queues** | Medium | Enterprise readiness | Tie review to semantic diffs, policy gates, owners, and immutable releases. |
 | **P3** | **Natural-language graph builder** | Medium | Convenience | Add after graph model, validation, versioning, and simulation are mature; treat as productivity, not USP. |
 | **P3** | **Large integration catalog** | Medium | Commodity | Prefer MCP and partner/runtime integrations rather than owning a broad marketplace early. |
-| **P3** | **Large-graph complexity management** | Medium | Strategic pillar, not yet scoped | Subgraphs with typed interfaces, collapse/expand, dependency search, blast-radius analysis, multiple graph views, graph health score — named in `graph-native-control-plane-plan.md` and confirmed as the one remaining open piece of `studio-ux-revision-plan.md`'s scope by [studio-shell-ux-gap-analysis.md](features/studio-shell-ux-gap-analysis.md)'s Tier 3. Needs its own design pass before it can move to P1/P2 — not a paragraph inside another slice. |
+| **P3** | **Large-graph complexity management** | Medium | Strategic pillar — **in progress** | **Designed 2026-09-24** in [large-graph-complexity-plan.md](features/large-graph-complexity-plan.md), in four waves: 7a understand, 7b groups, 7c graph-as-node subgraphs, 7d views/layers. **7a shipped** ([STO-610](https://linear.app/stockwise-productions-prototypes/issue/STO-610)): find on canvas (Ctrl/Cmd+F), a directional dependency view, a node blast-radius Impact tab, and a 0–100 graph health score with a linked breakdown. |
 
 ## Explicit Non-Goals for the Next Product Slice
 
