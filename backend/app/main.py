@@ -16,6 +16,7 @@ from starlette.requests import Request
 
 from . import runtime, storage, subgraphs
 from .adapters import get_adapter
+from .api_contract import API_VERSION, API_VERSION_HEADER
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .bindings import resource_usages
 from .chat_context import ChatContext, build_chat_system_prompt
@@ -134,7 +135,16 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Agent Graph Builder POC", lifespan=lifespan)
+app = FastAPI(title="Agent Graph Builder POC", version=API_VERSION, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def api_version_header(request: Request, call_next):
+    """SDK 3/7 (STO-616): every response names the API contract version,
+    so clients can warn when the server is ahead of them."""
+    response = await call_next(request)
+    response.headers[API_VERSION_HEADER] = API_VERSION
+    return response
 
 
 class DurableStorageMiddleware(BaseHTTPMiddleware):
@@ -164,6 +174,7 @@ app.add_middleware(
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[API_VERSION_HEADER],
 )
 
 

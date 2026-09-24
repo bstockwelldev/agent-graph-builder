@@ -15,7 +15,12 @@ export {
 } from "./errors.js";
 export { path as apiPath, query as apiQuery } from "./transport.js";
 export type { HeadersSource, RequestContext, RequestOptions, ResponseContext, RetryOptions, TransportOptions } from "./transport.js";
-export type { AgentGraphClient, AgentGraphClientOptions, RunHandle, RunsClient, StartRunRequest } from "./client.js";
+export type { AgentGraphClient, AgentGraphClientOptions, RunHandle, RunsClient, StartRunRequest, VersionSkew } from "./client.js";
+export { isServerAhead } from "./client.js";
+// SDK 3/7: types generated from the API's OpenAPI contract.
+export { CONTRACT_API_VERSION } from "./generated/openapi.js";
+export type { components as ApiComponents, operations as ApiOperations, paths as ApiPaths } from "./generated/openapi.js";
+export { API_VERSION_HEADER } from "./transport.js";
 // SDK 2/7: run lifecycle + run-step helpers.
 export { isSettledRun, parseSse, streamRun, waitForRun } from "./runs.js";
 export type { RunStreamOptions, SseMessage, WaitForRunOptions } from "./runs.js";

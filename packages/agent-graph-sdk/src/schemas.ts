@@ -352,18 +352,10 @@ export const simulateResultSchema = z.object({
   traces: z.array(nodeTraceSchema),
 });
 
-/**
- * Counterfactual replay (STO-609, backend/app/replay.py): pin routers to a
- * different target and/or swap an LLM node's provider/model. Nodes those
- * changes can't reach stay frozen; affected nodes recompute (on the stub
- * unless `live_affected`).
- */
-export const modelOverrideSchema = z.object({ provider: z.string(), model: z.string().nullish() });
-export const replayRequestSchema = z.object({
-  forced_routes: z.record(z.string(), z.string()).optional(),
-  model_overrides: z.record(z.string(), modelOverrideSchema).optional(),
-  live_affected: z.boolean().optional(),
-});
+// Counterfactual replay (STO-609, backend/app/replay.py) request bodies --
+// `ReplayRequest` / `ModelOverride` -- are typed from the generated OpenAPI
+// contract (SDK 3/7, types.ts); requests aren't runtime-validated, so a
+// hand-written Zod copy only duplicated the backend model.
 export const replayNodeModeSchema = z.enum(["frozen", "recomputed", "live", "stub_fallback", "forced"]);
 export const counterfactualResultSchema = simulateResultSchema.extend({
   original_run_id: z.string(),
