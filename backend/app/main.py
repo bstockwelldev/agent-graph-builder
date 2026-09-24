@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from . import runtime, storage
+from . import runtime, storage, subgraphs
 from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .bindings import resource_usages
@@ -39,23 +39,31 @@ from .knowledge import (
     summarize_entry,
     upload_knowledge_document,
 )
+from .compiler import validate_graph
+from .graph_health import GraphHealth, compute_graph_health
+from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
     CompileResult,
+    CounterfactualResult,
     CreateGraphRequest,
     CreatePolicyExceptionRequest,
+    EffectivePolicyRule,
     Fixture,
     GraphDefinition,
     GraphRelease,
     KnowledgeLineageEntry,
     NodeTrace,
     PolicyException,
+    PolicyRuleInfo,
+    PolicySettings,
     PublishReleaseRequest,
     PublishReleaseResponse,
     PublishResourceVersionResponse,
     ReleaseDiff,
     ReleaseRunRequest,
+    ReplayRequest,
     ResourceUsage,
     ResourceVersion,
     RoutingComparison,
@@ -66,18 +74,30 @@ from .models import (
     RunRoutingDatasetRequest,
     RunSummary,
     SimulateResult,
+    UpdatePolicyExceptionRequest,
 )
 from .node_analytics import GraphAnalytics, NodeExecution, get_graph_analytics, get_node_history
 from .policies import (
+    POLICY_CATALOG,
+    WORKSPACE_SCOPE,
+    PolicySettingsInvalid,
     create_policy_exception,
     delete_policy_exception,
+    effective_policies,
+    get_policy_settings,
+    graph_scope,
+    list_all_policy_exceptions,
     list_graph_policy_exceptions,
+    save_policy_settings,
+    update_policy_exception,
 )
 from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
 from .releases import (
     ReleasePublishBlocked,
+    compare_draft_to_release,
     compare_releases,
+    resolve_release_selector,
     get_release,
     list_releases,
     publish_release,
@@ -260,6 +280,88 @@ def get_release_endpoint(graph_id: str, release_id: str) -> GraphRelease:
     return release
 
 
+def _require_draft(graph_id: str, draft: GraphDefinition) -> None:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    if draft.id != graph_id:
+        raise HTTPException(status_code=422, detail="draft graph id does not match the route")
+
+
+@app.post("/api/graphs/{graph_id}/health")
+def graph_health_endpoint(graph_id: str, draft: GraphDefinition) -> GraphHealth:
+    """Wave 7a (STO-610): 0-100 health score with a per-factor breakdown,
+    computed against the draft (live canvas, unsaved edits included)."""
+    _require_draft(graph_id, draft)
+    return compute_graph_health(draft, validate_graph(draft), get_graph_analytics(graph_id))
+
+
+@app.post("/api/graphs/{graph_id}/nodes/{node_id}/impact")
+def node_impact_endpoint(graph_id: str, node_id: str, draft: GraphDefinition) -> NodeImpact:
+    """Wave 7a (STO-610): what changing `node_id` reaches -- downstream
+    nodes, bindings, runs, releases containing it, datasets stubbing it."""
+    _require_draft(graph_id, draft)
+    try:
+        return compute_node_impact(draft, node_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="node not found in draft") from exc
+
+
+class ExtractSubgraphRequest(BaseModel):
+    draft: GraphDefinition
+    node_ids: list[str]
+    name: str
+
+
+class ExtractSubgraphResponse(BaseModel):
+    child_graph: GraphDefinition
+    proposed_parent: GraphDefinition
+
+
+class GraphUsage(BaseModel):
+    graph_id: str
+    name: str
+    node_ids: list[str]
+
+
+@app.post("/api/graphs/{graph_id}/extract-subgraph")
+def extract_subgraph_endpoint(
+    graph_id: str, body: ExtractSubgraphRequest
+) -> ExtractSubgraphResponse:
+    """Wave 7c (STO-612): move a connected selection into a new saved graph
+    and return the parent as it would look with a subgraph node in its
+    place. The parent isn't saved -- Studio applies it as one undoable edit."""
+    _require_draft(graph_id, body.draft)
+    try:
+        child, proposed = subgraphs.extract_subgraph(body.draft, body.node_ids, body.name)
+    except subgraphs.ExtractError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    storage.save_graph(child)
+    return ExtractSubgraphResponse(child_graph=child, proposed_parent=proposed)
+
+
+@app.get("/api/graphs/{graph_id}/used-by")
+def graph_used_by_endpoint(graph_id: str) -> list[GraphUsage]:
+    """Wave 7c: saved graphs whose subgraph nodes reference this graph."""
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return [GraphUsage.model_validate(usage) for usage in subgraphs.used_by(graph_id)]
+
+
+@app.post("/api/graph-releases/{release_id}/compare-draft")
+def compare_draft_to_release_endpoint(release_id: str, draft: GraphDefinition) -> ReleaseDiff:
+    """STO-609: diff from a release to a draft graph (typically the live
+    canvas, unsaved edits included) of the same graph."""
+    graph_id = storage.get_release_graph_id(release_id)
+    release = get_release(release_id, graph_id) if graph_id is not None else None
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    if draft.id != release.graph_id:
+        raise HTTPException(
+            status_code=422, detail="draft graph id does not match the release's graph"
+        )
+    return compare_draft_to_release(release, draft)
+
+
 @app.get("/api/graph-releases/{release_id}/compare/{other_release_id}")
 def compare_releases_endpoint(release_id: str, other_release_id: str) -> ReleaseDiff:
     from_graph_id = storage.get_release_graph_id(release_id)
@@ -358,6 +460,38 @@ async def compare_routing_datasets_endpoint(
     return compare_routing_reports(baseline, candidate)
 
 
+@app.post("/api/graphs/{graph_id}/routing-lab/compare-release/{release_id}")
+async def compare_routing_to_release_endpoint(
+    graph_id: str, release_id: str, request: RunRoutingDatasetRequest
+) -> RoutingComparison:
+    """STO-609: the dataset against a published release (baseline, run with
+    its frozen resource snapshots) and the saved draft (candidate).
+    `release_id` may be `latest`."""
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    release = resolve_release_selector(graph_id, release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    try:
+        baseline = await run_routing_dataset(
+            release.graph,
+            request.dataset,
+            release_resource_snapshots=release.resource_snapshots,
+            release_id=release.id,
+        )
+        candidate = await run_routing_dataset(graph, request.dataset)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "routing dataset run blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+    return compare_routing_reports(baseline, candidate)
+
+
 @app.post("/api/graphs/{graph_id}/policy-exceptions")
 def create_policy_exception_endpoint(
     graph_id: str, request: CreatePolicyExceptionRequest
@@ -378,6 +512,74 @@ def list_policy_exceptions_endpoint(graph_id: str) -> list[PolicyException]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return list_graph_policy_exceptions(graph_id)
+
+
+@app.patch("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
+def update_policy_exception_endpoint(
+    graph_id: str, exception_id: str, request: UpdatePolicyExceptionRequest
+) -> PolicyException:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    updated = update_policy_exception(
+        graph_id, exception_id, expires_at=request.expires_at, reason=request.reason
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="policy exception not found")
+    return updated
+
+
+@app.get("/api/policy-exceptions")
+def list_all_policy_exceptions_endpoint() -> list[PolicyException]:
+    return list_all_policy_exceptions()
+
+
+# Configurable policies (STO-608): the rule catalog, workspace defaults, and
+# per-graph overrides. See policies.py.
+@app.get("/api/policies/catalog")
+def policy_catalog_endpoint() -> list[PolicyRuleInfo]:
+    return list(POLICY_CATALOG)
+
+
+@app.get("/api/policies/workspace")
+def get_workspace_policies_endpoint() -> PolicySettings:
+    return get_policy_settings(WORKSPACE_SCOPE)
+
+
+@app.put("/api/policies/workspace")
+def put_workspace_policies_endpoint(settings: PolicySettings) -> PolicySettings:
+    try:
+        return save_policy_settings(WORKSPACE_SCOPE, settings)
+    except PolicySettingsInvalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/policies/effective")
+def get_workspace_effective_policies_endpoint() -> list[EffectivePolicyRule]:
+    return list(effective_policies(None).values())
+
+
+@app.get("/api/graphs/{graph_id}/policies")
+def get_graph_policies_endpoint(graph_id: str) -> PolicySettings:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return get_policy_settings(graph_scope(graph_id))
+
+
+@app.put("/api/graphs/{graph_id}/policies")
+def put_graph_policies_endpoint(graph_id: str, settings: PolicySettings) -> PolicySettings:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    try:
+        return save_policy_settings(graph_scope(graph_id), settings)
+    except PolicySettingsInvalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/graphs/{graph_id}/policies/effective")
+def get_graph_effective_policies_endpoint(graph_id: str) -> list[EffectivePolicyRule]:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return list(effective_policies(graph_id).values())
 
 
 @app.delete("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
@@ -684,7 +886,9 @@ async def send_chat_session_message_route(
 
     system_prompt = build_chat_system_prompt(body.context) if body.context is not None else None
     chat_model = get_chat_model(model=session.model, provider=session.provider)
-    reply = await chat_model.generate(system_prompt=system_prompt, user_prompt=body.content, history=history)
+    reply = await chat_model.generate(
+        system_prompt=system_prompt, user_prompt=body.content, history=history
+    )
     session.messages.append(ChatMessage(role="assistant", content=reply))
     session.updated_at = datetime.now(UTC)
 
@@ -833,12 +1037,15 @@ def get_run_graph_snapshot(run_id: str) -> RunGraphSnapshot:
 
 
 @app.post("/api/runs/{run_id}/replay")
-async def replay_run_endpoint(run_id: str) -> SimulateResult:
+async def replay_run_endpoint(
+    run_id: str, request: ReplayRequest | None = None
+) -> CounterfactualResult:
     """P1 rollout plan, Slice C ("Historical replay") — re-executes
     `run_id`'s exact original graph read-only, with every non-routing
-    node's original output frozen. No live tool/LLM calls."""
+    node's original output frozen. No live tool/LLM calls. An optional
+    `ReplayRequest` body makes it a counterfactual replay (STO-609)."""
     try:
-        return await replay_run(run_id)
+        return await replay_run(run_id, request)
     except ReplayNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ReplayBlocked as exc:

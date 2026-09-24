@@ -42,7 +42,21 @@ import type {
   nodeTraceSchema,
   nodeTypeSchema,
   platformEventSchema,
+  effectivePolicyRuleSchema,
+  graphGroupSchema,
+  graphLayerSchema,
+  graphHealthSchema,
+  healthFactorSchema,
+  nodeImpactSchema,
+  subgraphExtractResponseSchema,
+  graphUsedBySchema,
+  policyEnforcementSchema,
   policyExceptionSchema,
+  policyParamSpecSchema,
+  policyParamValueSchema,
+  policyRuleInfoSchema,
+  policyRuleSettingSchema,
+  policySettingsSchema,
   portContractSchema,
   portKindSchema,
   promptTemplateSchema,
@@ -66,6 +80,10 @@ import type {
   runGraphSnapshotSchema,
   runSummarySchema,
   simulateResultSchema,
+  counterfactualResultSchema,
+  modelOverrideSchema,
+  replayNodeModeSchema,
+  replayRequestSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 
@@ -123,6 +141,11 @@ export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 export type Fixture = z.infer<typeof fixtureSchema>;
 export type FixtureDataset = z.infer<typeof fixtureDatasetSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
+// Counterfactual replay (STO-609).
+export type ModelOverride = z.infer<typeof modelOverrideSchema>;
+export type ReplayRequest = z.infer<typeof replayRequestSchema>;
+export type ReplayNodeMode = z.infer<typeof replayNodeModeSchema>;
+export type CounterfactualResult = z.infer<typeof counterfactualResultSchema>;
 
 // P1 rollout plan, Slice D ("Routing policy lab").
 export type RouteTargetCount = z.infer<typeof routeTargetCountSchema>;
@@ -192,6 +215,14 @@ export type NodeExecution = z.infer<typeof nodeExecutionSchema>;
 
 // P2, "Cross-cutting policy overlays" (backend/app/policies.py).
 export type PolicyException = z.infer<typeof policyExceptionSchema>;
+// Configurable policies (STO-608).
+export type PolicyEnforcement = z.infer<typeof policyEnforcementSchema>;
+export type PolicyParamValue = z.infer<typeof policyParamValueSchema>;
+export type PolicyParamSpec = z.infer<typeof policyParamSpecSchema>;
+export type PolicyRuleInfo = z.infer<typeof policyRuleInfoSchema>;
+export type PolicyRuleSetting = z.infer<typeof policyRuleSettingSchema>;
+export type PolicySettings = z.infer<typeof policySettingsSchema>;
+export type EffectivePolicyRule = z.infer<typeof effectivePolicyRuleSchema>;
 
 // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py).
 export type KnowledgeLineageEntry = z.infer<typeof knowledgeLineageEntrySchema>;
@@ -201,3 +232,12 @@ export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
 export type KnowledgeSummary = z.infer<typeof knowledgeSummarySchema>;
 export type KnowledgeUploadResponse = z.infer<typeof knowledgeUploadResponseSchema>;
 export type KnowledgeDeleteResponse = z.infer<typeof knowledgeDeleteResponseSchema>;
+
+// Large-graph complexity, Wave 7a (STO-610).
+export type GraphHealth = z.infer<typeof graphHealthSchema>;
+export type HealthFactor = z.infer<typeof healthFactorSchema>;
+export type NodeImpact = z.infer<typeof nodeImpactSchema>;
+export type SubgraphExtractResponse = z.infer<typeof subgraphExtractResponseSchema>;
+export type GraphUsedBy = z.infer<typeof graphUsedBySchema>;
+export type GraphGroup = z.infer<typeof graphGroupSchema>;
+export type GraphLayer = z.infer<typeof graphLayerSchema>;

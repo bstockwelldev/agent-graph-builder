@@ -79,6 +79,10 @@ export function fingerprintGraph(graph: GraphDefinition): string {
       kind: edge.kind,
       condition: edge.condition ?? null,
     })),
+    // Wave 7b: groups are display-only but saved, so they mark the graph dirty.
+    groups: graph.groups ?? null,
+    // Wave 7d: likewise architecture layers.
+    layers: graph.layers ?? null,
   };
   return JSON.stringify(payload);
 }
@@ -168,6 +172,15 @@ function documentPayload(graph: GraphDefinition) {
       transform: edge.transform ? transformPayload(edge.transform) : null,
       extensions: edge.extensions ?? null,
     })),
+    // Mirrors fingerprint.py: only present when the graph has groups, so
+    // pre-existing document fingerprints are unchanged.
+    ...(graph.groups && graph.groups.length > 0
+      ? { groups: graph.groups.map((g) => ({ id: g.id, label: g.label, color: g.color ?? null, node_ids: g.node_ids, collapsed: g.collapsed ?? false })) }
+      : {}),
+    // Wave 7d: same rule for architecture layers.
+    ...(graph.layers && graph.layers.length > 0
+      ? { layers: graph.layers.map((layer) => ({ id: layer.id, label: layer.label, color: layer.color ?? null })) }
+      : {}),
   };
 }
 
@@ -175,7 +188,8 @@ function documentPayload(graph: GraphDefinition) {
 // backend/app/fingerprint.py's _DISPLAY_ONLY_EXTENSION_KEYS. `label` is the
 // node's user-given name (studio-graph-workbench-redesign-plan.md, Slice
 // 4): renaming a node is cosmetic, like moving it.
-const DISPLAY_ONLY_EXTENSION_KEYS = new Set(["label"]);
+// Wave 7d adds `layer` (the node's architecture layer).
+const DISPLAY_ONLY_EXTENSION_KEYS = new Set(["label", "layer"]);
 
 function semanticExtensions(extensions: Record<string, unknown> | null): Record<string, unknown> | null {
   if (!extensions) return extensions;
@@ -185,7 +199,12 @@ function semanticExtensions(extensions: Record<string, unknown> | null): Record<
 }
 
 function semanticPayload(graph: GraphDefinition) {
-  const payload = documentPayload(graph);
+  // Wave 7b: visual groups are display-only, like positions.
+  // Wave 7d: so are architecture layers.
+  const { groups: _groups, layers: _layers, ...payload } = documentPayload(graph) as ReturnType<typeof documentPayload> & {
+    groups?: unknown;
+    layers?: unknown;
+  };
   return {
     ...payload,
     nodes: payload.nodes.map(({ position: _position, ...rest }) => ({

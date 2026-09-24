@@ -64,6 +64,11 @@ export const NODE_TYPE_TAXONOMY: Record<
     summary: "Multi-step tool-calling agent",
     details: "Repeats tool calls (currently lookup_topic) up to a configured limit before returning a final answer. Not yet addable from this palette.",
   },
+  subgraph: {
+    title: "Subgraph node",
+    summary: "Run another saved graph",
+    details: "Runs another saved graph as a nested run with its own trace, and outputs its result. Uses the child's latest release (else its saved draft), the draft, or a pinned release; publishing freezes the exact child release.",
+  },
   code_exec: {
     title: "Code execution node",
     summary: "Declare a code-execution contract",

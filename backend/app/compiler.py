@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from collections import Counter
 
-from . import storage
+from . import storage, subgraphs
 from .bindings import node_bindings
 from .builtin_tools import BUILTIN_TOOL_IDS
 from .contracts import validate_contracts
-from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType
+from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeType, PolicyGate
 from .node_configs import validate_node_config
 from .nodes import EXECUTORS
 from .policies import evaluate_graph_policies
@@ -26,7 +26,9 @@ from .policies import evaluate_graph_policies
 _KNOWN_TOOL_IDS = frozenset({"lookup_topic", *BUILTIN_TOOL_IDS})
 
 
-def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
+def validate_graph(
+    graph: GraphDefinition, *, policy_gate: PolicyGate = "compile"
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     node_ids = {n.id for n in graph.nodes}
 
@@ -270,6 +272,11 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
                 )
             )
 
+    # Graph-as-node subgraphs (Wave 7c, STO-612): the referenced graph /
+    # release must exist, references can't loop or nest past MAX_DEPTH, and
+    # a mapping key the child doesn't take is flagged (non-blocking).
+    diagnostics.extend(_validate_subgraphs(graph))
+
     # Port/contract validation (P0 graph foundation, Slice B): port
     # existence/direction, contract-kind compatibility, transform validity,
     # required-input coverage, and unambiguous input binding. Structural
@@ -278,11 +285,130 @@ def validate_graph(graph: GraphDefinition) -> list[Diagnostic]:
     # node), so there's no overlap.
     diagnostics.extend(validate_contracts(graph))
 
+    # Wave 7b (STO-611): visual groups are display-only, so problems with
+    # them are warnings, never blocking.
+    diagnostics.extend(_validate_groups(graph, node_ids))
+    diagnostics.extend(_validate_layers(graph))
+
     # Cross-cutting policy overlays (P2, docs/planning/roadmap.md's
     # Strategic Roadmap Addendum): security, reliability, and cost checks,
     # with active policy exceptions already applied. See policies.py.
-    diagnostics.extend(evaluate_graph_policies(graph))
+    diagnostics.extend(evaluate_graph_policies(graph, gate=policy_gate))
 
+    return diagnostics
+
+
+def _validate_subgraphs(graph: GraphDefinition) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    problems = subgraphs.reference_problems(graph)
+    for node in subgraphs.subgraph_nodes(graph):
+        target = subgraphs.target_graph_id(node)
+        if not target:
+            continue  # NODE_CONFIG_INVALID already covers a missing graphId
+        child = storage.get_graph(target)
+        if child is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="SUBGRAPH_TARGET_MISSING",
+                    node_id=node.id,
+                    message=f"subgraph node {node.id!r}: graphId: graph {target!r} not found",
+                    blocking=True,
+                    remediation="Pick another graph.",
+                )
+            )
+            continue
+        version = subgraphs.target_version(node)
+        if version not in ("latest", "draft") and subgraphs.release_for(node) is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="SUBGRAPH_VERSION_MISSING",
+                    node_id=node.id,
+                    message=(
+                        f"subgraph node {node.id!r}: version: release {version!r} "
+                        f"of {child.name!r} not found"
+                    ),
+                    blocking=True,
+                )
+            )
+        if node.id in problems:
+            code, message = problems[node.id]
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code=code,
+                    node_id=node.id,
+                    message=message,
+                    blocking=True,
+                )
+            )
+        inputs = subgraphs.child_inputs(child)
+        for key in node.config.get("inputMapping") or {}:
+            if key not in inputs:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        code="SUBGRAPH_INPUT_UNKNOWN",
+                        node_id=node.id,
+                        message=(
+                            f"subgraph node {node.id!r}: inputMapping: {child.name!r} has no "
+                            f"input {key!r} (inputs: {', '.join(inputs)})"
+                        ),
+                        blocking=False,
+                    )
+                )
+    return diagnostics
+
+
+def _validate_layers(graph: GraphDefinition) -> list[Diagnostic]:
+    """Wave 7d (STO-622): a node on a layer the graph doesn't define."""
+    known = {layer.id for layer in graph.layers or []}
+    diagnostics: list[Diagnostic] = []
+    for node in graph.nodes:
+        layer = (node.extensions or {}).get("layer")
+        if layer and layer not in known:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    category="structure",
+                    code="LAYER_UNKNOWN",
+                    node_id=node.id,
+                    message=f"Node {node.id!r} is on undefined layer {layer!r}.",
+                    blocking=False,
+                )
+            )
+    return diagnostics
+
+
+def _validate_groups(graph: GraphDefinition, node_ids: set[str]) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    owner: dict[str, str] = {}
+    for group in graph.groups or []:
+        for node_id in group.node_ids:
+            if node_id not in node_ids:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        category="structure",
+                        code="GROUP_UNKNOWN_NODE",
+                        message=f"Group {group.label!r} refers to missing node {node_id!r}.",
+                        blocking=False,
+                    )
+                )
+            elif node_id in owner and owner[node_id] != group.id:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        category="structure",
+                        code="GROUP_OVERLAP",
+                        node_id=node_id,
+                        message=f"Node {node_id!r} is in more than one group.",
+                        blocking=False,
+                    )
+                )
+            else:
+                owner[node_id] = group.id
     return diagnostics
 
 

@@ -8,6 +8,7 @@ import {
   FileText,
   Layers,
   Server,
+  ShieldCheck,
   SlidersHorizontal,
   Workflow,
   Wrench,
@@ -37,11 +38,17 @@ export const RESOURCE_ITEMS: readonly NavItem[] = [
 
 const RESOURCE_PREFIXES = ["/resources", ...RESOURCE_ITEMS.map((item) => item.href)];
 
-/** The compact rail's destinations (review section 7: Graph · Resources · Analytics). */
-export const STUDIO_RAIL_ITEMS: readonly (NavItem & { matches: readonly string[] })[] = [
+/**
+ * The compact rail's destinations (review section 7: Graph · Resources ·
+ * Analytics, plus Policies since STO-608). `mobileTab: false` keeps an item
+ * out of the phone tab bar, which only has room for five tabs; it's still
+ * in the More sheet.
+ */
+export const STUDIO_RAIL_ITEMS: readonly (NavItem & { matches: readonly string[]; mobileTab?: boolean })[] = [
   { href: "/graphs", label: "Graphs", icon: Workflow, matches: ["/graphs"] },
   { href: "/resources", label: "Resources", icon: Boxes, matches: RESOURCE_PREFIXES },
   { href: "/analytics", label: "Analytics", icon: BarChart3, matches: ["/analytics"] },
+  { href: "/policies", label: "Policies", icon: ShieldCheck, matches: ["/policies"], mobileTab: false },
 ];
 
 // Still consumed by the command palette's "jump to a page" groups. Runs is
@@ -51,6 +58,7 @@ export const studioNavGroups = [
   { label: "Agent Graphs", items: [{ href: "/graphs", label: "Graphs", icon: Workflow }] },
   { label: "Resources", items: [{ href: "/resources", label: "All resources", icon: Boxes }, ...RESOURCE_ITEMS] },
   { label: "Observability & Analytics", items: [{ href: "/analytics", label: "Analytics", icon: BarChart3 }] },
+  { label: "Governance", items: [{ href: "/policies", label: "Policies", icon: ShieldCheck }] },
 ] as const;
 
 function matchesPrefix(pathname: string, prefix: string) {

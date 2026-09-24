@@ -24,6 +24,8 @@ export const nodeTypeSchema = z.enum([
   "tool_loop",
   "code_exec",
   "branch",
+  // Large-graph complexity, Wave 7c (STO-612): graph-as-node.
+  "subgraph",
 ]);
 
 export const edgeKindSchema = z.enum(["sequence", "conditional", "default"]);
@@ -99,6 +101,22 @@ export const graphEdgeSchema = z.object({
   extensions: z.record(z.string(), z.unknown()).nullish(),
 });
 
+/** Wave 7b (STO-611): a display-only frame around a set of nodes. */
+export const graphGroupSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  color: z.string().nullish(),
+  node_ids: z.array(z.string()),
+  collapsed: z.boolean().optional(),
+});
+
+/** Wave 7d (STO-622): a display-only architecture layer. */
+export const graphLayerSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  color: z.string().nullish(),
+});
+
 export const graphDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -107,6 +125,8 @@ export const graphDefinitionSchema = z.object({
   edges: z.array(graphEdgeSchema),
   orientation: graphOrientationSchema.optional(),
   updated_at: z.string().nullish(),
+  groups: z.array(graphGroupSchema).nullish(),
+  layers: z.array(graphLayerSchema).nullish(),
 });
 
 // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
@@ -137,6 +157,9 @@ export const diagnosticSchema = z.object({
   port_id: z.string().nullish(),
   target: z.enum(["langgraph"]).nullish(),
   remediation: z.string().nullish(),
+  // Configurable policies (STO-608): a policy diagnostic that will block
+  // publishing unless waived -- including a non-blocking `block_publish` warning.
+  blocks_publish: z.boolean().nullish(),
 });
 
 export const compileResultSchema = z.object({
@@ -204,7 +227,10 @@ export const graphElementChangeSchema = z.object({
 
 export const releaseDiffSchema = z.object({
   from_release_id: z.string(),
-  to_release_id: z.string(),
+  // null when the "to" side is an unpublished draft (STO-609); `to_label`
+  // then reads "Draft".
+  to_release_id: z.string().nullable(),
+  to_label: z.string().nullish(),
   from_semantic_fingerprint: z.string(),
   to_semantic_fingerprint: z.string(),
   identical: z.boolean(),
@@ -234,6 +260,7 @@ export const platformEventSchema = z.object({
     "node.failed",
     "node.paused",
     "edge.selected",
+    "subgraph.completed",
   ]),
   run_id: z.string(),
   node_id: z.string().nullish(),
@@ -262,6 +289,9 @@ export const runSummarySchema = z.object({
   source: z.enum(["release", "draft_snapshot"]).nullish(),
   runtime_target: z.enum(["langgraph"]).nullish(),
   compiler_version: z.string().nullish(),
+  // Wave 7c: set on a subgraph node's nested child run.
+  parent_run_id: z.string().nullish(),
+  parent_node_id: z.string().nullish(),
 });
 
 // P0 graph foundation, Slice D — GET /api/runs/{run_id}/snapshot. A
@@ -320,6 +350,27 @@ export const fixtureDatasetSchema = z.object({
 export const simulateResultSchema = z.object({
   run: runSummarySchema,
   traces: z.array(nodeTraceSchema),
+});
+
+/**
+ * Counterfactual replay (STO-609, backend/app/replay.py): pin routers to a
+ * different target and/or swap an LLM node's provider/model. Nodes those
+ * changes can't reach stay frozen; affected nodes recompute (on the stub
+ * unless `live_affected`).
+ */
+export const modelOverrideSchema = z.object({ provider: z.string(), model: z.string().nullish() });
+export const replayRequestSchema = z.object({
+  forced_routes: z.record(z.string(), z.string()).optional(),
+  model_overrides: z.record(z.string(), modelOverrideSchema).optional(),
+  live_affected: z.boolean().optional(),
+});
+export const replayNodeModeSchema = z.enum(["frozen", "recomputed", "live", "stub_fallback", "forced"]);
+export const counterfactualResultSchema = simulateResultSchema.extend({
+  original_run_id: z.string(),
+  counterfactual: z.boolean(),
+  original_traces: z.array(nodeTraceSchema),
+  changed_nodes: z.array(z.string()),
+  node_modes: z.record(z.string(), replayNodeModeSchema),
 });
 
 // P1 rollout plan, Slice D ("Routing policy lab") — POST
@@ -622,6 +673,54 @@ export const createPolicyExceptionRequestSchema = z.object({
 });
 
 /**
+ * Configurable policies (STO-608, backend/app/policies.py): the rule
+ * catalog, a scope's settings (workspace defaults or one graph's
+ * overrides), and each rule's effective value after default → workspace →
+ * graph resolution.
+ */
+export const policyEnforcementSchema = z.enum(["off", "warn", "block_publish", "block"]);
+export const policyParamValueSchema = z.union([z.number(), z.string(), z.boolean()]);
+const policySourceSchema = z.enum(["default", "workspace", "graph"]);
+
+export const policyParamSpecSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  type: z.enum(["integer", "choice"]),
+  default: policyParamValueSchema,
+  description: z.string().nullish(),
+  minimum: z.number().nullish(),
+  choices: z.array(z.string()).nullish(),
+});
+
+export const policyRuleInfoSchema = z.object({
+  code: z.string(),
+  category: z.enum(["security", "reliability", "cost", "governance"]),
+  title: z.string(),
+  description: z.string(),
+  gate: z.enum(["compile", "publish"]),
+  default_enforcement: policyEnforcementSchema,
+  params: z.array(policyParamSpecSchema),
+});
+
+export const policyRuleSettingSchema = z.object({
+  enforcement: policyEnforcementSchema.nullish(),
+  params: z.record(z.string(), policyParamValueSchema),
+});
+
+export const policySettingsSchema = z.object({
+  rules: z.record(z.string(), policyRuleSettingSchema),
+  updated_at: z.string().nullish(),
+});
+
+export const effectivePolicyRuleSchema = z.object({
+  rule: policyRuleInfoSchema,
+  enforcement: policyEnforcementSchema,
+  enforcement_source: policySourceSchema,
+  params: z.record(z.string(), policyParamValueSchema),
+  param_sources: z.record(z.string(), policySourceSchema),
+});
+
+/**
  * P2, "Retrieval/document lineage graph" (see
  * docs/planning/roadmap.md's Strategic Roadmap Addendum and
  * backend/app/knowledge.py). One durable record of a knowledge chunk
@@ -682,3 +781,53 @@ export const knowledgeDeleteResponseSchema = z.object({
   ok: z.boolean(),
   ...knowledgeSummaryFields,
 });
+
+/**
+ * Large-graph complexity, Wave 7a (STO-610): the graph health score
+ * (backend/app/graph_health.py) and a node's blast radius
+ * (backend/app/impact.py). Both are computed against a draft graph.
+ */
+export const healthItemSchema = z.object({
+  node_id: z.string().nullish(),
+  edge_id: z.string().nullish(),
+  message: z.string(),
+});
+export const healthFactorSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  deduction: z.number(),
+  max: z.number(),
+  items: z.array(healthItemSchema),
+  note: z.string().nullish(),
+});
+export const graphHealthSchema = z.object({
+  graph_id: z.string(),
+  score: z.number(),
+  band: z.enum(["healthy", "attention", "at_risk"]),
+  factors: z.array(healthFactorSchema),
+  computed_at: z.string(),
+});
+export const nodeImpactSchema = z.object({
+  node_id: z.string(),
+  downstream: z.array(z.string()),
+  outputs_reached: z.array(z.string()),
+  routers_downstream: z.array(z.string()),
+  upstream_count: z.number(),
+  bindings: z.array(z.object({ field: z.string(), kind: z.string(), resource_id: z.string() })),
+  runs: z.object({ executions: z.number(), last_run_id: z.string().nullish(), last_run_at: z.string().nullish() }),
+  releases: z.array(z.object({ release_id: z.string(), created_at: z.string(), changed_since: z.boolean() })),
+  datasets: z.array(z.object({ dataset_id: z.string(), name: z.string() })),
+  // Wave 7c: the graph a subgraph node runs.
+  uses_graph: z.object({ graph_id: z.string(), name: z.string().nullish(), version: z.string() }).nullish(),
+});
+
+/** Wave 7c (STO-612): POST /api/graphs/{id}/extract-subgraph. */
+export const subgraphExtractResponseSchema = z.object({
+  child_graph: graphDefinitionSchema,
+  proposed_parent: graphDefinitionSchema,
+});
+
+/** Wave 7c: GET /api/graphs/{id}/used-by -- parents referencing this graph. */
+export const graphUsedBySchema = z.array(
+  z.object({ graph_id: z.string(), name: z.string(), node_ids: z.array(z.string()) }),
+);

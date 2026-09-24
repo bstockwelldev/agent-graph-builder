@@ -1,27 +1,10 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import {
-  AlertTriangle,
-  BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  Download,
-  Focus,
-  GitBranch,
-  HelpCircle,
-  LayoutGrid,
-  MoreHorizontal,
-  Play,
-  Plus,
-  Save,
-  Sparkles,
-  Tag,
-  Upload,
-  XCircle,
-} from "lucide-react";
-import type { Diagnostic, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, Download, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
+import type { Diagnostic, GraphHealth, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import { HEALTH_BAND } from "@/lib/graphHealth";
+import { GRAPH_VIEWS, type GraphView } from "@/lib/graphLayers";
 import { validationSummary } from "@/lib/diagnostics";
 import { color, radius, shell, spacing, status as statusColor, surface, text, typeScale } from "@/lib/graph-theme";
 import type { LayoutSpacing } from "@/layout/dagreLayout";
@@ -33,7 +16,7 @@ import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./No
 
 export type RunPanelSectionId = "run-controls" | "run-simulate" | "run-diagnostics" | "observe-events" | "observe-history";
 
-type MenuId = "run" | "layout" | "overflow";
+type MenuId = "run" | "layout" | "view" | "overflow";
 
 export type GraphHeaderLayoutControls = {
   orientation: GraphOrientation;
@@ -95,6 +78,13 @@ export function GraphHeader({
   onExport,
   onImport,
   onShowShortcuts,
+  health = null,
+  onOpenFind,
+  view = "canvas",
+  onViewChange,
+  onManageLayers,
+  usedBy = [],
+  onOpenGraph,
 }: {
   hudRef?: Ref<HTMLDivElement>;
   compact: boolean;
@@ -118,10 +108,21 @@ export function GraphHeader({
   onExport: () => void;
   onImport: () => void;
   onShowShortcuts: () => void;
+  /** Wave 7a (STO-610): health score chip + find-on-canvas entry. */
+  health?: Pick<GraphHealth, "score" | "band"> | null;
+  onOpenFind?: () => void;
+  /** Wave 7d: the canvas view and its switcher, plus "Manage layers". */
+  view?: GraphView;
+  onViewChange?: (view: GraphView) => void;
+  onManageLayers?: () => void;
+  /** Wave 7c: saved graphs whose subgraph nodes run this one. */
+  usedBy?: { graph_id: string; name: string }[];
+  onOpenGraph?: (graphId: string) => void;
 }) {
   const [menu, setMenu] = useState<{ id: MenuId; x: number; y: number } | null>(null);
   const runMenuRef = useRef<HTMLButtonElement>(null);
   const layoutMenuRef = useRef<HTMLButtonElement>(null);
+  const viewMenuRef = useRef<HTMLButtonElement>(null);
   const overflowMenuRef = useRef<HTMLButtonElement>(null);
 
   const openMenu = (id: MenuId, trigger: HTMLElement | null, align: "left" | "right" = "left") => {
@@ -173,6 +174,15 @@ export function GraphHeader({
     },
   ];
 
+  const viewActions: NodeContextMenuAction[] = [
+    ...GRAPH_VIEWS.map((option) => ({
+      label: option.label,
+      checked: view === option.value,
+      onClick: () => onViewChange?.(option.value),
+    })),
+    ...(onManageLayers ? [{ label: "Manage layers…", separatorBefore: true, onClick: onManageLayers }] : []),
+  ];
+
   const overflowActions: NodeContextMenuAction[] = [
     ...(compact
       ? [
@@ -199,6 +209,27 @@ export function GraphHeader({
       checked: activePanel === "knowledge",
       onClick: () => onTogglePanel("knowledge"),
     },
+    {
+      label: "Policies",
+      icon: <ShieldCheck size={14} />,
+      checked: activePanel === "policies",
+      onClick: () => onTogglePanel("policies"),
+    },
+    ...(onOpenFind ? [{ label: "Find on canvas", icon: <Search size={14} />, shortcut: "⌘F", separatorBefore: true, onClick: onOpenFind }] : []),
+    {
+      label: health ? `Health · ${health.score}` : "Health",
+      icon: <Activity size={14} />,
+      checked: activePanel === "health",
+      separatorBefore: !onOpenFind,
+      onClick: () => onTogglePanel("health"),
+    },
+    ...usedBy.map((parent, index) => ({
+      label: parent.name,
+      icon: <Workflow size={14} />,
+      separatorBefore: index === 0,
+      groupLabel: index === 0 ? `Used by ${usedBy.length} graph${usedBy.length === 1 ? "" : "s"}` : undefined,
+      onClick: () => onOpenGraph?.(parent.graph_id),
+    })),
     { label: "Export JSON", icon: <Download size={14} />, separatorBefore: true, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
     { label: "Shortcuts", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
@@ -261,6 +292,21 @@ export function GraphHeader({
             <span>{validationText}</span>
           </button>
         </HoverTooltip>
+        {health && !compact && (
+          <HoverTooltip content={`Graph health: ${HEALTH_BAND[health.band].label} — click for the breakdown`}>
+            <button
+              type="button"
+              onClick={() => onTogglePanel("health")}
+              className="agb-focus-ring agb-hoverable"
+              aria-label={`Graph health ${health.score} of 100 (${HEALTH_BAND[health.band].label})`}
+              aria-pressed={activePanel === "health"}
+              style={{ ...validateChipStyle("ok"), color: HEALTH_BAND[health.band].color, borderColor: HEALTH_BAND[health.band].color }}
+            >
+              <Activity size={14} aria-hidden="true" />
+              <span>{health.score}</span>
+            </button>
+          </HoverTooltip>
+        )}
         {!compact && (
           <div style={{ display: "inline-flex" }}>
             <IconButton
@@ -288,6 +334,17 @@ export function GraphHeader({
 
       {/* Tools */}
       <div style={{ ...groupStyle, paddingLeft: spacing[2], borderLeft: `1px solid ${surface.border}` }}>
+        {onViewChange && (
+          <IconButton
+            ref={viewMenuRef}
+            label={`View: ${GRAPH_VIEWS.find((option) => option.value === view)?.label ?? "Canvas"}`}
+            icon={<Layers size={16} />}
+            aria-haspopup="menu"
+            aria-expanded={menu?.id === "view"}
+            pressed={view !== "canvas" || menu?.id === "view"}
+            onClick={() => openMenu("view", viewMenuRef.current, "right")}
+          />
+        )}
         {!compact && (
           <>
             <IconButton
@@ -320,7 +377,7 @@ export function GraphHeader({
           icon={<MoreHorizontal size={18} />}
           aria-haspopup="menu"
           aria-expanded={menu?.id === "overflow"}
-          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge"}
+          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health"}
           onClick={() => openMenu("overflow", overflowMenuRef.current, "right")}
         />
       </div>
@@ -330,8 +387,10 @@ export function GraphHeader({
           x={menu.x}
           y={menu.y}
           width={MENU_WIDTH}
-          title={menu.id === "run" ? "Run" : menu.id === "layout" ? "Layout" : "More"}
-          actions={menu.id === "run" ? runActions : menu.id === "layout" ? layoutActions : overflowActions}
+          title={menu.id === "run" ? "Run" : menu.id === "layout" ? "Layout" : menu.id === "view" ? "View" : "More"}
+          actions={
+            menu.id === "run" ? runActions : menu.id === "layout" ? layoutActions : menu.id === "view" ? viewActions : overflowActions
+          }
           onClose={() => setMenu(null)}
         />
       )}

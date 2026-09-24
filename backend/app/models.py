@@ -41,6 +41,9 @@ class NodeType(StrEnum):
     TOOL_LOOP = "tool_loop"
     CODE_EXEC = "code_exec"
     BRANCH = "branch"
+    # Large-graph complexity, Wave 7c (STO-612): runs another saved graph
+    # as a nested run (subgraphs.py, nodes.py compute_subgraph).
+    SUBGRAPH = "subgraph"
 
 
 class EdgeKind(StrEnum):
@@ -126,6 +129,28 @@ class GraphEdge(BaseModel):
     extensions: dict[str, Any] | None = None
 
 
+class GraphGroup(BaseModel):
+    """Large-graph complexity, Wave 7b (STO-611): a visual frame around a
+    set of nodes. Display-only -- never part of the semantic fingerprint,
+    never read by the compiler's execution path or the runtime."""
+
+    id: str
+    label: str
+    color: str | None = None
+    node_ids: list[str] = Field(default_factory=list)
+    collapsed: bool = False
+
+
+class GraphLayer(BaseModel):
+    """Large-graph complexity, Wave 7d (STO-622): an architecture layer
+    (Ingress, Reasoning, ...). Display-only, like groups: nodes join one via
+    `extensions.layer`, which fingerprint.py treats as a display key."""
+
+    id: str
+    label: str
+    color: str | None = None
+
+
 class GraphDefinition(BaseModel):
     id: str
     name: str
@@ -134,6 +159,8 @@ class GraphDefinition(BaseModel):
     edges: list[GraphEdge]
     orientation: Literal["auto", "horizontal", "vertical"] = "auto"
     updated_at: str | None = None
+    groups: list[GraphGroup] | None = None
+    layers: list[GraphLayer] | None = None
 
 
 class Diagnostic(BaseModel):
@@ -149,6 +176,11 @@ class Diagnostic(BaseModel):
     port_id: str | None = None
     target: Literal["langgraph"] | None = None
     remediation: str | None = None
+    # Configurable policies (STO-608): true on a policy diagnostic that will
+    # block publishing -- including a `block_publish` rule's draft-time
+    # warning, which doesn't block runs -- unless waived. Lets Studio offer
+    # "Waive" on it without parsing the message.
+    blocks_publish: bool | None = None
 
 
 class CompileResult(BaseModel):
@@ -213,7 +245,10 @@ class GraphElementChange(BaseModel):
 
 class ReleaseDiff(BaseModel):
     from_release_id: str
-    to_release_id: str
+    # None when the "to" side is an unpublished draft (STO-609,
+    # `compare_draft_to_release`); `to_label` then reads "Draft".
+    to_release_id: str | None
+    to_label: str | None = None
     from_semantic_fingerprint: str
     to_semantic_fingerprint: str
     identical: bool
@@ -304,6 +339,9 @@ class RunSummary(BaseModel):
     source: Literal["release", "draft_snapshot"] | None = None
     runtime_target: Literal["langgraph"] | None = None
     compiler_version: str | None = None
+    # Wave 7c: set on a subgraph node's nested child run.
+    parent_run_id: str | None = None
+    parent_node_id: str | None = None
 
 
 # P0 graph foundation, Slice D (design doc, "Persistence and API" +
@@ -382,6 +420,34 @@ class Fixture(BaseModel):
 class SimulateResult(BaseModel):
     run: RunSummary
     traces: list[NodeTrace]
+
+
+# Counterfactual replay (STO-609, replay.py): re-run a recorded run with a
+# router pinned to a different target and/or a different model on an LLM
+# node. Nodes those changes can't reach stay frozen at their recorded
+# output; affected nodes recompute (on the stub unless `live_affected`).
+class ModelOverride(BaseModel):
+    provider: str
+    model: str | None = None
+
+
+class ReplayRequest(BaseModel):
+    forced_routes: dict[str, str] = Field(default_factory=dict)
+    model_overrides: dict[str, ModelOverride] = Field(default_factory=dict)
+    live_affected: bool = False
+
+
+ReplayNodeMode = Literal["frozen", "recomputed", "live", "stub_fallback", "forced"]
+
+
+class CounterfactualResult(SimulateResult):
+    original_run_id: str
+    counterfactual: bool = False
+    original_traces: list[NodeTrace] = Field(default_factory=list)
+    # Nodes whose output differs from the recorded run, including nodes
+    # that only ran in one of the two.
+    changed_nodes: list[str] = Field(default_factory=list)
+    node_modes: dict[str, ReplayNodeMode] = Field(default_factory=dict)
 
 
 # P1 rollout plan, Slice D ("Routing policy lab") — runs a graph against a
@@ -493,6 +559,70 @@ class CreatePolicyExceptionRequest(BaseModel):
     node_id: str | None = None
     reason: str | None = None
     expires_at: str
+
+
+class UpdatePolicyExceptionRequest(BaseModel):
+    """Extend (or shorten) a waiver, optionally re-stating why."""
+
+    expires_at: str
+    reason: str | None = None
+
+
+# Configurable policies (STO-608): each rule in policies.py's catalog has
+# an enforcement level and optional parameters. Settings resolve catalog
+# default → workspace → graph override, per rule and per parameter.
+#
+#   off           -- the rule never runs
+#   warn          -- a non-blocking warning at every gate
+#   block_publish -- a warning on the draft, blocking when publishing
+#   block         -- blocking everywhere (compile, run, publish)
+PolicyEnforcement = Literal["off", "warn", "block_publish", "block"]
+PolicyGate = Literal["compile", "publish"]
+PolicyParamValue = int | float | str | bool
+
+
+class PolicyParamSpec(BaseModel):
+    name: str
+    label: str
+    type: Literal["integer", "choice"]
+    default: PolicyParamValue
+    description: str | None = None
+    minimum: int | None = None
+    choices: list[str] | None = None
+
+
+class PolicyRuleInfo(BaseModel):
+    code: str
+    category: Literal["security", "reliability", "cost", "governance"]
+    title: str
+    description: str
+    # "publish" rules only have something to check at publish time (e.g.
+    # release metadata); "compile" rules run at both gates.
+    gate: PolicyGate
+    default_enforcement: PolicyEnforcement
+    params: list[PolicyParamSpec] = Field(default_factory=list)
+
+
+class PolicyRuleSetting(BaseModel):
+    """One scope's setting for one rule. `None` / missing params inherit."""
+
+    enforcement: PolicyEnforcement | None = None
+    params: dict[str, PolicyParamValue] = Field(default_factory=dict)
+
+
+class PolicySettings(BaseModel):
+    """A scope's (workspace or one graph's) rule settings, keyed by code."""
+
+    rules: dict[str, PolicyRuleSetting] = Field(default_factory=dict)
+    updated_at: str | None = None
+
+
+class EffectivePolicyRule(BaseModel):
+    rule: PolicyRuleInfo
+    enforcement: PolicyEnforcement
+    enforcement_source: Literal["default", "workspace", "graph"]
+    params: dict[str, PolicyParamValue]
+    param_sources: dict[str, Literal["default", "workspace", "graph"]]
 
 
 # P2, "Retrieval/document lineage graph" (docs/planning/roadmap.md's

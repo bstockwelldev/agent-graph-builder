@@ -140,6 +140,26 @@ describe("documentFingerprint / semanticFingerprint", () => {
     );
   });
 
+  it("keeps groups out of the semantic fingerprint and out of groupless documents (Wave 7b)", () => {
+    const plain = labeledFixture();
+    const grouped: GraphDefinition = { ...plain, groups: [{ id: "g1", label: "Intake", node_ids: ["n1"] }] };
+    expect(semanticFingerprint(grouped)).toBe(semanticFingerprint(plain));
+    expect(documentFingerprint(grouped)).not.toBe(documentFingerprint(plain));
+    expect(documentFingerprint({ ...plain, groups: [] })).toBe(documentFingerprint(plain));
+    expect(fingerprintGraph(grouped)).not.toBe(fingerprintGraph(plain));
+    expect(fingerprintGraphSemantics(grouped)).toBe(fingerprintGraphSemantics(plain));
+  });
+
+  it("keeps layers and a node's extensions.layer display-only (Wave 7d)", () => {
+    const plain = labeledFixture();
+    const layered: GraphDefinition = { ...labeledFixture({ layer: "ingress" }), layers: [{ id: "ingress", label: "Ingress" }] };
+    // Same digest as the plain fixture's, like the backend's semantic payload.
+    expect(semanticFingerprint(layered)).toBe("fa21e31b4554e37aade554411779cde27352719980c0fa1042c7d64508119a77");
+    expect(documentFingerprint(layered)).not.toBe(documentFingerprint(plain));
+    expect(documentFingerprint({ ...plain, layers: [] })).toBe(documentFingerprint(plain));
+    expect(fingerprintGraph(layered)).not.toBe(fingerprintGraph(plain));
+  });
+
   it("fingerprintGraph (local dirty check) sees a rename", () => {
     expect(fingerprintGraph(labeledFixture({ label: "A" }))).not.toBe(fingerprintGraph(labeledFixture({ label: "B" })));
   });
@@ -152,8 +172,9 @@ describe("NODE_TYPES (studio-consolidation Phase 1)", () => {
   const original: NodeType[] = ["input", "prompt", "llm", "tool", "router", "output"];
 
   it("includes both the original six and the six absorbed node types", () => {
-    expect(NODE_TYPES).toHaveLength(12);
-    for (const type of [...original, ...absorbed]) {
+    // + subgraph (large-graph Wave 7c).
+    expect(NODE_TYPES).toHaveLength(13);
+    for (const type of [...original, ...absorbed, "subgraph"]) {
       expect(NODE_TYPES).toContain(type);
     }
   });

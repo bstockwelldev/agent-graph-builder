@@ -17,7 +17,14 @@ import {
   llmProfileSchema,
   mcpServerConfigSchema,
   nodeTraceSchema,
+  effectivePolicyRuleSchema,
+  graphHealthSchema,
+  nodeImpactSchema,
+  subgraphExtractResponseSchema,
+  graphUsedBySchema,
   policyExceptionSchema,
+  policyRuleInfoSchema,
+  policySettingsSchema,
   promptTemplateSchema,
   providerCredentialsSchema,
   providerModelCatalogSchema,
@@ -36,6 +43,7 @@ import {
   graphAnalyticsSchema,
   nodeExecutionSchema,
   simulateResultSchema,
+  counterfactualResultSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 import type {
@@ -60,7 +68,14 @@ import type {
   McpServerConfig,
   NodeTrace,
   PlatformEvent,
+  EffectivePolicyRule,
+  GraphHealth,
+  NodeImpact,
+  SubgraphExtractResponse,
+  GraphUsedBy,
   PolicyException,
+  PolicyRuleInfo,
+  PolicySettings,
   ProviderCredentials,
   ProviderModelCatalog,
   PromptTemplate,
@@ -76,6 +91,8 @@ import type {
   RunGraphSnapshot,
   RunSummary,
   SimulateResult,
+  CounterfactualResult,
+  ReplayRequest,
   ToolDefinition,
 } from "./types.js";
 
@@ -367,6 +384,37 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // P1 rollout plan, Slice A ("Semantic release comparison") — a
     // categorized behavior-level diff between two releases (node config,
     // edge/router, port/contract, and resource_snapshots deltas).
+    /** Wave 7a (STO-610): 0-100 health score for a draft graph (unsaved edits included). */
+    getGraphHealth: (graphId: string, draft: GraphDefinition) =>
+      jsonFetch<GraphHealth>(baseUrl, `/api/graphs/${graphId}/health`, { method: "POST", body: JSON.stringify(draft) }, graphHealthSchema),
+    /** Wave 7a (STO-610): what changing `nodeId` reaches, against a draft graph. */
+    getNodeImpact: (graphId: string, nodeId: string, draft: GraphDefinition) =>
+      jsonFetch<NodeImpact>(
+        baseUrl,
+        `/api/graphs/${graphId}/nodes/${encodeURIComponent(nodeId)}/impact`,
+        { method: "POST", body: JSON.stringify(draft) },
+        nodeImpactSchema,
+      ),
+    /** Wave 7c (STO-612): move a connected selection into a new saved graph;
+     * returns it plus the parent with a subgraph node in its place (unsaved). */
+    extractSubgraph: (graphId: string, draft: GraphDefinition, request: { node_ids: string[]; name: string }) =>
+      jsonFetch<SubgraphExtractResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/extract-subgraph`,
+        { method: "POST", body: JSON.stringify({ draft, ...request }) },
+        subgraphExtractResponseSchema,
+      ),
+    /** Wave 7c: saved graphs whose subgraph nodes reference `graphId`. */
+    getGraphUsedBy: (graphId: string) =>
+      jsonFetch<GraphUsedBy>(baseUrl, `/api/graphs/${graphId}/used-by`, undefined, graphUsedBySchema),
+    /** STO-609: diff from a release to a draft graph (e.g. the live canvas, unsaved edits included). */
+    compareDraftToRelease: (releaseId: string, draft: GraphDefinition) =>
+      jsonFetch<ReleaseDiff>(
+        baseUrl,
+        `/api/graph-releases/${releaseId}/compare-draft`,
+        { method: "POST", body: JSON.stringify(draft) },
+        releaseDiffSchema,
+      ),
     compareReleases: (releaseId: string, otherReleaseId: string) =>
       jsonFetch<ReleaseDiff>(
         baseUrl,
@@ -398,12 +446,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // history UI can render either through one component. Deliberately
     // named `replayRun`, not reusing the unrelated `"replayed"` trace-event
     // flag human_gate resume already uses.
-    replayRun: (runId: string) =>
-      jsonFetch<SimulateResult>(
+    // With a `request` it's a counterfactual replay (STO-609): forced
+    // routes and/or model overrides; see replayRequestSchema.
+    replayRun: (runId: string, request?: ReplayRequest) =>
+      jsonFetch<CounterfactualResult>(
         baseUrl,
         `/api/runs/${runId}/replay`,
-        { method: "POST" },
-        simulateResultSchema,
+        request ? { method: "POST", body: JSON.stringify(request) } : { method: "POST" },
+        counterfactualResultSchema,
       ),
     // P1 rollout plan, Slice D ("Routing policy lab") — runs a graph once
     // per fixture in `dataset` (via simulate, so no live tool/LLM call for
@@ -415,6 +465,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graphs/${graphId}/routing-lab/run`,
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingLabReportSchema,
+      ),
+    /** STO-609: the dataset on a release (baseline; `"latest"` allowed) vs the saved draft (candidate). */
+    compareRoutingToRelease: (graphId: string, releaseId: string, dataset: Fixture[]) =>
+      jsonFetch<RoutingComparison>(
+        baseUrl,
+        `/api/graphs/${graphId}/routing-lab/compare-release/${releaseId}`,
+        { method: "POST", body: JSON.stringify({ dataset }) },
+        routingComparisonSchema,
       ),
     compareRoutingDatasets: (graphId: string, otherGraphId: string, dataset: Fixture[]) =>
       jsonFetch<RoutingComparison>(
@@ -455,6 +513,46 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graphs/${graphId}/policy-exceptions`,
         undefined,
         policyExceptionSchema.array(),
+      ),
+    /** Extend (or shorten) a waiver's expiry; `reason` is kept when omitted. */
+    updatePolicyException: (graphId: string, exceptionId: string, expiresAt: string, reason?: string) =>
+      jsonFetch<PolicyException>(
+        baseUrl,
+        `/api/graphs/${graphId}/policy-exceptions/${exceptionId}`,
+        { method: "PATCH", body: JSON.stringify({ expires_at: expiresAt, reason }) },
+        policyExceptionSchema,
+      ),
+    /** Every graph's exceptions -- the workspace Policies page. */
+    listAllPolicyExceptions: () =>
+      jsonFetch<PolicyException[]>(baseUrl, "/api/policy-exceptions", undefined, policyExceptionSchema.array()),
+    // Configurable policies (STO-608): catalog, workspace defaults, per-graph
+    // overrides, and the effective (resolved) rules.
+    getPolicyCatalog: () =>
+      jsonFetch<PolicyRuleInfo[]>(baseUrl, "/api/policies/catalog", undefined, policyRuleInfoSchema.array()),
+    getWorkspacePolicies: () =>
+      jsonFetch<PolicySettings>(baseUrl, "/api/policies/workspace", undefined, policySettingsSchema),
+    saveWorkspacePolicies: (settings: Pick<PolicySettings, "rules">) =>
+      jsonFetch<PolicySettings>(
+        baseUrl,
+        "/api/policies/workspace",
+        { method: "PUT", body: JSON.stringify({ rules: settings.rules }) },
+        policySettingsSchema,
+      ),
+    getEffectivePolicies: (graphId?: string) =>
+      jsonFetch<EffectivePolicyRule[]>(
+        baseUrl,
+        graphId ? `/api/graphs/${graphId}/policies/effective` : "/api/policies/effective",
+        undefined,
+        effectivePolicyRuleSchema.array(),
+      ),
+    getGraphPolicies: (graphId: string) =>
+      jsonFetch<PolicySettings>(baseUrl, `/api/graphs/${graphId}/policies`, undefined, policySettingsSchema),
+    saveGraphPolicies: (graphId: string, settings: Pick<PolicySettings, "rules">) =>
+      jsonFetch<PolicySettings>(
+        baseUrl,
+        `/api/graphs/${graphId}/policies`,
+        { method: "PUT", body: JSON.stringify({ rules: settings.rules }) },
+        policySettingsSchema,
       ),
     deletePolicyException: (graphId: string, exceptionId: string) =>
       jsonFetch<{ deleted: boolean }>(

@@ -29,7 +29,7 @@ from .events import RunEventBus
 from .guardrails import check_guardrail
 from .knowledge import augment_system_with_knowledge
 from .mcp.client import call_mcp_tool
-from .models import EdgeKind, GraphDefinition, GraphNode
+from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode
 from .ports import default_input_port, resolve_node_input
 from .providers.base import ChatModel
 from .resource_models import McpServerConfig, ToolDefinition
@@ -122,6 +122,14 @@ class ExecContext:
     # `replayed`) for the pre-seeded early-return branch both cases share —
     # no other executor reads this.
     fixture_node_outputs: frozenset[str] | None = None
+    # Counterfactual replay (STO-609, replay.py): router/branch node id ->
+    # the target node it must select regardless of its input, and llm /
+    # tool_loop node id -> the chat model to use instead of the run's.
+    forced_routes: dict[str, str] | None = None
+    node_chat_models: dict[str, ChatModel] | None = None
+    # Wave 7c (STO-612): how deep this run is nested under subgraph nodes
+    # (0 for a top-level run); compute_subgraph refuses past MAX_DEPTH.
+    depth: int = 0
 
 
 def _resolve_resource(ctx: ExecContext, kind: str, resource_id: str) -> dict[str, Any] | None:
@@ -173,6 +181,22 @@ def _node_model(ctx: ExecContext, node: GraphNode) -> str | None:
     return bound if bound else node.config.get("model")
 
 
+def _chat_model(ctx: ExecContext, node: GraphNode) -> ChatModel:
+    """The node's chat model: a counterfactual override when one is set,
+    otherwise the run's factory with the node's (or bound profile's) model."""
+    if ctx.node_chat_models and node.id in ctx.node_chat_models:
+        return ctx.node_chat_models[node.id]
+    return ctx.chat_model_factory(_node_model(ctx, node))
+
+
+def _forced_edge(ctx: ExecContext, node: GraphNode, outgoing: list[GraphEdge]) -> GraphEdge | None:
+    """The out-edge a counterfactual replay pins this router/branch to."""
+    target = (ctx.forced_routes or {}).get(node.id)
+    if target is None:
+        return None
+    return next((edge for edge in outgoing if edge.target == target), None)
+
+
 def get_upstream_output(node: GraphNode, state: dict[str, Any], graph: GraphDefinition) -> Any:
     """Return the output of whichever incoming edge's source node actually ran.
 
@@ -212,8 +236,7 @@ async def compute_prompt(node: GraphNode, state: dict[str, Any], ctx: ExecContex
 async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
     upstream = get_upstream_output(node, state, ctx.graph)
     system_prompt = _system_prompt(ctx, node)
-    model = _node_model(ctx, node)
-    chat_model = ctx.chat_model_factory(model)
+    chat_model = _chat_model(ctx, node)
     # RAG augmentation (studio-consolidation Phase 5): a no-op unless
     # ctx.graph has an uploaded knowledge base (see knowledge.py) — degrades
     # silently to the unmodified prompt on any failure, so a knowledge
@@ -320,7 +343,11 @@ async def compute_router(node: GraphNode, state: dict[str, Any], ctx: ExecContex
         record = {"edgeId": edge.id, "target": edge.target, "condition": edge.condition}
         (eligible if matched else excluded).append(record)
 
-    if eligible:
+    forced = _forced_edge(ctx, node, outgoing)
+    if forced is not None:
+        selected = forced
+        rationale = "forced"
+    elif eligible:
         selected_edge_id = eligible[0]["edgeId"]
         selected = next(e for e in conditional_edges if e.id == selected_edge_id)
         rationale = "conditional_match"
@@ -424,7 +451,11 @@ async def compute_branch(node: GraphNode, state: dict[str, Any], ctx: ExecContex
             for e in conditional_edges
         ]
 
-    if eligible:
+    forced = _forced_edge(ctx, node, outgoing)
+    if forced is not None:
+        selected = forced
+        rationale = "forced"
+    elif eligible:
         selected = next(e for e in conditional_edges if e.id == eligible[0]["edgeId"])
         rationale = "branch_matched"
     elif default_edges:
@@ -501,9 +532,8 @@ def _parse_tool_call(response: str) -> str | None:
 async def compute_tool_loop(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
     upstream = get_upstream_output(node, state, ctx.graph)
     base_system_prompt = _system_prompt(ctx, node)
-    model = _node_model(ctx, node)
     max_iterations = int(node.config.get("maxToolIterations", 1))
-    chat_model = ctx.chat_model_factory(model)
+    chat_model = _chat_model(ctx, node)
 
     tool_results: list[dict[str, str]] = []
     transcript: list[dict[str, Any]] = []
@@ -581,6 +611,58 @@ async def compute_human_gate(
     return {"content": node.config.get("content", ""), "approved": True}, upstream, {}
 
 
+async def compute_subgraph(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Graph-as-node (Wave 7c, STO-612): run the referenced graph as a
+    nested run with its own trace, and output its result. A release-sourced
+    parent runs the child release frozen at publish (subgraphs.py)."""
+    from . import runtime, subgraphs  # runtime imports this module
+
+    if ctx.depth + 1 > subgraphs.MAX_DEPTH:
+        raise ValueError(f"subgraph nesting exceeds {subgraphs.MAX_DEPTH} levels")
+    child = subgraphs.resolve_child(node, ctx.release_resource_snapshots)
+    upstream = get_upstream_output(node, state, ctx.graph)
+    child_input = subgraphs.build_child_input(
+        node, upstream, state["variables"], subgraphs.child_inputs(child.graph)
+    )
+    compiled = runtime.compile_workflow(child.graph)
+    if not compiled.ok:
+        first = next((d for d in compiled.diagnostics if d.blocking), None)
+        raise ValueError(
+            f"child graph {child.graph.id!r} doesn't compile: "
+            f"{first.message if first else 'blocking diagnostics'}"
+        )
+    child_run_id, _bus = await runtime.start_run_inline(
+        compiled.compiled_workflow_id or "",
+        child_input,
+        provider=ctx.resolved_provider,
+        model=ctx.requested_model,
+        api_key=ctx.api_key,
+        release_resource_snapshots=child.snapshots,
+        release_id=child.release_id,
+        parent_run_id=ctx.run_id,
+        parent_node_id=node.id,
+        depth=ctx.depth + 1,
+    )
+    summary = runtime.RUN_STORE[child_run_id]
+    if summary.status != "succeeded":
+        raise ValueError(
+            f"child run {child_run_id} {summary.status}: {summary.error or 'no result'}"
+        )
+    info = {
+        "graphId": child.graph.id,
+        "version": subgraphs.target_version(node),
+        "releaseId": child.release_id,
+        "childRunId": child_run_id,
+        "childInput": child_input,
+    }
+    ctx.bus.emit(
+        "subgraph.completed",
+        {"childRunId": child_run_id, "graphId": child.graph.id, "releaseId": child.release_id},
+        node_id=node.id,
+    )
+    return info, summary.result, {}
+
+
 EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitable[NodeResult]]] = {
     "input": compute_input,
     "prompt": compute_prompt,
@@ -594,4 +676,5 @@ EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitabl
     "tool_loop": compute_tool_loop,
     "code_exec": compute_code_exec,
     "human_gate": compute_human_gate,
+    "subgraph": compute_subgraph,
 }

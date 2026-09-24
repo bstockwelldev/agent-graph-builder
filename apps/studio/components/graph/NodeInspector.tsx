@@ -9,6 +9,7 @@ import {
   CornerDownRight,
   ExternalLink,
   History,
+  Radar,
   MoreHorizontal,
   Play,
   Settings2,
@@ -22,7 +23,9 @@ import type {
   BindableResourceKind,
   ChatProvider,
   EdgeKind,
+  GraphDefinition,
   GraphEdge,
+  GraphLayer,
   GraphNode,
   Diagnostic,
   NodeTrace,
@@ -63,8 +66,11 @@ import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { JsonEditor } from "./ui/JsonEditor";
 import { NodeHistoryTab } from "./NodeHistoryTab";
+import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
 import { NODE_TYPE_ICONS } from "./nodeTypeIcons";
+import { SubgraphConfig } from "./SubgraphConfig";
+import { childRunHref } from "@/lib/subgraphs";
 
 export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): GraphEdge {
   const kind = (patch.kind ?? edge.kind) as EdgeKind;
@@ -88,6 +94,7 @@ const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   tool_loop: ["llmProfileId", "provider", "model", "systemPromptId", "systemPrompt", "maxToolIterations"],
   code_exec: ["content", "codeExecLanguage", "toolName"],
   human_gate: ["content", "genuiCheckpointSurfaceJson"],
+  subgraph: ["graphId", "version", "inputMapping"],
 };
 
 const EDGE_KIND_OPTIONS = (["sequence", "conditional", "default"] as const).map((value) => ({
@@ -137,6 +144,14 @@ export function NodeInspector({
   onTabChange,
   templateVariables = [],
   onOpenResource,
+  getDraftGraph,
+  onSelectNode,
+  onOpenReleases,
+  onImpactHighlight,
+  layers = [],
+  currentLayer = null,
+  onLayerChange,
+  onManageLayers,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -178,6 +193,17 @@ export function NodeInspector({
   /** Wave 4a: open a bound registry resource for editing (the studio's
    * resource panel) without leaving the canvas. */
   onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
+  /** Wave 7a (STO-610) Impact tab: the live canvas graph, navigation, and
+   * the canvas highlight for this node's downstream set. */
+  getDraftGraph?: () => GraphDefinition;
+  onSelectNode?: (nodeId: string) => void;
+  onOpenReleases?: () => void;
+  onImpactHighlight?: (nodeIds: string[] | null) => void;
+  /** Wave 7d (STO-622): the graph's architecture layers and this node's. */
+  layers?: GraphLayer[];
+  currentLayer?: string | null;
+  onLayerChange?: (layer: string | null) => void;
+  onManageLayers?: () => void;
 }) {
   const [activeTab, setActiveTabState] = useState("configure");
   const setActiveTab = (tab: string) => {
@@ -208,6 +234,7 @@ export function NodeInspector({
     { id: "policy", label: "Policy", icon: <Shield size={14} />, count: policyIssues.length, countTone: "error" },
     { id: "run", label: "Run", icon: <Play size={14} /> },
     { id: "history", label: "History", icon: <History size={14} />, iconOnly: true },
+    { id: "impact", label: "Impact", icon: <Radar size={14} />, iconOnly: true },
     { id: "raw", label: "Raw JSON", icon: <Braces size={14} />, iconOnly: true },
   ];
 
@@ -319,6 +346,9 @@ export function NodeInspector({
       header={header}
       tabs={<IconTabs aria-label="Node sections" tabs={tabs} activeId={activeTab} onChange={setActiveTab} />}
     >
+      {activeTab === "configure" && onLayerChange && (
+        <LayerField layers={layers} value={currentLayer} onChange={onLayerChange} onManageLayers={onManageLayers} />
+      )}
       {activeTab === "configure" && (
         <ConfigureTab
           node={node}
@@ -335,12 +365,33 @@ export function NodeInspector({
       {activeTab === "policy" && (
         <PolicyTab graphId={graphId} nodeId={node.id} issues={issues} onPolicyExceptionCreated={onPolicyExceptionCreated} />
       )}
-      {activeTab === "run" && <RunTab selectedTrace={selectedTrace} onOpenRunPanel={onOpenRunPanel} />}
+      {activeTab === "run" && (
+        <RunTab
+          selectedTrace={selectedTrace}
+          onOpenRunPanel={onOpenRunPanel}
+          childGraphId={node.type === "subgraph" ? String(node.config.graphId ?? "") : undefined}
+        />
+      )}
       {activeTab === "history" &&
         (graphId ? (
           <NodeHistoryTab graphId={graphId} nodeId={node.id} refreshKey={historyRefreshKey} onInspectRun={onInspectRun} />
         ) : (
           <Muted>Save the graph to see this node&apos;s history.</Muted>
+        ))}
+      {activeTab === "impact" &&
+        (graphId && getDraftGraph ? (
+          <NodeImpactTab
+            graphId={graphId}
+            nodeId={node.id}
+            getDraftGraph={getDraftGraph}
+            refreshKey={historyRefreshKey}
+            onSelectNode={onSelectNode}
+            onOpenResource={onOpenResource}
+            onOpenReleases={onOpenReleases}
+            onHighlight={onImpactHighlight}
+          />
+        ) : (
+          <Muted>Save the graph to see this node&apos;s impact.</Muted>
         ))}
       {activeTab === "raw" && (
         <Group title="Raw config" icon={<Braces size={13} />}>
@@ -626,6 +677,8 @@ function ConfigureTab({
         </Group>
       )}
 
+      {node.type === "subgraph" && <SubgraphConfig node={node} graphId={graphId} set={set} fieldIssues={fieldIssues} variables={templateVariables} />}
+
       {node.type === "human_gate" && (
         <Group title="Checkpoint">
           <Field label="Content" hint="Shown to the approver at the checkpoint." issues={fieldIssues("content")}>
@@ -856,7 +909,54 @@ function formatTraceDuration(trace: NodeTrace): string | null {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | null; onOpenRunPanel?: () => void }) {
+/** Wave 7d: which architecture layer (swimlane) the node sits in. */
+function LayerField({
+  layers,
+  value,
+  onChange,
+  onManageLayers,
+}: {
+  layers: GraphLayer[];
+  value: string | null;
+  onChange: (layer: string | null) => void;
+  onManageLayers?: () => void;
+}) {
+  const known = value && layers.some((layer) => layer.id === value) ? value : "";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
+      <span style={{ fontSize: 12, color: text.secondary, flexShrink: 0 }}>Layer</span>
+      {layers.length > 0 ? (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Combobox
+            id="node-layer"
+            aria-label="Layer"
+            value={known}
+            options={[{ value: "", label: "Unassigned" }, ...layers.map((layer) => ({ value: layer.id, label: layer.label }))]}
+            onChange={(v) => onChange(v || null)}
+          />
+        </div>
+      ) : (
+        <span style={{ fontSize: 12, color: text.muted, flex: 1 }}>No layers yet</span>
+      )}
+      {onManageLayers && (
+        <Button variant="secondary" onClick={onManageLayers} style={{ fontSize: 12, flexShrink: 0 }}>
+          Manage…
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function RunTab({
+  selectedTrace,
+  onOpenRunPanel,
+  childGraphId,
+}: {
+  selectedTrace: NodeTrace | null;
+  onOpenRunPanel?: () => void;
+  /** Wave 7c: a subgraph node's configured graph, for "Open child run". */
+  childGraphId?: string | null;
+}) {
   if (!selectedTrace) {
     return (
       <Group title="Last execution">
@@ -872,6 +972,7 @@ function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | 
 
   const duration = formatTraceDuration(selectedTrace);
   const tone = statusColor[selectedTrace.status];
+  const childRun = childGraphId !== undefined ? childRunHref(selectedTrace, childGraphId) : null;
   return (
     <div>
       <Group
@@ -894,6 +995,11 @@ function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | 
           <div role="alert" style={{ fontSize: 12, color: color.error[500], overflowWrap: "anywhere" }}>
             {selectedTrace.error}
           </div>
+        )}
+        {childRun && (
+          <a href={childRun} className="agb-focus-ring agb-hoverable" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: color.primary[500], marginTop: spacing[2] }}>
+            <ExternalLink size={13} aria-hidden="true" /> Open child run
+          </a>
         )}
       </Group>
     </div>

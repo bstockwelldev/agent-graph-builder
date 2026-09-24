@@ -39,6 +39,23 @@ describe("graphDefinitionSchema", () => {
     expect(graphDefinitionSchema.safeParse(graph).success).toBe(true);
   });
 
+  it("accepts display-only groups and rejects malformed ones (Wave 7b)", () => {
+    const base = {
+      id: "g1",
+      name: "Demo",
+      entry_node_id: "n1",
+      nodes: [{ id: "n1", type: "input", position: { x: 0, y: 0 }, config: {} }],
+      edges: [],
+    };
+    const parsed = graphDefinitionSchema.safeParse({
+      ...base,
+      groups: [{ id: "grp", label: "Intake", color: null, node_ids: ["n1"], collapsed: true }],
+    });
+    expect(parsed.success && parsed.data.groups?.[0]?.collapsed).toBe(true);
+    expect(graphDefinitionSchema.safeParse({ ...base, groups: null }).success).toBe(true);
+    expect(graphDefinitionSchema.safeParse({ ...base, groups: [{ id: "grp", label: "x" }] }).success).toBe(false);
+  });
+
   it("rejects a node with an unknown type", () => {
     const graph = {
       id: "g1",

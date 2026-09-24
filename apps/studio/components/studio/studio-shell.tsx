@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { Sidebar } from "lucide-react";
+import { Menu, MessageSquare } from "lucide-react";
 
 import { StudioAuthSection } from "@/components/studio/studio-auth-section";
-import { isResourceRoute, ResourceTabs, StudioNav, StudioRail } from "@/components/studio/studio-nav";
+import { isRailItemActive, isResourceRoute, ResourceTabs, STUDIO_RAIL_ITEMS, StudioNav, StudioRail } from "@/components/studio/studio-nav";
+import { MobileTabBar, type MobileTab } from "@/components/navigation/mobile-tab-bar";
+import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { StudioNavProvider } from "@/components/studio/studio-nav-context";
-import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
@@ -49,6 +50,35 @@ export function StudioShell({
   }, []);
 
   const navContextValue = useMemo(() => ({ openStudioNav }), [openStudioNav]);
+
+  // Mobile bottom tab bar (STO-607): the rail's destinations plus Chat and
+  // More (the full nav sheet: resource types, account). Below md only --
+  // the same breakpoint where the rail gives way to the mobile header.
+  const workbench = useWorkbench();
+  const mobileTabs: MobileTab[] = [
+    ...STUDIO_RAIL_ITEMS.filter((item) => item.mobileTab !== false).map(({ href, label, icon: Icon, matches }) => ({
+      id: href,
+      label,
+      icon: <Icon />,
+      href,
+      active: isRailItemActive(safePathname, matches),
+    })),
+    {
+      id: "chat",
+      label: "Chat",
+      icon: <MessageSquare />,
+      active: workbench.activePanel === "chat",
+      onClick: () => workbench.toggle("chat"),
+    },
+    {
+      id: "more",
+      label: "More",
+      icon: <Menu />,
+      hasPopup: "dialog",
+      active: mobileNavOpen,
+      onClick: () => setMobileNavOpen(true),
+    },
+  ];
 
   return (
     <StudioNavProvider value={navContextValue}>
@@ -110,18 +140,14 @@ export function StudioShell({
             >
               Agent Graph Studio
             </Link>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-              aria-label="Toggle navigation menu"
-              onClick={() => setMobileNavOpen((open) => !open)}
-            >
-              <Sidebar className="size-4" aria-hidden />
-            </Button>
           </header>
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <main
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+              // Room for the mobile tab bar (64px + safe area) so it never covers content.
+              !graphCanvas && "pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0",
+            )}
+          >
             <div
               className={cn(
                 graphCanvas
@@ -135,6 +161,7 @@ export function StudioShell({
               {children}
             </div>
           </main>
+          {!graphCanvas && <MobileTabBar aria-label="Studio tabs" tabs={mobileTabs} className="md:hidden" />}
         </div>
       </div>
 

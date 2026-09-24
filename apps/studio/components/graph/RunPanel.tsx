@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clock,
   FlaskConical,
+  GitBranch,
   Hammer,
   History,
   KeyRound,
@@ -28,6 +29,7 @@ import { client } from "@/lib/api-client";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
+import { expiryFromNow, WAIVE_DURATIONS_DAYS } from "@/lib/policies";
 import {
   INSPECT_LOAD_FAIL,
   RUN_RESULT_EMPTY,
@@ -40,14 +42,18 @@ import {
 import { formatRunInputs, recentInputValues } from "@/lib/runInputs";
 import type {
   ChatProvider,
+  CounterfactualResult,
   Diagnostic,
+  GraphDefinition,
   NodeTrace,
   PlatformEvent,
   RunGraphSnapshot,
+  ReplayRequest,
   RunSummary,
   SimulateResult,
 } from "@bstockwelldev/agent-graph-sdk";
 import { accentSurface, border, color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { CounterfactualForm, CounterfactualResultView } from "./CounterfactualForm";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
 import { ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
 import { RunWaterfall } from "./RunWaterfall";
@@ -252,6 +258,7 @@ export function RunPanel({
   onValidate,
   onDiagnosticClick,
   onPolicyExceptionCreated,
+  getGraph,
   runSummary,
   runHistory,
   runHistoryLoading = false,
@@ -295,6 +302,8 @@ export function RunPanel({
   onDiagnosticClick: (diagnostic: Diagnostic) => void;
   /** Called after a policy exception is created from the Waive button. */
   onPolicyExceptionCreated?: () => void;
+  /** The canvas graph, for choosing what a counterfactual replay changes (STO-609). */
+  getGraph?: () => GraphDefinition;
   runSummary: RunSummary | null;
   runHistory: RunSummary[];
   runHistoryLoading?: boolean;
@@ -420,7 +429,9 @@ export function RunPanel({
   // ---- historical replay (P1 Slice C) + snapshots (Phase 10 Slice A) -------
   const [replayingRunId, setReplayingRunId] = useState<string | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
-  const [replayResult, setReplayResult] = useState<SimulateResult | null>(null);
+  const [replayResult, setReplayResult] = useState<CounterfactualResult | null>(null);
+  // STO-609: the run whose "Replay with changes…" form is open.
+  const [counterfactualRunId, setCounterfactualRunId] = useState<string | null>(null);
   const [snapshotRunId, setSnapshotRunId] = useState<string | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -438,13 +449,12 @@ export function RunPanel({
   const [waivingKey, setWaivingKey] = useState<string | null>(null);
   const [waiveError, setWaiveError] = useState<string | null>(null);
   const handleWaive = useCallback(
-    async (diagnostic: Diagnostic, key: string) => {
+    async (diagnostic: Diagnostic, key: string, days: number) => {
       if (!graphId) return;
       setWaivingKey(key);
       setWaiveError(null);
       try {
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        await client.createPolicyException(graphId, diagnostic.code, expiresAt, diagnostic.node_id ?? undefined, "Waived from Studio");
+        await client.createPolicyException(graphId, diagnostic.code, expiryFromNow(days), diagnostic.node_id ?? undefined, "Waived from Studio");
         onPolicyExceptionCreated?.();
       } catch (err) {
         setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
@@ -537,11 +547,12 @@ export function RunPanel({
     }
   }, [fixtureInputText, fixtureNodeOutputsText, graphId]);
 
-  const handleReplay = useCallback(async (runId: string) => {
+  const handleReplay = useCallback(async (runId: string, request?: ReplayRequest) => {
     setReplayingRunId(runId);
     setReplayError(null);
     try {
-      setReplayResult(await client.replayRun(runId));
+      setReplayResult(await client.replayRun(runId, request));
+      setCounterfactualRunId(null);
     } catch (err) {
       setReplayError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1122,13 +1133,32 @@ export function RunPanel({
                           <div style={{ display: "flex", gap: 2, padding: `0 ${spacing[1]}px ${spacing[1]}px` }}>
                             {item.status === "succeeded" && (
                               <SmallAction icon={<RotateCcw size={12} />} disabled={replayingRunId !== null} onClick={() => void handleReplay(item.run_id)}>
-                                {replayingRunId === item.run_id ? "Replaying…" : "Replay"}
+                                {replayingRunId === item.run_id && counterfactualRunId !== item.run_id ? "Replaying…" : "Replay"}
+                              </SmallAction>
+                            )}
+                            {item.status === "succeeded" && getGraph && (
+                              <SmallAction
+                                icon={<GitBranch size={12} />}
+                                disabled={replayingRunId !== null}
+                                onClick={() => setCounterfactualRunId((current) => (current === item.run_id ? null : item.run_id))}
+                              >
+                                Replay with changes…
                               </SmallAction>
                             )}
                             <SmallAction icon={<ScanSearch size={12} />} disabled={snapshotLoading && snapshotRunId === item.run_id} onClick={() => void handleViewSnapshot(item.run_id)}>
                               {snapshotRunId === item.run_id ? (snapshotLoading ? "Loading…" : "Hide snapshot") : "View snapshot"}
                             </SmallAction>
                           </div>
+                          {counterfactualRunId === item.run_id && getGraph && (
+                            <div style={{ padding: `0 ${spacing[2]}px ${spacing[2]}px` }}>
+                              <CounterfactualForm
+                                graph={getGraph()}
+                                busy={replayingRunId === item.run_id}
+                                onSubmit={(request) => void handleReplay(item.run_id, request)}
+                                onCancel={() => setCounterfactualRunId(null)}
+                              />
+                            </div>
+                          )}
                           {snapshotRunId === item.run_id && (
                             <div style={{ padding: `0 ${spacing[2]}px ${spacing[2]}px` }}>
                               <RunSnapshotDisplay snapshot={snapshot} error={snapshotError} />
@@ -1141,7 +1171,13 @@ export function RunPanel({
                 </>
               )}
               {replayError && <div role="alert" style={alertStyle}>{replayError}</div>}
-              {replayResult && (
+              {replayResult?.counterfactual && (
+                <Group title="Counterfactual replay" icon={<GitBranch size={13} />}>
+                  <StatusPill status={replayResult.run.status} />
+                  <CounterfactualResultView result={replayResult} />
+                </Group>
+              )}
+              {replayResult && !replayResult.counterfactual && (
                 <Group title="Replay (read-only)" icon={<RotateCcw size={13} />}>
                   <StatusPill status={replayResult.run.status} />
                   {replayResult.traces.map((trace) => (
@@ -1180,8 +1216,9 @@ export function RunPanel({
                       </span>
                     </>
                   );
-                  // Only a blocking policy diagnostic is waivable.
-                  const waivable = diagnostic.category === "policy" && diagnostic.blocking && Boolean(graphId);
+                  // A policy diagnostic that blocks runs or publishing is waivable
+                  // (a block_publish rule is only a warning on the draft).
+                  const waivable = diagnostic.category === "policy" && (diagnostic.blocking || Boolean(diagnostic.blocks_publish)) && Boolean(graphId);
                   return (
                     <div key={key} style={{ marginBottom: spacing[2] }}>
                       {clickable ? (
@@ -1192,9 +1229,21 @@ export function RunPanel({
                         <div style={diagnosticStyle(diagnostic.severity, false)}>{body}</div>
                       )}
                       {waivable && (
-                        <Button variant="secondary" disabled={waivingKey === key} onClick={() => void handleWaive(diagnostic, key)} style={{ marginTop: 4, fontSize: 12, padding: "4px 10px" }}>
-                          {waivingKey === key ? "Waiving…" : "Waive (30 days)"}
-                        </Button>
+                        <div role="group" aria-label={`Waive ${diagnostic.code}`} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, opacity: 0.75 }}>{waivingKey === key ? "Waiving…" : "Waive for"}</span>
+                          {WAIVE_DURATIONS_DAYS.map((days) => (
+                            <Button
+                              key={days}
+                              variant="secondary"
+                              disabled={waivingKey === key}
+                              aria-label={`Waive for ${days} days`}
+                              onClick={() => void handleWaive(diagnostic, key, days)}
+                              style={{ fontSize: 12, padding: "4px 10px" }}
+                            >
+                              {days}d
+                            </Button>
+                          ))}
+                        </div>
                       )}
                     </div>
                   );

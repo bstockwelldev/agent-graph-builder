@@ -13,7 +13,7 @@ import copy
 from typing import Any
 from uuid import uuid4
 
-from . import storage
+from . import storage, subgraphs
 from .bindings import node_bindings
 from .compiler import validate_graph
 from .events import now_iso
@@ -75,6 +75,38 @@ def resolve_resource_snapshots(
                     node.id, binding.resource_id, resource, snapshots, diagnostics
                 )
 
+    # Wave 7c (STO-612): freeze the exact child release each subgraph node
+    # resolves to, so a release run keeps running that child even after it
+    # publishes again. A draft or never-published child can't be frozen.
+    for node in subgraphs.subgraph_nodes(graph):
+        child_release = subgraphs.release_for(node)
+        if child_release is None:
+            child = storage.get_graph(subgraphs.target_graph_id(node))
+            child_name = child.name if child else subgraphs.target_graph_id(node)
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    category="capability",
+                    code="RELEASE_SUBGRAPH_UNPUBLISHED",
+                    node_id=node.id,
+                    message=(
+                        f"Subgraph node {node.id!r} uses the draft of {child_name!r}. "
+                        f"Publish {child_name!r} first"
+                        + (
+                            " and pick a release."
+                            if subgraphs.target_version(node) == "draft"
+                            else "."
+                        )
+                    ),
+                    blocking=True,
+                )
+            )
+            continue
+        snapshots[subgraphs.snapshot_key(node.id)] = {
+            "graph_id": child_release.graph_id,
+            "release_id": child_release.id,
+        }
+
     knowledge = storage.get_resource("knowledge", graph.id)
     if knowledge is not None:
         snapshots[f"knowledge:{graph.id}"] = copy.deepcopy(knowledge)
@@ -127,7 +159,8 @@ def publish_release(
     created "after clean LangGraph capability validation" (design doc,
     Slice C).
     """
-    diagnostics = validate_graph(graph)
+    # The publish gate: `block_publish` policy rules block here (STO-608).
+    diagnostics = validate_graph(graph, policy_gate="publish")
     resource_snapshots, resource_diagnostics = resolve_resource_snapshots(graph)
     # P2, "Cross-cutting policy overlays": the deploy gate. validate_graph
     # above already ran the compile-gate policies (security/reliability/
@@ -207,8 +240,43 @@ def compare_releases(from_release: GraphRelease, to_release: GraphRelease) -> Re
     )
 
 
+def compare_draft_to_release(release: GraphRelease, draft: GraphDefinition) -> ReleaseDiff:
+    """STO-609: the same categorized diff as `compare_releases`, from a
+    published release to a draft that was never published -- typically the
+    live canvas, unsaved edits included. The draft's resources resolve live
+    the way a publish would snapshot them; references that don't resolve
+    are simply absent from its side of the resource diff."""
+    draft_snapshots, _diagnostics = resolve_resource_snapshots(draft)
+    deltas = diff_graphs(release.graph, draft, release.resource_snapshots, draft_snapshots)
+    draft_fp = release_semantic_fingerprint(draft, draft_snapshots)
+    return ReleaseDiff(
+        from_release_id=release.id,
+        to_release_id=None,
+        to_label="Draft",
+        from_semantic_fingerprint=release.semantic_fingerprint,
+        to_semantic_fingerprint=draft_fp,
+        identical=release.semantic_fingerprint == draft_fp,
+        node_changes=deltas["node_changes"],
+        edge_changes=deltas["edge_changes"],
+        resource_changes=deltas["resource_changes"],
+    )
+
+
+def resolve_release_selector(graph_id: str, selector: str) -> GraphRelease | None:
+    """A release by id, or the newest one for `selector == "latest"`."""
+    if selector == "latest":
+        index = storage.get_release_index(graph_id)
+        if not index:
+            return None
+        newest = max(index, key=lambda entry: entry.get("created_at", ""))
+        return get_release(newest["release_id"], graph_id)
+    return get_release(selector, graph_id)
+
+
 __all__ = [
     "ReleasePublishBlocked",
+    "compare_draft_to_release",
+    "resolve_release_selector",
     "resolve_resource_snapshots",
     "publish_release",
     "get_release",
