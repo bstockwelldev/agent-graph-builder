@@ -1,4 +1,4 @@
-import type { GraphDefinition, NodeTrace, ReplayNodeMode, ReplayRequest } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphDefinition, NodeTrace, ReplayNodeMode, ReplayRequest } from "../types.js";
 
 /**
  * Pure helpers for counterfactual replay (STO-609, backend/app/replay.py):

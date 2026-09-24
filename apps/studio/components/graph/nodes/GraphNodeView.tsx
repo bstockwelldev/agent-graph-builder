@@ -30,7 +30,7 @@ import {
 } from "@/lib/graph-theme";
 import { computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
-import { boundTitleFor, summaryFor } from "@/lib/nodeDefaults";
+import { boundTitleFor, summaryFor } from "@bstockwelldev/agent-graph-sdk/graph";
 import { nodeBindings } from "@bstockwelldev/agent-graph-sdk";
 import { useResourceNames } from "../resourceBindings";
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";

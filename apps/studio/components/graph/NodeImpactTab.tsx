@@ -6,7 +6,7 @@ import type { BindableResourceKind, GraphDefinition, NodeImpact } from "@bstockw
 import { client } from "@/lib/api-client";
 import { color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { relativeTime } from "@/lib/nodeMetrics";
-import { versionLabel } from "@/lib/nodeDefaults";
+import { versionLabel } from "@bstockwelldev/agent-graph-sdk/graph";
 import { SkeletonBlock } from "./ui/Skeleton";
 
 /**

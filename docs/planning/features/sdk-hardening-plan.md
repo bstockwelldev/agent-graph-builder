@@ -253,7 +253,7 @@ Linear STO-617 · GitHub #68. Old names stay as deprecated aliases for one minor
 - Root build: green.
 - Playwright on the stub backend, at 1440 and 390 widths, with no failed API calls: graph list, publishing a release, a chat `/run` to Succeeded, and the policies page.
 
-### Phase 5a — `/graph` core and `/testing` kit (SDK 5/7, Medium)
+### Phase 5a — `/graph` core and `/testing` kit (SDK 5/7, Medium) — **Shipped**
 
 Linear STO-620 · GitHub #69. Non-breaking.
 
@@ -265,6 +265,53 @@ Linear STO-620 · GitHub #69. Non-breaking.
   - a fast local structural validation that mirrors the backend's cheap checks.
 - **`/testing`:** MSW handlers for every route, plus fixture factories.
 - **Consumers:** Studio and the Playground import from `/graph`, and the duplicates in Studio `lib/` are removed.
+
+#### As built
+
+**`@bstockwelldev/agent-graph-sdk/graph`** (`src/graph/`)
+- The entry point is pure: its built output imports nothing outside itself. There's no network, DOM or Zod runtime.
+- Immutable edits (`edit.ts`):
+  - `addNode` (default config for the type, id `<type>_<n>`), `connect`, `removeNode` (also removes the node's edges and group memberships), `setConfig` (merge or `{ replace }`; a key set to `undefined` is removed), `relabel`, and `nextId`.
+  - Every edit returns a new graph and leaves its input untouched. It throws on an unknown node or a duplicate id.
+- Traversal (`traverse.ts`): `upstream`, `downstream`, `reachableFrom` (the compiler's entry-node reachability), `hasCycle`, and Studio's `computeFocusNodeIds`.
+- Local validation (`validate.ts`): `validateStructure` mirrors the compiler's cheap checks. It uses the same 17 codes (`STRUCTURAL_CODES`), severities, node and edge ids, messages and ordering:
+  - duplicate node and edge ids;
+  - a missing entry node;
+  - edges to unknown nodes;
+  - a conditional edge without a condition;
+  - unreachable nodes and cycles;
+  - router/branch outgoing-edge rules;
+  - group and layer checks.
+  Config, binding, port, subgraph and policy checks need the server's registries, so `client.graphs.validate` stays the authority.
+- Moved from Studio `lib/`: `nodes.ts` (was `nodeDefaults`), `search.ts` (was `graphSearch`), `runInputs.ts` (now typed over graph nodes), `counterfactual.ts` and `policies.ts`, together with their tests.
+
+**Shared fixtures**
+- `contract/structural-fixtures.json` holds 14 cases, including the demo graph, each with the diagnostics it should produce.
+- Backend `tests/test_structural_fixtures.py` and SDK `graph/validate.test.ts` both check every case against this same file, so the two implementations can't drift apart. The backend test also pins the demo case to `build_demo_graph()`.
+
+**`@bstockwelldev/agent-graph-sdk/testing`** (`src/testing/`)
+- `msw` v2 is an optional peer dependency. Nothing else in the SDK imports this entry.
+- `createHandlers({ store, baseUrl })` returns MSW handlers for all 115 contract routes (method + path), backed by `createMockStore(seed)`, which is in-memory and stateful:
+  - Graph, resource and version CRUD work like the real API, and list routes support the API's `limit`/`cursor` paging with `X-Next-Cursor`.
+  - Runs finish immediately: one stub trace per node on the default-route path, plus a replayable SSE event stream.
+  - Releases have real fingerprints, and publishing is idempotent.
+  - Compile and publish use `validateStructure`, so a structurally broken graph returns a 422 with typed diagnostics.
+  - Policies resolve default → workspace → graph. Exceptions, routing-lab reports, knowledge upload and lineage, analytics, providers and chat are also mocked.
+- Coverage is enforced: a test compares the handler table with `contract/openapi.json` in both directions, so a new route fails CI until it's mocked.
+- Fixture factories: `demoGraph` (pinned to the backend's demo graph), `makeGraph`, `makeRun`, `makeTrace`, `makeRelease`, `releaseIndexEntry`, `makePolicyCatalog`, `makeEffectivePolicy`, `makePolicyException`, `makeDataset`, `makeFixture`, `makeDiagnostic`, `makePrompt`, `makeChatSession`.
+
+**Studio**
+- Studio imports these helpers from `/graph`. Seven `lib/` modules are deleted: the five moved ones, `runInputs`, and also `runFromNode`, whose `computeAncestorNodeIds` duplicated `upstream`.
+- `subgraphs.childInputs` duplicated `runInputVariables` and is removed.
+- `app/graphs/page.mock-api.test.tsx` is a consumer test: it renders the real page with the real client against `/testing`, with no backend and no module mocks.
+- The Playground named in this phase was retired in the studio consolidation, so Studio is the only consumer.
+
+**Verification**
+- Backend pytest: 554/554, including 15 structural-fixture tests.
+- SDK vitest: 219, plus 1 end-to-end test. Includes 58 `/graph` tests and 10 `/testing` tests; the `/testing` tests cover route coverage, factories, and every client namespace method against the mock through MSW.
+- Studio: vitest 271/271 (43 tests moved into the SDK with their helpers), tsc clean, eslint 0 errors.
+- Root build and `pnpm install --frozen-lockfile`: green.
+- Playwright on the stub backend (1440 and 390 widths), with no API or page errors: node cards, find (`type:llm`), the run input field, and the policies page.
 
 ### Phase 5b — `/react` hooks (SDK 6/7, Low)
 

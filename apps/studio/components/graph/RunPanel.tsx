@@ -29,7 +29,7 @@ import { client } from "@/lib/api-client";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
 import { showModelCatalog } from "@/lib/modelCatalog";
-import { expiryFromNow, WAIVE_DURATIONS_DAYS } from "@/lib/policies";
+import { expiryFromNow, formatRunInputs, recentInputValues, WAIVE_DURATIONS_DAYS } from "@bstockwelldev/agent-graph-sdk/graph";
 import {
   INSPECT_LOAD_FAIL,
   RUN_RESULT_EMPTY,
@@ -39,7 +39,6 @@ import {
   formatRunResult,
   resolveEventLogEvents,
 } from "@/lib/observePanel";
-import { formatRunInputs, recentInputValues } from "@/lib/runInputs";
 import type {
   ChatProvider,
   CounterfactualResult,

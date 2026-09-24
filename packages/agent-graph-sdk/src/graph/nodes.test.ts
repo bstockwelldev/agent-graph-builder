@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
+import type { NodeType } from "../types.js";
 
-import { defaultConfig, nodeLabel, summaryFor, templateVariables, withUserLabel } from "./nodeDefaults";
+import { boundTitleFor, defaultConfig, labelFor, nodeLabel, summaryFor, templateVariables, versionLabel, withUserLabel } from "./nodes.js";
 
 describe("summaryFor", () => {
   it("shows the provider for llm and tool_loop nodes", () => {
@@ -123,5 +123,19 @@ describe("defaultConfig", () => {
       "LLM profile · max 2 iterations",
     );
     expect(summaryFor("llm", { provider: "groq", llmProfileId: "" })).toBe("via groq");
+  });
+});
+
+// Wave 7c (STO-612), moved from Studio's lib/subgraphs.test.ts.
+describe("subgraph card text", () => {
+  it("titles by child name and summarizes the version", () => {
+    const config = { graphId: "answer_1", version: "latest" };
+    const names = { "graphs:answer_1": "Answer branch" };
+    expect(boundTitleFor("subgraph", config, names)).toBe("Answer branch");
+    expect(labelFor("subgraph", config)).toBe("answer_1");
+    expect(summaryFor("subgraph", config, { resourceNames: names })).toBe("latest release");
+    expect(summaryFor("subgraph", { ...config, version: "rel_9" }, { hasUserLabel: true, resourceNames: names })).toBe("Answer branch · rel_9");
+    expect(summaryFor("subgraph", { graphId: "" })).toBe("Pick a graph");
+    expect(versionLabel("draft")).toBe("draft");
   });
 });

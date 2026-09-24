@@ -3,10 +3,11 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Diagnostic, GraphDefinition, GraphNode, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
+import { runInputVariables } from "@bstockwelldev/agent-graph-sdk/graph";
 
 import { client } from "@/lib/api-client";
 import { color, spacing, text, typeScale } from "@/lib/graph-theme";
-import { childInputs, referenceableGraphs, setMappingRow } from "@/lib/subgraphs";
+import { referenceableGraphs, setMappingRow } from "@/lib/subgraphs";
 import { Combobox, type ComboboxOption } from "./ui/Combobox";
 import { Field } from "./ui/Field";
 import { Group } from "./ui/Group";
@@ -52,7 +53,7 @@ export function SubgraphConfig({
     { value: "draft", label: "Draft", description: "Always the saved draft — can't be published" },
     ...releases.map((release) => ({ value: release.release_id, label: release.release_id, description: release.created_at, group: "Pinned release" })),
   ];
-  const inputs = child ? childInputs(child) : [];
+  const inputs = child ? runInputVariables(child.nodes) : [];
 
   return (
     <Group title="Subgraph">

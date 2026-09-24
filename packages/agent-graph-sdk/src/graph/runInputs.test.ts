@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { formatRunInputs, recentInputValues, runInputVariables } from "./runInputs";
+import { formatRunInputs, recentInputValues, runInputVariables } from "./runInputs.js";
 
-const node = (nodeType: string, config: Record<string, unknown> = {}) => ({ data: { nodeType, config, label: "" } }) as never;
+const node = (type: string, config: Record<string, unknown> = {}) => ({ type, config });
 
 // studio-graph-workbench-redesign-plan.md, Wave 2.5.
 describe("runInputVariables", () => {

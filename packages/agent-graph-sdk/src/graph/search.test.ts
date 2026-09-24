@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseQuery, searchNodes } from "./graphSearch";
+import { parseQuery, searchNodes } from "./search.js";
 
 const nodes = [
   { id: "input_1", data: { nodeType: "input", label: "input: question", config: { variableName: "question" } } },

@@ -1,4 +1,4 @@
-import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
+import type { NodeType } from "../types.js";
 
 /**
  * Find-on-canvas matching (large-graph complexity, Wave 7a / STO-610).

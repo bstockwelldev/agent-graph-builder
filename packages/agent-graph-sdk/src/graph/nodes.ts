@@ -1,4 +1,4 @@
-import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
+import type { NodeType } from "../types.js";
 
 // Ported from apps/playground/src/App.tsx's defaultConfig()/labelFor() —
 // those switches were already exhaustive over all 12 NodeTypes since
