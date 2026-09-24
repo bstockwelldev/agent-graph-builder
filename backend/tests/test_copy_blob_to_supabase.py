@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import supabase_store, vercel_blob
+from app import storage, supabase_store, vercel_blob
 from scripts import copy_blob_to_supabase
 
 
@@ -36,3 +36,19 @@ def test_apply_skips_existing_unless_overwrite(stores) -> None:
 
     copy_blob_to_supabase.copy_all(apply=True, overwrite=True)
     assert supa["graphs/a.json"] == {"id": "a"}
+
+
+def test_apply_repairs_supabase_catalog_and_run_index(stores, monkeypatch) -> None:
+    calls: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        storage, "rebuild_graph_catalog", lambda backend: calls.append(("catalog", backend)) or 1
+    )
+    monkeypatch.setattr(
+        storage, "backfill_run_index", lambda backend: calls.append(("runs", backend)) or 1
+    )
+
+    copy_blob_to_supabase.main([])
+    assert calls == []
+
+    copy_blob_to_supabase.main(["--apply"])
+    assert calls == [("catalog", supabase_store), ("runs", supabase_store)]

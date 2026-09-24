@@ -6,10 +6,14 @@ import json
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+from fastapi.testclient import TestClient
 
-from app import storage, vercel_blob
+from app import storage, subgraphs, vercel_blob
+from app.bindings import resource_usages
 from app.demo_graph import build_demo_graph
-from app.models import NodeTrace, NodeType, RunSummary
+from app.main import app
+from app.models import GraphDefinition, GraphNode, NodeTrace, NodeType, RunSummary
+from app.pagination import NEXT_CURSOR_HEADER
 
 _TEST_TOKEN = "vercel_blob_rw_teststore_secrettoken"
 
@@ -328,3 +332,85 @@ def test_vercel_blob_run_listing_limit_none_returns_every_run(monkeypatch) -> No
 
     assert len(storage.list_runs_for_graph("graph_a", limit=None)) == 4
     assert len(storage.list_all_runs(limit=None)) == 4
+
+
+def _catalog_graph(graph_id: str, *, prompt_id: str = "", child_id: str = "") -> GraphDefinition:
+    nodes = []
+    if prompt_id:
+        nodes.append(GraphNode(id="p", type=NodeType.PROMPT, config={"promptId": prompt_id}))
+    if child_id:
+        nodes.append(GraphNode(id="s", type=NodeType.SUBGRAPH, config={"graphId": child_id}))
+    return GraphDefinition(
+        id=graph_id,
+        name=f"Graph {graph_id}",
+        entry_node_id="p",
+        nodes=nodes,
+        edges=[],
+        updated_at=f"2026-01-01T00:00:0{len(graph_id)}Z",
+    )
+
+
+def test_vercel_blob_graph_catalog_readers_cost_one_read(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    storage.save_graph(_catalog_graph("child"))
+    storage.save_graph(_catalog_graph("parent", prompt_id="p1", child_id="child"))
+    for index in range(10):
+        storage.save_graph(_catalog_graph(f"other_{index}"))
+    fake.blob_reads.clear()
+
+    parents = subgraphs.used_by("child")
+    usages = resource_usages(storage.list_graph_catalog(), "prompts", "p1")
+    names = {entry.id: entry.name for entry in storage.list_graph_catalog()}
+
+    assert parents == [{"graph_id": "parent", "name": "Graph parent", "node_ids": ["s"]}]
+    assert usages == [
+        {
+            "graph_id": "parent",
+            "graph_name": "Graph parent",
+            "node_id": "p",
+            "node_type": "prompt",
+            "field": "promptId",
+            "via": None,
+        }
+    ]
+    assert len(names) == 12
+    assert fake.blob_reads == ["graph_catalog.json"] * 3
+
+
+def test_vercel_blob_graph_catalog_tracks_delete_and_rebuilds_when_missing(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    # Written through the backend directly, as before the catalog existed.
+    vercel_blob.save_graph(_catalog_graph("legacy"))
+    storage.save_graph(_catalog_graph("new"))  # scans the missing catalog once
+    assert {entry.id for entry in storage.list_graph_catalog()} == {"legacy", "new"}
+
+    assert storage.delete_graph("new") is True
+    assert [entry.id for entry in storage.list_graph_catalog()] == ["legacy"]
+
+    del fake.objects["graph_catalog.json"]
+    fake.blob_reads.clear()
+    assert [entry.id for entry in storage.list_graph_catalog()] == ["legacy"]
+    assert "graph_catalog.json" in fake.objects
+    fake.blob_reads.clear()
+    storage.list_graph_catalog()
+    assert fake.blob_reads == ["graph_catalog.json"]
+
+
+def test_vercel_blob_paged_graph_listing_reads_only_the_page(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    for graph_id in ["g_c", "g_a", "g_e", "g_b", "g_d"]:
+        storage.save_graph(_catalog_graph(graph_id))
+    fake.blob_reads.clear()
+
+    first = TestClient(app).get("/api/graphs", params={"limit": 2})
+    cursor = first.headers[NEXT_CURSOR_HEADER]
+    second = TestClient(app).get("/api/graphs", params={"limit": 2, "cursor": cursor})
+
+    assert [graph["id"] for graph in first.json()] == ["g_a", "g_b"]
+    assert [graph["id"] for graph in second.json()] == ["g_c", "g_d"]
+    assert sorted(fake.blob_reads) == [
+        "graphs/g_a.json",
+        "graphs/g_b.json",
+        "graphs/g_c.json",
+        "graphs/g_d.json",
+    ]

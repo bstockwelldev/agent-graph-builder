@@ -203,7 +203,12 @@ def health_check() -> JSONResponse:
 @app.get("/api/graphs")
 def list_graphs(page: Page) -> list[GraphDefinition]:
     """Paged order (with `limit`/`cursor`): by id."""
-    return paginate(storage.list_graphs(), page, key=field_key("id"))
+    # A page reads only its own graphs; the unpaged full list reads every one.
+    if not page.requested:
+        return storage.list_graphs()
+    page_ids = paginate(storage.list_graph_ids(), page, key=lambda graph_id: (graph_id,))
+    graphs = [storage.get_graph(graph_id) for graph_id in page_ids]
+    return [graph for graph in graphs if graph is not None]
 
 
 @app.post("/api/graphs")
@@ -808,7 +813,7 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         )
         return [
             ResourceUsage.model_validate(usage)
-            for usage in resource_usages(storage.list_graphs(), kind, resource_id, tools)
+            for usage in resource_usages(storage.list_graph_catalog(), kind, resource_id, tools)
         ]
 
     @app.delete(
