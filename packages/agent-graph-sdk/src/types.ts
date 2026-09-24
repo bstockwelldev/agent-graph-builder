@@ -73,6 +73,10 @@ import type {
   runGraphSnapshotSchema,
   runSummarySchema,
   simulateResultSchema,
+  counterfactualResultSchema,
+  modelOverrideSchema,
+  replayNodeModeSchema,
+  replayRequestSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 
@@ -130,6 +134,11 @@ export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 export type Fixture = z.infer<typeof fixtureSchema>;
 export type FixtureDataset = z.infer<typeof fixtureDatasetSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
+// Counterfactual replay (STO-609).
+export type ModelOverride = z.infer<typeof modelOverrideSchema>;
+export type ReplayRequest = z.infer<typeof replayRequestSchema>;
+export type ReplayNodeMode = z.infer<typeof replayNodeModeSchema>;
+export type CounterfactualResult = z.infer<typeof counterfactualResultSchema>;
 
 // P1 rollout plan, Slice D ("Routing policy lab").
 export type RouteTargetCount = z.infer<typeof routeTargetCountSchema>;

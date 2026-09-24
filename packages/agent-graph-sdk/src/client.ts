@@ -39,6 +39,7 @@ import {
   graphAnalyticsSchema,
   nodeExecutionSchema,
   simulateResultSchema,
+  counterfactualResultSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 import type {
@@ -82,6 +83,8 @@ import type {
   RunGraphSnapshot,
   RunSummary,
   SimulateResult,
+  CounterfactualResult,
+  ReplayRequest,
   ToolDefinition,
 } from "./types.js";
 
@@ -373,6 +376,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // P1 rollout plan, Slice A ("Semantic release comparison") — a
     // categorized behavior-level diff between two releases (node config,
     // edge/router, port/contract, and resource_snapshots deltas).
+    /** STO-609: diff from a release to a draft graph (e.g. the live canvas, unsaved edits included). */
+    compareDraftToRelease: (releaseId: string, draft: GraphDefinition) =>
+      jsonFetch<ReleaseDiff>(
+        baseUrl,
+        `/api/graph-releases/${releaseId}/compare-draft`,
+        { method: "POST", body: JSON.stringify(draft) },
+        releaseDiffSchema,
+      ),
     compareReleases: (releaseId: string, otherReleaseId: string) =>
       jsonFetch<ReleaseDiff>(
         baseUrl,
@@ -404,12 +415,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
     // history UI can render either through one component. Deliberately
     // named `replayRun`, not reusing the unrelated `"replayed"` trace-event
     // flag human_gate resume already uses.
-    replayRun: (runId: string) =>
-      jsonFetch<SimulateResult>(
+    // With a `request` it's a counterfactual replay (STO-609): forced
+    // routes and/or model overrides; see replayRequestSchema.
+    replayRun: (runId: string, request?: ReplayRequest) =>
+      jsonFetch<CounterfactualResult>(
         baseUrl,
         `/api/runs/${runId}/replay`,
-        { method: "POST" },
-        simulateResultSchema,
+        request ? { method: "POST", body: JSON.stringify(request) } : { method: "POST" },
+        counterfactualResultSchema,
       ),
     // P1 rollout plan, Slice D ("Routing policy lab") — runs a graph once
     // per fixture in `dataset` (via simulate, so no live tool/LLM call for
@@ -421,6 +434,14 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         `/api/graphs/${graphId}/routing-lab/run`,
         { method: "POST", body: JSON.stringify({ dataset }) },
         routingLabReportSchema,
+      ),
+    /** STO-609: the dataset on a release (baseline; `"latest"` allowed) vs the saved draft (candidate). */
+    compareRoutingToRelease: (graphId: string, releaseId: string, dataset: Fixture[]) =>
+      jsonFetch<RoutingComparison>(
+        baseUrl,
+        `/api/graphs/${graphId}/routing-lab/compare-release/${releaseId}`,
+        { method: "POST", body: JSON.stringify({ dataset }) },
+        routingComparisonSchema,
       ),
     compareRoutingDatasets: (graphId: string, otherGraphId: string, dataset: Fixture[]) =>
       jsonFetch<RoutingComparison>(

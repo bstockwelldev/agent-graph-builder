@@ -207,7 +207,10 @@ export const graphElementChangeSchema = z.object({
 
 export const releaseDiffSchema = z.object({
   from_release_id: z.string(),
-  to_release_id: z.string(),
+  // null when the "to" side is an unpublished draft (STO-609); `to_label`
+  // then reads "Draft".
+  to_release_id: z.string().nullable(),
+  to_label: z.string().nullish(),
   from_semantic_fingerprint: z.string(),
   to_semantic_fingerprint: z.string(),
   identical: z.boolean(),
@@ -323,6 +326,27 @@ export const fixtureDatasetSchema = z.object({
 export const simulateResultSchema = z.object({
   run: runSummarySchema,
   traces: z.array(nodeTraceSchema),
+});
+
+/**
+ * Counterfactual replay (STO-609, backend/app/replay.py): pin routers to a
+ * different target and/or swap an LLM node's provider/model. Nodes those
+ * changes can't reach stay frozen; affected nodes recompute (on the stub
+ * unless `live_affected`).
+ */
+export const modelOverrideSchema = z.object({ provider: z.string(), model: z.string().nullish() });
+export const replayRequestSchema = z.object({
+  forced_routes: z.record(z.string(), z.string()).optional(),
+  model_overrides: z.record(z.string(), modelOverrideSchema).optional(),
+  live_affected: z.boolean().optional(),
+});
+export const replayNodeModeSchema = z.enum(["frozen", "recomputed", "live", "stub_fallback", "forced"]);
+export const counterfactualResultSchema = simulateResultSchema.extend({
+  original_run_id: z.string(),
+  counterfactual: z.boolean(),
+  original_traces: z.array(nodeTraceSchema),
+  changed_nodes: z.array(z.string()),
+  node_modes: z.record(z.string(), replayNodeModeSchema),
 });
 
 // P1 rollout plan, Slice D ("Routing policy lab") — POST

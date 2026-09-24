@@ -43,6 +43,7 @@ from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
     CompileResult,
+    CounterfactualResult,
     CreateGraphRequest,
     CreatePolicyExceptionRequest,
     EffectivePolicyRule,
@@ -59,6 +60,7 @@ from .models import (
     PublishResourceVersionResponse,
     ReleaseDiff,
     ReleaseRunRequest,
+    ReplayRequest,
     ResourceUsage,
     ResourceVersion,
     RoutingComparison,
@@ -90,7 +92,9 @@ from .provider_credentials import get_provider_credentials
 from .providers.base import get_chat_model
 from .releases import (
     ReleasePublishBlocked,
+    compare_draft_to_release,
     compare_releases,
+    resolve_release_selector,
     get_release,
     list_releases,
     publish_release,
@@ -273,6 +277,21 @@ def get_release_endpoint(graph_id: str, release_id: str) -> GraphRelease:
     return release
 
 
+@app.post("/api/graph-releases/{release_id}/compare-draft")
+def compare_draft_to_release_endpoint(release_id: str, draft: GraphDefinition) -> ReleaseDiff:
+    """STO-609: diff from a release to a draft graph (typically the live
+    canvas, unsaved edits included) of the same graph."""
+    graph_id = storage.get_release_graph_id(release_id)
+    release = get_release(release_id, graph_id) if graph_id is not None else None
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    if draft.id != release.graph_id:
+        raise HTTPException(
+            status_code=422, detail="draft graph id does not match the release's graph"
+        )
+    return compare_draft_to_release(release, draft)
+
+
 @app.get("/api/graph-releases/{release_id}/compare/{other_release_id}")
 def compare_releases_endpoint(release_id: str, other_release_id: str) -> ReleaseDiff:
     from_graph_id = storage.get_release_graph_id(release_id)
@@ -360,6 +379,38 @@ async def compare_routing_datasets_endpoint(
     try:
         baseline = await run_routing_dataset(graph, request.dataset)
         candidate = await run_routing_dataset(other_graph, request.dataset)
+    except SimulateBlocked as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "routing dataset run blocked by diagnostics",
+                "diagnostics": [d.model_dump() for d in exc.diagnostics],
+            },
+        ) from exc
+    return compare_routing_reports(baseline, candidate)
+
+
+@app.post("/api/graphs/{graph_id}/routing-lab/compare-release/{release_id}")
+async def compare_routing_to_release_endpoint(
+    graph_id: str, release_id: str, request: RunRoutingDatasetRequest
+) -> RoutingComparison:
+    """STO-609: the dataset against a published release (baseline, run with
+    its frozen resource snapshots) and the saved draft (candidate).
+    `release_id` may be `latest`."""
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    release = resolve_release_selector(graph_id, release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    try:
+        baseline = await run_routing_dataset(
+            release.graph,
+            request.dataset,
+            release_resource_snapshots=release.resource_snapshots,
+            release_id=release.id,
+        )
+        candidate = await run_routing_dataset(graph, request.dataset)
     except SimulateBlocked as exc:
         raise HTTPException(
             status_code=422,
@@ -916,12 +967,15 @@ def get_run_graph_snapshot(run_id: str) -> RunGraphSnapshot:
 
 
 @app.post("/api/runs/{run_id}/replay")
-async def replay_run_endpoint(run_id: str) -> SimulateResult:
+async def replay_run_endpoint(
+    run_id: str, request: ReplayRequest | None = None
+) -> CounterfactualResult:
     """P1 rollout plan, Slice C ("Historical replay") — re-executes
     `run_id`'s exact original graph read-only, with every non-routing
-    node's original output frozen. No live tool/LLM calls."""
+    node's original output frozen. No live tool/LLM calls. An optional
+    `ReplayRequest` body makes it a counterfactual replay (STO-609)."""
     try:
-        return await replay_run(run_id)
+        return await replay_run(run_id, request)
     except ReplayNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ReplayBlocked as exc:

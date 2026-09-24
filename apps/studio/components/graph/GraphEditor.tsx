@@ -1963,6 +1963,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onValidate={refreshDiagnostics}
           onDiagnosticClick={handleDiagnosticClick}
           onPolicyExceptionCreated={refreshDiagnostics}
+      getGraph={buildGraphDefinition}
           runSummary={runSummary}
           runHistory={runHistory}
           runHistoryLoading={runHistoryLoading}
@@ -1986,7 +1987,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
-        <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} />
+        <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} getDraftGraph={buildGraphDefinition} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="routingLab" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <RoutingLabPanel layout="rail" graphId={graphId} />

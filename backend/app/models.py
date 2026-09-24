@@ -218,7 +218,10 @@ class GraphElementChange(BaseModel):
 
 class ReleaseDiff(BaseModel):
     from_release_id: str
-    to_release_id: str
+    # None when the "to" side is an unpublished draft (STO-609,
+    # `compare_draft_to_release`); `to_label` then reads "Draft".
+    to_release_id: str | None
+    to_label: str | None = None
     from_semantic_fingerprint: str
     to_semantic_fingerprint: str
     identical: bool
@@ -387,6 +390,34 @@ class Fixture(BaseModel):
 class SimulateResult(BaseModel):
     run: RunSummary
     traces: list[NodeTrace]
+
+
+# Counterfactual replay (STO-609, replay.py): re-run a recorded run with a
+# router pinned to a different target and/or a different model on an LLM
+# node. Nodes those changes can't reach stay frozen at their recorded
+# output; affected nodes recompute (on the stub unless `live_affected`).
+class ModelOverride(BaseModel):
+    provider: str
+    model: str | None = None
+
+
+class ReplayRequest(BaseModel):
+    forced_routes: dict[str, str] = Field(default_factory=dict)
+    model_overrides: dict[str, ModelOverride] = Field(default_factory=dict)
+    live_affected: bool = False
+
+
+ReplayNodeMode = Literal["frozen", "recomputed", "live", "stub_fallback", "forced"]
+
+
+class CounterfactualResult(SimulateResult):
+    original_run_id: str
+    counterfactual: bool = False
+    original_traces: list[NodeTrace] = Field(default_factory=list)
+    # Nodes whose output differs from the recorded run, including nodes
+    # that only ran in one of the two.
+    changed_nodes: list[str] = Field(default_factory=list)
+    node_modes: dict[str, ReplayNodeMode] = Field(default_factory=dict)
 
 
 # P1 rollout plan, Slice D ("Routing policy lab") — runs a graph against a

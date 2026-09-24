@@ -506,6 +506,8 @@ def _prepare_run(
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
     release_id: str | None = None,
     fixture_node_outputs: dict[str, Any] | None = None,
+    forced_routes: dict[str, str] | None = None,
+    node_chat_models: dict[str, Any] | None = None,
 ) -> tuple[ExecContext, Any, dict[str, Any]]:
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
@@ -562,6 +564,8 @@ def _prepare_run(
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
         fixture_node_outputs=frozenset(seeded_node_outputs) or None,
+        forced_routes=forced_routes or None,
+        node_chat_models=node_chat_models or None,
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
@@ -615,10 +619,13 @@ async def start_run_inline(
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
     release_id: str | None = None,
     fixture_node_outputs: dict[str, Any] | None = None,
+    forced_routes: dict[str, str] | None = None,
+    node_chat_models: dict[str, Any] | None = None,
 ) -> tuple[str, RunEventBus]:
     """Create the run and await execution in this request (Vercel / serverless).
     See `start_run` for `release_resource_snapshots`/`release_id`/
-    `fixture_node_outputs`."""
+    `fixture_node_outputs`. `forced_routes`/`node_chat_models` are
+    counterfactual replay's hooks (replay.py) -- see `ExecContext`."""
     ctx, compiled_app, run_input = _prepare_run(
         compiled_workflow_id,
         run_input,
@@ -628,6 +635,8 @@ async def start_run_inline(
         release_resource_snapshots=release_resource_snapshots,
         release_id=release_id,
         fixture_node_outputs=fixture_node_outputs,
+        forced_routes=forced_routes,
+        node_chat_models=node_chat_models,
     )
     await _execute(ctx, compiled_app, run_input)
     return ctx.run_id, ctx.bus

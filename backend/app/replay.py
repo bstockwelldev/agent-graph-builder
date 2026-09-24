@@ -7,10 +7,15 @@ frozen — a full, byte-identical reproduction of the historical run, no live
 tool/LLM calls at all. This is the `studio-ux-revision-plan.md` "Replay
 run" slot: "Opens immutable workflow version in read-only execution mode."
 
-First-cut scope is full reproduction, not counterfactual replay (swapping
-one node's output for a different model/version, or freezing all nodes but
-one) — that's named in the P1 doc as later follow-on work within this same
-slice.
+Counterfactual replay (STO-609) builds on the same mechanism: a
+`ReplayRequest` can pin routers/branches to a different target
+(`forced_routes`) and give LLM/tool_loop nodes a different provider/model
+(`model_overrides`). Every node reachable downstream of a change is
+"affected" and recomputes instead of using its recorded output -- on the
+stub provider unless `live_affected` asks for the original run's provider.
+A swapped node itself runs on its chosen provider when that provider has
+credentials, and on the stub (flagged `stub_fallback`) when it doesn't.
+Everything else stays frozen, exactly as in a plain replay.
 
 Reuses Slice B's fixture mechanism directly: freezing every node's
 original output *is* a fixture, just one that happens to cover the whole
@@ -34,8 +39,18 @@ from __future__ import annotations
 from typing import Any
 
 from . import runtime, storage
-from .models import Diagnostic, GraphDefinition, NodeTrace, NodeType, SimulateResult
+from .models import (
+    CounterfactualResult,
+    Diagnostic,
+    GraphDefinition,
+    NodeTrace,
+    NodeType,
+    ReplayNodeMode,
+    ReplayRequest,
+)
 from .ports import default_output_port
+from .provider_credentials import get_provider_credentials
+from .providers.base import ChatModel, ChatProvider, get_chat_model
 from .releases import get_release
 
 _ROUTING_NODE_TYPES = frozenset({NodeType.ROUTER, NodeType.BRANCH})
@@ -106,13 +121,107 @@ def _resolve_replay_graph(
     return graph, snapshot["resource_snapshots"], None
 
 
-async def replay_run(run_id: str) -> SimulateResult:
-    """Re-executes `run_id`'s exact original graph read-only, with every
-    non-routing node's original `NodeTrace.output` frozen — no live tool or
-    LLM calls. Raises `ReplayNotFound` when the run or its durable records
-    are gone, `ReplayBlocked` when the run never succeeded or its graph no
-    longer compiles.
+_MODEL_NODE_TYPES = frozenset({NodeType.LLM, NodeType.TOOL_LOOP})
+
+
+def _counterfactual_error(message: str, node_id: str | None = None) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        category="structure",
+        code="REPLAY_COUNTERFACTUAL_INVALID",
+        node_id=node_id,
+        message=message,
+        blocking=True,
+    )
+
+
+def _validate_request(graph: GraphDefinition, request: ReplayRequest) -> list[Diagnostic]:
+    nodes_by_id = {n.id: n for n in graph.nodes}
+    diagnostics: list[Diagnostic] = []
+    for node_id, target in request.forced_routes.items():
+        node = nodes_by_id.get(node_id)
+        if node is None or node.type not in _ROUTING_NODE_TYPES:
+            diagnostics.append(
+                _counterfactual_error(f"{node_id!r} is not a router or branch node.", node_id)
+            )
+            continue
+        targets = {e.target for e in graph.edges if e.source == node_id}
+        if target not in targets:
+            diagnostics.append(
+                _counterfactual_error(
+                    f"{target!r} is not a target of {node_id!r}'s out-edges.", node_id
+                )
+            )
+    for node_id, override in request.model_overrides.items():
+        node = nodes_by_id.get(node_id)
+        if node is None or node.type not in _MODEL_NODE_TYPES:
+            diagnostics.append(
+                _counterfactual_error(f"{node_id!r} is not an llm or tool_loop node.", node_id)
+            )
+            continue
+        try:
+            ChatProvider(override.provider)
+        except ValueError:
+            diagnostics.append(
+                _counterfactual_error(f"Unknown provider {override.provider!r}.", node_id)
+            )
+    return diagnostics
+
+
+def _downstream(graph: GraphDefinition, starts: set[str]) -> set[str]:
+    """`starts` plus every node reachable from them along graph edges."""
+    adjacency: dict[str, list[str]] = {}
+    for edge in graph.edges:
+        adjacency.setdefault(edge.source, []).append(edge.target)
+    seen = set(starts)
+    frontier = list(starts)
+    while frontier:
+        for target in adjacency.get(frontier.pop(), []):
+            if target not in seen:
+                seen.add(target)
+                frontier.append(target)
+    return seen
+
+
+def _provider_usable(provider: str) -> bool:
+    """Stub/ollama need no key; the others need one configured."""
+    credentials = get_provider_credentials(provider)
+    return not credentials["requires_api_key"] or bool(credentials["configured"])
+
+
+def _override_models(request: ReplayRequest) -> tuple[dict[str, ChatModel], set[str]]:
+    """Chat models for swapped nodes, and which of them fell back to stub."""
+    models: dict[str, ChatModel] = {}
+    fallbacks: set[str] = set()
+    for node_id, override in request.model_overrides.items():
+        if _provider_usable(override.provider):
+            models[node_id] = get_chat_model(override.model, provider=override.provider)
+        else:
+            models[node_id] = get_chat_model(override.model, provider=ChatProvider.STUB.value)
+            fallbacks.add(node_id)
+    return models, fallbacks
+
+
+def _changed_nodes(original: list[NodeTrace], replayed: list[NodeTrace]) -> list[str]:
+    before = {t.node_id: t.output for t in original}
+    after = {t.node_id: t.output for t in replayed}
+    return sorted(
+        node_id
+        for node_id in before.keys() | after.keys()
+        if before.get(node_id, ...) != after.get(node_id, ...)
+    )
+
+
+async def replay_run(run_id: str, request: ReplayRequest | None = None) -> CounterfactualResult:
+    """Re-executes `run_id`'s exact original graph read-only. With no (or an
+    empty) `request`, every non-routing node's original `NodeTrace.output`
+    is frozen -- no live tool or LLM calls, a byte-identical reproduction.
+    With a counterfactual `request`, nodes downstream of its changes
+    recompute (see the module docstring). Raises `ReplayNotFound` when the
+    run or its durable records are gone, `ReplayBlocked` when the run never
+    succeeded, the request is invalid, or the graph no longer compiles.
     """
+    request = request or ReplayRequest()
     original_summary = runtime.get_run_summary(run_id)
     if original_summary is None:
         raise ReplayNotFound(f"run {run_id!r} not found")
@@ -133,26 +242,75 @@ async def replay_run(run_id: str) -> SimulateResult:
         )
 
     graph, resource_snapshots, release_id = _resolve_replay_graph(run_id)
+    request_diagnostics = _validate_request(graph, request)
+    if request_diagnostics:
+        raise ReplayBlocked(request_diagnostics)
+
     original_traces = runtime.get_run_node_traces(run_id)
-    fixture_node_outputs = frozen_node_outputs(graph, original_traces)
+    changed = set(request.forced_routes) | set(request.model_overrides)
+    affected = _downstream(graph, changed) if changed else set()
+    if changed:
+        # Input nodes also populate `state["variables"]` as a side effect,
+        # which a frozen (fixture) node skips -- and recomputed nodes such as
+        # a tool reading `inputVariable` need those. They're deterministic
+        # from the run input, so re-running them changes nothing else.
+        affected |= {n.id for n in graph.nodes if n.type == NodeType.INPUT}
+    fixture_node_outputs = {
+        node_id: output
+        for node_id, output in frozen_node_outputs(graph, original_traces).items()
+        if node_id not in affected
+    }
 
     compile_result = runtime.compile_workflow(graph)
     if not compile_result.ok or compile_result.compiled_workflow_id is None:
         raise ReplayBlocked(compile_result.diagnostics)
 
+    node_chat_models, fallbacks = _override_models(request)
+    provider = "stub"
+    if (
+        request.live_affected
+        and original_summary.provider
+        and _provider_usable(original_summary.provider)
+    ):
+        provider = original_summary.provider
+
     replay_run_id, _bus = await runtime.start_run_inline(
         compile_result.compiled_workflow_id,
         original_summary.input,
-        provider="stub",
+        provider=provider,
         release_resource_snapshots=resource_snapshots if release_id else None,
         release_id=release_id,
         fixture_node_outputs=fixture_node_outputs,
+        forced_routes=dict(request.forced_routes),
+        node_chat_models=node_chat_models,
     )
     summary = runtime.get_run_summary(replay_run_id)
     if summary is None:
         raise RuntimeError(f"replay run {replay_run_id!r} vanished immediately after completion")
     traces = runtime.get_run_node_traces(replay_run_id)
-    return SimulateResult(run=summary, traces=traces)
+
+    node_modes: dict[str, ReplayNodeMode] = {}
+    for trace in traces:
+        if trace.node_id in request.forced_routes:
+            node_modes[trace.node_id] = "forced"
+        elif trace.node_id in fallbacks:
+            node_modes[trace.node_id] = "stub_fallback"
+        elif trace.node_id in request.model_overrides:
+            node_modes[trace.node_id] = "live"
+        elif trace.node_id in fixture_node_outputs:
+            node_modes[trace.node_id] = "frozen"
+        else:
+            node_modes[trace.node_id] = "recomputed"
+
+    return CounterfactualResult(
+        run=summary,
+        traces=traces,
+        original_run_id=run_id,
+        counterfactual=bool(changed),
+        original_traces=original_traces,
+        changed_nodes=_changed_nodes(original_traces, traces),
+        node_modes=node_modes,
+    )
 
 
 __all__ = ["ReplayNotFound", "ReplayBlocked", "replay_run"]
