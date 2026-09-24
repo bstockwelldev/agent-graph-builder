@@ -37,7 +37,7 @@ import {
   type RunSummary,
 } from "@bstockwelldev/agent-graph-sdk";
 
-import { client, streamRunEvents } from "@/lib/api-client";
+import { client, waitForRun } from "@/lib/api-client";
 import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
 import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
@@ -508,7 +508,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const refreshRunHistory = useCallback(async () => {
     setRunHistoryLoading(true);
     try {
-      const runs = await client.listRuns(graphId);
+      const runs = await client.runs.list({ graphId });
       setRunHistory(runs);
     } finally {
       setRunHistoryLoading(false);
@@ -551,7 +551,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const refreshLibraryGraphs = useCallback(async () => {
     setLibraryLoading(true);
     try {
-      setLibraryGraphs(await client.listGraphs());
+      setLibraryGraphs(await client.graphs.list());
     } finally {
       setLibraryLoading(false);
     }
@@ -581,7 +581,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     let cancelled = false;
     setUsedBy([]);
     client
-      .getGraphUsedBy(graphId)
+      .graphs.usedBy(graphId)
       .then((parents) => {
         if (!cancelled) setUsedBy(parents);
       })
@@ -612,8 +612,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    client
-      .getGraph(graphId)
+    client.graphs
+      .get(graphId)
       .then((graph) => {
         if (cancelled) return;
         syncIdCounter(graph);
@@ -726,7 +726,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       try {
         const graph = buildGraphDefinition();
         client
-          .validateGraph(graph, { signal: controller.signal })
+          .graphs.validate(graph, { signal: controller.signal })
           .then((result) => setDiagnostics(result.diagnostics))
           .catch((err: unknown) => {
             if (err instanceof DOMException && err.name === "AbortError") return;
@@ -759,7 +759,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       // button (RunPanel.tsx's onValidate prop) without changing behavior
       // for this function's original fire-and-forget callers.
       return client
-        .validateGraph(graph)
+        .graphs.validate(graph)
         .then((result) => setDiagnostics(result.diagnostics))
         .catch((err: unknown) => {
           console.error("Diagnostics refresh failed:", err);
@@ -787,7 +787,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }
     setHealthLoading(true);
     client
-      .getGraphHealth(graphId, graph)
+      .graphs.health(graphId, graph)
       .then((result) => {
         setHealth(result);
         setHealthError(null);
@@ -1005,7 +1005,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     setSaveError(null);
     try {
       const graph = buildGraphDefinition();
-      await client.saveGraph(graph);
+      await client.graphs.update(graph);
       setSavedFingerprint(fingerprintGraph(graph));
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -1226,7 +1226,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     async (runId: string) => {
       lastInspectAttemptRef.current = runId;
       try {
-        const [summary, traces] = await Promise.all([client.getRun(runId), client.getRunNodeTraces(runId)]);
+        const [summary, traces] = await Promise.all([client.runs.get(runId), client.runs.traces(runId)]);
         applyRunInspection(summary, traces);
         setInspectLoadError(false);
       } catch (err: unknown) {
@@ -1261,9 +1261,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         const synced = applyRunSelectionToLlmNodes(nodes, selection.provider, selection.model);
         if (synced !== nodes) setNodes(synced);
         const graph = buildGraphDefinition(synced);
-        await client.saveGraph(graph);
+        await client.graphs.update(graph);
         setSavedFingerprint(fingerprintGraph(graph));
-        const result = await client.compileGraph(graph.id);
+        const result = await client.graphs.compile(graph.id);
         setDiagnostics(result.diagnostics);
         if (!result.ok) focusDiagnostics();
       } finally {
@@ -1293,7 +1293,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       try {
         const needsServerKey = provider === "groq" || provider === "google" || provider === "azure";
         if (needsServerKey && !apiKey?.trim()) {
-          const readiness = await client.providerReady(provider);
+          const readiness = await client.providers.ready(provider);
           if (!readiness.ready) {
             setProviderBlockMessage(readiness.message);
             return;
@@ -1304,9 +1304,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         if (synced !== nodes) setNodes(synced);
 
         const graph = buildGraphDefinition(synced);
-        await client.saveGraph(graph);
+        await client.graphs.update(graph);
         setSavedFingerprint(fingerprintGraph(graph));
-        const compileResult = await client.compileGraph(graph.id);
+        const compileResult = await client.graphs.compile(graph.id);
         setDiagnostics(compileResult.diagnostics);
         if (!compileResult.ok) {
           focusDiagnostics();
@@ -1318,7 +1318,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setInspectionRouteDecisions([]);
         closeStreamRef.current?.();
 
-        const summary = await client.startRun(graph.id, input, provider, model, apiKey, nodeOutputs);
+        const { run: summary } = await client.runs.start({ graphId: graph.id, input, provider, model, apiKey, nodeOutputs });
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
 
@@ -1326,7 +1326,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           setRunSummary(latest);
           setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
           try {
-            const traces = await client.getRunNodeTraces(latest.run_id);
+            const traces = await client.runs.traces(latest.run_id);
             setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
           } catch (err: unknown) {
             const fallback = tracesFromEvents(latest.events ?? []);
@@ -1356,8 +1356,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
         closeStreamRef.current = watchRunCompletion({
           initial: summary,
-          streamRunEvents,
-          getRun: client.getRun,
+          wait: waitForRun,
           onEvent: (event) => {
             setEvents((evts) => [...evts, event]);
             // Mirror (not duplicate) into the app-wide console's Run events
@@ -1693,7 +1692,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // undoable edit (the child graph itself stays saved).
   const extractToGraph = useCallback(
     async (nodeIds: string[], name: string) => {
-      const result = await client.extractSubgraph(graphId, buildGraphDefinition(), { node_ids: nodeIds, name });
+      const result = await client.graphs.extractSubgraph(graphId, { draft: buildGraphDefinition(), nodeIds, name });
       const proposed = result.proposed_parent;
       const removed = new Set(nodeIds);
       const added = proposed.nodes.filter((node) => !nodes.some((existing) => existing.id === node.id));
@@ -1889,7 +1888,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     if (view !== "heatmap" || !graphId) return;
     let cancelled = false;
     client
-      .getGraphAnalytics(graphId)
+      .analytics.graph(graphId)
       .then((analytics) => {
         if (!cancelled) setHeatAnalytics(analytics);
       })

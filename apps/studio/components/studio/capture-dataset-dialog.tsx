@@ -63,7 +63,7 @@ export function CaptureDatasetDialog({
     setSaving(true);
     setError(null);
     try {
-      const dataset = await client.createDatasetFromRuns({
+      const dataset = await client.datasets.fromRuns({
         name: name.trim(),
         description: description.trim() || undefined,
         runIds: runs.map((run) => run.run_id),

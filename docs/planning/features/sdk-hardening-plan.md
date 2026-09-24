@@ -91,7 +91,7 @@ Linear STO-614 · GitHub #65. Non-breaking. As-built notes follow the original s
   - the extract dialog shows its 422 reason;
   - with the backend down, the graph shows "failed to load" after about 2 s, including retries, and doesn't hang.
 
-### Phase 4 — Run lifecycle and universal streaming (SDK 2/7, **High**)
+### Phase 4 — Run lifecycle and universal streaming (SDK 2/7, **High**) — **Shipped**
 
 Linear STO-615 · GitHub #66. Non-breaking. It is sequenced second because Studio already works around these gaps.
 
@@ -100,7 +100,45 @@ Linear STO-615 · GitHub #66. Non-breaking. It is sequenced second because Studi
 - **Result helpers:** `stepsFromTraces`, `applyRunEvent` and `formatStepDuration` move out of Studio's `chatRuns.ts`.
 - **Compatibility:** `streamRunEvents` stays as a deprecated wrapper.
 
-### Phase 3 — Types generated from OpenAPI, plus a drift check (SDK 3/7, Medium)
+#### As built
+
+**Backend**
+- `RunEventBus` is now a broadcast log instead of a single-consumer queue. Every subscriber sees every event, and `stream(after=n)` replays whatever a subscriber missed.
+- A resumed run's new bus continues the sequence numbering, so it keeps climbing across a pause and resume.
+- `GET /api/runs/{id}/events`:
+  - sends `retry: 1000` and an `id: <sequence>` on every frame;
+  - honours `Last-Event-ID`, or `?after=`;
+  - with no live bus (a different serverless isolate), replays the run's persisted events and then closes.
+
+**SDK**
+- `runs.ts`:
+  - `parseSse` parses a `ReadableStream` body, so it works in browsers, Node 18+ and edge runtimes;
+  - `streamRun` validates events, reconnects with `Last-Event-ID`, skips duplicates by sequence, ends on `run.completed`, `run.failed` or `run.paused`, and ends quietly when the server has no live bus;
+  - `waitForRun` combines the stream with polling and a timeout.
+- **Client API:** `client.runs.stream`, `client.runs.wait`, and `client.runs.start(request)`, which returns a handle with `.wait()` and `.stream()`.
+- `transport.open` returns the raw response for streaming.
+- `runSteps.ts`: `applyRunEvent`, `stepsFromTraces` and `formatStepDuration` moved here from Studio.
+- `streamRunEvents` is deprecated and now wraps `streamRun`, so existing callers get reconnection and no longer depend on `EventSource`.
+
+**Decision: `wait()` treats `paused` as settled, alongside `succeeded` and `failed`**
+- A run paused at a human gate won't make progress without a resume. Studio previously let such a run time out after 30 s with a "stream unavailable" message; it now shows the paused state.
+
+**Studio**
+- `watchRunCompletion` is now a thin adapter over `client.runs.wait`. It maps a timeout or a 404 to a failed run summary with a readable reason.
+- The Run panel (GraphEditor) and chat run cards use it through `waitForRun`.
+- `lib/chatRuns.ts` re-exports the step helpers, so existing imports keep working.
+
+**Verification**
+- **Tests:**
+  - Backend pytest 519/519, including `test_run_event_stream.py`: broadcast, `after`, sequence continuity across a resume, SSE ids with `Last-Event-ID` and `?after=`, and persisted replay.
+  - SDK vitest 138 passed, plus 1 live end-to-end test that is skipped unless `AGB_E2E_URL` is set. The suite covers the parser, reconnecting without losing or duplicating events, the no-live-bus case, malformed events, the reconnect limit, `wait` via stream and via polling, and timeout and abort.
+  - Studio vitest 314/314, including `watchRun.test.ts`.
+- **Live end to end:** run in Node against a stub backend. It runs the demo graph, streams it to completion, and resumes the stream from `lastEventId: 2`.
+- **Playwright:**
+  - The Run panel settled in about 1 s over the fetch stream, with a single `/events` request and 16 events.
+  - A chat `/run` card reached "Succeeded · 7 of 7 nodes done".
+
+### Phase 3 — Types generated from OpenAPI, plus a drift check (SDK 3/7, Medium) — **Shipped**
 
 Linear STO-616 · GitHub #67. Internal only.
 
@@ -108,7 +146,45 @@ Linear STO-616 · GitHub #67. Internal only.
 - **Drift check:** CI regenerates the output and fails on any diff.
 - **Versioning:** the server sends an `X-AGB-API-Version` header, and the client warns when the server is ahead.
 
-### Phase 2 — Namespaced API, request objects and pagination (SDK 4/7, Medium)
+#### As built
+
+**Contract**
+- `backend/app/api_contract.py` defines `API_VERSION` (0.3.0) and writes FastAPI's OpenAPI document deterministically, with sorted keys.
+- `uv run python -m scripts.export_openapi [--check]` exports it to `packages/agent-graph-sdk/contract/openapi.json` (81 schemas), following the existing `node-bindings.json` pattern.
+- Every response carries `X-AGB-API-Version`. CORS exposes the header so browser clients can read it.
+
+**Generated types**
+- `pnpm --filter @bstockwelldev/agent-graph-sdk run generate [--check]` runs `scripts/generate.mjs`, which uses openapi-typescript 7 to produce `src/generated/openapi.ts` along with `CONTRACT_API_VERSION`.
+- The generated types are exported as `ApiPaths`, `ApiComponents` and `ApiOperations`.
+- Generation uses `defaultNonNullable: false`, so a field that has a server default is optional to send.
+
+**Drift checks (both run in CI)**
+1. Backend pytest `test_openapi_contract.py` fails when `openapi.json` is stale.
+2. SDK vitest `contract.test.ts` fails in either of these cases:
+   - the generated types are stale;
+   - a hand-written response schema lacks a field of its contract model, or has a field the model doesn't. Schemas are matched to models by name, with an alias map.
+3. The same test fails when a new hand-written object schema has no contract model, unless it's explicitly listed in `UNTYPED_ON_BACKEND`. That list covers 20 schemas whose routes return untyped dicts.
+
+Both checks were verified by adding a field to a Pydantic model without regenerating: pytest and vitest each failed, and vitest named the missing field.
+
+**Decision: keep the hand-written Zod response schemas**
+- They are the SDK's runtime validation, since every response is parsed. openapi-typescript generates types only, not Zod.
+- The duplication is now checked against the contract, so the schemas can't drift silently.
+- Pure duplicates were removed: the `replayRequestSchema` and `modelOverrideSchema` request bodies are now typed from the generated contract.
+- Generating the Zod schemas themselves, for example with an openapi-to-zod generator, can be revisited alongside SDK 4/7's request objects.
+
+**Version skew**
+- The client compares the server's major.minor version with `CONTRACT_API_VERSION`.
+- If the server is ahead, `onVersionSkew` is called once per client. It defaults to `console.warn`, and `false` silences it.
+- `RunSummary.compiler_version` was already exposed.
+
+**Verification**
+- Backend pytest: 528/528.
+- SDK vitest: 143, plus 1 end-to-end test that runs only when `AGB_E2E_URL` is set. The contract, drift, coverage and skew tests are included.
+- Studio vitest: 314/314.
+- Root build, with `pnpm install --frozen-lockfile`: green.
+
+### Phase 2 — Namespaced API, request objects and pagination (SDK 4/7, Medium) — **Shipped**
 
 Linear STO-617 · GitHub #68. Old names stay as deprecated aliases for one minor version.
 
@@ -127,6 +203,55 @@ Linear STO-617 · GitHub #68. Old names stay as deprecated aliases for one minor
 
 - **Request objects** replace positional arguments.
 - **Pagination:** cursor pagination (`limit` and `cursor`) on list endpoints, in both the backend and the SDK.
+
+#### As built
+
+**Backend pagination (opt-in, non-breaking)**
+- `backend/app/pagination.py` adds `?limit=` (1–500) and `?cursor=` to every list route: graphs, runs (per graph and across graphs), releases, policy exceptions (per graph and across the workspace), knowledge lineage, every resource kind, and resource versions.
+- Without either parameter, a route returns exactly what it did before. With them, it returns one page in a documented order and sets `X-Next-Cursor` while more items remain. CORS exposes the header.
+- The body stays a plain array, so no response schema changed and older clients are unaffected. `API_VERSION` is now 0.4.0 (an additive change).
+- A cursor is the base64url sort key of the last item, and the next page is every item strictly after it. Deleting an item between pages never shifts or repeats the rest. A malformed cursor returns 400.
+- Page order:
+  - graphs and resources: by id;
+  - runs: newest first;
+  - releases, versions, exceptions and lineage: by creation time.
+- Paged runs are uncapped. Unpaged runs keep the old caps of 50 per graph and 200 across graphs. Storage `list_runs_for_graph` / `list_all_runs` now accept `limit=None`.
+- The remote stores still list and then filter. Keyset queries on the backend can come later.
+
+**SDK namespaces** (`src/api.ts`)
+- Namespaces: `graphs`, `runs`, `releases`, `policies` (`catalog`, `workspace.get/save`, `graph.get/save`, `effective`, `exceptions.*`), `routingLab`, `knowledge`, `analytics` (`dashboard`, `graph`, `nodeHistory`), `providers`, `runtimeTargets`, and the resource kinds.
+- The resource kinds (`prompts`, `tools`, `mcpServers`, `agents`, `llmProfiles`, `datasets`, `chatSessions`) stay top-level. They were already namespaces, so a `client.resources` wrapper would only add a second path to the same thing. `datasets.fromRuns` and `chatSessions.send` absorb the last two flat bespoke methods.
+- Convention: the resource's own ids are positional, and everything else is one camelCase request object that the SDK maps to snake_case. Examples:
+  - `releases.publish(graphId, { notes, author })`
+  - `policies.exceptions.create(graphId, { code, expiresAt, nodeId, reason })`
+  - `graphs.impact(graphId, { nodeId, draft })`
+- `runs.start` and `releases.run` return a `RunHandle` (`.run`, `.wait()`, `.stream()`).
+- Every list offers three readers:
+  - `list()`: unpaged, as before;
+  - `listPage({ limit, cursor })`: returns `{ items, nextCursor }`;
+  - `iterate({ pageSize })`: an async generator over every item.
+- Knowledge lineage uses `lineage`, `lineagePage` and `iterateLineage`. `collectAll()` gathers an iterator into an array.
+- Transport gains `requestWithHeaders`, which pagination uses to read `X-Next-Cursor`.
+
+**Deprecated aliases**
+- Every flat method (`getGraph`, `startRun`, `createPolicyException`, ...) keeps its positional signature, delegates to its namespace, and is tagged `@deprecated` in TSDoc with the replacement named.
+- The existing client tests pass unchanged against the aliases. A new test checks that each alias sends exactly the request its namespaced method sends.
+- Deprecated aliases stay for one minor version; they are removed at 1.0 (SDK 7/7).
+
+**Studio**
+- Every call site and every test mock uses the namespaces.
+- `lib/api-client.ts` types `client` as `Omit<AgentGraphClient, keyof DeprecatedClientMethods>`, so `tsc` rejects any use of a deprecated alias.
+- `lib/mockClient.ts` resets nested test mocks.
+
+**Verification**
+- Backend pytest: 539/539. `test_pagination.py` pages through 130 graphs, 120 runs (past the unpaged cap) and 105 resources, checks that a deleted cursor item doesn't shift the next page, and checks bounds, the invalid-cursor response, CORS exposure, and every other paged route.
+- SDK vitest: 150, plus the end-to-end test.
+  - `namespaces.test.ts` iterates 250 items across pages, and checks `listPage`, per-route paging, request-object bodies, alias/namespace parity, and `with()` scoping.
+  - The end-to-end test also passed live against the stub backend.
+- A live check through the built SDK iterated 121 graphs in pages of 50, with none missing or repeated.
+- Studio: vitest 314/314, tsc clean, eslint 0 errors.
+- Root build: green.
+- Playwright on the stub backend, at 1440 and 390 widths, with no failed API calls: graph list, publishing a release, a chat `/run` to Succeeded, and the policies page.
 
 ### Phase 5a — `/graph` core and `/testing` kit (SDK 5/7, Medium)
 

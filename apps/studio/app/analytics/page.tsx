@@ -35,7 +35,7 @@ export default function AnalyticsPage() {
     let cancelled = false;
     async function load() {
       try {
-        const dashboard = await client.getAnalytics();
+        const dashboard = await client.analytics.dashboard();
         if (!cancelled) setPayload(dashboard);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));

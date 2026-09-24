@@ -16,7 +16,7 @@ import { useWorkbench, type StudioGraphContext } from "@/components/workbench/Wo
  * the same dashboard body as `app/analytics/page.tsx`, ported into a HUD
  * panel so it's reachable via Cmd/Ctrl+K without leaving the canvas — the
  * gap analysis's Tier 1 finding that /analytics had no HUD door at all.
- * Global scope, not graph-scoped: `client.getAnalytics()` spans every
+ * Global scope, not graph-scoped: `client.analytics.dashboard()` spans every
  * graph in the workspace. Token counts / spend are estimates (chars/4
  * heuristic — AGB's ChatModel protocol has no real usage data), not
  * billing truth; see backend/app/analytics.py's module docstring.
@@ -43,7 +43,7 @@ function WorkspaceAnalytics() {
     let cancelled = false;
     async function load() {
       try {
-        const dashboard = await client.getAnalytics();
+        const dashboard = await client.analytics.dashboard();
         if (!cancelled) setPayload(dashboard);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -222,7 +222,7 @@ export function GraphAnalyticsView({ context }: { context: StudioGraphContext })
     let cancelled = false;
     setError(null);
     client
-      .getGraphAnalytics(graphId)
+      .analytics.graph(graphId)
       .then((result) => {
         if (!cancelled) setPayload(result);
       })

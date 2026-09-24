@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlatformEvent, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 
-vi.mock("@/lib/api-client", () => ({ client: {}, streamRunEvents: vi.fn() }));
+vi.mock("@/lib/api-client", () => ({ client: {}, waitForRun: vi.fn() }));
 
 import { RunCard, RunConfirmCard, type RunCardDeps } from "./run-card";
 import { ToolStep } from "./tool-step";
@@ -44,9 +44,10 @@ describe("RunCard", () => {
     const deps: RunCardDeps = {
       getRun: vi.fn(async () => summary("running")),
       getRunNodeTraces: vi.fn(async () => []),
-      streamRunEvents: vi.fn((_runId, onEvent) => {
-        emit = onEvent;
-        return () => undefined;
+      // SDK 2/7: runs.wait streams events to onEvent until the run settles.
+      waitForRun: vi.fn((_runId, options) => {
+        emit = options.onEvent ?? (() => undefined);
+        return new Promise(() => undefined);
       }),
     };
     const onViewRun = vi.fn();
@@ -70,14 +71,14 @@ describe("RunCard", () => {
       getRunNodeTraces: vi.fn(async () => [
         { node_id: "input_1", node_type: "input", status: "succeeded", input: {}, output: "TCP?", started_at: "2026-01-01T00:00:00Z", completed_at: "2026-01-01T00:00:00Z" },
       ]) as never,
-      streamRunEvents: vi.fn(() => () => undefined),
+      waitForRun: vi.fn(() => new Promise(() => undefined)),
     };
     render(<RunCard runRef={{ ...ref, source: "release", release_id: "rel_9" }} deps={deps} />);
     await vi.waitFor(() => expect(screen.getByRole("status").textContent).toBe("succeeded"));
     expect(await screen.findByRole("button", { name: /input_1/ })).toBeTruthy();
     expect(screen.getByText("Release rel_9")).toBeTruthy();
     expect(screen.getByTestId("json-result").textContent).toBe("done");
-    expect(deps.streamRunEvents).not.toHaveBeenCalled();
+    expect(deps.waitForRun).not.toHaveBeenCalled();
   });
 });
 

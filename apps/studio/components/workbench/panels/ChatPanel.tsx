@@ -38,7 +38,7 @@ function commandFor(target: RunTarget): string {
 
 /**
  * Direct model scratchpad (studio-consolidation Phase 8 part E) — chats
- * straight to a chosen provider/model via `client.sendChatMessage`,
+ * straight to a chosen provider/model via `client.chatSessions.send`,
  * bypassing the graph engine entirely (confirmed with the user: not bound
  * to a node, not a multi-turn graph execution). Session persistence is a
  * day-one requirement (also confirmed), so sessions are listed/created via
@@ -71,7 +71,7 @@ export function ChatPanel() {
 
   async function loadGraphs(): Promise<GraphDefinition[]> {
     if (graphs) return graphs;
-    const list = await client.listGraphs();
+    const list = await client.graphs.list();
     setGraphs(list);
     return list;
   }
@@ -153,7 +153,7 @@ export function ChatPanel() {
     try {
       let releaseId: string | null = null;
       if (target.release !== null) {
-        const releases = [...(await client.listReleases(target.graph.id))].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+        const releases = [...(await client.releases.list(target.graph.id))].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
         const release = target.release === "latest" ? releases[0] : releases.find((entry) => entry.release_id === target.release);
         if (!release) {
           throw new Error(
@@ -166,9 +166,9 @@ export function ChatPanel() {
       }
       const provider = activeSession.provider as ChatProvider;
       const model = activeSession.model || undefined;
-      const summary = releaseId
-        ? await client.startReleaseRun(releaseId, target.input, provider, model)
-        : await client.startRun(target.graph.id, target.input, provider, model);
+      const { run: summary } = releaseId
+        ? await client.releases.run(releaseId, { input: target.input, provider, model })
+        : await client.runs.start({ graphId: target.graph.id, input: target.input, provider, model });
       const run: ChatRunRef = {
         run_id: summary.run_id,
         graph_id: target.graph.id,
@@ -259,7 +259,7 @@ export function ChatPanel() {
               run_id: graphContext.runId,
             }
           : undefined;
-      const updated = await client.sendChatMessage(activeSession.id, content, context);
+      const updated = await client.chatSessions.send(activeSession.id, { content, context });
       setActiveSession(updated);
       setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (err) {

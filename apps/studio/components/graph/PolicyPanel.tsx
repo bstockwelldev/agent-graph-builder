@@ -56,10 +56,10 @@ export function PolicyPanel({
 
   const load = useCallback(async (id: string) => {
     const [graphEffective, workspaceEffective, graphSettings, graphExceptions] = await Promise.all([
-      client.getEffectivePolicies(id),
-      client.getEffectivePolicies(),
-      client.getGraphPolicies(id),
-      client.listPolicyExceptions(id),
+      client.policies.effective({ graphId: id }),
+      client.policies.effective(),
+      client.policies.graph.get(id),
+      client.policies.exceptions.list({ graphId: id }),
     ]);
     setEffective(graphEffective);
     setInherited(Object.fromEntries(workspaceEffective.map((rule) => [rule.rule.code, rule])));
@@ -92,8 +92,8 @@ export function PolicyPanel({
       const previous = overrides;
       setOverrides(next);
       try {
-        await client.saveGraphPolicies(graphId, { rules: next });
-        setEffective(await client.getEffectivePolicies(graphId));
+        await client.policies.graph.save(graphId, { rules: next });
+        setEffective(await client.policies.effective({ graphId }));
         onPoliciesChanged?.();
       } catch (err) {
         setOverrides(previous);
@@ -112,7 +112,7 @@ export function PolicyPanel({
       setError(null);
       try {
         await action();
-        setExceptions(await client.listPolicyExceptions(graphId));
+        setExceptions(await client.policies.exceptions.list({ graphId }));
         setPendingRevokeId(null);
         onPoliciesChanged?.();
       } catch (err) {
@@ -259,7 +259,7 @@ export function PolicyPanel({
                       aria-label={`Extend ${name} exception by 30 days`}
                       onClick={() =>
                         void exceptionAction(exception.id, () =>
-                          client.updatePolicyException(exception.graph_id, exception.id, extendExpiry(exception, 30)),
+                          client.policies.exceptions.update(exception.graph_id, exception.id, { expiresAt: extendExpiry(exception, 30) }),
                         )
                       }
                     >
@@ -270,7 +270,7 @@ export function PolicyPanel({
                         <Button
                           variant="destructive"
                           disabled={busy}
-                          onClick={() => void exceptionAction(exception.id, () => client.deletePolicyException(exception.graph_id, exception.id))}
+                          onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.delete(exception.graph_id, exception.id))}
                         >
                           {busy ? "Revoking…" : "Confirm revoke"}
                         </Button>

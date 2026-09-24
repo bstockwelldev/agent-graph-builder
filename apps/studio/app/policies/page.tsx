@@ -62,10 +62,10 @@ export default function PoliciesPage() {
     setError(null);
     try {
       const [effective, workspace, allExceptions, graphs] = await Promise.all([
-        client.getEffectivePolicies(),
-        client.getWorkspacePolicies(),
-        client.listAllPolicyExceptions(),
-        client.listGraphs().catch(() => [] as GraphDefinition[]),
+        client.policies.effective(),
+        client.policies.workspace.get(),
+        client.policies.exceptions.list(),
+        client.graphs.list().catch(() => [] as GraphDefinition[]),
       ]);
       setRules(effective);
       setSettings(workspace.rules);
@@ -90,9 +90,9 @@ export default function PoliciesPage() {
       setSaving(true);
       setError(null);
       try {
-        const saved = await client.saveWorkspacePolicies({ rules: next });
+        const saved = await client.policies.workspace.save({ rules: next });
         setSavedAt(saved.updated_at ?? null);
-        setRules(await client.getEffectivePolicies());
+        setRules(await client.policies.effective());
       } catch (err) {
         setSettings(previous);
         setError(errorDetail(err));
@@ -108,7 +108,7 @@ export default function PoliciesPage() {
     setError(null);
     try {
       await action();
-      setExceptions(await client.listAllPolicyExceptions());
+      setExceptions(await client.policies.exceptions.list());
       setPendingRevokeId(null);
     } catch (err) {
       setError(errorDetail(err));
@@ -227,7 +227,7 @@ export default function PoliciesPage() {
                         variant="outline"
                         disabled={busy}
                         aria-label={`Extend ${name} exception on ${graphNames[exception.graph_id] ?? exception.graph_id} by 30 days`}
-                        onClick={() => void exceptionAction(exception.id, () => client.updatePolicyException(exception.graph_id, exception.id, extendExpiry(exception, 30)))}
+                        onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.update(exception.graph_id, exception.id, { expiresAt: extendExpiry(exception, 30) }))}
                       >
                         {state === "expired" ? "Renew 30 days" : "Extend 30 days"}
                       </Button>
@@ -238,7 +238,7 @@ export default function PoliciesPage() {
                             size="sm"
                             variant="destructive"
                             disabled={busy}
-                            onClick={() => void exceptionAction(exception.id, () => client.deletePolicyException(exception.graph_id, exception.id))}
+                            onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.delete(exception.graph_id, exception.id))}
                           >
                             Confirm revoke
                           </Button>

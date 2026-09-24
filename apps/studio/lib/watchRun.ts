@@ -1,4 +1,10 @@
-import type { PlatformEvent, RunSummary } from "@bstockwelldev/agent-graph-sdk";
+import {
+  AgentGraphTimeoutError,
+  isAgentGraphApiError,
+  type PlatformEvent,
+  type RunSummary,
+  type WaitForRunOptions,
+} from "@bstockwelldev/agent-graph-sdk";
 
 export const RUN_WATCH_TIMEOUT_MS = 30_000;
 export const RUN_WATCH_POLL_MS = 1_000;
@@ -10,12 +16,15 @@ export const RUN_NOT_FOUND_HINT =
   "Run not found on this server instance. Production storage is per-isolate until BLOB_READ_WRITE_TOKEN (Vercel Blob), OBJECT_STORE_*, or TURSO_* env is set.";
 
 export function isRunNotFoundError(error: unknown): boolean {
+  if (isAgentGraphApiError(error)) return error.status === 404;
   const message = error instanceof Error ? error.message : String(error);
   return message.includes("(404)") && message.toLowerCase().includes("run not found");
 }
 
+/** Settled: succeeded, failed, or paused at a human gate (nothing more
+ * happens without a resume) -- the SDK's `isSettledRun`. */
 export function isTerminalRunStatus(status: RunSummary["status"]): boolean {
-  return status === "succeeded" || status === "failed";
+  return status === "succeeded" || status === "failed" || status === "paused";
 }
 
 export function timedOutRunSummary(current: RunSummary): RunSummary {
@@ -36,89 +45,44 @@ export function failedUnavailableRunSummary(current: RunSummary, detail: string)
   };
 }
 
+/** `client.runs.wait` (SDK 2/7), or a stand-in with the same contract. */
+export type WaitForRun = (runId: string, options: WaitForRunOptions) => Promise<RunSummary>;
+
 type WatchRunOptions = {
   initial: RunSummary;
-  streamRunEvents: (
-    runId: string,
-    onEvent: (event: PlatformEvent) => void,
-    onClose?: () => void,
-  ) => () => void;
-  getRun: (runId: string) => Promise<RunSummary>;
+  wait: WaitForRun;
   onEvent: (event: PlatformEvent) => void;
   onTerminal: (summary: RunSummary) => void;
   timeoutMs?: number;
   pollMs?: number;
 };
 
+/**
+ * Stream a run's events until it settles, then report its final summary.
+ * SDK 2/7 (STO-615): the stream + poll-fallback + timeout logic now lives
+ * in the SDK (`client.runs.wait`); this adapts it to the callback shape
+ * the Run panel and chat run cards use, and maps a timeout / failed poll
+ * onto a failed summary with a readable reason. Returns a stop function.
+ */
 export function watchRunCompletion(options: WatchRunOptions): () => void {
-  const {
-    initial,
-    streamRunEvents,
-    getRun,
-    onEvent,
-    onTerminal,
-    timeoutMs = RUN_WATCH_TIMEOUT_MS,
-    pollMs = RUN_WATCH_POLL_MS,
-  } = options;
-  const runId = initial.run_id;
-  let stopped = false;
-  let inflight = false;
-  let stopStream: () => void = () => undefined;
-  // Both reassigned below via window.setInterval/setTimeout; eslint's scope
-  // analysis doesn't associate that reassignment with this declaration.
-  // eslint-disable-next-line prefer-const
-  let pollTimer: number | undefined;
-  // eslint-disable-next-line prefer-const
-  let timeoutTimer: number | undefined;
-
-  const finish = (summary: RunSummary) => {
-    if (stopped) return;
-    stopped = true;
-    if (pollTimer !== undefined) window.clearInterval(pollTimer);
-    if (timeoutTimer !== undefined) window.clearTimeout(timeoutTimer);
-    stopStream();
-    onTerminal(summary);
-  };
-
-  const pollOnce = async () => {
-    if (stopped || inflight) return;
-    inflight = true;
-    try {
-      const latest = await getRun(runId);
-      if (isTerminalRunStatus(latest.status)) {
-        finish(latest);
+  const { initial, wait, onEvent, onTerminal, timeoutMs = RUN_WATCH_TIMEOUT_MS, pollMs = RUN_WATCH_POLL_MS } = options;
+  const controller = new AbortController();
+  wait(initial.run_id, { signal: controller.signal, timeoutMs, pollMs, onEvent })
+    .then((summary) => {
+      if (!controller.signal.aborted) onTerminal(summary);
+    })
+    .catch((err: unknown) => {
+      if (controller.signal.aborted) return;
+      if (err instanceof AgentGraphTimeoutError) {
+        onTerminal(timedOutRunSummary(initial));
+        return;
       }
-    } catch (err: unknown) {
-      finish(
+      onTerminal(
         failedUnavailableRunSummary(
           initial,
-          isRunNotFoundError(err)
-            ? RUN_NOT_FOUND_HINT
-            : "Live stream unavailable (serverless); poll failed.",
+          isRunNotFoundError(err) ? RUN_NOT_FOUND_HINT : "Live stream unavailable (serverless); poll failed.",
         ),
       );
-    } finally {
-      inflight = false;
-    }
-  };
-
-  stopStream = streamRunEvents(runId, onEvent, () => {
-    void pollOnce();
-  });
-
-  pollTimer = window.setInterval(() => {
-    void pollOnce();
-  }, pollMs);
-
-  timeoutTimer = window.setTimeout(() => {
-    finish(timedOutRunSummary(initial));
-  }, timeoutMs);
-
-  return () => {
-    if (stopped) return;
-    stopped = true;
-    if (pollTimer !== undefined) window.clearInterval(pollTimer);
-    if (timeoutTimer !== undefined) window.clearTimeout(timeoutTimer);
-    stopStream();
-  };
+    });
+  return () => controller.abort();
 }

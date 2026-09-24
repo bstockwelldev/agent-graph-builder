@@ -54,11 +54,17 @@ class PlatformEvent(BaseModel):
 
 
 class RunEventBus:
-    def __init__(self, run_id: str) -> None:
+    """A run's event log. SDK 2/7 (STO-615): a broadcast log rather than a
+    single-consumer queue, so any number of SSE subscribers -- including a
+    client reconnecting with `Last-Event-ID` -- each see every event, and
+    `stream(after=n)` replays what they missed."""
+
+    def __init__(self, run_id: str, start_sequence: int = 0) -> None:
         self.run_id = run_id
-        self._queue: asyncio.Queue[PlatformEvent | None] = asyncio.Queue()
-        self._seq = 0
+        self._seq = start_sequence
         self._collected: list[PlatformEvent] = []
+        self._closed = False
+        self._changed = asyncio.Event()
 
     def emit(
         self, event_type: EventType, payload: dict[str, Any], node_id: str | None = None
@@ -73,28 +79,45 @@ class RunEventBus:
             payload=payload,
         )
         self._collected.append(event)
-        self._queue.put_nowait(event)
+        self._notify()
         return event
 
     def collected_events(self) -> list[PlatformEvent]:
         return list(self._collected)
 
     def close(self) -> None:
-        self._queue.put_nowait(None)
+        self._closed = True
+        self._notify()
 
-    async def stream(self):
+    def _notify(self) -> None:
+        # Wake every waiting subscriber, then arm a fresh event for the next
+        # change (asyncio.Event has no "pulse").
+        changed, self._changed = self._changed, asyncio.Event()
+        changed.set()
+
+    async def stream(self, after: int = 0):
+        """Every event with `sequence > after` -- already emitted ones first,
+        then live ones -- until the bus closes."""
+        index = 0
         while True:
-            event = await self._queue.get()
-            if event is None:
-                break
-            yield event
+            while index < len(self._collected):
+                event = self._collected[index]
+                index += 1
+                if event.sequence > after:
+                    yield event
+            if self._closed:
+                return
+            await self._changed.wait()
 
 
 _BUSES: dict[str, RunEventBus] = {}
 
 
 def create_bus(run_id: str) -> RunEventBus:
-    bus = RunEventBus(run_id)
+    # A resumed run (human_gate) gets a fresh bus; keep its sequence numbers
+    # climbing so SSE ids / Last-Event-ID stay monotonic across the resume.
+    previous = _BUSES.get(run_id)
+    bus = RunEventBus(run_id, start_sequence=previous._seq if previous else 0)
     _BUSES[run_id] = bus
     return bus
 

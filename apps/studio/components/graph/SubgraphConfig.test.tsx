@@ -5,7 +5,7 @@ import { SubgraphConfig } from "./SubgraphConfig";
 
 // Wave 7c (STO-612): the subgraph node's Configure tab.
 
-const { clientMock } = vi.hoisted(() => ({ clientMock: { listGraphs: vi.fn(), listReleases: vi.fn() } }));
+const { clientMock } = vi.hoisted(() => ({ clientMock: { graphs: { list: vi.fn() }, releases: { list: vi.fn() } } }));
 vi.mock("@/lib/api-client", () => ({ client: clientMock }));
 
 const g = (id: string, name: string, extra: Record<string, unknown>[] = []) => ({
@@ -17,12 +17,12 @@ const g = (id: string, name: string, extra: Record<string, unknown>[] = []) => (
 });
 
 beforeEach(() => {
-  clientMock.listGraphs.mockResolvedValue([
+  clientMock.graphs.list.mockResolvedValue([
     g("parent", "Parent"),
     g("child", "Child graph"),
     g("loop", "Loops back", [{ id: "s", type: "subgraph", position: { x: 0, y: 0 }, config: { graphId: "parent" } }]),
   ]);
-  clientMock.listReleases.mockResolvedValue([{ release_id: "rel_1", created_at: "2026-09-24", semantic_fingerprint: "x" }]);
+  clientMock.releases.list.mockResolvedValue([{ release_id: "rel_1", created_at: "2026-09-24", semantic_fingerprint: "x" }]);
 });
 afterEach(cleanup);
 
@@ -38,7 +38,7 @@ describe("SubgraphConfig", () => {
         variables={["question"]}
       />,
     );
-    await waitFor(() => expect(clientMock.listReleases).toHaveBeenCalledWith("child"));
+    await waitFor(() => expect(clientMock.releases.list).toHaveBeenCalledWith("child"));
     expect(await screen.findByRole("textbox", { name: "Input topic" })).toBeTruthy();
     expect(screen.getByText("← upstream")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open graph" }).getAttribute("href")).toBe("/graphs/child");

@@ -44,7 +44,7 @@ export function ProviderModelPicker({
     let cancelled = false;
     setModelCatalogLoading(true);
     client
-      .listProviderModels(provider, graphId ?? undefined)
+      .providers.models(provider, { graphId: graphId ?? undefined })
       .then((catalog) => {
         if (cancelled) return;
         setModelOptions(catalog.models);

@@ -2,25 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { Play, ShieldAlert, Workflow } from "lucide-react";
-import type { ChatRunRef, NodeTrace, PlatformEvent, RunSummary } from "@bstockwelldev/agent-graph-sdk";
+import type { ChatRunRef, NodeTrace, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 
 import { Button } from "@/components/ui/button";
-import { client, streamRunEvents } from "@/lib/api-client";
+import { client, waitForRun } from "@/lib/api-client";
 import { applyRunEvent, formatStepDuration, stepsFromTraces, type RunStep } from "@/lib/chatRuns";
 import { cn } from "@/lib/utils";
-import { isTerminalRunStatus, watchRunCompletion } from "@/lib/watchRun";
+import { isTerminalRunStatus, watchRunCompletion, type WaitForRun } from "@/lib/watchRun";
 import { JsonBlock, ToolStep } from "./tool-step";
 
 export type RunCardDeps = {
   getRun: (runId: string) => Promise<RunSummary>;
   getRunNodeTraces: (runId: string) => Promise<NodeTrace[]>;
-  streamRunEvents: (runId: string, onEvent: (event: PlatformEvent) => void, onClose?: () => void) => () => void;
+  /** SDK 2/7: `client.runs.wait` -- streams events and resolves when the run settles. */
+  waitForRun: WaitForRun;
 };
 
 const DEFAULT_DEPS: RunCardDeps = {
-  getRun: (runId) => client.getRun(runId),
-  getRunNodeTraces: (runId) => client.getRunNodeTraces(runId),
-  streamRunEvents,
+  getRun: (runId) => client.runs.get(runId),
+  getRunNodeTraces: (runId) => client.runs.traces(runId),
+  waitForRun,
 };
 
 export function versionLabel(ref: Pick<ChatRunRef, "source" | "release_id">): string {
@@ -80,8 +81,7 @@ export function RunCard({
         }
         stop = watchRunCompletion({
           initial,
-          streamRunEvents: deps.streamRunEvents,
-          getRun: deps.getRun,
+          wait: deps.waitForRun,
           onEvent: (event) => {
             if (!cancelled) setSteps((current) => applyRunEvent(current, event));
           },

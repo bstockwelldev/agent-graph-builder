@@ -51,6 +51,8 @@ export type TransportOptions = {
   retry?: RetryOptions | false;
   onRequest?: (context: RequestContext) => void;
   onResponse?: (context: ResponseContext) => void;
+  /** SDK 3/7: called with the server's `X-AGB-API-Version` header, when sent. */
+  onApiVersion?: (serverVersion: string) => void;
 };
 
 /** Per-call options -- via `client.with({...})`. */
@@ -63,6 +65,7 @@ export type RequestOptions = {
 
 type RequestInitLike = Omit<RequestInit, "headers" | "signal"> & { headers?: HeadersInit; signal?: AbortSignal | null };
 
+export const API_VERSION_HEADER = "X-AGB-API-Version";
 const IDEMPOTENT = new Set(["GET", "HEAD", "OPTIONS"]);
 const RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const DEFAULT_RETRY: Required<RetryOptions> = { retries: 2, baseDelayMs: 250, maxDelayMs: 4000 };
@@ -70,14 +73,28 @@ const DEFAULT_RETRY: Required<RetryOptions> = { retries: 2, baseDelayMs: 250, ma
 export type Transport = {
   readonly baseUrl: string;
   request<T>(path: string, init?: RequestInitLike, schema?: z.ZodType<T>): Promise<T>;
+  /** SDK 4/7: `request`, plus the response headers (e.g. `X-Next-Cursor`). */
+  requestWithHeaders<T>(path: string, init?: RequestInitLike, schema?: z.ZodType<T>): Promise<{ data: T; headers: Headers }>;
+  /** SDK 2/7: one attempt, returning the raw `Response` (for streaming
+   * bodies). Headers, hooks and cancellation apply; no timeout or retry --
+   * a stream's caller owns both. Non-2xx rejects with AgentGraphApiError. */
+  open(path: string, init?: RequestInitLike): Promise<Response>;
   /** A transport whose calls also carry `options` (merged over this one's). */
   with(options: RequestOptions): Transport;
 };
 
 export function createTransport(options: TransportOptions = {}, scoped: RequestOptions = {}): Transport {
   const baseUrl = options.baseUrl ?? "";
+  const reportApiVersion = (response: Response) => {
+    const version = response.headers?.get?.(API_VERSION_HEADER);
+    if (version) options.onApiVersion?.(version);
+  };
 
   async function request<T>(path: string, init: RequestInitLike = {}, schema?: z.ZodType<T>): Promise<T> {
+    return (await requestWithHeaders(path, init, schema)).data;
+  }
+
+  async function requestWithHeaders<T>(path: string, init: RequestInitLike = {}, schema?: z.ZodType<T>): Promise<{ data: T; headers: Headers }> {
     const method = (init.method ?? "GET").toUpperCase();
     const url = `${baseUrl}${path}`;
     const retry = resolveRetry(scoped.retry ?? options.retry, method);
@@ -117,6 +134,7 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
       }
       timeout?.clear();
       options.onResponse?.({ ...context, status: response.status, durationMs: Date.now() - started });
+      reportApiVersion(response);
 
       if (!response.ok) {
         if (RETRY_STATUSES.has(response.status) && attempt <= retry.retries) {
@@ -127,18 +145,47 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
       }
 
       const data: unknown = response.status === 204 ? null : await response.json();
-      if (!schema) return data as T;
+      const responseHeaders = response.headers ?? new Headers();
+      if (!schema) return { data: data as T, headers: responseHeaders };
       const result = schema.safeParse(data);
       if (!result.success) {
         throw new AgentGraphResponseError({ method, path, issues: result.error.issues, message: result.error.message });
       }
-      return result.data;
+      return { data: result.data, headers: responseHeaders };
     }
+  }
+
+  async function open(path: string, init: RequestInitLike = {}): Promise<Response> {
+    const method = (init.method ?? "GET").toUpperCase();
+    const url = `${baseUrl}${path}`;
+    const signal = anySignal([scoped.signal, init.signal ?? undefined]);
+    const fetchImpl = options.fetch ?? ((input: RequestInfo | URL, reqInit?: RequestInit) => fetch(input, reqInit));
+    const headers = new Headers(await resolveHeaders(options.headers));
+    mergeHeaders(headers, scoped.headers);
+    mergeHeaders(headers, init.headers);
+    throwIfAborted(signal);
+    const context: RequestContext = { method, url, path, attempt: 1 };
+    options.onRequest?.(context);
+    const started = Date.now();
+    let response: Response;
+    try {
+      response = await fetchImpl(url, { ...init, method, headers, signal });
+    } catch (error) {
+      options.onResponse?.({ ...context, status: null, durationMs: Date.now() - started });
+      if (signal?.aborted || isAbortError(error)) throw error;
+      throw new AgentGraphNetworkError({ method, path, cause: error });
+    }
+    options.onResponse?.({ ...context, status: response.status, durationMs: Date.now() - started });
+    reportApiVersion(response);
+    if (!response.ok) throw new AgentGraphApiError({ status: response.status, method, path, url, body: await safeText(response) });
+    return response;
   }
 
   return {
     baseUrl,
     request,
+    requestWithHeaders,
+    open,
     with: (next) =>
       createTransport(options, {
         ...scoped,

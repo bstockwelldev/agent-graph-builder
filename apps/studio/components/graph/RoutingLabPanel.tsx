@@ -110,7 +110,7 @@ export function RoutingLabPanel({
     if (!graphId) return;
     let cancelled = false;
     client
-      .listReleases(graphId)
+      .releases.list(graphId)
       .then((entries) => {
         if (!cancelled) setReleases(entries);
       })
@@ -135,7 +135,7 @@ export function RoutingLabPanel({
     setComparison(null);
     try {
       const dataset = parseDataset();
-      const result = await client.runRoutingDataset(graphId, dataset);
+      const result = await client.routingLab.run(graphId, { dataset });
       setReport(result);
     } catch (err) {
       setError(errorDetail(err));
@@ -152,12 +152,12 @@ export function RoutingLabPanel({
     try {
       const dataset = parseDataset();
       if (compareMode === "release") {
-        const result = await client.compareRoutingToRelease(graphId, releaseId, dataset);
+        const result = await client.routingLab.compareRelease(graphId, { releaseId, dataset });
         setComparisonLabels([`Release ${releaseId === "latest" ? "(latest)" : shortId(releaseId)}`, "Draft"]);
         setComparison(result);
         return;
       }
-      const result = await client.compareRoutingDatasets(graphId, otherGraphId.trim(), dataset);
+      const result = await client.routingLab.compare(graphId, { otherGraphId: otherGraphId.trim(), dataset });
       setComparisonLabels(null);
       setComparison(result);
     } catch (err) {

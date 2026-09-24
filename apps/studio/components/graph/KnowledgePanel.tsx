@@ -50,7 +50,7 @@ export function KnowledgePanel({
   // hide documents the user can still act on, so it has its own error slot.
   const loadLineage = useCallback(async (id: string) => {
     try {
-      setLineage(await client.getKnowledgeLineage(id));
+      setLineage(await client.knowledge.lineage(id));
       setLineageError(null);
     } catch (err) {
       setLineageError(errorDetail(err));
@@ -69,7 +69,7 @@ export function KnowledgePanel({
     setPendingDeleteId(null);
     void (async () => {
       try {
-        const loaded = await client.getKnowledge(graphId);
+        const loaded = await client.knowledge.get(graphId);
         if (!cancelled) setSummary(loaded);
       } catch (err) {
         if (!cancelled) setError(errorDetail(err));
@@ -91,7 +91,7 @@ export function KnowledgePanel({
       setUploading(true);
       setError(null);
       try {
-        const result = await client.uploadKnowledgeDocument(graphId, file);
+        const result = await client.knowledge.upload(graphId, file);
         setSummary({ graphId, ...result });
       } catch (err) {
         setError(errorDetail(err));
@@ -110,7 +110,7 @@ export function KnowledgePanel({
       setDeletingId(documentId);
       setError(null);
       try {
-        const result = await client.deleteKnowledgeDocument(graphId, documentId);
+        const result = await client.knowledge.delete(graphId, documentId);
         setSummary({ graphId, ...result });
         setPendingDeleteId(null);
       } catch (err) {

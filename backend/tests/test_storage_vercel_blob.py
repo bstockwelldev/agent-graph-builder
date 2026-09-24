@@ -316,3 +316,15 @@ def test_vercel_blob_backfill_indexes_legacy_runs(monkeypatch) -> None:
     listed = storage.list_runs_for_graph("graph_a")
     assert [run.run_id for run in listed] == ["run_new", "run_legacy"]
     assert storage.get_run("run_legacy") is not None
+
+
+def test_vercel_blob_run_listing_limit_none_returns_every_run(monkeypatch) -> None:
+    # Paged routes (SDK 4/7) pass limit=None and paginate in memory.
+    _enable_blob(monkeypatch)
+    for index in range(4):
+        storage.save_run_snapshot(
+            _run(f"run_{index}", "graph_a", f"2026-01-0{index + 1}T00:00:00Z"), []
+        )
+
+    assert len(storage.list_runs_for_graph("graph_a", limit=None)) == 4
+    assert len(storage.list_all_runs(limit=None)) == 4
