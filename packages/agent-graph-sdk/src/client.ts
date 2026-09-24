@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import { createTransport, type RequestOptions, type Transport, type TransportOptions } from "./transport.js";
 import { streamRun, waitForRun, type RunStreamOptions, type WaitForRunOptions } from "./runs.js";
+import { CONTRACT_API_VERSION } from "./generated/openapi.js";
 
 import {
   agentProfileSchema,
@@ -100,8 +101,23 @@ import type {
 } from "./types.js";
 
 /** SDK 1/7: transport options (injectable fetch, headers/auth, timeout,
- * retries, hooks) -- see transport.ts. */
-export type AgentGraphClientOptions = TransportOptions;
+ * retries, hooks) -- see transport.ts. SDK 3/7 adds `onVersionSkew`: called
+ * (once per client) when the server's API version is ahead of the contract
+ * this SDK was generated from; defaults to a console warning. Pass `false`
+ * to silence it. */
+export type AgentGraphClientOptions = TransportOptions & {
+  onVersionSkew?: ((skew: VersionSkew) => void) | false;
+};
+
+export type VersionSkew = { serverVersion: string; clientVersion: string };
+
+/** True when `server` is ahead of `client` by major or minor (x.y.z). */
+export function isServerAhead(server: string, client: string): boolean {
+  const parse = (version: string) => version.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const [sMajor, sMinor] = parse(server);
+  const [cMajor, cMinor] = parse(client);
+  return sMajor > cMajor || (sMajor === cMajor && sMinor > cMinor);
+}
 
 /**
  * Every client method's single HTTP entry point, now a thin shim over the
@@ -435,7 +451,7 @@ function buildMethods(baseUrl: Transport) {
     // named `replayRun`, not reusing the unrelated `"replayed"` trace-event
     // flag human_gate resume already uses.
     // With a `request` it's a counterfactual replay (STO-609): forced
-    // routes and/or model overrides; see replayRequestSchema.
+    // routes and/or model overrides; see the ReplayRequest type (generated).
     replayRun: (runId: string, request?: ReplayRequest) =>
       jsonFetch<CounterfactualResult>(
         baseUrl,
@@ -708,7 +724,27 @@ function scopedClient(transport: Transport): AgentGraphClient {
 }
 
 export function createAgentGraphClient(options: AgentGraphClientOptions = {}): AgentGraphClient {
-  return scopedClient(createTransport(options));
+  const { onVersionSkew, ...transportOptions } = options;
+  let warned = false;
+  const report =
+    onVersionSkew === false
+      ? undefined
+      : (onVersionSkew ??
+        ((skew: VersionSkew) =>
+          console.warn(
+            `[agent-graph-sdk] API server is at ${skew.serverVersion}, ahead of this SDK's contract ${skew.clientVersion}; upgrade the SDK for new fields and routes.`,
+          )));
+  return scopedClient(
+    createTransport({
+      ...transportOptions,
+      onApiVersion: (serverVersion) => {
+        transportOptions.onApiVersion?.(serverVersion);
+        if (warned || !report || !isServerAhead(serverVersion, CONTRACT_API_VERSION)) return;
+        warned = true;
+        report({ serverVersion, clientVersion: CONTRACT_API_VERSION });
+      },
+    }),
+  );
 }
 
 /**

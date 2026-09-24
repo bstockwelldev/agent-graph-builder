@@ -51,6 +51,8 @@ export type TransportOptions = {
   retry?: RetryOptions | false;
   onRequest?: (context: RequestContext) => void;
   onResponse?: (context: ResponseContext) => void;
+  /** SDK 3/7: called with the server's `X-AGB-API-Version` header, when sent. */
+  onApiVersion?: (serverVersion: string) => void;
 };
 
 /** Per-call options -- via `client.with({...})`. */
@@ -63,6 +65,7 @@ export type RequestOptions = {
 
 type RequestInitLike = Omit<RequestInit, "headers" | "signal"> & { headers?: HeadersInit; signal?: AbortSignal | null };
 
+export const API_VERSION_HEADER = "X-AGB-API-Version";
 const IDEMPOTENT = new Set(["GET", "HEAD", "OPTIONS"]);
 const RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const DEFAULT_RETRY: Required<RetryOptions> = { retries: 2, baseDelayMs: 250, maxDelayMs: 4000 };
@@ -80,6 +83,10 @@ export type Transport = {
 
 export function createTransport(options: TransportOptions = {}, scoped: RequestOptions = {}): Transport {
   const baseUrl = options.baseUrl ?? "";
+  const reportApiVersion = (response: Response) => {
+    const version = response.headers?.get?.(API_VERSION_HEADER);
+    if (version) options.onApiVersion?.(version);
+  };
 
   async function request<T>(path: string, init: RequestInitLike = {}, schema?: z.ZodType<T>): Promise<T> {
     const method = (init.method ?? "GET").toUpperCase();
@@ -121,6 +128,7 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
       }
       timeout?.clear();
       options.onResponse?.({ ...context, status: response.status, durationMs: Date.now() - started });
+      reportApiVersion(response);
 
       if (!response.ok) {
         if (RETRY_STATUSES.has(response.status) && attempt <= retry.retries) {
@@ -161,6 +169,7 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
       throw new AgentGraphNetworkError({ method, path, cause: error });
     }
     options.onResponse?.({ ...context, status: response.status, durationMs: Date.now() - started });
+    reportApiVersion(response);
     if (!response.ok) throw new AgentGraphApiError({ status: response.status, method, path, url, body: await safeText(response) });
     return response;
   }

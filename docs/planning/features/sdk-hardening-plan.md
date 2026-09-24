@@ -138,13 +138,51 @@ Linear STO-615 · GitHub #66. Non-breaking. It is sequenced second because Studi
   - The Run panel settled in about 1 s over the fetch stream, with a single `/events` request and 16 events.
   - A chat `/run` card reached "Succeeded · 7 of 7 nodes done".
 
-### Phase 3 — Types generated from OpenAPI, plus a drift check (SDK 3/7, Medium)
+### Phase 3 — Types generated from OpenAPI, plus a drift check (SDK 3/7, Medium) — **Shipped**
 
 Linear STO-616 · GitHub #67. Internal only.
 
 - **Generation:** generate types or Zod from `/openapi.json` (openapi-typescript or orval) into `src/generated/`. Hand-written Zod stays only where it adds behaviour (the SSE event union and the graph helpers).
 - **Drift check:** CI regenerates the output and fails on any diff.
 - **Versioning:** the server sends an `X-AGB-API-Version` header, and the client warns when the server is ahead.
+
+#### As built
+
+**Contract**
+- `backend/app/api_contract.py` defines `API_VERSION` (0.3.0) and writes FastAPI's OpenAPI document deterministically, with sorted keys.
+- `uv run python -m scripts.export_openapi [--check]` exports it to `packages/agent-graph-sdk/contract/openapi.json` (81 schemas), following the existing `node-bindings.json` pattern.
+- Every response carries `X-AGB-API-Version`. CORS exposes the header so browser clients can read it.
+
+**Generated types**
+- `pnpm --filter @bstockwelldev/agent-graph-sdk run generate [--check]` runs `scripts/generate.mjs`, which uses openapi-typescript 7 to produce `src/generated/openapi.ts` along with `CONTRACT_API_VERSION`.
+- The generated types are exported as `ApiPaths`, `ApiComponents` and `ApiOperations`.
+- Generation uses `defaultNonNullable: false`, so a field that has a server default is optional to send.
+
+**Drift checks (both run in CI)**
+1. Backend pytest `test_openapi_contract.py` fails when `openapi.json` is stale.
+2. SDK vitest `contract.test.ts` fails in either of these cases:
+   - the generated types are stale;
+   - a hand-written response schema lacks a field of its contract model, or has a field the model doesn't. Schemas are matched to models by name, with an alias map.
+3. The same test fails when a new hand-written object schema has no contract model, unless it's explicitly listed in `UNTYPED_ON_BACKEND`. That list covers 20 schemas whose routes return untyped dicts.
+
+Both checks were verified by adding a field to a Pydantic model without regenerating: pytest and vitest each failed, and vitest named the missing field.
+
+**Decision: keep the hand-written Zod response schemas**
+- They are the SDK's runtime validation, since every response is parsed. openapi-typescript generates types only, not Zod.
+- The duplication is now checked against the contract, so the schemas can't drift silently.
+- Pure duplicates were removed: the `replayRequestSchema` and `modelOverrideSchema` request bodies are now typed from the generated contract.
+- Generating the Zod schemas themselves, for example with an openapi-to-zod generator, can be revisited alongside SDK 4/7's request objects.
+
+**Version skew**
+- The client compares the server's major.minor version with `CONTRACT_API_VERSION`.
+- If the server is ahead, `onVersionSkew` is called once per client. It defaults to `console.warn`, and `false` silences it.
+- `RunSummary.compiler_version` was already exposed.
+
+**Verification**
+- Backend pytest: 528/528.
+- SDK vitest: 143, plus 1 end-to-end test that runs only when `AGB_E2E_URL` is set. The contract, drift, coverage and skew tests are included.
+- Studio vitest: 314/314.
+- Root build, with `pnpm install --frozen-lockfile`: green.
 
 ### Phase 2 — Namespaced API, request objects and pagination (SDK 4/7, Medium)
 

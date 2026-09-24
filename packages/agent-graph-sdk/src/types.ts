@@ -1,3 +1,4 @@
+import type { components } from "./generated/openapi.js";
 import type { z } from "zod";
 
 import type {
@@ -81,9 +82,7 @@ import type {
   runSummarySchema,
   simulateResultSchema,
   counterfactualResultSchema,
-  modelOverrideSchema,
   replayNodeModeSchema,
-  replayRequestSchema,
   toolDefinitionSchema,
 } from "./schemas.js";
 
@@ -142,8 +141,10 @@ export type Fixture = z.infer<typeof fixtureSchema>;
 export type FixtureDataset = z.infer<typeof fixtureDatasetSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
 // Counterfactual replay (STO-609).
-export type ModelOverride = z.infer<typeof modelOverrideSchema>;
-export type ReplayRequest = z.infer<typeof replayRequestSchema>;
+// SDK 3/7 (STO-616): request bodies come straight from the OpenAPI contract.
+/** Counterfactual replay: pin routers and/or swap an LLM node's provider/model. */
+export type ReplayRequest = components["schemas"]["ReplayRequest"];
+export type ModelOverride = components["schemas"]["ModelOverride"];
 export type ReplayNodeMode = z.infer<typeof replayNodeModeSchema>;
 export type CounterfactualResult = z.infer<typeof counterfactualResultSchema>;
 

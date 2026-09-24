@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **OpenAPI contract** (SDK 3/7, STO-616): `contract/openapi.json`, exported by the backend.
+  - `src/generated/openapi.ts` is generated from it (`pnpm run generate`) and exported as `ApiPaths`, `ApiComponents` and `ApiOperations`, along with `CONTRACT_API_VERSION`.
+  - Contract drift tests fail on stale generated types or on a hand-written schema that doesn't match its contract model.
+- **Version-skew warning:** when the server's `X-AGB-API-Version` is ahead of the contract, the client calls `onVersionSkew`, once per client. It defaults to `console.warn`; pass `false` to silence it.
+- Exported `isServerAhead` and `API_VERSION_HEADER`.
+
+### Changed
+- `ReplayRequest` and `ModelOverride` are now typed from the generated contract.
+- `replayRequestSchema` and `modelOverrideSchema` are removed. They were request bodies that were never used for validation.
+
 - **Run lifecycle** (SDK 2/7, STO-615):
   - `client.runs.stream(runId)` is an async iterator of validated events. It is built on `fetch`, so it works in browsers, Node 18+ and edge runtimes. It reconnects with `Last-Event-ID`, never loses or repeats an event, and ends when the run settles.
   - `client.runs.wait(runId, { onEvent, timeoutMs, signal })` streams events with a polling fallback, and resolves on `succeeded`, `failed` or `paused`.
