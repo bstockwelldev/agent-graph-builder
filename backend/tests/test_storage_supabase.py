@@ -49,8 +49,7 @@ class FakeSupabaseStorage:
             return httpx.Response(
                 200,
                 json=[
-                    {"name": key[len(prefix) :], "created_at": self.created_at[key]}
-                    for key in page
+                    {"name": key[len(prefix) :], "created_at": self.created_at[key]} for key in page
                 ],
             )
 
@@ -256,3 +255,13 @@ def test_supabase_backfill_indexes_legacy_runs(monkeypatch) -> None:
     assert "run_index/g_a/run_legacy.json" in fake.objects
     listed = storage.list_runs_for_graph("g_a")
     assert [run.run_id for run in listed] == ["run_new", "run_legacy"]
+
+
+def test_secret_key_sent_on_apikey_header_only(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_testkey")
+    assert supabase_store._headers() == {"apikey": "sb_secret_testkey"}
+
+
+def test_legacy_jwt_key_keeps_bearer_header(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJlegacy")
+    assert supabase_store._headers() == {"Authorization": "Bearer eyJlegacy", "apikey": "eyJlegacy"}
