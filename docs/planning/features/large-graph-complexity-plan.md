@@ -18,7 +18,7 @@ Design pass for roadmap P3 "Large-graph complexity management". The pillar comes
 | Wave | Scope | Status |
 | --- | --- | --- |
 | 7a | Find on canvas, dependency view, blast radius, health score | **Shipped** ([STO-610](https://linear.app/stockwise-productions-prototypes/issue/STO-610)) |
-| 7b | Visual groups with collapse and expand, stored in node `extensions`; no runtime change | Planned |
+| 7b | Visual groups with collapse and expand; display-only, no runtime change | **Shipped** ([STO-611](https://linear.app/stockwise-productions-prototypes/issue/STO-611)) |
 | 7c | Graph-as-node subgraphs: typed interface, nested runs, "Extract to graph" | Planned |
 | 7d | Multiple graph views and architecture layers | Planned |
 
@@ -92,3 +92,63 @@ When several views are active, the dimming follows the first that applies: find 
   - "Show downstream" from `llm_classify` showed the chip.
   - The Impact tab reported "reaches 5 nodes · 1 output", with `router_1` under routing and the release marked unchanged.
   - On mobile, the tray's More menu has Find and Health, and both work.
+
+## 7b — what shipped
+
+### Model
+
+- Groups live in a top-level `GraphDefinition.groups: [{id, label, color?, node_ids, collapsed}]` field, not node `extensions` as first sketched.
+  - One list is easier to validate, undo and round-trip than membership spread across nodes.
+  - Groups are flat: a node belongs to at most one group.
+- **Fingerprints:**
+  - The semantic fingerprint excludes groups (`_semantic_payload` pops them), so grouping never invalidates a release or replay.
+  - The document fingerprint includes `groups` only when the list is non-empty, so the digest of every groupless graph is unchanged.
+  - The SDK's `fingerprintGraph` dirty-check includes groups.
+- **Compiler warnings** (non-blocking, `structure`): `GROUP_UNKNOWN_NODE` for a missing member, and `GROUP_OVERLAP` for a node in two groups.
+- **Studio:** `buildGraphDefinition` prunes deleted members and empty groups before saving.
+
+### Studio (`lib/graphGroups.ts`, `nodes/GroupFrame.tsx`)
+
+**Frames are derived, not stored.** Each render builds `groupFrame` React Flow nodes from `groups` plus member positions, and they never enter `nodes` state. So dagre layout, validation and the saved graph never see them, and after auto-layout the frames simply re-fit.
+
+**On the canvas** (`FlowCanvas` draws `renderNodes`/`renderEdges`; layout, fit and focus still use the graph):
+- An expanded frame is a tinted dashed rectangle behind its members.
+  - Only its header takes pointer events, so panning and box-selecting inside it still work.
+  - Dragging the header moves every member.
+- A collapsed group becomes a card showing the label, "N nodes" and a strip of member-type icons.
+  - Members are hidden, not removed.
+  - Edges crossing the boundary re-attach to the card.
+  - Duplicate edges merge into one with a "×N" badge.
+  - Double-click expands the card.
+
+**Actions:**
+- Group:
+  - Ctrl/Cmd+G;
+  - node menu → "Group selection (N)" / "Group node";
+  - right-click on the selection box.
+- A new group opens straight into an inline rename.
+- The group menu has Rename, Collapse/Expand, six colour swatches, and Ungroup (Ctrl/Cmd+Shift+G).
+- Every action records an undo snapshot; `CanvasSnapshot` gained `groups`.
+
+**Interplay with 7a:**
+- Find, Health, diagnostics and the other `focusNode` paths expand the collapsed group holding the target first.
+- Find, Impact and dependency dimming also dims frames with no lit members.
+
+**Fixed along the way:** the selection-mirroring effect collapsed React Flow's Ctrl/Cmd+click multi-selection to a single node. It now keeps an existing multi-selection.
+
+## Verification (7b)
+
+- **Backend:** pytest 493/493 (`test_graph_groups.py`: round-trip, warnings, fingerprints).
+- **SDK:** vitest 114/114 (schema, and fingerprints matching the backend).
+- **Studio:**
+  - vitest 298/298: `graphGroups.test.ts` for bounds, membership, reroute and merge, hiding and dimming; `GroupFrame.test.tsx` for toggle, double-click and rename;
+  - tsc clean, and eslint 0 errors.
+- **Root:** build green.
+- **Playwright** on a live stub backend, at 1440 and 390:
+  - Ctrl+click `prompt_answer` and `llm_answer`, then Ctrl+G, gave a frame. Renamed it "Answer path" and coloured it violet.
+  - Collapse gave the card: the fallback edge goes in, and the edge to output comes out.
+  - Saved and reloaded: still collapsed, and the API returned the group.
+  - Find `llm_answer` auto-expanded the group.
+  - Dragging the header moved the members (+75, +67).
+  - Ungroup, then Ctrl+Z, restored the frame.
+  - On mobile, the collapsed card renders.

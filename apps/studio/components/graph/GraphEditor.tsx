@@ -8,6 +8,7 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -22,6 +23,7 @@ import {
   type EdgeKind,
   type GraphDefinition,
   type GraphEdge,
+  type GraphGroup,
   type GraphHealth,
   type GraphNode,
   type GraphOrientation,
@@ -60,6 +62,22 @@ import { computeAncestorNodeIds } from "@/lib/runFromNode";
 import { runInputVariables } from "@/lib/runInputs";
 import { RESOURCE_PANEL, ResourceNamesProvider, useResourceNamesMap } from "./resourceBindings";
 import { computeFocusNodeIds, type FocusDirection } from "@/lib/graphFocus";
+import {
+  GROUP_COLORS,
+  buildGroupFrameNodes,
+  groupIdFromFrame,
+  groupOfNode,
+  groupSelection,
+  hideCollapsedMembers,
+  isFrameNodeId,
+  nextGroupId,
+  pruneGroups,
+  rerouteEdgesForCollapsedGroups,
+  revealNodeInGroups,
+  ungroup,
+  updateGroup,
+  type GroupColorId,
+} from "@/lib/graphGroups";
 import { buildExecutedPath, edgeStrokeForInspection, normalizeRouteDecisions, tracesFromEvents } from "@/lib/runInspection";
 import {
   failedUnavailableRunSummary,
@@ -76,7 +94,7 @@ import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { WorkflowSummary } from "./WorkflowSummary";
 import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
-import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
+import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
 import { MOBILE_TAB_BAR_HEIGHT, MobileTabBar } from "@/components/navigation/mobile-tab-bar";
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
@@ -90,6 +108,7 @@ import { ReleasesPanel } from "./ReleasesPanel";
 import { RoutingLabPanel } from "./RoutingLabPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
 import { GraphNodeView, type GraphNodeData, type NodeTraceSummary } from "./nodes/GraphNodeView";
+import { GroupFrame } from "./nodes/GroupFrame";
 import { GraphHeader, type RunPanelSectionId } from "./GraphHeader";
 import { IconButton } from "./ui/IconButton";
 import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
@@ -180,6 +199,8 @@ const nodeTypes = {
   tool_loop: GraphNodeView,
   code_exec: GraphNodeView,
   human_gate: GraphNodeView,
+  // Wave 7b: derived visual group frames (never in `nodes` state).
+  groupFrame: GroupFrame,
 };
 
 let idCounter = 1;
@@ -293,6 +314,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [findMatches, setFindMatches] = useState<string[] | null>(null);
   const [impactHighlight, setImpactHighlight] = useState<string[] | null>(null);
   const [dependencyView, setDependencyView] = useState<{ nodeId: string; direction: FocusDirection } | null>(null);
+  // Wave 7b (STO-611): display-only visual groups. Frames are derived from
+  // these + member positions at render time (lib/graphGroups.ts).
+  const [groups, setGroups] = useState<GraphGroup[]>([]);
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [health, setHealth] = useState<GraphHealth | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
@@ -409,6 +434,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // NodeInspector tab.
   const focusNode = useCallback((nodeId: string, tab?: string) => {
     const nonce = Date.now();
+    setGroups((current) => revealNodeInGroups(current, nodeId));
     setSelectedNodeId(nodeId);
     setSelectedEdgeId(null);
     setFocusRequest({ nodeId, nonce });
@@ -545,6 +571,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setGraphOrientation(graph.orientation ?? "auto");
         setNodes(graph.nodes.map(toFlowNode));
         setEdges(graph.edges.map(toFlowEdge));
+        setGroups(graph.groups ?? []);
         setSavedFingerprint(fingerprintGraph(graph));
         clearHistory();
         setSelectedNodeId(null);
@@ -586,9 +613,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           kind: (e.data?.kind as EdgeKind) ?? "sequence",
           condition: (e.data?.condition as string | null) ?? null,
         })),
+        // Wave 7b: members deleted since grouping are dropped on the way out.
+        ...(() => {
+          const saved = pruneGroups(groups, sourceNodes.map((n) => n.id));
+          return saved.length > 0 ? { groups: saved } : {};
+        })(),
       };
     },
-    [nodes, edges, graphId, graphName, graphOrientation],
+    [nodes, edges, graphId, graphName, graphOrientation, groups],
   );
 
   // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
@@ -742,8 +774,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [diagnostics, applyDiagnosticsToCanvas]);
 
   const getCanvasSnapshot = useCallback(
-    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation),
-    [nodes, edges, graphName, graphOrientation],
+    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation, groups),
+    [nodes, edges, graphName, graphOrientation, groups],
   );
 
   const applyCanvasSnapshot = useCallback(
@@ -752,6 +784,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setEdges(snapshot.edges);
       setGraphName(snapshot.graphName);
       setGraphOrientation(snapshot.graphOrientation);
+      setGroups(snapshot.groups ?? []);
     },
     [setNodes, setEdges],
   );
@@ -857,6 +890,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [contextMenu, setContextMenu] = useState<
     | { kind: "node"; nodeId: string; x: number; y: number }
     | { kind: "edge"; edgeId: string; x: number; y: number }
+    // Wave 7b: a group frame/card, or a multi-node selection box.
+    | { kind: "group"; groupId: string; x: number; y: number }
+    | { kind: "selection"; x: number; y: number }
     | { kind: "pane"; x: number; y: number; flowX: number; flowY: number }
     // Phase 10 Slice C follow-up, "double-click + searchable node
     // launcher" — same {x, y, flowX, flowY} shape as "pane" (right-click),
@@ -965,6 +1001,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setGraphOrientation(graph.orientation ?? "auto");
       setNodes(graph.nodes.map(toFlowNode));
       setEdges(graph.edges.map(toFlowEdge));
+      setGroups(graph.groups ?? []);
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setDiagnostics([]);
@@ -1091,16 +1128,20 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // selected node's ancestor/descendant closure whenever the mode, the
   // selection, or the graph shape changes. Clears dimming entirely when
   // focus mode is off or nothing is selected.
+  const focusSet = useMemo(
+    () =>
+      findMatches
+        ? new Set(findMatches)
+        : impactHighlight
+          ? new Set(impactHighlight)
+          : dependencyView
+            ? computeFocusNodeIds(dependencyView.nodeId, edges, dependencyView.direction)
+            : focusMode && selectedNodeId
+              ? computeFocusNodeIds(selectedNodeId, edges)
+              : null,
+    [focusMode, selectedNodeId, edges, findMatches, impactHighlight, dependencyView],
+  );
   useEffect(() => {
-    const focusSet = findMatches
-      ? new Set(findMatches)
-      : impactHighlight
-        ? new Set(impactHighlight)
-        : dependencyView
-          ? computeFocusNodeIds(dependencyView.nodeId, edges, dependencyView.direction)
-          : focusMode && selectedNodeId
-            ? computeFocusNodeIds(selectedNodeId, edges)
-            : null;
     setNodes((nds) =>
       nds.map((node) => {
         const focusDimmed = focusSet !== null && !focusSet.has(node.id);
@@ -1108,7 +1149,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         return { ...node, data: { ...node.data, focusDimmed } };
       }),
     );
-  }, [focusMode, selectedNodeId, edges, setNodes, findMatches, impactHighlight, dependencyView]);
+  }, [focusSet, setNodes]);
 
   useEffect(() => {
     if (!inspectionRunId) return;
@@ -1406,8 +1447,172 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [recordMutation, setEdges, setNodes],
   );
 
+  // Wave 7b (STO-611): visual group actions. Every one goes through
+  // recordMutation so it undoes like any other canvas edit.
+  const selectedNodeIdsForGrouping = useCallback((): string[] => {
+    const picked = nodes.filter((node) => node.selected).map((node) => node.id);
+    if (selectedNodeId && !picked.includes(selectedNodeId)) picked.push(selectedNodeId);
+    return picked;
+  }, [nodes, selectedNodeId]);
+
+  const groupNodes = useCallback(
+    (nodeIds: string[]) => {
+      if (nodeIds.length === 0) return;
+      recordMutation();
+      const id = nextGroupId(groups);
+      setGroups((current) => groupSelection(current, nodeIds, id, `Group ${current.length + 1}`));
+      setRenamingGroupId(id);
+    },
+    [groups, recordMutation],
+  );
+
+  const ungroupById = useCallback(
+    (groupId: string) => {
+      recordMutation();
+      setGroups((current) => ungroup(current, groupId));
+    },
+    [recordMutation],
+  );
+
+  const toggleGroup = useCallback(
+    (groupId: string) => {
+      const group = groups.find((candidate) => candidate.id === groupId);
+      if (!group) return;
+      recordMutation();
+      setGroups((current) => updateGroup(current, groupId, { collapsed: !group.collapsed }));
+      // A collapsed member can't stay selected -- its card is hidden.
+      if (!group.collapsed && selectedNodeId && group.node_ids.includes(selectedNodeId)) setSelectedNodeId(null);
+    },
+    [groups, recordMutation, selectedNodeId],
+  );
+
+  const renameGroup = useCallback(
+    (groupId: string, label: string | null) => {
+      setRenamingGroupId(null);
+      const next = label?.trim();
+      const group = groups.find((candidate) => candidate.id === groupId);
+      if (!group || !next || next === group.label) return;
+      recordMutation();
+      setGroups((current) => updateGroup(current, groupId, { label: next }));
+    },
+    [groups, recordMutation],
+  );
+
+  const setGroupColor = useCallback(
+    (groupId: string, colorId: GroupColorId) => {
+      recordMutation();
+      setGroups((current) => updateGroup(current, groupId, { color: colorId }));
+    },
+    [recordMutation],
+  );
+
+  // Frames lead the list so they paint first; collapsed members stay in
+  // `nodes` (and the saved graph) but are hidden, and edges crossing a
+  // collapsed boundary reattach to its card.
+  const canvasNodes = useMemo(() => {
+    if (groups.length === 0) return nodes;
+    const frames = buildGroupFrameNodes(groups, nodes, focusSet).map((frame) =>
+      frame.data.groupId === renamingGroupId ? { ...frame, data: { ...frame.data, renaming: true } } : frame,
+    );
+    return [...(frames as unknown as Node<GraphNodeData>[]), ...hideCollapsedMembers(nodes, groups)];
+  }, [focusSet, groups, nodes, renamingGroupId]);
+  const canvasEdges = useMemo(() => rerouteEdgesForCollapsedGroups(edges, groups), [edges, groups]);
+  const framePositionsRef = useRef(new Map<string, { x: number; y: number }>());
+  framePositionsRef.current = new Map(canvasNodes.filter((node) => isFrameNodeId(node.id)).map((node) => [node.id, node.position]));
+  const frameDragRef = useRef<string | null>(null);
+
+  // Frame nodes are derived, so their React Flow changes never reach
+  // `nodes`: dragging a frame (or a collapsed card) moves its members by
+  // the same delta instead, and select/remove/dimension changes are dropped.
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<Node<GraphNodeData>>[]) => {
+      const graphChanges: NodeChange<Node<GraphNodeData>>[] = [];
+      for (const change of changes) {
+        if (!("id" in change) || !isFrameNodeId(change.id)) {
+          graphChanges.push(change);
+          continue;
+        }
+        if (change.type !== "position") continue;
+        if (!change.dragging) {
+          frameDragRef.current = null;
+          continue;
+        }
+        const previous = framePositionsRef.current.get(change.id);
+        const group = groups.find((candidate) => candidate.id === groupIdFromFrame(change.id));
+        if (!change.position || !previous || !group) continue;
+        const dx = change.position.x - previous.x;
+        const dy = change.position.y - previous.y;
+        if (dx === 0 && dy === 0) continue;
+        if (frameDragRef.current !== change.id) {
+          frameDragRef.current = change.id;
+          recordMutation();
+        }
+        framePositionsRef.current.set(change.id, change.position);
+        const members = new Set(group.node_ids);
+        setNodes((current) =>
+          current.map((node) =>
+            members.has(node.id) ? { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } } : node,
+          ),
+        );
+      }
+      if (graphChanges.length > 0) onNodesChange(graphChanges);
+    },
+    [groups, onNodesChange, recordMutation, setNodes],
+  );
+
+  // ⌘/Ctrl+G groups the selection; ⌘/Ctrl+Shift+G ungroups the selected
+  // node's group.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(event.target)) return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "g") return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        const owner = selectedNodeId ? groupOfNode(groups, selectedNodeId) : undefined;
+        if (owner) ungroupById(owner.id);
+        return;
+      }
+      groupNodes(selectedNodeIdsForGrouping());
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [groupNodes, groups, selectedNodeId, selectedNodeIdsForGrouping, ungroupById]);
+
   // Node toolbar + edge chip callbacks (Slices 4 and 6), provided to
   // canvas-rendered components through CanvasActionsProvider.
+  const groupMenuActionsForNode = (nodeId: string): NodeContextMenuAction[] => {
+    const owner = groupOfNode(groups, nodeId);
+    const picked = selectedNodeIdsForGrouping();
+    const ids = picked.includes(nodeId) ? picked : [nodeId];
+    return [
+      {
+        label: ids.length > 1 ? `Group selection (${ids.length})` : "Group node",
+        shortcut: "⌘G",
+        separatorBefore: true,
+        onClick: () => groupNodes(ids),
+      },
+      ...(owner ? [{ label: `Ungroup "${owner.label}"`, shortcut: "⌘⇧G", onClick: () => ungroupById(owner.id) }] : []),
+    ];
+  };
+
+  const groupMenuActions = (groupId: string): NodeContextMenuAction[] => {
+    const group = groups.find((candidate) => candidate.id === groupId);
+    if (!group) return [];
+    return [
+      { label: "Rename", onClick: () => setRenamingGroupId(groupId) },
+      { label: group.collapsed ? "Expand" : "Collapse", onClick: () => toggleGroup(groupId) },
+      ...(Object.keys(GROUP_COLORS) as GroupColorId[]).map((colorId, index) => ({
+        label: colorId[0].toUpperCase() + colorId.slice(1),
+        checked: (group.color ?? "slate") === colorId,
+        separatorBefore: index === 0,
+        groupLabel: index === 0 ? "Color" : undefined,
+        icon: <span aria-hidden="true" style={{ display: "inline-block", width: 10, height: 10, borderRadius: 999, background: GROUP_COLORS[colorId] }} />,
+        onClick: () => setGroupColor(groupId, colorId),
+      })),
+      { label: "Ungroup", shortcut: "⌘⇧G", separatorBefore: true, onClick: () => ungroupById(groupId) },
+    ];
+  };
+
   const canvasActions = useMemo<CanvasActions>(
     () => ({
       editNode: (nodeId) => {
@@ -1421,15 +1626,20 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setRunFromNodeRequest({ nodeId, nonce: Date.now() });
       },
       duplicateNode,
-      focusNode: (nodeId) => setFocusRequest({ nodeId, nonce: Date.now() }),
+      focusNode: (nodeId) => {
+        setGroups((current) => revealNodeInGroups(current, nodeId));
+        setFocusRequest({ nodeId, nonce: Date.now() });
+      },
       deleteNode: deleteNodeById,
       selectEdge: (edgeId) => {
         setSelectedEdgeId(edgeId);
         setSelectedNodeId(null);
         if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
       },
+      toggleGroup,
+      renameGroup,
     }),
-    [deleteNodeById, duplicateNode, focusNode, workbench],
+    [deleteNodeById, duplicateNode, focusNode, renameGroup, toggleGroup, workbench],
   );
 
   // Wave 2 URL state -- apply once per graph, after its nodes load: select +
@@ -1474,9 +1684,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // never appeared for them. Mirror our selection into React Flow's.
   useEffect(() => {
     setNodes((nds) => {
+      // Wave 7b: a Ctrl/Cmd+click that adds to React Flow's multi-selection
+      // also sets selectedNodeId -- keep the rest of that selection (it's
+      // what "Group selection" groups) instead of collapsing it to one.
+      const keepMulti = selectedNodeId !== null && nds.some((node) => node.id === selectedNodeId && node.selected);
       let changed = false;
       const next = nds.map((node) => {
-        const selected = node.id === selectedNodeId;
+        const selected = keepMulti ? Boolean(node.selected) : node.id === selectedNodeId;
         if (Boolean(node.selected) === selected) return node;
         changed = true;
         return { ...node, selected };
@@ -1780,8 +1994,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           graphId={graphId}
           nodes={nodes}
           edges={edges}
+          renderNodes={canvasNodes}
+          renderEdges={canvasEdges}
           setNodes={setNodes}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onConnectStart={(event) => {
@@ -1848,6 +2064,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             </>
           }
           onNodeClick={(nodeId) => {
+            if (isFrameNodeId(nodeId)) return;
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
             if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
@@ -1867,6 +2084,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             setContextMenu({ kind: "launcher", x, y, flowX, flowY });
           }}
           onNodeContextMenu={(nodeId, x, y) => {
+            if (isFrameNodeId(nodeId)) {
+              setContextMenu({ kind: "group", groupId: groupIdFromFrame(nodeId), x, y });
+              return;
+            }
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
             setContextMenu({ kind: "node", nodeId, x, y });
@@ -1879,6 +2100,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onPaneContextMenu={(x, y, flowX, flowY) => {
             setContextMenu({ kind: "pane", x, y, flowX, flowY });
           }}
+          onSelectionContextMenu={(x, y) => setContextMenu({ kind: "selection", x, y })}
         />
         </CanvasActionsProvider>
       </div>
@@ -1903,7 +2125,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               ? "Node"
               : contextMenu.kind === "edge"
                 ? "Edge"
-                : "Add node"
+                : contextMenu.kind === "group"
+                  ? "Group"
+                  : contextMenu.kind === "selection"
+                    ? "Selection"
+                    : "Add node"
           }
           {...(contextMenu.kind === "launcher"
             ? {
@@ -1925,11 +2151,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                   },
                   { label: "Show downstream", onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "downstream" }) },
                   { label: "Show all dependencies", onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "both" }) },
+                  ...groupMenuActionsForNode(contextMenu.nodeId),
                   { label: "Delete node", onClick: deleteSelection, tone: "destructive", separatorBefore: true },
                 ]
               : contextMenu.kind === "edge"
                 ? [{ label: "Delete edge", onClick: deleteSelection, tone: "destructive" }]
-                : NODE_TYPES_FOR_CONTEXT_MENU.filter(
+                : contextMenu.kind === "group"
+                  ? groupMenuActions(contextMenu.groupId)
+                  : contextMenu.kind === "selection"
+                    ? [{ label: "Group selection", shortcut: "⌘G", onClick: () => groupNodes(selectedNodeIdsForGrouping()) }]
+                    : NODE_TYPES_FOR_CONTEXT_MENU.filter(
                     (type) =>
                       contextMenu.kind !== "launcher" ||
                       NODE_TYPE_TAXONOMY[type].title.toLowerCase().includes(nodeLauncherQuery.toLowerCase()),

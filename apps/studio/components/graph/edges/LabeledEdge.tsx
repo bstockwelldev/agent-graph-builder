@@ -14,6 +14,8 @@ export type LabeledEdgeData = {
   kind?: EdgeKind;
   condition?: string | null;
   runState?: EdgeRunState;
+  /** Wave 7b: edges merged onto a collapsed group's card (badge "×N"). */
+  mergedCount?: number;
 };
 
 /**
@@ -45,7 +47,8 @@ export function LabeledEdge({
   const edgeData = (data ?? {}) as LabeledEdgeData;
   const actions = useCanvasActions();
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const label = flowEdgeLabel(edgeData.kind ?? "sequence", edgeData.condition);
+  const merged = (edgeData.mergedCount ?? 1) > 1 ? edgeData.mergedCount : null;
+  const label = merged ? `×${merged}` : flowEdgeLabel(edgeData.kind ?? "sequence", edgeData.condition);
   const runState = edgeData.runState;
 
   const edgeStyle: CSSProperties = {
@@ -73,8 +76,8 @@ export function LabeledEdge({
               event.stopPropagation();
               actions.selectEdge(id);
             }}
-            aria-label={`Edge: ${label}`}
-            title={label}
+            aria-label={merged ? `${merged} edges into collapsed group` : `Edge: ${label}`}
+            title={merged ? `${merged} edges merged at a collapsed group` : label}
             style={{
               ...chipStyle,
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
