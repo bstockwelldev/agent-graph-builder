@@ -19,8 +19,10 @@ class FakeBlob:
 
     def __init__(self, page_size: int | None = None) -> None:
         self.objects: dict[str, bytes] = {}
+        self.uploaded_at: dict[str, str] = {}
         self.page_size = page_size
         self.put_headers: list[dict[str, str]] = []
+        self.blob_reads: list[str] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         parsed = urlparse(str(request.url))
@@ -30,6 +32,8 @@ class FakeBlob:
             pathname = params.get("pathname", "")
             self.put_headers.append({k: v for k, v in request.headers.items()})
             self.objects[pathname] = request.content
+            # Monotonic upload time so newest-first listing is deterministic.
+            self.uploaded_at[pathname] = f"2026-01-01T00:00:00.{len(self.put_headers):06d}Z"
             return httpx.Response(
                 200,
                 json={
@@ -56,7 +60,7 @@ class FakeBlob:
                         "url": f"https://teststore.private.blob.vercel-storage.com/{key}",
                         "downloadUrl": f"https://teststore.private.blob.vercel-storage.com/{key}?download=1",
                         "size": len(self.objects[key]),
-                        "uploadedAt": "2026-01-01T00:00:00.000Z",
+                        "uploadedAt": self.uploaded_at[key],
                         "etag": "etag",
                     }
                     for key in chunk
@@ -74,6 +78,7 @@ class FakeBlob:
             return httpx.Response(200, json={"pathname": pathname})
         if request.method == "GET" and host.endswith(".blob.vercel-storage.com"):
             pathname = parsed.path.lstrip("/")
+            self.blob_reads.append(pathname)
             if pathname not in self.objects:
                 return httpx.Response(404, json={"error": {"code": "not_found"}})
             return httpx.Response(
@@ -253,3 +258,61 @@ def test_vercel_blob_resource_crud(monkeypatch) -> None:
     assert storage.delete_resource("prompts", "p1") is True
     assert storage.get_resource("prompts", "p1") is None
     assert storage.delete_resource("prompts", "p1") is False
+
+
+def _run(run_id: str, graph_id: str, started_at: str) -> RunSummary:
+    return RunSummary(
+        run_id=run_id,
+        graph_id=graph_id,
+        status="succeeded",
+        started_at=started_at,
+        completed_at=started_at,
+    )
+
+
+def test_vercel_blob_list_runs_for_graph_reads_only_that_graphs_newest_runs(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    for index in range(5):
+        storage.save_run_snapshot(
+            _run(f"run_a{index}", "graph_a", f"2026-01-0{index + 1}T00:00:00Z"), []
+        )
+    for index in range(20):
+        storage.save_run_snapshot(_run(f"run_b{index}", "graph_b", "2026-02-01T00:00:00Z"), [])
+    fake.blob_reads.clear()
+
+    listed = storage.list_runs_for_graph("graph_a", limit=2)
+
+    assert [run.run_id for run in listed] == ["run_a4", "run_a3"]
+    assert sorted(fake.blob_reads) == [
+        "run_index/graph_a/run_a3.json",
+        "run_index/graph_a/run_a4.json",
+    ]
+
+
+def test_vercel_blob_list_all_runs_reads_at_most_limit_blobs(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    for index in range(10):
+        started = f"2026-01-{index + 1:02d}T00:00:00Z"
+        storage.save_run_snapshot(_run(f"run_{index}", f"graph_{index % 3}", started), [])
+    fake.blob_reads.clear()
+
+    listed = storage.list_all_runs(limit=3)
+
+    assert [run.run_id for run in listed] == ["run_9", "run_8", "run_7"]
+    assert len(fake.blob_reads) == 3
+    assert all(path.startswith("runs/") for path in fake.blob_reads)
+
+
+def test_vercel_blob_backfill_indexes_legacy_runs(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    # Written through the backend directly, as before run_index existed.
+    vercel_blob.save_run_snapshot(_run("run_legacy", "graph_a", "2026-01-01T00:00:00Z"), [])
+    storage.save_run_snapshot(_run("run_new", "graph_a", "2026-01-02T00:00:00Z"), [])
+    assert [run.run_id for run in storage.list_runs_for_graph("graph_a")] == ["run_new"]
+
+    assert storage.backfill_run_index() == 1
+    assert storage.backfill_run_index() == 0
+    assert "run_index/graph_a/run_legacy.json" in fake.objects
+    listed = storage.list_runs_for_graph("graph_a")
+    assert [run.run_id for run in listed] == ["run_new", "run_legacy"]
+    assert storage.get_run("run_legacy") is not None

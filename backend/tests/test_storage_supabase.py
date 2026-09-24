@@ -24,6 +24,9 @@ class FakeSupabaseStorage:
 
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
+        self.created_at: dict[str, str] = {}
+        self.list_bodies: list[dict] = []
+        self.object_reads: list[str] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         parsed = urlparse(str(request.url))
@@ -31,19 +34,36 @@ class FakeSupabaseStorage:
 
         if request.method == "POST" and path.startswith("/storage/v1/object/list/"):
             body = json.loads(request.content or b"{}")
+            self.list_bodies.append(body)
             prefix = body.get("prefix", "")
-            names = sorted(
-                key[len(prefix) :] for key in self.objects if key.startswith(prefix)
+            keys = [key for key in self.objects if key.startswith(prefix)]
+            sort_by = body.get("sortBy") or {"column": "name", "order": "asc"}
+            if sort_by["column"] == "created_at":
+                keys.sort(key=lambda key: self.created_at[key])
+            else:
+                keys.sort()
+            if sort_by["order"] == "desc":
+                keys.reverse()
+            offset = body.get("offset", 0)
+            page = keys[offset : offset + body.get("limit", 100)]
+            return httpx.Response(
+                200,
+                json=[
+                    {"name": key[len(prefix) :], "created_at": self.created_at[key]}
+                    for key in page
+                ],
             )
-            return httpx.Response(200, json=[{"name": name} for name in names])
 
         if request.method == "POST" and path.startswith("/storage/v1/object/"):
             key = path.removeprefix("/storage/v1/object/agent-graph-builder/")
             self.objects[key] = request.content
+            # Monotonic creation time so newest-first listing is deterministic.
+            self.created_at.setdefault(key, f"2026-01-01T00:00:00.{len(self.created_at):06d}Z")
             return httpx.Response(200, json={"Key": key})
 
         if request.method == "GET" and path.startswith("/storage/v1/object/"):
             key = path.removeprefix("/storage/v1/object/agent-graph-builder/")
+            self.object_reads.append(key)
             if key not in self.objects:
                 return httpx.Response(404, json={"error": "not_found"})
             return httpx.Response(200, content=self.objects[key])
@@ -176,3 +196,63 @@ def test_supabase_resource_crud(monkeypatch) -> None:
     assert any(item["id"] == "p1" for item in storage.list_resources("prompts"))
     assert storage.delete_resource("prompts", "p1") is True
     assert storage.get_resource("prompts", "p1") is None
+
+
+def _run(run_id: str, graph_id: str, started_at: str) -> RunSummary:
+    return RunSummary(
+        run_id=run_id,
+        graph_id=graph_id,
+        status="succeeded",
+        started_at=started_at,
+        completed_at=started_at,
+    )
+
+
+def test_supabase_list_runs_for_graph_reads_only_that_graphs_newest_runs(monkeypatch) -> None:
+    fake = _enable_supabase(monkeypatch)
+    for index in range(5):
+        started = f"2026-01-0{index + 1}T00:00:00Z"
+        storage.save_run_snapshot(_run(f"run_a{index}", "g_a", started), [])
+    for index in range(20):
+        storage.save_run_snapshot(_run(f"run_b{index}", "g_b", "2026-02-01T00:00:00Z"), [])
+    fake.object_reads.clear()
+    fake.list_bodies.clear()
+
+    listed = storage.list_runs_for_graph("g_a", limit=2)
+
+    assert [run.run_id for run in listed] == ["run_a4", "run_a3"]
+    assert sorted(fake.object_reads) == ["run_index/g_a/run_a3.json", "run_index/g_a/run_a4.json"]
+    assert fake.list_bodies == [
+        {
+            "prefix": "run_index/g_a/",
+            "limit": 1000,
+            "offset": 0,
+            "sortBy": {"column": "created_at", "order": "desc"},
+        }
+    ]
+
+
+def test_supabase_list_all_runs_reads_at_most_limit_objects(monkeypatch) -> None:
+    fake = _enable_supabase(monkeypatch)
+    for index in range(10):
+        started = f"2026-01-{index + 1:02d}T00:00:00Z"
+        storage.save_run_snapshot(_run(f"run_{index}", f"g_{index % 3}", started), [])
+    fake.object_reads.clear()
+
+    listed = storage.list_all_runs(limit=3)
+
+    assert [run.run_id for run in listed] == ["run_9", "run_8", "run_7"]
+    assert len(fake.object_reads) == 3
+
+
+def test_supabase_backfill_indexes_legacy_runs(monkeypatch) -> None:
+    fake = _enable_supabase(monkeypatch)
+    # Written through the backend directly, as before run_index existed.
+    supabase_store.save_run_snapshot(_run("run_legacy", "g_a", "2026-01-01T00:00:00Z"), [])
+    storage.save_run_snapshot(_run("run_new", "g_a", "2026-01-02T00:00:00Z"), [])
+
+    assert storage.backfill_run_index() == 1
+    assert storage.backfill_run_index() == 0
+    assert "run_index/g_a/run_legacy.json" in fake.objects
+    listed = storage.list_runs_for_graph("g_a")
+    assert [run.run_id for run in listed] == ["run_new", "run_legacy"]

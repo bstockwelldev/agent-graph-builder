@@ -115,8 +115,13 @@ def delete_json(key: str) -> bool:
     return True
 
 
-def list_keys(prefix: str) -> list[str]:
-    keys: list[str] = []
+def list_keys(prefix: str, *, newest_first: bool = False, limit: int | None = None) -> list[str]:
+    """Lists ``.json`` keys under `prefix`. `newest_first` orders by the
+    list metadata's ``uploadedAt`` (no blob reads), so callers can read
+    only the first `limit` keys instead of every blob under the prefix.
+    Blob's list API has no server-side sort, so every page is still listed.
+    """
+    entries: list[tuple[str, str]] = []
     cursor: str | None = None
     with _http_client() as client:
         while True:
@@ -133,13 +138,16 @@ def list_keys(prefix: str) -> list[str]:
             for item in payload.get("blobs") or []:
                 pathname = item.get("pathname")
                 if isinstance(pathname, str) and pathname.endswith(".json"):
-                    keys.append(pathname)
+                    entries.append((pathname, str(item.get("uploadedAt") or "")))
             if not payload.get("hasMore"):
                 break
             cursor = payload.get("cursor")
             if not cursor:
                 break
-    return keys
+    if newest_first:
+        entries.sort(key=lambda entry: entry[1], reverse=True)
+    keys = [pathname for pathname, _ in entries]
+    return keys if limit is None else keys[:limit]
 
 
 def save_graph(graph: GraphDefinition) -> None:
@@ -194,19 +202,6 @@ def get_run(run_id: str) -> RunSummary | None:
     if payload is None:
         return None
     return _summary_from_blob(payload)
-
-
-def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
-    runs: list[RunSummary] = []
-    for key in list_keys(_RUN_PREFIX):
-        payload = get_json(key)
-        if payload is None:
-            continue
-        summary = _summary_from_blob(payload)
-        if summary.graph_id == graph_id:
-            runs.append(summary)
-    runs.sort(key=lambda item: item.started_at or "", reverse=True)
-    return runs[:limit]
 
 
 def get_run_traces(run_id: str) -> list[NodeTrace]:

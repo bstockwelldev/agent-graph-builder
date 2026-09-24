@@ -104,10 +104,15 @@ def delete_json(key: str) -> bool:
     return True
 
 
-def list_keys(prefix: str) -> list[str]:
+def list_keys(prefix: str, *, newest_first: bool = False, limit: int | None = None) -> list[str]:
+    """Lists ``.json`` keys under `prefix`. `newest_first` orders by the
+    listing's ``LastModified`` (no object reads), so callers can read only
+    the first `limit` keys. S3 lists in key order only, so every page is
+    still listed.
+    """
     client = s3_client()
     bucket = _bucket()
-    keys: list[str] = []
+    entries: list[tuple[str, str]] = []
     token: str | None = None
     while True:
         kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
@@ -117,13 +122,17 @@ def list_keys(prefix: str) -> list[str]:
         for item in response.get("Contents") or []:
             key = item.get("Key")
             if isinstance(key, str) and key.endswith(".json"):
-                keys.append(key)
+                modified = item.get("LastModified")
+                entries.append((key, modified.isoformat() if modified else ""))
         if not response.get("IsTruncated"):
             break
         token = response.get("NextContinuationToken")
         if not token:
             break
-    return keys
+    if newest_first:
+        entries.sort(key=lambda entry: entry[1], reverse=True)
+    keys = [key for key, _ in entries]
+    return keys if limit is None else keys[:limit]
 
 
 def save_graph(graph: GraphDefinition) -> None:
@@ -178,19 +187,6 @@ def get_run(run_id: str) -> RunSummary | None:
     if payload is None:
         return None
     return _summary_from_blob(payload)
-
-
-def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
-    runs: list[RunSummary] = []
-    for key in list_keys(_RUN_PREFIX):
-        payload = get_json(key)
-        if payload is None:
-            continue
-        summary = _summary_from_blob(payload)
-        if summary.graph_id == graph_id:
-            runs.append(summary)
-    runs.sort(key=lambda item: item.started_at or "", reverse=True)
-    return runs[:limit]
 
 
 def get_run_traces(run_id: str) -> list[NodeTrace]:
