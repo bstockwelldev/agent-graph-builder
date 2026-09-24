@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
@@ -1102,17 +1102,39 @@ def get_run_node_traces(run_id: str) -> list[NodeTrace]:
 
 
 @app.get("/api/runs/{run_id}/events")
-async def stream_run_events(run_id: str) -> StreamingResponse:
+async def stream_run_events(
+    run_id: str,
+    after: int | None = None,
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+) -> StreamingResponse:
+    """SSE stream of a run's events. SDK 2/7 (STO-615): every event carries
+    `id: <sequence>`, and a reconnect with `Last-Event-ID` (or `?after=`)
+    resumes after it. With no live bus on this isolate, a finished run's
+    persisted events are replayed and the stream closes."""
     bus = get_bus(run_id)
+    try:
+        resume_after = int(last_event_id) if last_event_id else (after or 0)
+    except ValueError:
+        resume_after = after or 0
+
+    def frame(event) -> str:
+        return f"id: {event.sequence}\ndata: {json.dumps(event.model_dump())}\n\n"
 
     async def event_source():
+        yield "retry: 1000\n\n"
         if bus is None:
-            # Serverless: live bus lives only on the isolate that ran POST /api/runs.
-            # Close immediately so the client can poll GET /api/runs/{id} instead of 404 limbo.
-            yield ": no live bus\n\n"
+            # Serverless: the live bus lives only on the isolate that ran
+            # POST /api/runs. Replay what was persisted, then close so the
+            # client polls GET /api/runs/{id} instead of hanging.
+            summary = runtime.get_run_summary(run_id)
+            for event in summary.events if summary else []:
+                if event.sequence > resume_after:
+                    yield frame(event)
+            if summary is None or not summary.events:
+                yield ": no live bus\n\n"
             return
-        async for event in bus.stream():
-            yield f"data: {json.dumps(event.model_dump())}\n\n"
+        async for event in bus.stream(after=resume_after):
+            yield frame(event)
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
 

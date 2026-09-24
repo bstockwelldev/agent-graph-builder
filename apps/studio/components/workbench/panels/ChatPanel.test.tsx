@@ -40,7 +40,7 @@ const api = vi.hoisted(() => {
     },
   };
 });
-vi.mock("@/lib/api-client", () => ({ client: api.client, streamRunEvents: vi.fn(() => () => undefined) }));
+vi.mock("@/lib/api-client", () => ({ client: api.client, waitForRun: vi.fn(() => new Promise(() => undefined)) }));
 
 import { WorkbenchProvider, useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { ChatPanel } from "./ChatPanel";

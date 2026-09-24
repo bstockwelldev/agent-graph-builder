@@ -37,7 +37,7 @@ import {
   type RunSummary,
 } from "@bstockwelldev/agent-graph-sdk";
 
-import { client, streamRunEvents } from "@/lib/api-client";
+import { client, waitForRun } from "@/lib/api-client";
 import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
 import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
@@ -1356,8 +1356,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
         closeStreamRef.current = watchRunCompletion({
           initial: summary,
-          streamRunEvents,
-          getRun: client.getRun,
+          wait: waitForRun,
           onEvent: (event) => {
             setEvents((evts) => [...evts, event]);
             // Mirror (not duplicate) into the app-wide console's Run events
