@@ -176,3 +176,13 @@ def test_supabase_resource_crud(monkeypatch) -> None:
     assert any(item["id"] == "p1" for item in storage.list_resources("prompts"))
     assert storage.delete_resource("prompts", "p1") is True
     assert storage.get_resource("prompts", "p1") is None
+
+
+def test_secret_key_sent_on_apikey_header_only(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_testkey")
+    assert supabase_store._headers() == {"apikey": "sb_secret_testkey"}
+
+
+def test_legacy_jwt_key_keeps_bearer_header(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJlegacy")
+    assert supabase_store._headers() == {"Authorization": "Bearer eyJlegacy", "apikey": "eyJlegacy"}

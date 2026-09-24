@@ -45,7 +45,13 @@ def _bucket() -> str:
 
 
 def _headers() -> dict[str, str]:
+    # SUPABASE_SERVICE_ROLE_KEY holds either a legacy service_role JWT or a
+    # new-style secret key (``sb_secret_...``). Secret keys are not JWTs:
+    # Supabase wants them on ``apikey`` only, and may reject them as
+    # ``Invalid JWT`` on ``Authorization: Bearer``.
     key = _service_role_key()
+    if key.startswith("sb_"):
+        return {"apikey": key}
     return {"Authorization": f"Bearer {key}", "apikey": key}
 
 
