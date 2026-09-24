@@ -73,6 +73,8 @@ const DEFAULT_RETRY: Required<RetryOptions> = { retries: 2, baseDelayMs: 250, ma
 export type Transport = {
   readonly baseUrl: string;
   request<T>(path: string, init?: RequestInitLike, schema?: z.ZodType<T>): Promise<T>;
+  /** SDK 4/7: `request`, plus the response headers (e.g. `X-Next-Cursor`). */
+  requestWithHeaders<T>(path: string, init?: RequestInitLike, schema?: z.ZodType<T>): Promise<{ data: T; headers: Headers }>;
   /** SDK 2/7: one attempt, returning the raw `Response` (for streaming
    * bodies). Headers, hooks and cancellation apply; no timeout or retry --
    * a stream's caller owns both. Non-2xx rejects with AgentGraphApiError. */
@@ -89,6 +91,10 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
   };
 
   async function request<T>(path: string, init: RequestInitLike = {}, schema?: z.ZodType<T>): Promise<T> {
+    return (await requestWithHeaders(path, init, schema)).data;
+  }
+
+  async function requestWithHeaders<T>(path: string, init: RequestInitLike = {}, schema?: z.ZodType<T>): Promise<{ data: T; headers: Headers }> {
     const method = (init.method ?? "GET").toUpperCase();
     const url = `${baseUrl}${path}`;
     const retry = resolveRetry(scoped.retry ?? options.retry, method);
@@ -139,12 +145,13 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
       }
 
       const data: unknown = response.status === 204 ? null : await response.json();
-      if (!schema) return data as T;
+      const responseHeaders = response.headers ?? new Headers();
+      if (!schema) return { data: data as T, headers: responseHeaders };
       const result = schema.safeParse(data);
       if (!result.success) {
         throw new AgentGraphResponseError({ method, path, issues: result.error.issues, message: result.error.message });
       }
-      return result.data;
+      return { data: result.data, headers: responseHeaders };
     }
   }
 
@@ -177,6 +184,7 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
   return {
     baseUrl,
     request,
+    requestWithHeaders,
     open,
     with: (next) =>
       createTransport(options, {

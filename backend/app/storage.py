@@ -567,7 +567,7 @@ def get_run(run_id: str) -> RunSummary | None:
     return _row_to_run_summary(row)
 
 
-def list_all_runs(*, limit: int = 200) -> list[RunSummary]:
+def list_all_runs(*, limit: int | None = 200) -> list[RunSummary]:
     """Cross-graph run history (studio-consolidation Phase 5 — see
     docs/planning/features/studio-consolidation-plan.md). AGB had no
     cross-graph run listing before this — Phase 4c's as-built notes flagged
@@ -583,7 +583,8 @@ def list_all_runs(*, limit: int = 200) -> list[RunSummary]:
     return runs[:limit]
 
 
-def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
+def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSummary]:
+    """Newest first; `limit=None` returns every run (paged routes)."""
     remote = _json_object_backend()
     if remote is not None:
         return remote.list_runs_for_graph(graph_id, limit=limit)
@@ -598,7 +599,7 @@ def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
             order by started_at desc
             limit ?
             """,
-            (graph_id, limit),
+            (graph_id, -1 if limit is None else limit),
         ).fetchall()
     return [_row_to_run_summary(row) for row in rows]
 

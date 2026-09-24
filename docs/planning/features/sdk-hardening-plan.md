@@ -184,7 +184,7 @@ Both checks were verified by adding a field to a Pydantic model without regenera
 - Studio vitest: 314/314.
 - Root build, with `pnpm install --frozen-lockfile`: green.
 
-### Phase 2 — Namespaced API, request objects and pagination (SDK 4/7, Medium)
+### Phase 2 — Namespaced API, request objects and pagination (SDK 4/7, Medium) — **Shipped**
 
 Linear STO-617 · GitHub #68. Old names stay as deprecated aliases for one minor version.
 
@@ -203,6 +203,55 @@ Linear STO-617 · GitHub #68. Old names stay as deprecated aliases for one minor
 
 - **Request objects** replace positional arguments.
 - **Pagination:** cursor pagination (`limit` and `cursor`) on list endpoints, in both the backend and the SDK.
+
+#### As built
+
+**Backend pagination (opt-in, non-breaking)**
+- `backend/app/pagination.py` adds `?limit=` (1–500) and `?cursor=` to every list route: graphs, runs (per graph and across graphs), releases, policy exceptions (per graph and across the workspace), knowledge lineage, every resource kind, and resource versions.
+- Without either parameter, a route returns exactly what it did before. With them, it returns one page in a documented order and sets `X-Next-Cursor` while more items remain. CORS exposes the header.
+- The body stays a plain array, so no response schema changed and older clients are unaffected. `API_VERSION` is now 0.4.0 (an additive change).
+- A cursor is the base64url sort key of the last item, and the next page is every item strictly after it. Deleting an item between pages never shifts or repeats the rest. A malformed cursor returns 400.
+- Page order:
+  - graphs and resources: by id;
+  - runs: newest first;
+  - releases, versions, exceptions and lineage: by creation time.
+- Paged runs are uncapped. Unpaged runs keep the old caps of 50 per graph and 200 across graphs. Storage `list_runs_for_graph` / `list_all_runs` now accept `limit=None`.
+- The remote stores still list and then filter. Keyset queries on the backend can come later.
+
+**SDK namespaces** (`src/api.ts`)
+- Namespaces: `graphs`, `runs`, `releases`, `policies` (`catalog`, `workspace.get/save`, `graph.get/save`, `effective`, `exceptions.*`), `routingLab`, `knowledge`, `analytics` (`dashboard`, `graph`, `nodeHistory`), `providers`, `runtimeTargets`, and the resource kinds.
+- The resource kinds (`prompts`, `tools`, `mcpServers`, `agents`, `llmProfiles`, `datasets`, `chatSessions`) stay top-level. They were already namespaces, so a `client.resources` wrapper would only add a second path to the same thing. `datasets.fromRuns` and `chatSessions.send` absorb the last two flat bespoke methods.
+- Convention: the resource's own ids are positional, and everything else is one camelCase request object that the SDK maps to snake_case. Examples:
+  - `releases.publish(graphId, { notes, author })`
+  - `policies.exceptions.create(graphId, { code, expiresAt, nodeId, reason })`
+  - `graphs.impact(graphId, { nodeId, draft })`
+- `runs.start` and `releases.run` return a `RunHandle` (`.run`, `.wait()`, `.stream()`).
+- Every list offers three readers:
+  - `list()`: unpaged, as before;
+  - `listPage({ limit, cursor })`: returns `{ items, nextCursor }`;
+  - `iterate({ pageSize })`: an async generator over every item.
+- Knowledge lineage uses `lineage`, `lineagePage` and `iterateLineage`. `collectAll()` gathers an iterator into an array.
+- Transport gains `requestWithHeaders`, which pagination uses to read `X-Next-Cursor`.
+
+**Deprecated aliases**
+- Every flat method (`getGraph`, `startRun`, `createPolicyException`, ...) keeps its positional signature, delegates to its namespace, and is tagged `@deprecated` in TSDoc with the replacement named.
+- The existing client tests pass unchanged against the aliases. A new test checks that each alias sends exactly the request its namespaced method sends.
+- Deprecated aliases stay for one minor version; they are removed at 1.0 (SDK 7/7).
+
+**Studio**
+- Every call site and every test mock uses the namespaces.
+- `lib/api-client.ts` types `client` as `Omit<AgentGraphClient, keyof DeprecatedClientMethods>`, so `tsc` rejects any use of a deprecated alias.
+- `lib/mockClient.ts` resets nested test mocks.
+
+**Verification**
+- Backend pytest: 539/539. `test_pagination.py` pages through 130 graphs, 120 runs (past the unpaged cap) and 105 resources, checks that a deleted cursor item doesn't shift the next page, and checks bounds, the invalid-cursor response, CORS exposure, and every other paged route.
+- SDK vitest: 150, plus the end-to-end test.
+  - `namespaces.test.ts` iterates 250 items across pages, and checks `listPage`, per-route paging, request-object bodies, alias/namespace parity, and `with()` scoping.
+  - The end-to-end test also passed live against the stub backend.
+- A live check through the built SDK iterated 121 graphs in pages of 50, with none missing or repeated.
+- Studio: vitest 314/314, tsc clean, eslint 0 errors.
+- Root build: green.
+- Playwright on the stub backend, at 1440 and 390 widths, with no failed API calls: graph list, publishing a release, a chat `/run` to Succeeded, and the policies page.
 
 ### Phase 5a — `/graph` core and `/testing` kit (SDK 5/7, Medium)
 

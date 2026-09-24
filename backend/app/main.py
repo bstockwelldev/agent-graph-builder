@@ -33,6 +33,7 @@ from .env_config import (
 )
 from .events import get_bus
 from .graph_templates import create_graph_definition
+from .pagination import NEXT_CURSOR_HEADER, Page, field_key, paginate
 from .knowledge import (
     KnowledgeUploadError,
     delete_knowledge_document,
@@ -174,7 +175,7 @@ app.add_middleware(
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[API_VERSION_HEADER],
+    expose_headers=[API_VERSION_HEADER, NEXT_CURSOR_HEADER],
 )
 
 
@@ -200,8 +201,9 @@ def health_check() -> JSONResponse:
 
 
 @app.get("/api/graphs")
-def list_graphs() -> list[GraphDefinition]:
-    return storage.list_graphs()
+def list_graphs(page: Page) -> list[GraphDefinition]:
+    """Paged order (with `limit`/`cursor`): by id."""
+    return paginate(storage.list_graphs(), page, key=field_key("id"))
 
 
 @app.post("/api/graphs")
@@ -287,10 +289,12 @@ def publish_release_endpoint(
 
 
 @app.get("/api/graphs/{graph_id}/releases")
-def list_releases_endpoint(graph_id: str) -> list[dict[str, Any]]:
+def list_releases_endpoint(
+    graph_id: str, page: Page
+) -> list[dict[str, Any]]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
-    return list_releases(graph_id)
+    return paginate(list_releases(graph_id), page, key=field_key("created_at", "release_id"))
 
 
 @app.get("/api/graphs/{graph_id}/releases/{release_id}")
@@ -529,10 +533,14 @@ def create_policy_exception_endpoint(
 
 
 @app.get("/api/graphs/{graph_id}/policy-exceptions")
-def list_policy_exceptions_endpoint(graph_id: str) -> list[PolicyException]:
+def list_policy_exceptions_endpoint(
+    graph_id: str, page: Page
+) -> list[PolicyException]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
-    return list_graph_policy_exceptions(graph_id)
+    return paginate(
+        list_graph_policy_exceptions(graph_id), page, key=field_key("created_at", "id")
+    )
 
 
 @app.patch("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
@@ -550,8 +558,10 @@ def update_policy_exception_endpoint(
 
 
 @app.get("/api/policy-exceptions")
-def list_all_policy_exceptions_endpoint() -> list[PolicyException]:
-    return list_all_policy_exceptions()
+def list_all_policy_exceptions_endpoint(
+    page: Page,
+) -> list[PolicyException]:
+    return paginate(list_all_policy_exceptions(), page, key=field_key("created_at", "id"))
 
 
 # Configurable policies (STO-608): the rule catalog, workspace defaults, and
@@ -715,11 +725,13 @@ def delete_graph_knowledge_document(graph_id: str, document_id: str) -> dict[str
 # knowledge`, which records these at retrieval time.
 @app.get("/api/graphs/{graph_id}/knowledge/lineage")
 def get_graph_knowledge_lineage(
-    graph_id: str, document_id: str | None = None
+    graph_id: str, page: Page, document_id: str | None = None
 ) -> list[KnowledgeLineageEntry]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
-    return list_knowledge_lineage(graph_id, document_id)
+    return paginate(
+        list_knowledge_lineage(graph_id, document_id), page, key=field_key("created_at", "id")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -754,8 +766,8 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
             raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     @app.get(f"/api/{path}", name=f"list_{kind}", operation_id=f"list_{kind}")
-    def list_resources_route() -> list[dict[str, Any]]:
-        return storage.list_resources(kind)
+    def list_resources_route(page: Page) -> list[dict[str, Any]]:
+        return paginate(storage.list_resources(kind), page, key=field_key("id"))
 
     @app.get(f"/api/{path}/{{resource_id}}", name=f"get_{kind}", operation_id=f"get_{kind}")
     def get_resource_route(resource_id: str) -> dict[str, Any]:
@@ -859,8 +871,14 @@ def _register_resource_version_routes(kind: str, path: str) -> None:
         name=f"list_{kind}_versions",
         operation_id=f"list_{kind}_versions",
     )
-    def list_versions_route(resource_id: str) -> list[dict[str, Any]]:
-        return list_resource_versions(kind, resource_id)
+    def list_versions_route(
+        resource_id: str, page: Page
+    ) -> list[dict[str, Any]]:
+        return paginate(
+            list_resource_versions(kind, resource_id),
+            page,
+            key=field_key("created_at", "version_id"),
+        )
 
     @app.get(
         f"/api/{path}/{{resource_id}}/versions/{{version_id}}",
@@ -919,22 +937,30 @@ async def send_chat_session_message_route(
 
 
 @app.get("/api/graphs/{graph_id}/runs")
-def list_graph_runs(graph_id: str) -> list[RunSummary]:
+def list_graph_runs(graph_id: str, page: Page) -> list[RunSummary]:
+    """Unpaged: the 50 newest. Paged: every run, newest first."""
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
-    return storage.list_runs_for_graph(graph_id)
+    if not page.requested:
+        return storage.list_runs_for_graph(graph_id)
+    runs = storage.list_runs_for_graph(graph_id, limit=None)
+    return paginate(runs, page, key=field_key("started_at", "run_id"), descending=True)
 
 
 @app.get("/api/runs")
-def list_all_runs() -> list[RunSummary]:
+def list_all_runs(page: Page) -> list[RunSummary]:
     """Cross-graph run history (studio-consolidation Phase 5) — flagged as
     a gap in Phase 4c's as-built notes ("/runs in the studio becomes
     'pick a graph -> see its runs', not a single global run feed... a true
     cross-graph GET /api/runs endpoint is a candidate Phase 5+ backend
     addition"). Backs the analytics dashboard below; the studio UI itself
-    still uses the per-graph route for its Runs screen.
+    still uses the per-graph route for its Runs screen. Unpaged: the 200
+    newest. Paged (SDK 4/7): every run, newest first.
     """
-    return storage.list_all_runs()
+    if not page.requested:
+        return storage.list_all_runs()
+    runs = storage.list_all_runs(limit=None)
+    return paginate(runs, page, key=field_key("started_at", "run_id"), descending=True)
 
 
 @app.get("/api/analytics")

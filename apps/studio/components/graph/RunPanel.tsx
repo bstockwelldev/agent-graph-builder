@@ -382,7 +382,7 @@ export function RunPanel({
     }
     let cancelled = false;
     client
-      .providerCredentials(provider)
+      .providers.credentials(provider)
       .then((credentials) => {
         if (cancelled) return;
         setApiKeyLabel(credentials.label || "API key");
@@ -455,7 +455,7 @@ export function RunPanel({
       setWaivingKey(key);
       setWaiveError(null);
       try {
-        await client.createPolicyException(graphId, diagnostic.code, expiryFromNow(days), diagnostic.node_id ?? undefined, "Waived from Studio");
+        await client.policies.exceptions.create(graphId, { code: diagnostic.code, expiresAt: expiryFromNow(days), nodeId: diagnostic.node_id ?? undefined, reason: "Waived from Studio" });
         onPolicyExceptionCreated?.();
       } catch (err) {
         setWaiveError(err instanceof Error ? err.message : "Failed to waive diagnostic.");
@@ -540,7 +540,7 @@ export function RunPanel({
     try {
       const input = JSON.parse(fixtureInputText || "{}") as Record<string, unknown>;
       const node_outputs = JSON.parse(fixtureNodeOutputsText || "{}") as Record<string, unknown>;
-      setSimulateResult(await client.simulateGraph(graphId, { input, node_outputs }));
+      setSimulateResult(await client.graphs.simulate(graphId, { input, node_outputs }));
     } catch (err) {
       setSimulateError(errorDetail(err));
     } finally {
@@ -552,7 +552,7 @@ export function RunPanel({
     setReplayingRunId(runId);
     setReplayError(null);
     try {
-      setReplayResult(await client.replayRun(runId, request));
+      setReplayResult(await client.runs.replay(runId, request));
       setCounterfactualRunId(null);
     } catch (err) {
       setReplayError(errorDetail(err));
@@ -572,7 +572,7 @@ export function RunPanel({
       setSnapshotError(null);
       setSnapshot(null);
       try {
-        setSnapshot(await client.getRunGraphSnapshot(runId));
+        setSnapshot(await client.runs.snapshot(runId));
       } catch (err) {
         setSnapshotError(errorDetail(err));
       } finally {

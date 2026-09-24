@@ -7,7 +7,7 @@ import { AgentGraphApiError } from "@bstockwelldev/agent-graph-sdk";
 
 const { createFromRunsMock } = vi.hoisted(() => ({ createFromRunsMock: vi.fn() }));
 
-vi.mock("@/lib/api-client", () => ({ client: { createDatasetFromRuns: createFromRunsMock } }));
+vi.mock("@/lib/api-client", () => ({ client: { datasets: { fromRuns: createFromRunsMock } } }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>

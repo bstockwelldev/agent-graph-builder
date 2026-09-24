@@ -9,7 +9,7 @@
  * JSON-syntax and top-level-shape validity client-side. A raw edit still
  * goes through the same async live-validation pipeline every Configure-tab
  * edit already goes through (GraphEditor.tsx's debounced
- * `client.validateGraph` call) once applied — this editor is exactly as
+ * `client.graphs.validate` call) once applied — this editor is exactly as
  * strict as the typed form, not more, not less.
  */
 

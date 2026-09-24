@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api-client", () => ({
   client: {
     tools: { list: vi.fn(async () => []) },
-    listProviderModels: vi.fn(async () => ({ models: [], message: "" })),
+    providers: { models: vi.fn(async () => ({ models: [], message: "" })) },
     prompts: { list: vi.fn(async () => [{ id: "p_explain", name: "Explain", body: "Explain {question}" }]) },
   },
 }));

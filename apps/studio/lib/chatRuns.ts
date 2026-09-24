@@ -4,7 +4,7 @@ import { runInputVariables } from "@/lib/runInputs";
 /**
  * Pure helpers for running graphs from Chat (studio-ux-gap-remediation-
  * plan.md §4-5, STO-600/601). The run itself goes through the same run API
- * the Run panel uses (`client.startRun` / `client.startReleaseRun`); this
+ * the Run panel uses (`client.runs.start` / `client.releases.run`); this
  * module only resolves *what* to run and turns a run's events/traces into
  * the chat card's step rows.
  */

@@ -87,7 +87,7 @@ export function useResourceNamesMap(enabled: boolean): ResourceNames {
   const load = useCallback(() => {
     if (!enabled) return;
     // Wave 7c: saved graph names too, for subgraph node cards ("graphs:<id>").
-    Promise.all([listBindable("prompts"), listBindable("llm_profiles"), client.listGraphs().catch(() => [])])
+    Promise.all([listBindable("prompts"), listBindable("llm_profiles"), client.graphs.list().catch(() => [])])
       .then(([prompts, profiles, graphs]) =>
         setNames(
           Object.fromEntries([

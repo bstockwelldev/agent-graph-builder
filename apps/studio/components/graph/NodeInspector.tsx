@@ -803,7 +803,7 @@ function PolicyTab({
     let cancelled = false;
     setLoading(true);
     client
-      .listPolicyExceptions(graphId)
+      .policies.exceptions.list({ graphId })
       .then((all) => {
         if (!cancelled) setExceptions(all.filter((exception) => exception.node_id === nodeId));
       })
@@ -824,7 +824,7 @@ function PolicyTab({
     setError(null);
     try {
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const created = await client.createPolicyException(graphId, diagnostic.code, expiresAt, nodeId, "Waived from Studio");
+      const created = await client.policies.exceptions.create(graphId, { code: diagnostic.code, expiresAt, nodeId, reason: "Waived from Studio" });
       setExceptions((current) => [...current, created]);
       onPolicyExceptionCreated?.();
     } catch (err) {
@@ -839,7 +839,7 @@ function PolicyTab({
     setBusyKey(exceptionId);
     setError(null);
     try {
-      await client.deletePolicyException(graphId, exceptionId);
+      await client.policies.exceptions.delete(graphId, exceptionId);
       setExceptions((current) => current.filter((exception) => exception.id !== exceptionId));
       onPolicyExceptionCreated?.();
     } catch (err) {

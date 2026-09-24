@@ -7,7 +7,7 @@ import { NodeImpactTab } from "./NodeImpactTab";
 
 // Wave 7a (STO-610): find on canvas, health panel, node impact tab.
 
-const { clientMock } = vi.hoisted(() => ({ clientMock: { getNodeImpact: vi.fn() } }));
+const { clientMock } = vi.hoisted(() => ({ clientMock: { graphs: { impact: vi.fn() } } }));
 vi.mock("@/lib/api-client", () => ({ client: clientMock }));
 
 const nodes = [
@@ -17,7 +17,7 @@ const nodes = [
   { id: "llm_answer", data: { nodeType: "llm", label: "qwen", config: {} } },
 ];
 
-beforeEach(() => clientMock.getNodeImpact.mockReset());
+beforeEach(() => clientMock.graphs.impact.mockReset());
 afterEach(cleanup);
 
 describe("FindBar", () => {
@@ -81,7 +81,7 @@ describe("HealthPanel", () => {
 
 describe("NodeImpactTab", () => {
   it("loads impact for the draft, highlights downstream and navigates", async () => {
-    clientMock.getNodeImpact.mockResolvedValue({
+    clientMock.graphs.impact.mockResolvedValue({
       node_id: "llm_classify",
       downstream: ["router_1", "llm_answer"],
       outputs_reached: [],
@@ -107,7 +107,7 @@ describe("NodeImpactTab", () => {
       />,
     );
     await screen.findByText(/Changing this node reaches 2 nodes · 0 outputs/);
-    expect(clientMock.getNodeImpact).toHaveBeenCalledWith("g1", "llm_classify", draft);
+    expect(clientMock.graphs.impact).toHaveBeenCalledWith("g1", { nodeId: "llm_classify", draft });
     expect(onHighlight).toHaveBeenCalledWith(["llm_classify", "router_1", "llm_answer"]);
     expect(screen.getByText("changed since")).toBeTruthy();
     expect(screen.getByText("Stubbed")).toBeTruthy();

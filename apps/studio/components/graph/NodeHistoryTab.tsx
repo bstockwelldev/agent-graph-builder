@@ -42,7 +42,7 @@ export function NodeHistoryTab({
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    Promise.all([client.getGraphAnalytics(graphId), client.getNodeHistory(graphId, nodeId, 15)])
+    Promise.all([client.analytics.graph(graphId), client.analytics.nodeHistory(graphId, nodeId, { limit: 15 })])
       .then(([analytics, executions]) => {
         if (cancelled) return;
         setMetrics(analytics.nodes.find((node) => node.node_id === nodeId) ?? null);

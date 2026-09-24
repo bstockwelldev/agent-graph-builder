@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api-client", () => ({
   client: {
-    getGraphAnalytics: vi.fn(async () => ({
+    analytics: {
+      graph: vi.fn(async () => ({
       graph_id: "g",
       run_window: 3,
       totals: { invocations: 3, input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_usd: 0, avg_duration_ms: 0 },
@@ -27,10 +28,11 @@ vi.mock("@/lib/api-client", () => ({
         },
       ],
     })),
-    getNodeHistory: vi.fn(async () => [
+      nodeHistory: vi.fn(async () => [
       { run_id: "r3", run_status: "failed", status: "failed", started_at: null, duration_ms: 900, error: "boom" },
       { run_id: "r2", run_status: "succeeded", status: "succeeded", started_at: null, duration_ms: 300, error: null },
-    ]),
+      ]),
+    },
   },
 }));
 

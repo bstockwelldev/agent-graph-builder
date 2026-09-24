@@ -82,7 +82,7 @@ export function ReleasesPanel({
     setReleasesLoading(true);
     setReleasesError(null);
     try {
-      const loaded = await client.listReleases(graphId);
+      const loaded = await client.releases.list(graphId);
       setReleases([...loaded].sort((a, b) => b.created_at.localeCompare(a.created_at)));
     } catch (err) {
       setReleasesError(errorDetail(err));
@@ -100,11 +100,10 @@ export function ReleasesPanel({
     setPublishError(null);
     setPublishBlockers([]);
     try {
-      const result = await client.publishRelease(
-        graphId,
-        releaseNotes.trim() || undefined,
-        author.trim() || undefined,
-      );
+      const result = await client.releases.publish(graphId, {
+        notes: releaseNotes.trim() || undefined,
+        author: author.trim() || undefined,
+      });
       setLastResult(result);
       if (result.created) setReleaseNotes("");
       await refreshReleases();
@@ -130,7 +129,7 @@ export function ReleasesPanel({
       setExpandedRelease(null);
       setExpandedLoading(true);
       try {
-        const release = await client.getRelease(graphId, releaseId);
+        const release = await client.releases.get(graphId, releaseId);
         setExpandedRelease(release);
       } catch {
         setExpandedRelease(null);
@@ -157,7 +156,7 @@ export function ReleasesPanel({
       if (!getDraftGraph) return;
       setDraftDiff({ releaseId, diff: null, loading: true, error: null });
       try {
-        const diff = await client.compareDraftToRelease(releaseId, getDraftGraph());
+        const diff = await client.releases.compareDraft(releaseId, getDraftGraph());
         setDraftDiff({ releaseId, diff, loading: false, error: null });
       } catch (err) {
         setDraftDiff({ releaseId, diff: null, loading: false, error: errorDetail(err) });
@@ -176,7 +175,7 @@ export function ReleasesPanel({
     setCompareLoading(true);
     setCompareError(null);
     void client
-      .compareReleases(compareIds[0], compareIds[1])
+      .releases.compare(compareIds[0], compareIds[1])
       .then((diff) => {
         if (!cancelled) setCompareDiff(diff);
       })

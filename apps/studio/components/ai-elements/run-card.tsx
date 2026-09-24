@@ -19,8 +19,8 @@ export type RunCardDeps = {
 };
 
 const DEFAULT_DEPS: RunCardDeps = {
-  getRun: (runId) => client.getRun(runId),
-  getRunNodeTraces: (runId) => client.getRunNodeTraces(runId),
+  getRun: (runId) => client.runs.get(runId),
+  getRunNodeTraces: (runId) => client.runs.traces(runId),
   waitForRun,
 };
 
