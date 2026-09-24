@@ -24,6 +24,7 @@ import {
   type GraphDefinition,
   type GraphEdge,
   type GraphGroup,
+  type GraphUsedBy,
   type GraphHealth,
   type GraphNode,
   type GraphOrientation,
@@ -119,6 +120,8 @@ import { shell } from "@/lib/graph-theme";
 import { parseGraphUrlState, serializeGraphUrlState } from "@/lib/graphUrlState";
 import { WORKBENCH_PANELS } from "@/components/workbench/panels";
 import { CaptureDatasetDialog } from "@/components/studio/capture-dataset-dialog";
+import { emitResourceChanged } from "@/lib/resourceEvents";
+import { ExtractSubgraphDialog } from "@/components/studio/extract-subgraph-dialog";
 
 // Layout-menu view preferences (studio-graph-workbench-redesign-plan.md,
 // Slice 3) -- per viewer, not per graph, so they live in localStorage
@@ -199,6 +202,7 @@ const nodeTypes = {
   tool_loop: GraphNodeView,
   code_exec: GraphNodeView,
   human_gate: GraphNodeView,
+  subgraph: GraphNodeView,
   // Wave 7b: derived visual group frames (never in `nodes` state).
   groupFrame: GroupFrame,
 };
@@ -318,6 +322,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // these + member positions at render time (lib/graphGroups.ts).
   const [groups, setGroups] = useState<GraphGroup[]>([]);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  // Wave 7c (STO-612): "Extract to graph" (the selection being extracted)
+  // and the saved graphs whose subgraph nodes run this one.
+  const [extractRequest, setExtractRequest] = useState<{ nodeIds: string[]; defaultName: string } | null>(null);
+  const [usedBy, setUsedBy] = useState<GraphUsedBy>([]);
   const [health, setHealth] = useState<GraphHealth | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
@@ -541,6 +549,22 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   useEffect(() => {
     setCoachDismissed(isCoachDismissed(graphId));
+  }, [graphId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUsedBy([]);
+    client
+      .getGraphUsedBy(graphId)
+      .then((parents) => {
+        if (!cancelled) setUsedBy(parents);
+      })
+      .catch(() => {
+        // Cosmetic: the header menu just omits "Used by".
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [graphId]);
 
   useEffect(() => {
@@ -1580,6 +1604,38 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   // Node toolbar + edge chip callbacks (Slices 4 and 6), provided to
   // canvas-rendered components through CanvasActionsProvider.
+  // Wave 7c: the backend saves the new child graph and proposes the parent
+  // with one subgraph node in the selection's place; applying it is one
+  // undoable edit (the child graph itself stays saved).
+  const extractToGraph = useCallback(
+    async (nodeIds: string[], name: string) => {
+      const result = await client.extractSubgraph(graphId, buildGraphDefinition(), { node_ids: nodeIds, name });
+      const proposed = result.proposed_parent;
+      const removed = new Set(nodeIds);
+      const added = proposed.nodes.filter((node) => !nodes.some((existing) => existing.id === node.id));
+      const handleSides = nodes.find((node) => !removed.has(node.id));
+      recordMutation();
+      syncIdCounter(proposed);
+      setNodes((current) => [
+        ...current.filter((node) => !removed.has(node.id)),
+        ...added.map((node) => ({
+          ...toFlowNode(node),
+          sourcePosition: handleSides?.sourcePosition,
+          targetPosition: handleSides?.targetPosition,
+        })),
+      ]);
+      setEdges(proposed.edges.map(toFlowEdge));
+      setGroups(proposed.groups ?? []);
+      setSelectedEdgeId(null);
+      setSelectedNodeId(added[0]?.id ?? null);
+      setLiveAnnouncement(`Extracted ${nodeIds.length} nodes into ${result.child_graph.name}.`);
+      emitResourceChanged(); // node cards pick up the new graph's name
+    },
+    [buildGraphDefinition, graphId, nodes, recordMutation, setEdges, setNodes],
+  );
+
+  const requestExtract = (nodeIds: string[], defaultName: string) => setExtractRequest({ nodeIds, defaultName });
+
   const groupMenuActionsForNode = (nodeId: string): NodeContextMenuAction[] => {
     const owner = groupOfNode(groups, nodeId);
     const picked = selectedNodeIdsForGrouping();
@@ -1592,6 +1648,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         onClick: () => groupNodes(ids),
       },
       ...(owner ? [{ label: `Ungroup "${owner.label}"`, shortcut: "⌘⇧G", onClick: () => ungroupById(owner.id) }] : []),
+      { label: ids.length > 1 ? `Extract ${ids.length} nodes to graph…` : "Extract to graph…", onClick: () => requestExtract(ids, `${graphName} part`) },
     ];
   };
 
@@ -1609,7 +1666,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         icon: <span aria-hidden="true" style={{ display: "inline-block", width: 10, height: 10, borderRadius: 999, background: GROUP_COLORS[colorId] }} />,
         onClick: () => setGroupColor(groupId, colorId),
       })),
-      { label: "Ungroup", shortcut: "⌘⇧G", separatorBefore: true, onClick: () => ungroupById(groupId) },
+      { label: "Extract to graph…", separatorBefore: true, onClick: () => requestExtract(group.node_ids, group.label) },
+      { label: "Ungroup", shortcut: "⌘⇧G", onClick: () => ungroupById(groupId) },
     ];
   };
 
@@ -1772,9 +1830,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     : [];
   const selectedTrace = selectedNodeId ? nodeTraces[selectedNodeId] ?? null : null;
   // Wave 4a: registry names for bound node cards (loaded only when the
-  // graph has library bindings).
-  const hasLibraryBindings = nodes.some((node) =>
-    nodeBindings(node.data.nodeType, node.data.config).some((binding) => binding.kind !== "tools"),
+  // graph has library bindings, or -- Wave 7c -- a subgraph node, whose
+  // card is titled by the child graph's name).
+  const hasLibraryBindings = nodes.some(
+    (node) =>
+      node.data.nodeType === "subgraph" ||
+      nodeBindings(node.data.nodeType, node.data.config).some((binding) => binding.kind !== "tools"),
   );
   const resourceNames = useResourceNamesMap(hasLibraryBindings);
   const showEmptyCoach = isCoachVisible(graphId, coachDismissed, nodes, edges);
@@ -1967,6 +2028,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         onShowShortcuts={() => workbench.toggle("help")}
         health={health}
         onOpenFind={() => setFindOpen(true)}
+        usedBy={usedBy}
+        onOpenGraph={(parentId) => router.push(`/graphs/${encodeURIComponent(parentId)}`)}
       />
       <input
         ref={fileInputRef}
@@ -2159,7 +2222,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 : contextMenu.kind === "group"
                   ? groupMenuActions(contextMenu.groupId)
                   : contextMenu.kind === "selection"
-                    ? [{ label: "Group selection", shortcut: "⌘G", onClick: () => groupNodes(selectedNodeIdsForGrouping()) }]
+                    ? [
+                        { label: "Group selection", shortcut: "⌘G", onClick: () => groupNodes(selectedNodeIdsForGrouping()) },
+                        { label: "Extract selection to graph…", onClick: () => requestExtract(selectedNodeIdsForGrouping(), `${graphName} part`) },
+                      ]
                     : NODE_TYPES_FOR_CONTEXT_MENU.filter(
                     (type) =>
                       contextMenu.kind !== "launcher" ||
@@ -2410,6 +2476,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           </span>
         </button>
       )}
+      <ExtractSubgraphDialog
+        open={extractRequest !== null}
+        onOpenChange={(open) => {
+          if (!open) setExtractRequest(null);
+        }}
+        nodeCount={extractRequest?.nodeIds.length ?? 0}
+        defaultName={extractRequest?.defaultName ?? ""}
+        onExtract={(name) => (extractRequest ? extractToGraph(extractRequest.nodeIds, name) : Promise.resolve())}
+      />
       {graphId && (
         <CaptureDatasetDialog
           open={captureRuns !== null}

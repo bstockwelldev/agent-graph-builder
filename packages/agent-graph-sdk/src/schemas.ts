@@ -24,6 +24,8 @@ export const nodeTypeSchema = z.enum([
   "tool_loop",
   "code_exec",
   "branch",
+  // Large-graph complexity, Wave 7c (STO-612): graph-as-node.
+  "subgraph",
 ]);
 
 export const edgeKindSchema = z.enum(["sequence", "conditional", "default"]);
@@ -250,6 +252,7 @@ export const platformEventSchema = z.object({
     "node.failed",
     "node.paused",
     "edge.selected",
+    "subgraph.completed",
   ]),
   run_id: z.string(),
   node_id: z.string().nullish(),
@@ -278,6 +281,9 @@ export const runSummarySchema = z.object({
   source: z.enum(["release", "draft_snapshot"]).nullish(),
   runtime_target: z.enum(["langgraph"]).nullish(),
   compiler_version: z.string().nullish(),
+  // Wave 7c: set on a subgraph node's nested child run.
+  parent_run_id: z.string().nullish(),
+  parent_node_id: z.string().nullish(),
 });
 
 // P0 graph foundation, Slice D — GET /api/runs/{run_id}/snapshot. A
@@ -803,4 +809,17 @@ export const nodeImpactSchema = z.object({
   runs: z.object({ executions: z.number(), last_run_id: z.string().nullish(), last_run_at: z.string().nullish() }),
   releases: z.array(z.object({ release_id: z.string(), created_at: z.string(), changed_since: z.boolean() })),
   datasets: z.array(z.object({ dataset_id: z.string(), name: z.string() })),
+  // Wave 7c: the graph a subgraph node runs.
+  uses_graph: z.object({ graph_id: z.string(), name: z.string().nullish(), version: z.string() }).nullish(),
 });
+
+/** Wave 7c (STO-612): POST /api/graphs/{id}/extract-subgraph. */
+export const subgraphExtractResponseSchema = z.object({
+  child_graph: graphDefinitionSchema,
+  proposed_parent: graphDefinitionSchema,
+});
+
+/** Wave 7c: GET /api/graphs/{id}/used-by -- parents referencing this graph. */
+export const graphUsedBySchema = z.array(
+  z.object({ graph_id: z.string(), name: z.string(), node_ids: z.array(z.string()) }),
+);

@@ -39,6 +39,8 @@ EventType = Literal[
     "node.failed",
     "node.paused",
     "edge.selected",
+    # Wave 7c (STO-612): a subgraph node's nested child run finished.
+    "subgraph.completed",
 ]
 
 

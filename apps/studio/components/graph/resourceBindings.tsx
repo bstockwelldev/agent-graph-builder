@@ -86,12 +86,14 @@ export function useResourceNamesMap(enabled: boolean): ResourceNames {
   const [names, setNames] = useState<ResourceNames>({});
   const load = useCallback(() => {
     if (!enabled) return;
-    Promise.all([listBindable("prompts"), listBindable("llm_profiles")])
-      .then(([prompts, profiles]) =>
+    // Wave 7c: saved graph names too, for subgraph node cards ("graphs:<id>").
+    Promise.all([listBindable("prompts"), listBindable("llm_profiles"), client.listGraphs().catch(() => [])])
+      .then(([prompts, profiles, graphs]) =>
         setNames(
           Object.fromEntries([
             ...prompts.map((p) => [`prompts:${p.id}`, p.name] as const),
             ...profiles.map((p) => [`llm_profiles:${p.id}`, p.name] as const),
+            ...graphs.map((g) => [`graphs:${g.id}`, g.name] as const),
           ]),
         ),
       )

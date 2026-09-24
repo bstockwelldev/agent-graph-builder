@@ -68,6 +68,8 @@ import { NodeHistoryTab } from "./NodeHistoryTab";
 import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
 import { NODE_TYPE_ICONS } from "./nodeTypeIcons";
+import { SubgraphConfig } from "./SubgraphConfig";
+import { childRunHref } from "@/lib/subgraphs";
 
 export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): GraphEdge {
   const kind = (patch.kind ?? edge.kind) as EdgeKind;
@@ -91,6 +93,7 @@ const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   tool_loop: ["llmProfileId", "provider", "model", "systemPromptId", "systemPrompt", "maxToolIterations"],
   code_exec: ["content", "codeExecLanguage", "toolName"],
   human_gate: ["content", "genuiCheckpointSurfaceJson"],
+  subgraph: ["graphId", "version", "inputMapping"],
 };
 
 const EDGE_KIND_OPTIONS = (["sequence", "conditional", "default"] as const).map((value) => ({
@@ -349,7 +352,13 @@ export function NodeInspector({
       {activeTab === "policy" && (
         <PolicyTab graphId={graphId} nodeId={node.id} issues={issues} onPolicyExceptionCreated={onPolicyExceptionCreated} />
       )}
-      {activeTab === "run" && <RunTab selectedTrace={selectedTrace} onOpenRunPanel={onOpenRunPanel} />}
+      {activeTab === "run" && (
+        <RunTab
+          selectedTrace={selectedTrace}
+          onOpenRunPanel={onOpenRunPanel}
+          childGraphId={node.type === "subgraph" ? String(node.config.graphId ?? "") : undefined}
+        />
+      )}
       {activeTab === "history" &&
         (graphId ? (
           <NodeHistoryTab graphId={graphId} nodeId={node.id} refreshKey={historyRefreshKey} onInspectRun={onInspectRun} />
@@ -655,6 +664,8 @@ function ConfigureTab({
         </Group>
       )}
 
+      {node.type === "subgraph" && <SubgraphConfig node={node} graphId={graphId} set={set} fieldIssues={fieldIssues} variables={templateVariables} />}
+
       {node.type === "human_gate" && (
         <Group title="Checkpoint">
           <Field label="Content" hint="Shown to the approver at the checkpoint." issues={fieldIssues("content")}>
@@ -885,7 +896,16 @@ function formatTraceDuration(trace: NodeTrace): string | null {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | null; onOpenRunPanel?: () => void }) {
+function RunTab({
+  selectedTrace,
+  onOpenRunPanel,
+  childGraphId,
+}: {
+  selectedTrace: NodeTrace | null;
+  onOpenRunPanel?: () => void;
+  /** Wave 7c: a subgraph node's configured graph, for "Open child run". */
+  childGraphId?: string | null;
+}) {
   if (!selectedTrace) {
     return (
       <Group title="Last execution">
@@ -901,6 +921,7 @@ function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | 
 
   const duration = formatTraceDuration(selectedTrace);
   const tone = statusColor[selectedTrace.status];
+  const childRun = childGraphId !== undefined ? childRunHref(selectedTrace, childGraphId) : null;
   return (
     <div>
       <Group
@@ -923,6 +944,11 @@ function RunTab({ selectedTrace, onOpenRunPanel }: { selectedTrace: NodeTrace | 
           <div role="alert" style={{ fontSize: 12, color: color.error[500], overflowWrap: "anywhere" }}>
             {selectedTrace.error}
           </div>
+        )}
+        {childRun && (
+          <a href={childRun} className="agb-focus-ring agb-hoverable" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: color.primary[500], marginTop: spacing[2] }}>
+            <ExternalLink size={13} aria-hidden="true" /> Open child run
+          </a>
         )}
       </Group>
     </div>

@@ -127,6 +127,9 @@ class ExecContext:
     # tool_loop node id -> the chat model to use instead of the run's.
     forced_routes: dict[str, str] | None = None
     node_chat_models: dict[str, ChatModel] | None = None
+    # Wave 7c (STO-612): how deep this run is nested under subgraph nodes
+    # (0 for a top-level run); compute_subgraph refuses past MAX_DEPTH.
+    depth: int = 0
 
 
 def _resolve_resource(ctx: ExecContext, kind: str, resource_id: str) -> dict[str, Any] | None:
@@ -608,6 +611,58 @@ async def compute_human_gate(
     return {"content": node.config.get("content", ""), "approved": True}, upstream, {}
 
 
+async def compute_subgraph(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Graph-as-node (Wave 7c, STO-612): run the referenced graph as a
+    nested run with its own trace, and output its result. A release-sourced
+    parent runs the child release frozen at publish (subgraphs.py)."""
+    from . import runtime, subgraphs  # runtime imports this module
+
+    if ctx.depth + 1 > subgraphs.MAX_DEPTH:
+        raise ValueError(f"subgraph nesting exceeds {subgraphs.MAX_DEPTH} levels")
+    child = subgraphs.resolve_child(node, ctx.release_resource_snapshots)
+    upstream = get_upstream_output(node, state, ctx.graph)
+    child_input = subgraphs.build_child_input(
+        node, upstream, state["variables"], subgraphs.child_inputs(child.graph)
+    )
+    compiled = runtime.compile_workflow(child.graph)
+    if not compiled.ok:
+        first = next((d for d in compiled.diagnostics if d.blocking), None)
+        raise ValueError(
+            f"child graph {child.graph.id!r} doesn't compile: "
+            f"{first.message if first else 'blocking diagnostics'}"
+        )
+    child_run_id, _bus = await runtime.start_run_inline(
+        compiled.compiled_workflow_id or "",
+        child_input,
+        provider=ctx.resolved_provider,
+        model=ctx.requested_model,
+        api_key=ctx.api_key,
+        release_resource_snapshots=child.snapshots,
+        release_id=child.release_id,
+        parent_run_id=ctx.run_id,
+        parent_node_id=node.id,
+        depth=ctx.depth + 1,
+    )
+    summary = runtime.RUN_STORE[child_run_id]
+    if summary.status != "succeeded":
+        raise ValueError(
+            f"child run {child_run_id} {summary.status}: {summary.error or 'no result'}"
+        )
+    info = {
+        "graphId": child.graph.id,
+        "version": subgraphs.target_version(node),
+        "releaseId": child.release_id,
+        "childRunId": child_run_id,
+        "childInput": child_input,
+    }
+    ctx.bus.emit(
+        "subgraph.completed",
+        {"childRunId": child_run_id, "graphId": child.graph.id, "releaseId": child.release_id},
+        node_id=node.id,
+    )
+    return info, summary.result, {}
+
+
 EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitable[NodeResult]]] = {
     "input": compute_input,
     "prompt": compute_prompt,
@@ -621,4 +676,5 @@ EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitabl
     "tool_loop": compute_tool_loop,
     "code_exec": compute_code_exec,
     "human_gate": compute_human_gate,
+    "subgraph": compute_subgraph,
 }

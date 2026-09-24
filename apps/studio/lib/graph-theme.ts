@@ -106,6 +106,8 @@ export const nodeType = {
   tool_loop: { bg: "#2a2014", border: "#c07a2c", accent: "#f0aa5c", label: "#f6d2a8" },
   code_exec: { bg: "#1a1f2c", border: "#5a6aa8", accent: "#9aa8e0", label: "#cdd4f2" },
   branch: { bg: "#162524", border: "#2f9a8c", accent: "#5fd0c0", label: "#abe7df" },
+  // Wave 7c: graph-as-node.
+  subgraph: { bg: "#1c1f2a", border: "#8a7fd0", accent: "#bdb4f5", label: "#ddd8fa" },
 } as const;
 
 /** Blueprint-style canvas pane — subtle paper tone over dark base. */

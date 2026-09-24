@@ -1,29 +1,7 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import {
-  Activity,
-  AlertTriangle,
-  BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  Download,
-  Focus,
-  GitBranch,
-  HelpCircle,
-  LayoutGrid,
-  MoreHorizontal,
-  Play,
-  Plus,
-  Save,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Tag,
-  Upload,
-  XCircle,
-} from "lucide-react";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, Download, Focus, GitBranch, HelpCircle, LayoutGrid, MoreHorizontal, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
 import type { Diagnostic, GraphHealth, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 import { HEALTH_BAND } from "@/lib/graphHealth";
 import { validationSummary } from "@/lib/diagnostics";
@@ -101,6 +79,8 @@ export function GraphHeader({
   onShowShortcuts,
   health = null,
   onOpenFind,
+  usedBy = [],
+  onOpenGraph,
 }: {
   hudRef?: Ref<HTMLDivElement>;
   compact: boolean;
@@ -127,6 +107,9 @@ export function GraphHeader({
   /** Wave 7a (STO-610): health score chip + find-on-canvas entry. */
   health?: Pick<GraphHealth, "score" | "band"> | null;
   onOpenFind?: () => void;
+  /** Wave 7c: saved graphs whose subgraph nodes run this one. */
+  usedBy?: { graph_id: string; name: string }[];
+  onOpenGraph?: (graphId: string) => void;
 }) {
   const [menu, setMenu] = useState<{ id: MenuId; x: number; y: number } | null>(null);
   const runMenuRef = useRef<HTMLButtonElement>(null);
@@ -222,6 +205,13 @@ export function GraphHeader({
       separatorBefore: !onOpenFind,
       onClick: () => onTogglePanel("health"),
     },
+    ...usedBy.map((parent, index) => ({
+      label: parent.name,
+      icon: <Workflow size={14} />,
+      separatorBefore: index === 0,
+      groupLabel: index === 0 ? `Used by ${usedBy.length} graph${usedBy.length === 1 ? "" : "s"}` : undefined,
+      onClick: () => onOpenGraph?.(parent.graph_id),
+    })),
     { label: "Export JSON", icon: <Download size={14} />, separatorBefore: true, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
     { label: "Shortcuts", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },

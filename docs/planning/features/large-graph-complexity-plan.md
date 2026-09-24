@@ -19,7 +19,7 @@ Design pass for roadmap P3 "Large-graph complexity management". The pillar comes
 | --- | --- | --- |
 | 7a | Find on canvas, dependency view, blast radius, health score | **Shipped** ([STO-610](https://linear.app/stockwise-productions-prototypes/issue/STO-610)) |
 | 7b | Visual groups with collapse and expand; display-only, no runtime change | **Shipped** ([STO-611](https://linear.app/stockwise-productions-prototypes/issue/STO-611)) |
-| 7c | Graph-as-node subgraphs: typed interface, nested runs, "Extract to graph" | Planned |
+| 7c | Graph-as-node subgraphs: typed interface, nested runs, "Extract to graph" | **Shipped** ([STO-612](https://linear.app/stockwise-productions-prototypes/issue/STO-612)) |
 | 7d | Multiple graph views and architecture layers | Planned |
 
 ## 7a — what shipped
@@ -152,3 +152,98 @@ When several views are active, the dimming follows the first that applies: find 
   - Dragging the header moved the members (+75, +67).
   - Ungroup, then Ctrl+Z, restored the frame.
   - On mobile, the collapsed card renders.
+
+## 7c — what shipped
+
+### Model and config
+
+- New node type `subgraph`, with a `message → message` port.
+- `SubgraphConfig` (`node_configs.py`):
+  ```yaml
+  graphId: str
+  version: latest | draft | <release_id>   # default: latest
+  inputMapping: {childVariable: template}   # optional
+  ```
+- **Interface:** the child's inputs are its input nodes' `variableName`s (`subgraphs.child_inputs`, mirrored by Studio `lib/subgraphs.ts`). Its output is the child run's `result`.
+- **Input:** with no mapping, the upstream output feeds the child's first input. A mapping renders templates over the parent's variables plus `{upstream}`. Unmapped inputs take a parent variable of the same name.
+- `RunSummary` gains `parent_run_id` and `parent_node_id`, set on the nested child run.
+
+### Runtime (`nodes.py` `compute_subgraph`, `backend/app/subgraphs.py`)
+
+- The executor resolves the child, compiles it, and runs it inline with the parent's provider, model and key. It passes `depth + 1`, and the runtime refuses nesting deeper than 4.
+- A child that fails or pauses fails the node, and the error names the child run id.
+- The node's trace input records `{graphId, version, releaseId, childRunId, childInput}`, and a `subgraph.completed` event is emitted.
+- **Which child runs:**
+  - A draft run uses `latest`: the child's newest release, falling back to its saved draft. It can also use the `draft`, or a pinned release.
+  - A release run uses the child release frozen at publish.
+- Replay and counterfactual replay freeze the node's output like any other node's, so the child doesn't run again (covered by a test).
+
+### Compiler and releases
+
+| Code | Blocking | When |
+| --- | --- | --- |
+| `SUBGRAPH_TARGET_MISSING` | yes | the referenced graph doesn't exist |
+| `SUBGRAPH_VERSION_MISSING` | yes | the pinned release doesn't exist |
+| `SUBGRAPH_CYCLE` | yes | the reference chain leads back to this graph. Levels below the first are followed through saved drafts. |
+| `SUBGRAPH_DEPTH` | yes | nesting is deeper than 4 |
+| `SUBGRAPH_INPUT_UNKNOWN` | no | a mapping key the child doesn't take |
+
+- Messages use the `"subgraph node '<id>': <field>: …"` format, so Studio shows them under the field.
+- **Publishing:** it freezes `subgraph:{node_id} → {graph_id, release_id}` in `resource_snapshots`. A `draft` or never-published child blocks publishing with `RELEASE_SUBGRAPH_UNPUBLISHED`.
+- The release's semantic fingerprint covers the snapshots, so republishing after the child publishes again creates a new parent release.
+
+### Extract to graph and used-by
+
+`POST /api/graphs/{id}/extract-subgraph` takes the draft plus `node_ids` and a name.
+
+**What it accepts.** The selection must:
+- be connected;
+- contain no input or output nodes;
+- have at least one incoming edge and exactly one outgoing edge.
+
+**What it saves.** A new child graph, made of:
+- an input node named after the first parent variable the selection's templates use, or `input` if they use none;
+- the selected nodes;
+- an output node.
+
+**What it returns.** The parent with one `subgraph` node in the selection's place:
+- `inputMapping` passes that variable through;
+- the boundary edges keep their kind and condition;
+- groups are pruned.
+
+Studio applies the returned parent as one undoable edit.
+
+`GET /api/graphs/{id}/used-by` lists the parent graphs that reference this graph.
+
+### Studio
+
+- **Node type:** registered in every per-type map, with the `Workflow` icon and a violet colour.
+- **Card:** titled with the child's name (graph names joined the resource-name map) and summarised with its version.
+- **Configure tab** (`SubgraphConfig.tsx`):
+  - a Graph picker that hides this graph and any graph whose references lead back to it. A target that has become cyclic stays visible, labelled "Leads back to this graph".
+  - a Version picker: Latest release, Draft, and pinned releases;
+  - an Inputs table with one `TemplateEditor` row per child input;
+  - an "Open graph" link.
+- **Run tab:** "Open child run", including when the child failed. The link comes from the error text.
+- **Impact tab:** "Uses graph".
+- **Header ⋯ menu:** "Used by N graphs", linking to each parent.
+- **Extract:**
+  - "Extract to graph…" is on the group menu (7b), the node menu (for the selection) and the selection-box menu.
+  - It opens a naming dialog (`extract-subgraph-dialog.tsx`), which shows the backend's reason when a selection can't be extracted.
+
+## Verification (7c)
+
+- **Backend:** pytest 512/512 (`test_subgraphs.py`: 18 tests).
+- **SDK:** vitest 116/116.
+- **Studio:**
+  - vitest 304/304 (`lib/subgraphs.test.ts`, `SubgraphConfig.test.tsx`);
+  - tsc clean, eslint 0 errors.
+- **Root:** build green.
+- **Playwright** on a stub backend, at 1440 and 390:
+  - Ctrl+click `prompt_answer` and `llm_answer`, then "Extract 2 nodes to graph…" named "Answer branch": the card reads "Answer branch · latest release".
+  - Saved and reran with a non-technical question: same result as before the extraction.
+  - The Run tab's "Open child run" opened the child graph's run.
+  - Publishing the parent returned 422 `RELEASE_SUBGRAPH_UNPUBLISHED`. After publishing the child, publishing the parent returned 200.
+  - The child's ⋯ menu shows "Used by 1 graph".
+  - Pointing the child back at the parent raised `SUBGRAPH_CYCLE`, shown inline on the Graph field.
+  - The mobile canvas renders.

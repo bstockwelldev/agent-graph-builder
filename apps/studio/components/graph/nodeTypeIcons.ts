@@ -10,6 +10,7 @@ import {
   PenLine,
   Repeat,
   ShieldCheck,
+  Workflow,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -30,4 +31,5 @@ export const NODE_TYPE_ICONS: Record<NodeType, LucideIcon> = {
   tool_loop: Repeat,
   code_exec: Code2,
   branch: GitFork,
+  subgraph: Workflow,
 };

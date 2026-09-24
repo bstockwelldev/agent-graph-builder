@@ -47,6 +47,7 @@ export const NODE_PORT_CATALOG: Record<NodeType, { input: GraphPort[]; output: G
   human_gate: singleIo("approval", "approval"),
   tool_loop: singleIo("message", "message"),
   code_exec: singleIo("structured-json", "artifact"),
+  subgraph: singleIo("message", "message"),
   branch: routerLikeIo("message"),
 };
 

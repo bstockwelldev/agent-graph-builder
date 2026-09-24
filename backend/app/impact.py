@@ -45,6 +45,12 @@ class ImpactDataset(BaseModel):
     name: str
 
 
+class ImpactGraph(BaseModel):
+    graph_id: str
+    name: str | None = None
+    version: str
+
+
 class NodeImpact(BaseModel):
     node_id: str
     downstream: list[str] = Field(default_factory=list)
@@ -55,6 +61,20 @@ class NodeImpact(BaseModel):
     runs: ImpactRuns
     releases: list[ImpactRelease] = Field(default_factory=list)
     datasets: list[ImpactDataset] = Field(default_factory=list)
+    # Wave 7c: the graph a subgraph node runs ("Uses graph").
+    uses_graph: ImpactGraph | None = None
+
+
+def _uses_graph(node) -> ImpactGraph | None:
+    if node.type != NodeType.SUBGRAPH or not node.config.get("graphId"):
+        return None
+    graph_id = str(node.config["graphId"])
+    child = storage.get_graph(graph_id)
+    return ImpactGraph(
+        graph_id=graph_id,
+        name=child.name if child else None,
+        version=str(node.config.get("version") or "latest"),
+    )
 
 
 def _walk(graph: GraphDefinition, start: str, *, forward: bool) -> list[str]:
@@ -132,6 +152,7 @@ def compute_node_impact(graph: GraphDefinition, node_id: str) -> NodeImpact:
         runs=runs,
         releases=releases,
         datasets=datasets,
+        uses_graph=_uses_graph(node),
     )
 
 
