@@ -1,7 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { GraphNodeData } from "@/components/graph/nodes/GraphNodeView";
 import { EDGE_KIND_TAXONOMY } from "../content/taxonomy";
-import type { EdgeKind, GraphGroup, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import type { EdgeKind, GraphGroup, GraphLayer, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 
 export type CanvasSnapshot = {
   nodes: Node<GraphNodeData>[];
@@ -10,6 +10,8 @@ export type CanvasSnapshot = {
   graphOrientation: GraphOrientation;
   /** Wave 7b visual groups, so group actions undo like any other edit. */
   groups?: GraphGroup[];
+  /** Wave 7d architecture layers. */
+  layers?: GraphLayer[];
 };
 
 /**
@@ -33,6 +35,7 @@ export function cloneCanvasSnapshot(
   graphName: string,
   graphOrientation: GraphOrientation,
   groups: GraphGroup[] = [],
+  layers: GraphLayer[] = [],
 ): CanvasSnapshot {
   return {
     nodes: nodes.map((node) => ({
@@ -49,6 +52,7 @@ export function cloneCanvasSnapshot(
     graphName,
     graphOrientation,
     groups: groups.map((group) => ({ ...group, node_ids: [...group.node_ids] })),
+    layers: layers.map((layer) => ({ ...layer })),
   };
 }
 

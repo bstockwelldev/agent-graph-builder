@@ -12,7 +12,14 @@ describe("graph URL state", () => {
       panel: "run",
       tab: "history",
       section: "observe-history",
+      view: null,
     });
+  });
+
+  it("round-trips the Wave 7d view, omitting the default canvas", () => {
+    expect(parseGraphUrlState("?view=layers").view).toBe("layers");
+    expect(serializeGraphUrlState({ view: "heatmap" })).toBe("?view=heatmap");
+    expect(serializeGraphUrlState({ view: "canvas" }, "?view=layers")).toBe("");
   });
 
   it("prefers a node over an edge and drops a tab without a node", () => {

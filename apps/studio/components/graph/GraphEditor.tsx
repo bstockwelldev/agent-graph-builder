@@ -23,7 +23,9 @@ import {
   type EdgeKind,
   type GraphDefinition,
   type GraphEdge,
+  type GraphAnalytics,
   type GraphGroup,
+  type GraphLayer,
   type GraphUsedBy,
   type GraphHealth,
   type GraphNode,
@@ -110,6 +112,20 @@ import { RoutingLabPanel } from "./RoutingLabPanel";
 import { GraphSwitcherCombobox } from "./GraphSwitcherCombobox";
 import { GraphNodeView, type GraphNodeData, type NodeTraceSummary } from "./nodes/GraphNodeView";
 import { GroupFrame } from "./nodes/GroupFrame";
+import { LaneBand } from "./nodes/LaneBand";
+import { ViewOverlay } from "./ViewOverlay";
+import { ManageLayersDialog, type LayerEdit } from "@/components/studio/manage-layers-dialog";
+import {
+  autoAssignLayer,
+  heatByNode,
+  laneLayout,
+  layerOf,
+  parseGraphView,
+  withLayer,
+  UNASSIGNED_LAYER as UNASSIGNED,
+  type GraphView,
+  type HeatMetric,
+} from "@/lib/graphLayers";
 import { GraphHeader, type RunPanelSectionId } from "./GraphHeader";
 import { IconButton } from "./ui/IconButton";
 import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
@@ -205,6 +221,8 @@ const nodeTypes = {
   subgraph: GraphNodeView,
   // Wave 7b: derived visual group frames (never in `nodes` state).
   groupFrame: GroupFrame,
+  // Wave 7d: derived swimlane bands (Layers view).
+  laneBand: LaneBand,
 };
 
 let idCounter = 1;
@@ -326,6 +344,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // and the saved graphs whose subgraph nodes run this one.
   const [extractRequest, setExtractRequest] = useState<{ nodeIds: string[]; defaultName: string } | null>(null);
   const [usedBy, setUsedBy] = useState<GraphUsedBy>([]);
+  // Wave 7d (STO-622): display-only architecture layers, and the canvas
+  // view (?view=) -- no view ever writes positions back to `nodes`.
+  const [layers, setLayers] = useState<GraphLayer[]>([]);
+  const [view, setView] = useState<GraphView>("canvas");
+  const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(new Set());
+  const [heatMetric, setHeatMetric] = useState<HeatMetric>("p95");
+  const [heatAnalytics, setHeatAnalytics] = useState<GraphAnalytics | null>(null);
+  const [manageLayersOpen, setManageLayersOpen] = useState(false);
   const [health, setHealth] = useState<GraphHealth | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState<string | null>(null);
@@ -596,6 +622,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setNodes(graph.nodes.map(toFlowNode));
         setEdges(graph.edges.map(toFlowEdge));
         setGroups(graph.groups ?? []);
+        setLayers(graph.layers ?? []);
         setSavedFingerprint(fingerprintGraph(graph));
         clearHistory();
         setSelectedNodeId(null);
@@ -642,9 +669,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           const saved = pruneGroups(groups, sourceNodes.map((n) => n.id));
           return saved.length > 0 ? { groups: saved } : {};
         })(),
+        ...(layers.length > 0 ? { layers } : {}),
       };
     },
-    [nodes, edges, graphId, graphName, graphOrientation, groups],
+    [nodes, edges, graphId, graphName, graphOrientation, groups, layers],
   );
 
   // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
@@ -798,8 +826,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [diagnostics, applyDiagnosticsToCanvas]);
 
   const getCanvasSnapshot = useCallback(
-    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation, groups),
-    [nodes, edges, graphName, graphOrientation, groups],
+    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation, groups, layers),
+    [nodes, edges, graphName, graphOrientation, groups, layers],
   );
 
   const applyCanvasSnapshot = useCallback(
@@ -809,6 +837,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setGraphName(snapshot.graphName);
       setGraphOrientation(snapshot.graphOrientation);
       setGroups(snapshot.groups ?? []);
+      setLayers(snapshot.layers ?? []);
     },
     [setNodes, setEdges],
   );
@@ -1026,6 +1055,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setNodes(graph.nodes.map(toFlowNode));
       setEdges(graph.edges.map(toFlowEdge));
       setGroups(graph.groups ?? []);
+      setLayers(graph.layers ?? []);
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setDiagnostics([]);
@@ -1502,12 +1532,22 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     (groupId: string) => {
       const group = groups.find((candidate) => candidate.id === groupId);
       if (!group) return;
+      // Overview collapses every group only for display: expanding a card
+      // there drills back into the Canvas view instead of editing the group.
+      if (view === "overview") {
+        setView("canvas");
+        if (group.collapsed) {
+          recordMutation();
+          setGroups((current) => updateGroup(current, groupId, { collapsed: false }));
+        }
+        return;
+      }
       recordMutation();
       setGroups((current) => updateGroup(current, groupId, { collapsed: !group.collapsed }));
       // A collapsed member can't stay selected -- its card is hidden.
       if (!group.collapsed && selectedNodeId && group.node_ids.includes(selectedNodeId)) setSelectedNodeId(null);
     },
-    [groups, recordMutation, selectedNodeId],
+    [groups, recordMutation, selectedNodeId, view],
   );
 
   const renameGroup = useCallback(
@@ -1533,14 +1573,55 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // Frames lead the list so they paint first; collapsed members stay in
   // `nodes` (and the saved graph) but are hidden, and edges crossing a
   // collapsed boundary reattach to its card.
+  // Wave 7d views: Overview renders every group collapsed (display only),
+  // Layers lays nodes into swimlanes, Heatmap tints cards by a metric.
+  const displayGroups = useMemo(
+    () => (view === "overview" ? groups.map((group) => ({ ...group, collapsed: true })) : groups),
+    [groups, view],
+  );
+  const lanes = useMemo(
+    () => (view === "layers" ? laneLayout(nodes, edges, layers, hiddenLayers) : null),
+    [edges, hiddenLayers, layers, nodes, view],
+  );
+  // Chips list every lane, hidden ones included, so they can be re-shown.
+  const laneChips = useMemo(
+    () => (view === "layers" ? laneLayout(nodes, edges, layers).lanes : []),
+    [edges, layers, nodes, view],
+  );
+  const heat = useMemo(
+    () => (view === "heatmap" && heatAnalytics ? heatByNode(heatMetric, heatAnalytics.nodes) : null),
+    [heatAnalytics, heatMetric, view],
+  );
   const canvasNodes = useMemo(() => {
-    if (groups.length === 0) return nodes;
-    const frames = buildGroupFrameNodes(groups, nodes, focusSet).map((frame) =>
+    if (lanes) {
+      const bands = lanes.lanes.map((lane) => ({
+        id: `lane:${lane.id}`,
+        type: "laneBand",
+        position: { x: 0, y: lane.y },
+        width: lane.width,
+        height: lane.height,
+        style: { width: lane.width, height: lane.height, pointerEvents: "none" as const },
+        zIndex: -2,
+        selectable: false,
+        draggable: false,
+        data: { label: lane.label, color: lane.color, count: lane.count },
+      }));
+      const laid = nodes
+        .filter((node) => lanes.positions.has(node.id))
+        .map((node) => ({ ...node, position: lanes.positions.get(node.id)!, draggable: false }));
+      return [...(bands as unknown as Node<GraphNodeData>[]), ...laid];
+    }
+    const base = heat ? nodes.map((node) => ({ ...node, data: { ...node.data, heat: heat.get(node.id) ?? null } })) : nodes;
+    if (displayGroups.length === 0) return base;
+    const frames = buildGroupFrameNodes(displayGroups, base, focusSet).map((frame) =>
       frame.data.groupId === renamingGroupId ? { ...frame, data: { ...frame.data, renaming: true } } : frame,
     );
-    return [...(frames as unknown as Node<GraphNodeData>[]), ...hideCollapsedMembers(nodes, groups)];
-  }, [focusSet, groups, nodes, renamingGroupId]);
-  const canvasEdges = useMemo(() => rerouteEdgesForCollapsedGroups(edges, groups), [edges, groups]);
+    return [...(frames as unknown as Node<GraphNodeData>[]), ...hideCollapsedMembers(base, displayGroups)];
+  }, [displayGroups, focusSet, heat, lanes, nodes, renamingGroupId]);
+  const canvasEdges = useMemo(() => {
+    if (lanes) return edges.filter((edge) => lanes.positions.has(edge.source) && lanes.positions.has(edge.target));
+    return rerouteEdgesForCollapsedGroups(edges, displayGroups);
+  }, [displayGroups, edges, lanes]);
   const framePositionsRef = useRef(new Map<string, { x: number; y: number }>());
   framePositionsRef.current = new Map(canvasNodes.filter((node) => isFrameNodeId(node.id)).map((node) => [node.id, node.position]));
   const frameDragRef = useRef<string | null>(null);
@@ -1552,11 +1633,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     (changes: NodeChange<Node<GraphNodeData>>[]) => {
       const graphChanges: NodeChange<Node<GraphNodeData>>[] = [];
       for (const change of changes) {
+        if ("id" in change && change.id.startsWith("lane:")) continue; // derived lane bands
         if (!("id" in change) || !isFrameNodeId(change.id)) {
+          // Layers view positions are computed, never dragged into `nodes`.
+          if (view === "layers" && change.type === "position") continue;
           graphChanges.push(change);
           continue;
         }
-        if (change.type !== "position") continue;
+        if (change.type !== "position" || view === "layers") continue;
         if (!change.dragging) {
           frameDragRef.current = null;
           continue;
@@ -1581,7 +1665,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       }
       if (graphChanges.length > 0) onNodesChange(graphChanges);
     },
-    [groups, onNodesChange, recordMutation, setNodes],
+    [groups, onNodesChange, recordMutation, setNodes, view],
   );
 
   // ⌘/Ctrl+G groups the selection; ⌘/Ctrl+Shift+G ungroups the selected
@@ -1708,6 +1792,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     if (!graphId || loading || urlStateAppliedRef.current === graphId) return;
     urlStateAppliedRef.current = graphId;
     const state = parseGraphUrlState(window.location.search);
+    setView(parseGraphView(state.view));
     // The pan/zoom waits out the load-time layout + whole-graph fit
     // (FlowCanvas's rAF and 150ms-debounced fitView), which would
     // otherwise land after it and zoom straight back out.
@@ -1783,13 +1868,74 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         tab: inspectorTab,
         run: inspectionRunId,
         panel: workbench.activePanel,
+        view,
       },
       window.location.search,
     );
     if (next !== window.location.search) {
       window.history.replaceState(window.history.state, "", `${window.location.pathname}${next}${window.location.hash}`);
     }
-  }, [graphId, selectedNodeId, selectedEdgeId, inspectorTab, inspectionRunId, workbench.activePanel]);
+  }, [graphId, selectedNodeId, selectedEdgeId, inspectorTab, inspectionRunId, workbench.activePanel, view]);
+
+  // Wave 7d: each view frames differently (lanes vs. the graph), so refit
+  // on every switch; the heatmap loads recent-run analytics on entry.
+  const previousViewRef = useRef(view);
+  useEffect(() => {
+    if (previousViewRef.current === view) return;
+    previousViewRef.current = view;
+    setFitViewNonce((value) => value + 1);
+  }, [view]);
+  useEffect(() => {
+    if (view !== "heatmap" || !graphId) return;
+    let cancelled = false;
+    client
+      .getGraphAnalytics(graphId)
+      .then((analytics) => {
+        if (!cancelled) setHeatAnalytics(analytics);
+      })
+      .catch(() => {
+        if (!cancelled) setHeatAnalytics(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [graphId, view, runSummary?.run_id]);
+
+  // Wave 7d: "Manage layers" applies as one undoable change. Nodes on a
+  // removed layer drop it; auto-assign only uses layers that exist.
+  const applyLayerEdit = useCallback(
+    ({ layers: nextLayers, autoAssign }: LayerEdit) => {
+      recordMutation();
+      const known = new Set(nextLayers.map((layer) => layer.id));
+      setLayers(nextLayers);
+      setNodes((current) =>
+        current.map((node) => {
+          const currentLayer = layerOf(node, nextLayers);
+          const assigned = currentLayer === UNASSIGNED ? null : currentLayer;
+          const auto = autoAssignLayer(node.data.nodeType);
+          const wanted =
+            autoAssign === "all" || (autoAssign === "unassigned" && assigned === null)
+              ? known.has(auto)
+                ? auto
+                : assigned
+              : assigned;
+          if (wanted === ((node.data.extensions?.layer as string | undefined) ?? null)) return node;
+          return { ...node, data: { ...node.data, extensions: withLayer(node.data.extensions, wanted) } };
+        }),
+      );
+    },
+    [recordMutation, setNodes],
+  );
+
+  const setNodeLayer = useCallback(
+    (nodeId: string, layer: string | null) => {
+      recordMutation();
+      setNodes((current) =>
+        current.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, extensions: withLayer(node.data.extensions, layer) } } : node)),
+      );
+    },
+    [recordMutation, setNodes],
+  );
 
   // ⌘S / Ctrl+S saves (new with the header's Save button, Slice 2). Runs
   // even from inside inputs -- saving while editing a field is the point.
@@ -1848,6 +1994,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     <NodeInspector
       key={selectedNode.id}
       graphId={graphId}
+      layers={layers}
+      currentLayer={(selectedNode.data.extensions?.layer as string | undefined) ?? null}
+      onLayerChange={(layer) => setNodeLayer(selectedNode.id, layer)}
+      onManageLayers={() => setManageLayersOpen(true)}
       node={{
         id: selectedNode.id,
         type: selectedNode.data.nodeType,
@@ -2028,6 +2178,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         onShowShortcuts={() => workbench.toggle("help")}
         health={health}
         onOpenFind={() => setFindOpen(true)}
+        view={view}
+        onViewChange={setView}
+        onManageLayers={() => setManageLayersOpen(true)}
         usedBy={usedBy}
         onOpenGraph={(parentId) => router.push(`/graphs/${encodeURIComponent(parentId)}`)}
       />
@@ -2092,6 +2245,31 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           selectedEdgeId={selectedEdgeId}
           overlay={
             <>
+            {(view === "layers" || view === "heatmap") && (
+              <ViewOverlay
+                view={view}
+                lanes={laneChips}
+                hiddenLayers={hiddenLayers}
+                onToggleLayer={(layerId) =>
+                  setHiddenLayers((current) => {
+                    const next = new Set(current);
+                    if (next.has(layerId)) next.delete(layerId);
+                    else next.add(layerId);
+                    return next;
+                  })
+                }
+                onManageLayers={() => setManageLayersOpen(true)}
+                metric={heatMetric}
+                onMetricChange={setHeatMetric}
+                heatStatus={
+                  heatAnalytics
+                    ? heatAnalytics.run_window > 0
+                      ? `last ${heatAnalytics.run_window} run${heatAnalytics.run_window === 1 ? "" : "s"}`
+                      : "no runs yet"
+                    : "loading…"
+                }
+              />
+            )}
             <EmptyGraphCoach
               visible={showEmptyCoach}
               step={authoringCoachStep}
@@ -2127,7 +2305,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             </>
           }
           onNodeClick={(nodeId) => {
-            if (isFrameNodeId(nodeId)) return;
+            if (isFrameNodeId(nodeId) || nodeId.startsWith("lane:")) return;
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
             if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
@@ -2147,6 +2325,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             setContextMenu({ kind: "launcher", x, y, flowX, flowY });
           }}
           onNodeContextMenu={(nodeId, x, y) => {
+            if (nodeId.startsWith("lane:")) return;
             if (isFrameNodeId(nodeId)) {
               setContextMenu({ kind: "group", groupId: groupIdFromFrame(nodeId), x, y });
               return;
@@ -2476,6 +2655,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           </span>
         </button>
       )}
+      <ManageLayersDialog open={manageLayersOpen} onOpenChange={setManageLayersOpen} layers={layers} onApply={applyLayerEdit} />
       <ExtractSubgraphDialog
         open={extractRequest !== null}
         onOpenChange={(open) => {

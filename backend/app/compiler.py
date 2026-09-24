@@ -257,6 +257,7 @@ def validate_graph(
     # Wave 7b (STO-611): visual groups are display-only, so problems with
     # them are warnings, never blocking.
     diagnostics.extend(_validate_groups(graph, node_ids))
+    diagnostics.extend(_validate_layers(graph))
 
     # Cross-cutting policy overlays (P2, docs/planning/roadmap.md's
     # Strategic Roadmap Addendum): security, reliability, and cost checks,
@@ -326,6 +327,26 @@ def _validate_subgraphs(graph: GraphDefinition) -> list[Diagnostic]:
                         blocking=False,
                     )
                 )
+    return diagnostics
+
+
+def _validate_layers(graph: GraphDefinition) -> list[Diagnostic]:
+    """Wave 7d (STO-622): a node on a layer the graph doesn't define."""
+    known = {layer.id for layer in graph.layers or []}
+    diagnostics: list[Diagnostic] = []
+    for node in graph.nodes:
+        layer = (node.extensions or {}).get("layer")
+        if layer and layer not in known:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    category="structure",
+                    code="LAYER_UNKNOWN",
+                    node_id=node.id,
+                    message=f"Node {node.id!r} is on undefined layer {layer!r}.",
+                    blocking=False,
+                )
+            )
     return diagnostics
 
 

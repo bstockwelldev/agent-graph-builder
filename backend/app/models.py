@@ -141,6 +141,16 @@ class GraphGroup(BaseModel):
     collapsed: bool = False
 
 
+class GraphLayer(BaseModel):
+    """Large-graph complexity, Wave 7d (STO-622): an architecture layer
+    (Ingress, Reasoning, ...). Display-only, like groups: nodes join one via
+    `extensions.layer`, which fingerprint.py treats as a display key."""
+
+    id: str
+    label: str
+    color: str | None = None
+
+
 class GraphDefinition(BaseModel):
     id: str
     name: str
@@ -150,6 +160,7 @@ class GraphDefinition(BaseModel):
     orientation: Literal["auto", "horizontal", "vertical"] = "auto"
     updated_at: str | None = None
     groups: list[GraphGroup] | None = None
+    layers: list[GraphLayer] | None = None
 
 
 class Diagnostic(BaseModel):

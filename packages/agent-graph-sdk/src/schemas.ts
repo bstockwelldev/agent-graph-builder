@@ -110,6 +110,13 @@ export const graphGroupSchema = z.object({
   collapsed: z.boolean().optional(),
 });
 
+/** Wave 7d (STO-622): a display-only architecture layer. */
+export const graphLayerSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  color: z.string().nullish(),
+});
+
 export const graphDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -119,6 +126,7 @@ export const graphDefinitionSchema = z.object({
   orientation: graphOrientationSchema.optional(),
   updated_at: z.string().nullish(),
   groups: z.array(graphGroupSchema).nullish(),
+  layers: z.array(graphLayerSchema).nullish(),
 });
 
 // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
