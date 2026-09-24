@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -116,11 +117,20 @@ from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     load_app_env()
-    if storage.storage_is_healthy() and storage.get_graph(build_demo_graph().id) is None:
-        storage.save_graph(build_demo_graph())
+    # A failing store (e.g. a suspended Vercel Blob returning 403) must not
+    # abort startup — that turns every request, /api/health included, into
+    # FUNCTION_INVOCATION_FAILED instead of a diagnosable error response.
+    try:
+        if storage.storage_is_healthy() and storage.get_graph(build_demo_graph().id) is None:
+            storage.save_graph(build_demo_graph())
+    except Exception:
+        logger.warning("Demo graph seed skipped: storage backend unavailable", exc_info=True)
     yield
 
 
