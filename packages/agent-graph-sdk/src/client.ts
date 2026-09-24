@@ -1,6 +1,7 @@
 import type { z } from "zod";
 
 import { createTransport, type RequestOptions, type Transport, type TransportOptions } from "./transport.js";
+import { streamRun, waitForRun, type RunStreamOptions, type WaitForRunOptions } from "./runs.js";
 
 import {
   agentProfileSchema,
@@ -657,33 +658,81 @@ function buildMethods(baseUrl: Transport) {
   };
 }
 
+/** SDK 2/7 (STO-615): the run lifecycle -- stream a run's events, wait
+ * for it to settle, or start one and get a handle that can wait. */
+export type RunsClient = {
+  stream(runId: string, options?: RunStreamOptions): AsyncGenerator<PlatformEvent>;
+  wait(runId: string, options?: WaitForRunOptions): Promise<RunSummary>;
+  start(request: StartRunRequest): Promise<RunHandle>;
+};
+
+export type StartRunRequest = {
+  graphId: string;
+  input: Record<string, unknown>;
+  provider?: ChatProvider;
+  model?: string;
+  apiKey?: string;
+  nodeOutputs?: Record<string, unknown>;
+};
+
+export type RunHandle = {
+  /** The run as the start call returned it (usually queued or running). */
+  run: RunSummary;
+  stream(options?: RunStreamOptions): AsyncGenerator<PlatformEvent>;
+  wait(options?: WaitForRunOptions): Promise<RunSummary>;
+};
+
 export type AgentGraphClient = ReturnType<typeof buildMethods> & {
+  runs: RunsClient;
   /** SDK 1/7: the same client with per-call options applied to every call
    * made through it -- e.g. `client.with({ signal }).getGraph(id)`. */
   with(options: RequestOptions): AgentGraphClient;
 };
 
+function runsClient(transport: Transport, methods: ReturnType<typeof buildMethods>): RunsClient {
+  const stream = (runId: string, options?: RunStreamOptions) => streamRun(transport, runId, options);
+  const wait = (runId: string, options?: WaitForRunOptions) => waitForRun({ transport, getRun: methods.getRun }, runId, options);
+  return {
+    stream,
+    wait,
+    start: async (request) => {
+      const run = await methods.startRun(request.graphId, request.input, request.provider, request.model, request.apiKey, request.nodeOutputs);
+      return { run, stream: (options) => stream(run.run_id, options), wait: (options) => wait(run.run_id, options) };
+    },
+  };
+}
+
 function scopedClient(transport: Transport): AgentGraphClient {
-  return { ...buildMethods(transport), with: (options) => scopedClient(transport.with(options)) };
+  const methods = buildMethods(transport);
+  return { ...methods, runs: runsClient(transport, methods), with: (options) => scopedClient(transport.with(options)) };
 }
 
 export function createAgentGraphClient(options: AgentGraphClientOptions = {}): AgentGraphClient {
   return scopedClient(createTransport(options));
 }
 
+/**
+ * @deprecated SDK 2/7 -- use `client.runs.stream(runId)` (an async
+ * iterator that works outside the browser and resumes after drops) or
+ * `client.runs.wait(runId, { onEvent })`. Kept as a callback wrapper over
+ * the same resumable stream; `onClose` fires once the stream ends for any
+ * reason (settled run, no live bus, or error).
+ */
 export function streamRunEvents(
   baseUrl: string,
   runId: string,
   onEvent: (event: PlatformEvent) => void,
   onClose?: () => void,
 ): () => void {
-  const source = new EventSource(`${baseUrl}/api/runs/${runId}/events`);
-  source.onmessage = (message) => {
-    onEvent(JSON.parse(message.data) as PlatformEvent);
-  };
-  source.onerror = () => {
-    source.close();
-    onClose?.();
-  };
-  return () => source.close();
+  const controller = new AbortController();
+  void (async () => {
+    try {
+      for await (const event of streamRun(createTransport({ baseUrl }), runId, { signal: controller.signal })) onEvent(event);
+    } catch {
+      // Reported via onClose; callers poll getRun for the outcome.
+    } finally {
+      if (!controller.signal.aborted) onClose?.();
+    }
+  })();
+  return () => controller.abort();
 }

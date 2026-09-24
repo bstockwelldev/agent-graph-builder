@@ -5,6 +5,10 @@ const BASE_URL = "";
 
 export const client = createAgentGraphClient({ baseUrl: BASE_URL });
 
+/** SDK 2/7: stream a run until it settles (stream + poll fallback). */
+export const waitForRun = (runId: string, options: Parameters<typeof client.runs.wait>[1]) => client.runs.wait(runId, options);
+
+/** @deprecated SDK 2/7 -- use `client.runs.stream` / `waitForRun`. */
 export function streamRunEvents(
   runId: string,
   onEvent: (event: PlatformEvent) => void,

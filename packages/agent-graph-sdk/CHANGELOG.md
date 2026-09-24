@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **Run lifecycle** (SDK 2/7, STO-615):
+  - `client.runs.stream(runId)` is an async iterator of validated events. It is built on `fetch`, so it works in browsers, Node 18+ and edge runtimes. It reconnects with `Last-Event-ID`, never loses or repeats an event, and ends when the run settles.
+  - `client.runs.wait(runId, { onEvent, timeoutMs, signal })` streams events with a polling fallback, and resolves on `succeeded`, `failed` or `paused`.
+  - `client.runs.start(request)` returns a handle with `.wait()` and `.stream()`.
+- Exported `parseSse`, `streamRun`, `waitForRun` and `isSettledRun`.
+- Run-step helpers `applyRunEvent`, `stepsFromTraces` and `formatStepDuration`, moved here from Studio.
+
+### Deprecated
+- `streamRunEvents`: use `client.runs.stream` or `client.runs.wait`. It now wraps the resumable stream instead of `EventSource`.
+
 - **Transport options** (SDK 1/7, STO-614): `createAgentGraphClient({ baseUrl, fetch, headers, timeoutMs, retry, onRequest, onResponse })`.
   - `fetch` is injectable, for servers and tests.
   - `headers` can be a value, or a function that is awaited on every request (for auth).

@@ -91,7 +91,7 @@ Linear STO-614 · GitHub #65. Non-breaking. As-built notes follow the original s
   - the extract dialog shows its 422 reason;
   - with the backend down, the graph shows "failed to load" after about 2 s, including retries, and doesn't hang.
 
-### Phase 4 — Run lifecycle and universal streaming (SDK 2/7, **High**)
+### Phase 4 — Run lifecycle and universal streaming (SDK 2/7, **High**) — **Shipped**
 
 Linear STO-615 · GitHub #66. Non-breaking. It is sequenced second because Studio already works around these gaps.
 
@@ -99,6 +99,44 @@ Linear STO-615 · GitHub #66. Non-breaking. It is sequenced second because Studi
 - **`runs.start(...).wait({ timeoutMs, signal, onEvent })`:** absorbs Studio's `watchRun.ts`.
 - **Result helpers:** `stepsFromTraces`, `applyRunEvent` and `formatStepDuration` move out of Studio's `chatRuns.ts`.
 - **Compatibility:** `streamRunEvents` stays as a deprecated wrapper.
+
+#### As built
+
+**Backend**
+- `RunEventBus` is now a broadcast log instead of a single-consumer queue. Every subscriber sees every event, and `stream(after=n)` replays whatever a subscriber missed.
+- A resumed run's new bus continues the sequence numbering, so it keeps climbing across a pause and resume.
+- `GET /api/runs/{id}/events`:
+  - sends `retry: 1000` and an `id: <sequence>` on every frame;
+  - honours `Last-Event-ID`, or `?after=`;
+  - with no live bus (a different serverless isolate), replays the run's persisted events and then closes.
+
+**SDK**
+- `runs.ts`:
+  - `parseSse` parses a `ReadableStream` body, so it works in browsers, Node 18+ and edge runtimes;
+  - `streamRun` validates events, reconnects with `Last-Event-ID`, skips duplicates by sequence, ends on `run.completed`, `run.failed` or `run.paused`, and ends quietly when the server has no live bus;
+  - `waitForRun` combines the stream with polling and a timeout.
+- **Client API:** `client.runs.stream`, `client.runs.wait`, and `client.runs.start(request)`, which returns a handle with `.wait()` and `.stream()`.
+- `transport.open` returns the raw response for streaming.
+- `runSteps.ts`: `applyRunEvent`, `stepsFromTraces` and `formatStepDuration` moved here from Studio.
+- `streamRunEvents` is deprecated and now wraps `streamRun`, so existing callers get reconnection and no longer depend on `EventSource`.
+
+**Decision: `wait()` treats `paused` as settled, alongside `succeeded` and `failed`**
+- A run paused at a human gate won't make progress without a resume. Studio previously let such a run time out after 30 s with a "stream unavailable" message; it now shows the paused state.
+
+**Studio**
+- `watchRunCompletion` is now a thin adapter over `client.runs.wait`. It maps a timeout or a 404 to a failed run summary with a readable reason.
+- The Run panel (GraphEditor) and chat run cards use it through `waitForRun`.
+- `lib/chatRuns.ts` re-exports the step helpers, so existing imports keep working.
+
+**Verification**
+- **Tests:**
+  - Backend pytest 519/519, including `test_run_event_stream.py`: broadcast, `after`, sequence continuity across a resume, SSE ids with `Last-Event-ID` and `?after=`, and persisted replay.
+  - SDK vitest 138 passed, plus 1 live end-to-end test that is skipped unless `AGB_E2E_URL` is set. The suite covers the parser, reconnecting without losing or duplicating events, the no-live-bus case, malformed events, the reconnect limit, `wait` via stream and via polling, and timeout and abort.
+  - Studio vitest 314/314, including `watchRun.test.ts`.
+- **Live end to end:** run in Node against a stub backend. It runs the demo graph, streams it to completion, and resumes the stream from `lastEventId: 2`.
+- **Playwright:**
+  - The Run panel settled in about 1 s over the fetch stream, with a single `/events` request and 16 events.
+  - A chat `/run` card reached "Succeeded · 7 of 7 nodes done".
 
 ### Phase 3 — Types generated from OpenAPI, plus a drift check (SDK 3/7, Medium)
 

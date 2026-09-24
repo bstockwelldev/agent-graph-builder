@@ -70,6 +70,10 @@ const DEFAULT_RETRY: Required<RetryOptions> = { retries: 2, baseDelayMs: 250, ma
 export type Transport = {
   readonly baseUrl: string;
   request<T>(path: string, init?: RequestInitLike, schema?: z.ZodType<T>): Promise<T>;
+  /** SDK 2/7: one attempt, returning the raw `Response` (for streaming
+   * bodies). Headers, hooks and cancellation apply; no timeout or retry --
+   * a stream's caller owns both. Non-2xx rejects with AgentGraphApiError. */
+  open(path: string, init?: RequestInitLike): Promise<Response>;
   /** A transport whose calls also carry `options` (merged over this one's). */
   with(options: RequestOptions): Transport;
 };
@@ -136,9 +140,35 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
     }
   }
 
+  async function open(path: string, init: RequestInitLike = {}): Promise<Response> {
+    const method = (init.method ?? "GET").toUpperCase();
+    const url = `${baseUrl}${path}`;
+    const signal = anySignal([scoped.signal, init.signal ?? undefined]);
+    const fetchImpl = options.fetch ?? ((input: RequestInfo | URL, reqInit?: RequestInit) => fetch(input, reqInit));
+    const headers = new Headers(await resolveHeaders(options.headers));
+    mergeHeaders(headers, scoped.headers);
+    mergeHeaders(headers, init.headers);
+    throwIfAborted(signal);
+    const context: RequestContext = { method, url, path, attempt: 1 };
+    options.onRequest?.(context);
+    const started = Date.now();
+    let response: Response;
+    try {
+      response = await fetchImpl(url, { ...init, method, headers, signal });
+    } catch (error) {
+      options.onResponse?.({ ...context, status: null, durationMs: Date.now() - started });
+      if (signal?.aborted || isAbortError(error)) throw error;
+      throw new AgentGraphNetworkError({ method, path, cause: error });
+    }
+    options.onResponse?.({ ...context, status: response.status, durationMs: Date.now() - started });
+    if (!response.ok) throw new AgentGraphApiError({ status: response.status, method, path, url, body: await safeText(response) });
+    return response;
+  }
+
   return {
     baseUrl,
     request,
+    open,
     with: (next) =>
       createTransport(options, {
         ...scoped,
