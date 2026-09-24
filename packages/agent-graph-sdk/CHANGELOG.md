@@ -13,6 +13,7 @@
     - `/graph`: pure edits, traversal and `validateStructure`;
     - `/react`: TanStack Query hooks;
     - `/testing`: MSW handlers for every route, plus fixture factories.
+  - **Graph summaries:** `client.graphs.summaries` and `useGraphSummaries` list graphs without loading their definitions.
 
   **Breaking:**
 
@@ -22,11 +23,16 @@
   - `zod` is now a peer dependency.
   - The package is MIT-licensed, has `sideEffects: false`, and its core types no longer require the DOM lib.
 
-### Details: SDK 1/7–6/7 (0.1.0 → 1.0.0)
+### Details (0.1.0 → 1.0.0)
 
 Everything listed as deprecated below was removed in 1.0 (see Major Changes).
 
 #### Added
+
+- **Graph summaries:** `client.graphs.summaries` (`list`/`listPage`/`iterate`) over `GET /api/graph-summaries`, which returns each graph's `id`, `name`, counts, `input_variables` and `subgraph_ids` without nodes or edges. The server reads one catalog, not every graph, so prefer it over `graphs.list()` for lists and pickers.
+  - `GraphSummary` type and `graphSummarySchema`.
+  - `useGraphSummaries` hook and `agentGraphKeys.graphSummaries()`, which `agentGraphInvalidation(...).graphs()` also refreshes.
+  - `summarizeGraph(graph)` in `/graph`, and a mock route in `/testing`.
 
 - **`@bstockwelldev/agent-graph-sdk/react`** (SDK 6/7, STO-618): TanStack Query hooks. `react` 18+ and `@tanstack/react-query` v5 are optional peer dependencies.
 

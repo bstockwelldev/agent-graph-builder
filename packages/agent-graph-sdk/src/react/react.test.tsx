@@ -13,6 +13,7 @@ import {
   useGraph,
   useGraphHealth,
   useGraphs,
+  useGraphSummaries,
   useNodeImpact,
   usePolicies,
   useReleases,
@@ -59,6 +60,14 @@ describe("/react hooks", () => {
     );
     expect(await screen.findAllByText("Classify & Route (demo)")).toHaveLength(2);
     expect(requests.filter((r) => r === "GET /api/graphs")).toHaveLength(1);
+  });
+
+  it("loads graph summaries from /api/graph-summaries", async () => {
+    const { result } = renderHook(() => useGraphSummaries(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.map((g) => [g.id, g.input_variables])).toEqual([["demo_classify_and_route", ["question"]]]);
+    expect(requests).toContain("GET /api/graph-summaries");
+    expect(agentGraphKeys.graphSummaries().slice(0, 2)).toEqual(agentGraphKeys.graphs());
   });
 
   it("loads a graph, its releases, health and a node's impact", async () => {

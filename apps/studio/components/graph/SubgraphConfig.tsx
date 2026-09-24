@@ -3,8 +3,7 @@
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import type { Diagnostic, GraphNode } from "@bstockwelldev/agent-graph-sdk";
-import { runInputVariables } from "@bstockwelldev/agent-graph-sdk/graph";
-import { useGraphs, useReleases } from "@bstockwelldev/agent-graph-sdk/react";
+import { useGraphSummaries, useReleases } from "@bstockwelldev/agent-graph-sdk/react";
 
 import { color, spacing, text, typeScale } from "@/lib/graph-theme";
 import { referenceableGraphs, setMappingRow } from "@/lib/subgraphs";
@@ -31,7 +30,7 @@ export function SubgraphConfig({
   fieldIssues: (key: string) => Diagnostic[];
   variables: readonly string[];
 }) {
-  const graphList = useGraphs();
+  const graphList = useGraphSummaries();
   // null while loading; a failed load leaves the picker empty but usable.
   const graphs = useMemo(() => graphList.data ?? (graphList.isError ? [] : null), [graphList.data, graphList.isError]);
   const targetId = typeof node.config.graphId === "string" ? node.config.graphId : "";
@@ -55,7 +54,7 @@ export function SubgraphConfig({
     { value: "draft", label: "Draft", description: "Always the saved draft — can't be published" },
     ...releases.map((release) => ({ value: release.release_id, label: release.release_id, description: release.created_at, group: "Pinned release" })),
   ];
-  const inputs = child ? runInputVariables(child.nodes) : [];
+  const inputs = child ? child.input_variables : [];
 
   return (
     <Group title="Subgraph">

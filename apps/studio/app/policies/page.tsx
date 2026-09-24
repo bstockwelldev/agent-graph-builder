@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { EffectivePolicyRule, GraphDefinition, PolicyEnforcement, PolicyException, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
+import type { EffectivePolicyRule, GraphSummary, PolicyEnforcement, PolicyException, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
 
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
@@ -65,7 +65,7 @@ export default function PoliciesPage() {
         client.policies.effective(),
         client.policies.workspace.get(),
         client.policies.exceptions.list(),
-        client.graphs.list().catch(() => [] as GraphDefinition[]),
+        client.graphs.summaries.list().catch(() => [] as GraphSummary[]),
       ]);
       setRules(effective);
       setSettings(workspace.rules);

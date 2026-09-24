@@ -137,3 +137,13 @@ describe("client.with()", () => {
     expect(new Headers((fetch.mock.calls[0][1] as RequestInit).headers).get("x-trace")).toBe("1");
   });
 });
+
+describe("graphs.summaries", () => {
+  it("lists /api/graph-summaries and validates the summary shape", async () => {
+    const summary = { id: "g1", name: "G1", updated_at: null, node_count: 2, edge_count: 1, input_variables: ["question"], subgraph_ids: [] };
+    const fetch = vi.fn(async () => json([summary]));
+    const client = createAgentGraphClient({ fetch: fetch as never });
+    expect(await client.graphs.summaries.list()).toEqual([summary]);
+    expect(sent(fetch).url).toBe("/api/graph-summaries");
+  });
+});

@@ -176,17 +176,48 @@ class CatalogSubgraphRef(BaseModel):
     graph_id: str
 
 
-class GraphCatalogEntry(BaseModel):
-    """What cross-graph readers need from a graph without loading it: names
-    for analytics, bindings for resource "used by", subgraph targets for
-    `subgraphs.used_by`. Kept in one document on the object-store backends
-    so those reads cost one object read, not one per graph (storage.py)."""
+class GraphSummary(BaseModel):
+    """A saved graph without its nodes/edges (GET /api/graph-summaries):
+    enough for lists, pickers and `/run` parsing. Served from the graph
+    catalog -- one object read, not one per graph."""
 
     id: str
     name: str
     updated_at: str | None = None
+    node_count: int = 0
+    edge_count: int = 0
+    input_variables: list[str] = []
+    subgraph_ids: list[str] = []
+
+
+class GraphCatalogEntry(BaseModel):
+    """What cross-graph readers need from a graph without loading it: names
+    for analytics, bindings for resource "used by", subgraph targets for
+    `subgraphs.used_by`, and the GraphSummary fields. Kept in one document
+    on the object-store backends so those reads cost one object read, not
+    one per graph (storage.py)."""
+
+    id: str
+    name: str
+    updated_at: str | None = None
+    node_count: int = 0
+    edge_count: int = 0
+    input_variables: list[str] = []
     bindings: list[CatalogBinding] = []
     subgraphs: list[CatalogSubgraphRef] = []
+
+    def summary(self) -> GraphSummary:
+        return GraphSummary(
+            id=self.id,
+            name=self.name,
+            updated_at=self.updated_at,
+            node_count=self.node_count,
+            edge_count=self.edge_count,
+            input_variables=self.input_variables,
+            subgraph_ids=list(
+                dict.fromkeys(ref.graph_id for ref in self.subgraphs if ref.graph_id)
+            ),
+        )
 
 
 class Diagnostic(BaseModel):

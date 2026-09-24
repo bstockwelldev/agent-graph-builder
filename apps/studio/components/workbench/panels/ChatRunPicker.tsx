@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { GraphDefinition, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphSummary, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
 import { useReleases } from "@bstockwelldev/agent-graph-sdk/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { graphInputVariables, type RunTarget } from "@/lib/chatRuns";
+import type { RunTarget } from "@/lib/chatRuns";
 
 const DRAFT = "__draft__";
 const LATEST = "__latest__";
@@ -25,7 +25,7 @@ export function ChatRunPicker({
   onSubmit,
   onCancel,
 }: {
-  graphs: GraphDefinition[];
+  graphs: GraphSummary[];
   defaultGraphId?: string | null;
   onSubmit: (target: RunTarget) => void;
   onCancel: () => void;
@@ -36,7 +36,7 @@ export function ChatRunPicker({
   const [version, setVersion] = useState<string>(DRAFT);
   const [input, setInput] = useState<Record<string, string>>({});
   const graph = graphs.find((candidate) => candidate.id === graphId) ?? null;
-  const variables = graph ? graphInputVariables(graph) : [];
+  const variables = graph ? graph.input_variables : [];
 
   // Newest first. No releases (or unreachable): the draft is still runnable.
   const releases = useReleases(graphId, { select: newestFirst }).data ?? [];

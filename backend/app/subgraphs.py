@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import storage
+from .graph_inputs import input_variables
 from .models import (
     GraphDefinition,
     GraphEdge,
@@ -54,18 +55,8 @@ def target_version(node: GraphNode) -> str:
 
 
 def child_inputs(graph: GraphDefinition) -> list[str]:
-    """The child's input variables: each input node's `variableName`
-    (nodes.py `compute_input`), in node order -- mirrors Studio's
-    `lib/runInputs.ts` `runInputVariables`, falling back to `question`."""
-    names: list[str] = []
-    for node in graph.nodes:
-        if node.type != NodeType.INPUT:
-            continue
-        raw = node.config.get("variableName")
-        name = raw.strip() if isinstance(raw, str) and raw.strip() else "question"
-        if name not in names:
-            names.append(name)
-    return names or ["question"]
+    """The child's input variables (graph_inputs.input_variables)."""
+    return input_variables(graph)
 
 
 # ------------------------------------------------------------ releases

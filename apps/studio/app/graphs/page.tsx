@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
+import { summarizeGraph } from "@bstockwelldev/agent-graph-sdk/graph";
 
 import { client } from "@/lib/api-client";
 import { StudioConfirmDialog } from "@/components/studio/studio-confirm-dialog";
@@ -19,18 +20,18 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export default function GraphsPage() {
-  const [graphs, setGraphs] = useState<GraphDefinition[]>([]);
+  const [graphs, setGraphs] = useState<GraphSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<GraphDefinition | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GraphSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const refetch = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setGraphs(await client.graphs.list());
+      setGraphs(await client.graphs.summaries.list());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -47,7 +48,7 @@ export default function GraphsPage() {
     try {
       const name = template === "demo" ? "Demo graph" : `New graph ${new Date().toLocaleTimeString()}`;
       const created = await client.graphs.create({ name, template });
-      setGraphs((prev) => [created, ...prev]);
+      setGraphs((prev) => [summarizeGraph(created), ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -104,8 +105,8 @@ export default function GraphsPage() {
                       <CardTitle className="text-base">{graph.name}</CardTitle>
                       <CardDescription className="flex flex-wrap items-center gap-2 font-mono text-xs">
                         {graph.id}
-                        <Badge variant="outline">{graph.nodes.length} nodes</Badge>
-                        <Badge variant="outline">{graph.edges.length} edges</Badge>
+                        <Badge variant="outline">{graph.node_count} nodes</Badge>
+                        <Badge variant="outline">{graph.edge_count} edges</Badge>
                       </CardDescription>
                       <p className="text-muted-foreground pt-1 text-[11px]">{studioCardEditHint}</p>
                     </CardHeader>

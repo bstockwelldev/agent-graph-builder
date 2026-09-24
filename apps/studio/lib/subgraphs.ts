@@ -1,4 +1,4 @@
-import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 
 /**
  * Graph-as-node subgraphs (large-graph complexity, Wave 7c / STO-612) --
@@ -6,21 +6,11 @@ import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
  * backend/app/subgraphs.py.
  */
 
-/** Graph ids a graph's subgraph nodes point at. */
-export function subgraphTargets(graph: Pick<GraphDefinition, "nodes">): string[] {
-  const ids: string[] = [];
-  for (const node of graph.nodes) {
-    if (node.type !== "subgraph") continue;
-    const target = node.config.graphId;
-    if (typeof target === "string" && target && !ids.includes(target)) ids.push(target);
-  }
-  return ids;
-}
-
 /** Graphs a subgraph node in `currentId` may reference: never itself, and
  * never a graph whose own references (followed through `graphs`) lead
- * back to it -- the client-side twin of the compiler's SUBGRAPH_CYCLE. */
-export function referenceableGraphs<T extends Pick<GraphDefinition, "id" | "nodes">>(graphs: T[], currentId: string): T[] {
+ * back to it -- the client-side twin of the compiler's SUBGRAPH_CYCLE.
+ * `subgraph_ids` comes from the graph summaries (server-computed). */
+export function referenceableGraphs<T extends Pick<GraphSummary, "id" | "subgraph_ids">>(graphs: T[], currentId: string): T[] {
   const byId = new Map(graphs.map((graph) => [graph.id, graph]));
   const reachesCurrent = (start: string): boolean => {
     const seen = new Set<string>();
@@ -31,13 +21,12 @@ export function referenceableGraphs<T extends Pick<GraphDefinition, "id" | "node
       if (seen.has(id)) continue;
       seen.add(id);
       const graph = byId.get(id);
-      if (graph) stack.push(...subgraphTargets(graph));
+      if (graph) stack.push(...graph.subgraph_ids);
     }
     return false;
   };
   return graphs.filter((graph) => graph.id !== currentId && !reachesCurrent(graph.id));
 }
-
 
 /** Next `inputMapping` after editing one row: blank rows are dropped, and
  * an empty mapping becomes `undefined` (the default wiring). */

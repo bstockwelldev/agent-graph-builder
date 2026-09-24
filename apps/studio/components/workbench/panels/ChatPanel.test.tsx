@@ -29,9 +29,11 @@ const api = vi.hoisted(() => {
         send: vi.fn(async () => session),
       },
       graphs: {
-        list: vi.fn(async () => [
-          { id: "demo", name: "Support flow", entry_node_id: "i", edges: [], nodes: [{ id: "i", type: "input", position: { x: 0, y: 0 }, config: { variableName: "question" } }] },
-        ]),
+        summaries: {
+          list: vi.fn(async () => [
+            { id: "demo", name: "Support flow", node_count: 1, edge_count: 0, input_variables: ["question"], subgraph_ids: [] },
+          ]),
+        },
       },
       releases: {
         list: vi.fn(async () => [{ release_id: "rel_new", created_at: "2026-09-02", semantic_fingerprint: "a", document_fingerprint: "b" }]),

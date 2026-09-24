@@ -26,6 +26,7 @@ import {
   type GraphAnalytics,
   type GraphGroup,
   type GraphLayer,
+  type GraphSummary,
   type GraphUsedBy,
   type GraphHealth,
   type GraphNode,
@@ -412,7 +413,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // applied yet (writes are held until then so they can't wipe the link).
   const [inspectorTab, setInspectorTab] = useState<string | null>(null);
   const urlStateAppliedRef = useRef<string | null>(null);
-  const [libraryGraphs, setLibraryGraphs] = useState<GraphDefinition[]>([]);
+  const [libraryGraphs, setLibraryGraphs] = useState<GraphSummary[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const workbench = useWorkbench();
   // Default the Run panel open on desktop, matching the old playground's
@@ -558,7 +559,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const refreshLibraryGraphs = useCallback(async () => {
     setLibraryLoading(true);
     try {
-      setLibraryGraphs(await client.graphs.list());
+      setLibraryGraphs(await client.graphs.summaries.list());
     } finally {
       setLibraryLoading(false);
     }

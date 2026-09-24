@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AgentGraphNamespaces as AgentGraphClient } from "../api.js";
 import { isSettledRun } from "../runs.js";
 import { documentFingerprint } from "../schema.js";
-import type { EffectivePolicyRule, GraphDefinition, PlatformEvent, PolicyException, PolicySettings } from "../types.js";
+import type { EffectivePolicyRule, GraphDefinition, GraphSummary, PlatformEvent, PolicyException, PolicySettings } from "../types.js";
 import { agentGraphInvalidation, agentGraphKeys } from "./keys.js";
 import { useAgentGraphClient } from "./provider.js";
 
@@ -20,6 +20,13 @@ type QueryOptions<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, "q
 export function useGraphs(options: QueryOptions<GraphDefinition[]> = {}) {
   const client = useAgentGraphClient();
   return useQuery({ queryKey: agentGraphKeys.graphs(), queryFn: () => client.graphs.list(), ...options });
+}
+
+/** Every graph without nodes/edges -- prefer over `useGraphs` for lists and
+ * pickers: the server reads one catalog, not every graph. */
+export function useGraphSummaries(options: QueryOptions<GraphSummary[]> = {}) {
+  const client = useAgentGraphClient();
+  return useQuery({ queryKey: agentGraphKeys.graphSummaries(), queryFn: () => client.graphs.summaries.list(), ...options });
 }
 
 /** Disabled until `graphId` is set. */

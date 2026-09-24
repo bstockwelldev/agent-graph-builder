@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 
 import { childRunHref, referenceableGraphs, setMappingRow } from "./subgraphs";
 
 // Wave 7c (STO-612): subgraph node helpers.
 
-const graph = (id: string, refs: string[] = []): GraphDefinition => ({
+const graph = (id: string, refs: string[] = []): GraphSummary => ({
   id,
   name: id.toUpperCase(),
-  entry_node_id: "in",
-  nodes: refs.map((graphId, i) => ({ id: `sub${i}`, type: "subgraph" as const, position: { x: 0, y: 0 }, config: { graphId } })),
-  edges: [],
+  node_count: refs.length,
+  edge_count: 0,
+  input_variables: ["question"],
+  subgraph_ids: refs,
 });
 
 describe("referenceableGraphs", () => {

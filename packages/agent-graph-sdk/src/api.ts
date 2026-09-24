@@ -16,6 +16,7 @@ import {
   graphDefinitionSchema,
   graphHealthSchema,
   graphReleaseSchema,
+  graphSummarySchema,
   graphUsedBySchema,
   knowledgeDeleteResponseSchema,
   knowledgeLineageEntrySchema,
@@ -191,6 +192,9 @@ export function buildNamespaces(transport: Transport) {
     graphs: {
       ...paged(transport, () => "/api/graphs", graphDefinitionSchema),
       get: (graphId: string) => transport.request(path`/api/graphs/${graphId}`, undefined, graphDefinitionSchema),
+      /** Every graph without nodes/edges -- prefer this over `list()` for
+       * lists and pickers: the server reads one catalog, not every graph. */
+      summaries: paged(transport, () => "/api/graph-summaries", graphSummarySchema),
       create: (request: CreateGraphRequest) =>
         transport.request("/api/graphs", json({ name: request.name, template: request.template ?? "blank" }), graphDefinitionSchema),
       update: (graph: GraphDefinition) =>
