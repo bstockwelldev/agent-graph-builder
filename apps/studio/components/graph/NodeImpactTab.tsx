@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
-import type { BindableResourceKind, GraphDefinition, NodeImpact } from "@bstockwelldev/agent-graph-sdk";
+import { useEffect, type CSSProperties } from "react";
+import type { BindableResourceKind, GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
+import { useNodeImpact } from "@bstockwelldev/agent-graph-sdk/react";
 
-import { client } from "@/lib/api-client";
 import { color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { relativeTime } from "@/lib/nodeMetrics";
 import { versionLabel } from "@bstockwelldev/agent-graph-sdk/graph";
@@ -37,32 +37,18 @@ export function NodeImpactTab({
   /** Node ids to keep lit on the canvas (this node + downstream), or null to clear. */
   onHighlight?: (nodeIds: string[] | null) => void;
 }) {
-  const [impact, setImpact] = useState<NodeImpact | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // getDraftGraph is a live closure read at fetch time: refetch on
+  // node/graph/refresh changes, and on every mount (staleTime 0) so a
+  // reopened tab reflects edits made since.
+  const { data: impact, error } = useNodeImpact(graphId, nodeId, { draft: getDraftGraph, draftKey: refreshKey ?? "" }, { staleTime: 0 });
 
   useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    client
-      .graphs.impact(graphId, { nodeId, draft: getDraftGraph() })
-      .then((result) => {
-        if (cancelled) return;
-        setImpact(result);
-        onHighlight?.([nodeId, ...result.downstream]);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-    // getDraftGraph is a live closure; refetch on node/graph/refresh only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphId, nodeId, refreshKey]);
+    if (impact?.node_id === nodeId) onHighlight?.([nodeId, ...impact.downstream]);
+  }, [impact, nodeId, onHighlight]);
 
   useEffect(() => () => onHighlight?.(null), [onHighlight]);
 
-  if (error) return <div role="alert" style={{ ...typeScale.caption, color: color.warning[500] }}>{error}</div>;
+  if (error) return <div role="alert" style={{ ...typeScale.caption, color: color.warning[500] }}>{error.message}</div>;
   if (!impact || impact.node_id !== nodeId) return <SkeletonBlock lines={4} gap={spacing[2]} />;
 
   return (

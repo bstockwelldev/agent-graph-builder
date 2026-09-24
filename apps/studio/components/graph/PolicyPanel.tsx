@@ -1,7 +1,9 @@
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import type { EffectivePolicyRule, PolicyEnforcement, PolicyException, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
+import type { PolicyEnforcement, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
+import { agentGraphKeys, useAgentGraphInvalidation, usePolicies, type PoliciesData } from "@bstockwelldev/agent-graph-sdk/react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { client } from "@/lib/api-client";
 import { color, fontFamily, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
@@ -44,84 +46,62 @@ export function PolicyPanel({
   /** Called after an override or exception changes, to refresh diagnostics. */
   onPoliciesChanged?: () => void;
 }) {
-  const [effective, setEffective] = useState<EffectivePolicyRule[]>([]);
-  const [inherited, setInherited] = useState<Record<string, EffectivePolicyRule>>({});
-  const [overrides, setOverrides] = useState<PolicySettings["rules"]>({});
-  const [exceptions, setExceptions] = useState<PolicyException[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const invalidate = useAgentGraphInvalidation();
+  // SDK 6/7: one cached query for the graph's effective rules, the
+  // workspace's (what an override replaces), its overrides and exceptions.
+  const policies = usePolicies(graphId, { enabled: Boolean(graphId) });
+  const effective = policies.data?.effective ?? [];
+  const overrides = policies.data?.settings.rules ?? {};
+  const exceptions = policies.data?.exceptions ?? [];
+  const inherited = useMemo(() => Object.fromEntries((policies.data?.workspace ?? []).map((rule) => [rule.rule.code, rule])), [policies.data]);
+  const loading = Boolean(graphId) && policies.isPending;
   const [saving, setSaving] = useState(false);
   const [busyExceptionId, setBusyExceptionId] = useState<string | null>(null);
   const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (id: string) => {
-    const [graphEffective, workspaceEffective, graphSettings, graphExceptions] = await Promise.all([
-      client.policies.effective({ graphId: id }),
-      client.policies.effective(),
-      client.policies.graph.get(id),
-      client.policies.exceptions.list({ graphId: id }),
-    ]);
-    setEffective(graphEffective);
-    setInherited(Object.fromEntries(workspaceEffective.map((rule) => [rule.rule.code, rule])));
-    setOverrides(graphSettings.rules);
-    setExceptions(graphExceptions);
-  }, []);
-
-  useEffect(() => {
-    if (!graphId) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    load(graphId)
-      .catch((err: unknown) => {
-        if (!cancelled) setError(errorDetail(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [graphId, load]);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? (policies.error ? errorDetail(policies.error) : null);
 
   const saveOverrides = useCallback(
     async (next: PolicySettings["rules"]) => {
       if (!graphId) return;
+      const key = agentGraphKeys.policies(graphId);
       setSaving(true);
-      setError(null);
-      const previous = overrides;
-      setOverrides(next);
+      setActionError(null);
+      // Optimistic: show the new overrides at once, roll back on failure.
+      const previous = queryClient.getQueryData<PoliciesData>(key);
+      if (previous) queryClient.setQueryData<PoliciesData>(key, { ...previous, settings: { ...previous.settings, rules: next } });
       try {
         await client.policies.graph.save(graphId, { rules: next });
-        setEffective(await client.policies.effective({ graphId }));
+        await invalidate.policies();
         onPoliciesChanged?.();
       } catch (err) {
-        setOverrides(previous);
-        setError(errorDetail(err));
+        if (previous) queryClient.setQueryData(key, previous);
+        setActionError(errorDetail(err));
       } finally {
         setSaving(false);
       }
     },
-    [graphId, onPoliciesChanged, overrides],
+    [graphId, invalidate, onPoliciesChanged, queryClient],
   );
 
   const exceptionAction = useCallback(
     async (exceptionId: string, action: () => Promise<unknown>) => {
       if (!graphId) return;
       setBusyExceptionId(exceptionId);
-      setError(null);
+      setActionError(null);
       try {
         await action();
-        setExceptions(await client.policies.exceptions.list({ graphId }));
+        await invalidate.policies();
         setPendingRevokeId(null);
         onPoliciesChanged?.();
       } catch (err) {
-        setError(errorDetail(err));
+        setActionError(errorDetail(err));
       } finally {
         setBusyExceptionId(null);
       }
     },
-    [graphId, onPoliciesChanged],
+    [graphId, invalidate, onPoliciesChanged],
   );
 
   const titles = Object.fromEntries(effective.map((rule) => [rule.rule.code, rule.rule.title]));

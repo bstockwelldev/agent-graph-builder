@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
 import { NodeImpactTab } from "./NodeImpactTab";
+import { agentGraphWrapper } from "@/lib/agentGraphTestWrapper";
 
 // Wave 7a (STO-610): find on canvas, health panel, node impact tab.
 
@@ -105,6 +106,7 @@ describe("NodeImpactTab", () => {
         onSelectNode={onSelectNode}
         onOpenResource={onOpenResource}
       />,
+      { wrapper: agentGraphWrapper(clientMock) },
     );
     await screen.findByText(/Changing this node reaches 2 nodes · 0 outputs/);
     expect(clientMock.graphs.impact).toHaveBeenCalledWith("g1", { nodeId: "llm_classify", draft });
