@@ -316,7 +316,7 @@ git push -u origin master
 
 **URL:** https://agent-graph-builder-app.vercel.app
 
-Health check: `GET /api/health` → `{"ok":true,"storage_backend":"vercel_blob"}` (when Blob is configured).
+Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage; see AGENTS.md for why not Blob).
 
 **Legacy aliases** (still work; bookmarks OK): [agent-graph-builder-poc.vercel.app](https://agent-graph-builder-poc.vercel.app), [theagenticengineer-graph-builder.vercel.app](https://theagenticengineer-graph-builder.vercel.app).
 

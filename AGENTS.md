@@ -33,7 +33,7 @@ uv run uvicorn app.main:app --reload --port 8000
 
 Docker (full stack): `docker compose up` or `scripts/spin-up.ps1`.
 
-Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"vercel_blob"}`). Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
+Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"supabase"}`; Supabase Storage bucket `agent-graph-builder` in the `supabase-tabletop-studio-db` project). Prod left Vercel Blob on 2026-09-24: the Hobby Blob store was suspended for exceeding its monthly operation limits (2k advanced / 10k simple), which locks it for 30 days — do not re-add `BLOB_READ_WRITE_TOKEN` to prod without fixing the N+1 list reads first. Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
 
 Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set secrets in the Vercel dashboard (Project → Environment Variables); do not commit them:
 

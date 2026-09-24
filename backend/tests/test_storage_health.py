@@ -17,6 +17,8 @@ def _clear_durable_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OBJECT_STORE_SECRET_ACCESS_KEY", raising=False)
     monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
     monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
 
 def test_storage_is_healthy_local_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,3 +135,22 @@ def test_api_routes_work_on_vercel_with_blob_token(monkeypatch: pytest.MonkeyPat
 
     assert response.status_code == 200
     assert any(graph["id"] == build_demo_graph().id for graph in response.json())
+
+
+def test_startup_survives_unavailable_storage(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A suspended/unreachable store must not crash app startup (prod
+    outage 2026-09-24: Blob 403 in the demo-graph seed killed every request)."""
+    _clear_durable_env(monkeypatch)
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_teststore_testtoken")
+
+    def _forbidden(graph_id: str):
+        raise RuntimeError("403 Forbidden")
+
+    monkeypatch.setattr(storage.vercel_blob, "get_graph", _forbidden)
+
+    with TestClient(app) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["storage_backend"] == "vercel_blob"
