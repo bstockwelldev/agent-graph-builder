@@ -10,6 +10,7 @@ export {
   useGraph,
   useGraphHealth,
   useGraphs,
+  useGraphSummaries,
   useNodeImpact,
   usePolicies,
   useReleases,

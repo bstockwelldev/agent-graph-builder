@@ -9,6 +9,9 @@ export const agentGraphKeys = {
   all: ["agent-graph"] as const,
   graphs: () => [...agentGraphKeys.all, "graphs"] as const,
   graph: (graphId: string) => [...agentGraphKeys.graphs(), graphId] as const,
+  /** Under `graphs()` so the list invalidation covers it; an object can't
+   * collide with a graph id. */
+  graphSummaries: () => [...agentGraphKeys.graphs(), { view: "summaries" }] as const,
   releases: (graphId: string) => [...agentGraphKeys.graph(graphId), "releases"] as const,
   health: (graphId: string, draftKey: string) => [...agentGraphKeys.graph(graphId), "health", draftKey] as const,
   impact: (graphId: string, nodeId: string, draftKey: string) => [...agentGraphKeys.graph(graphId), "impact", nodeId, draftKey] as const,
@@ -25,7 +28,7 @@ export function agentGraphInvalidation(queryClient: QueryClient) {
   return {
     /** A graph's own data: definition, releases, health, impact. */
     graph: (graphId: string) => invalidate(agentGraphKeys.graph(graphId)),
-    /** The graph list (after create/delete/rename). */
+    /** The graph list and graph summaries (after create/delete/rename). */
     graphs: () => invalidate(agentGraphKeys.graphs()),
     releases: (graphId: string) => invalidate(agentGraphKeys.releases(graphId)),
     /** Every run list and run. */

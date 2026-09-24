@@ -6,22 +6,23 @@ import { agentGraphWrapper } from "@/lib/agentGraphTestWrapper";
 
 // Wave 7c (STO-612): the subgraph node's Configure tab.
 
-const { clientMock } = vi.hoisted(() => ({ clientMock: { graphs: { list: vi.fn() }, releases: { list: vi.fn() } } }));
+const { clientMock } = vi.hoisted(() => ({ clientMock: { graphs: { summaries: { list: vi.fn() } }, releases: { list: vi.fn() } } }));
 vi.mock("@/lib/api-client", () => ({ client: clientMock }));
 
-const g = (id: string, name: string, extra: Record<string, unknown>[] = []) => ({
+const g = (id: string, name: string, subgraphIds: string[] = []) => ({
   id,
   name,
-  entry_node_id: "in",
-  nodes: [{ id: "in", type: "input", position: { x: 0, y: 0 }, config: { variableName: id === "child" ? "topic" : "question" } }, ...extra],
-  edges: [],
+  node_count: 1 + subgraphIds.length,
+  edge_count: 0,
+  input_variables: [id === "child" ? "topic" : "question"],
+  subgraph_ids: subgraphIds,
 });
 
 beforeEach(() => {
-  clientMock.graphs.list.mockResolvedValue([
+  clientMock.graphs.summaries.list.mockResolvedValue([
     g("parent", "Parent"),
     g("child", "Child graph"),
-    g("loop", "Loops back", [{ id: "s", type: "subgraph", position: { x: 0, y: 0 }, config: { graphId: "parent" } }]),
+    g("loop", "Loops back", ["parent"]),
   ]);
   clientMock.releases.list.mockResolvedValue([{ release_id: "rel_1", created_at: "2026-09-24", semantic_fingerprint: "x" }]);
 });

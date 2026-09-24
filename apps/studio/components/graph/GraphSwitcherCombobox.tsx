@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
-import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ export function GraphSwitcherCombobox({
   onSelect,
   onOpenChange,
 }: {
-  graphs: GraphDefinition[];
+  graphs: Pick<GraphSummary, "id" | "name">[];
   activeGraphId: string | null;
   /** Current graph's name, known immediately from the editor's own state —
    * used as the trigger label until `graphs` has been fetched (lazily, on

@@ -414,3 +414,37 @@ def test_vercel_blob_paged_graph_listing_reads_only_the_page(monkeypatch) -> Non
         "graphs/g_c.json",
         "graphs/g_d.json",
     ]
+
+
+def test_vercel_blob_graph_summaries_route_reads_only_the_catalog(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    child = _catalog_graph("child")
+    child.nodes.append(GraphNode(id="in", type=NodeType.INPUT, config={"variableName": "topic"}))
+    storage.save_graph(child)
+    storage.save_graph(_catalog_graph("parent", prompt_id="p1", child_id="child"))
+    fake.blob_reads.clear()
+
+    response = TestClient(app).get("/api/graph-summaries")
+
+    assert response.status_code == 200
+    by_id = {item["id"]: item for item in response.json()}
+    assert by_id["child"]["input_variables"] == ["topic"]
+    assert by_id["child"]["node_count"] == 1
+    assert by_id["parent"]["subgraph_ids"] == ["child"]
+    assert by_id["parent"]["input_variables"] == ["question"]
+    assert "nodes" not in by_id["parent"]
+    assert fake.blob_reads == ["graph_catalog.json"]
+
+
+def test_vercel_blob_older_catalog_version_is_rebuilt(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+    storage.save_graph(_catalog_graph("g1", prompt_id="p1"))
+    # A catalog written before node_count/input_variables existed.
+    fake.objects["graph_catalog.json"] = json.dumps(
+        {"graphs": {"g1": {"id": "g1", "name": "Graph g1"}}}
+    ).encode()
+
+    (summary,) = storage.list_graph_summaries()
+
+    assert summary.node_count == 1
+    assert json.loads(fake.objects["graph_catalog.json"])["version"] == 2

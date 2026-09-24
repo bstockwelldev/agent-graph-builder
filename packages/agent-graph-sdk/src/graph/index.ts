@@ -24,6 +24,7 @@ export {
 } from "./nodes.js";
 export type { SummaryContext } from "./nodes.js";
 export { formatRunInputs, recentInputValues, runInputVariables } from "./runInputs.js";
+export { summarizeGraph } from "./summary.js";
 export { EMPTY_DRAFT, MODE_LABEL, buildReplayRequest, compareNodes, modelChoices, routeChoices } from "./counterfactual.js";
 export type { CounterfactualDraft, ModelChoice, NodeComparison, RouteChoice } from "./counterfactual.js";
 export {

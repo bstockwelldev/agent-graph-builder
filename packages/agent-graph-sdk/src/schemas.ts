@@ -819,6 +819,18 @@ export const subgraphExtractResponseSchema = z.object({
   proposed_parent: graphDefinitionSchema,
 });
 
+/** GET /api/graph-summaries -- a saved graph without its nodes/edges, for
+ * lists and pickers. One catalog read on the server, not one per graph. */
+export const graphSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  updated_at: z.string().nullish(),
+  node_count: z.number().int(),
+  edge_count: z.number().int(),
+  input_variables: z.array(z.string()),
+  subgraph_ids: z.array(z.string()),
+});
+
 /** Wave 7c: GET /api/graphs/{id}/used-by -- parents referencing this graph. */
 export const graphUsedBySchema = z.array(
   z.object({ graph_id: z.string(), name: z.string(), node_ids: z.array(z.string()) }),

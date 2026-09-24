@@ -349,6 +349,27 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/graph-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Graph Summaries
+         * @description Every saved graph without its nodes/edges -- for lists and pickers.
+         *     Unpaged order: newest-updated first. Paged order: by id.
+         */
+        get: operations["list_graph_summaries_api_graph_summaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/graphs": {
         parameters: {
             query?: never;
@@ -1943,6 +1964,40 @@ export type components = {
             };
             /** Semantic Fingerprint */
             semantic_fingerprint: string;
+        };
+        /**
+         * GraphSummary
+         * @description A saved graph without its nodes/edges (GET /api/graph-summaries):
+         *     enough for lists, pickers and `/run` parsing. Served from the graph
+         *     catalog -- one object read, not one per graph.
+         */
+        GraphSummary: {
+            /**
+             * Edge Count
+             * @default 0
+             */
+            edge_count?: number;
+            /** Id */
+            id: string;
+            /**
+             * Input Variables
+             * @default []
+             */
+            input_variables?: string[];
+            /** Name */
+            name: string;
+            /**
+             * Node Count
+             * @default 0
+             */
+            node_count?: number;
+            /**
+             * Subgraph Ids
+             * @default []
+             */
+            subgraph_ids?: string[];
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** GraphUsage */
         GraphUsage: {
@@ -3580,6 +3635,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimulateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_graph_summaries_api_graph_summaries_get: {
+        parameters: {
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphSummary"][];
                 };
             };
             /** @description Validation Error */

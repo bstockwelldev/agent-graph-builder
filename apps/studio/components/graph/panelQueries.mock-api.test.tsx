@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { summarizeGraph } from "@bstockwelldev/agent-graph-sdk/graph";
 import { AgentGraphProvider } from "@bstockwelldev/agent-graph-sdk/react";
 import { createHandlers, createMockStore, demoGraph, makeGraph } from "@bstockwelldev/agent-graph-sdk/testing";
 import { setupServer } from "msw/node";
@@ -48,7 +49,7 @@ describe("panels on /react hooks", () => {
             variables={["question"]}
           />
           <PolicyPanel graphId="demo_classify_and_route" />
-          <ChatRunPicker graphs={[demo]} defaultGraphId="demo_classify_and_route" onSubmit={() => undefined} onCancel={() => undefined} />
+          <ChatRunPicker graphs={[summarizeGraph(demo)]} defaultGraphId="demo_classify_and_route" onSubmit={() => undefined} onCancel={() => undefined} />
         </AgentGraphProvider>
       </StrictMode>,
     );
@@ -61,7 +62,8 @@ describe("panels on /react hooks", () => {
     const counts = requests.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r]: (acc[r] ?? 0) + 1 }), {});
     expect(counts).toEqual({
       "POST /api/graphs/demo_classify_and_route/nodes/router_1/impact": 1,
-      "GET /api/graphs": 1,
+      // Summaries (one catalog read server-side), never the full graph list.
+      "GET /api/graph-summaries": 1,
       // SubgraphConfig and ChatRunPicker share one releases request.
       "GET /api/graphs/demo_classify_and_route/releases": 1,
       "GET /api/graphs/demo_classify_and_route/policies/effective": 1,
