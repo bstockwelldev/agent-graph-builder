@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SubgraphConfig } from "./SubgraphConfig";
+import { agentGraphWrapper } from "@/lib/agentGraphTestWrapper";
 
 // Wave 7c (STO-612): the subgraph node's Configure tab.
 
@@ -38,6 +39,7 @@ describe("SubgraphConfig", () => {
         fieldIssues={() => []}
         variables={["question"]}
       />,
+      { wrapper: agentGraphWrapper(clientMock) },
     );
     await waitFor(() => expect(clientMock.releases.list).toHaveBeenCalledWith("child"));
     expect(await screen.findByRole("textbox", { name: "Input topic" })).toBeTruthy();

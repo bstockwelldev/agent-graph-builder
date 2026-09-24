@@ -313,7 +313,7 @@ Linear STO-620 · GitHub #69. Non-breaking.
 - Root build and `pnpm install --frozen-lockfile`: green.
 - Playwright on the stub backend (1440 and 390 widths), with no API or page errors: node cards, find (`type:llm`), the run input field, and the policies page.
 
-### Phase 5b — `/react` hooks (SDK 6/7, Low)
+### Phase 5b — `/react` hooks (SDK 6/7, Low) — **Shipped**
 
 Linear STO-618 · GitHub #70. Non-breaking.
 
@@ -330,6 +330,45 @@ Linear STO-618 · GitHub #70. Non-breaking.
   - `useResources(kind)`
 - **Cache:** query keys are exported.
 - **Studio migration:** panels move over gradually.
+
+#### As built
+
+**`@bstockwelldev/agent-graph-sdk/react`** (`src/react/`)
+- Peer dependencies: `react` 18+ and `@tanstack/react-query` v5. Both are optional, so the core entry point doesn't need them.
+- **Provider:** `AgentGraphProvider({ client, queryClient? })`.
+  - It accepts any client with the namespaces, including Studio's alias-free type and clients scoped with `.with()`.
+  - If you don't pass a `queryClient`, it creates its own with no retries (the transport already retries), a 30s `staleTime`, and no refetch on window focus.
+- **`useAgentGraphClient()`** returns the provider's client.
+- **Hooks:** `useGraphs`, `useGraph`, `useRuns`, `useRun`, `useReleases`, `useGraphHealth`, `useNodeImpact`, `usePolicies`, `useResources(kind)`. Each hook is one cached query and accepts TanStack's query options.
+  - `useRun` streams `client.runs.stream` into `events` and refetches the run when the stream ends. It replays a finished run's history too.
+  - `useGraphHealth` and `useNodeImpact` take either a draft (keyed by its document fingerprint) or a function evaluated at fetch time plus your own `draftKey`. The function form is for a live canvas you don't want to fingerprint on every render.
+  - `usePolicies(graphId?)` loads the scope's effective rules, the workspace's effective rules, the scope's settings and its exceptions in one query.
+- **Cache control:**
+  - `agentGraphKeys`: every key starts with `["agent-graph"]`, and a graph's keys nest under `graph(id)`.
+  - `agentGraphInvalidation(queryClient)` and `useAgentGraphInvalidation()` provide scoped invalidation: `graph`, `graphs`, `releases`, `runs`, `policies`, `resources`, `everything`.
+- `src/entrypoints.test.ts` walks each entry point's runtime imports:
+  - core: zod and @noble/hashes only;
+  - `/graph`: nothing;
+  - `/testing`: adds msw;
+  - `/react`: adds react and TanStack Query.
+
+**Studio**
+- `StudioDataProvider` in the root layout wraps the app in `AgentGraphProvider` with Studio's client.
+- Four panels are migrated off the `useEffect` + `cancelled` pattern:
+  - `NodeImpactTab`: `useNodeImpact` with the live-canvas function form. `staleTime` is 0, so a reopened tab refetches.
+  - `SubgraphConfig`: `useGraphs` and `useReleases` replace its private copies of both.
+  - `ChatRunPicker`: `useReleases` with a newest-first `select`.
+  - `PolicyPanel`: `usePolicies`, with optimistic overrides through `setQueryData`, a rollback on failure, and `invalidate.policies()` after writes. That invalidation also refreshes the workspace page's cache.
+- **No duplicate fetches:** `components/graph/panelQueries.mock-api.test.tsx` mounts all four panels together under StrictMode against `/testing` and asserts that every endpoint is requested exactly once. SubgraphConfig and ChatRunPicker share one releases request.
+- `lib/agentGraphTestWrapper.tsx` wraps component tests that use the hooks with a mocked client.
+- The other panels (Knowledge, Releases, RoutingLab, History, Analytics, ...) keep their loaders and can move over one at a time.
+
+**Verification**
+- SDK vitest: 228, plus 1 end-to-end test. Includes 6 hook tests against the `/testing` MSW mock (shared request under StrictMode, graph/releases/health/impact, a live run stream to the settled summary, policies, resources and invalidation, keys, the missing-provider error) and 3 entry-point dependency tests.
+- Studio: vitest 273/273, tsc clean, eslint 0 errors.
+- Backend pytest: 563/563.
+- Root build and frozen install: green.
+- Playwright on the stub backend (1440 and 390 widths): the Impact tab, the graph Policies panel and the chat run picker work. The impact endpoint was requested once even in Next dev's StrictMode, and there were no errors.
 
 ### Phase 5c — Docs, packaging and release (SDK 7/7, Low)
 

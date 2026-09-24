@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { GraphSummary, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
+import { useReleases } from "@bstockwelldev/agent-graph-sdk/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { client } from "@/lib/api-client";
 import type { RunTarget } from "@/lib/chatRuns";
 
 const DRAFT = "__draft__";
@@ -34,28 +34,12 @@ export function ChatRunPicker({
     (defaultGraphId && graphs.some((graph) => graph.id === defaultGraphId) ? defaultGraphId : graphs[0]?.id) ?? "",
   );
   const [version, setVersion] = useState<string>(DRAFT);
-  const [releases, setReleases] = useState<ReleaseIndexEntry[]>([]);
   const [input, setInput] = useState<Record<string, string>>({});
   const graph = graphs.find((candidate) => candidate.id === graphId) ?? null;
   const variables = graph ? graph.input_variables : [];
 
-  useEffect(() => {
-    setVersion(DRAFT);
-    setReleases([]);
-    if (!graphId) return;
-    let cancelled = false;
-    client
-      .releases.list(graphId)
-      .then((list) => {
-        if (!cancelled) setReleases([...list].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)));
-      })
-      .catch(() => {
-        // No releases (or unreachable): the draft is still runnable.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [graphId]);
+  // Newest first. No releases (or unreachable): the draft is still runnable.
+  const releases = useReleases(graphId, { select: newestFirst }).data ?? [];
 
   return (
     <form
@@ -76,7 +60,11 @@ export function ChatRunPicker({
           </Label>
           <Select
             value={graphId}
-            onValueChange={(value) => value && setGraphId(value)}
+            onValueChange={(value) => {
+              if (!value) return;
+              setGraphId(value);
+              setVersion(DRAFT);
+            }}
             items={Object.fromEntries(graphs.map((candidate) => [candidate.id, candidate.name]))}
           >
             <SelectTrigger id="chat-run-graph" className="h-8 w-full text-xs">
@@ -142,4 +130,8 @@ export function ChatRunPicker({
       </div>
     </form>
   );
+}
+
+function newestFirst(list: ReleaseIndexEntry[]): ReleaseIndexEntry[] {
+  return [...list].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 }

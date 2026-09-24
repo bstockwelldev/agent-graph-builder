@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **Graph summaries:** `client.graphs.summaries` (`list`/`listPage`/`iterate`) over `GET /api/graph-summaries`, which returns each graph's `id`, `name`, counts, `input_variables` and `subgraph_ids` without nodes or edges. The server reads one catalog, not every graph, so prefer it over `graphs.list()` for lists and pickers.
+  - `GraphSummary` type and `graphSummarySchema`.
+  - `useGraphSummaries` hook and `agentGraphKeys.graphSummaries()`, which `agentGraphInvalidation(...).graphs()` also refreshes.
+  - `summarizeGraph(graph)` in `/graph`, and a mock route in `/testing`.
+
+- **`@bstockwelldev/agent-graph-sdk/react`** (SDK 6/7, STO-618): TanStack Query hooks. `react` 18+ and `@tanstack/react-query` v5 are optional peer dependencies.
+  - `AgentGraphProvider` and `useAgentGraphClient`.
+  - Hooks: `useGraphs`, `useGraph`, `useRuns`, `useRun` (live over `runs.stream`), `useReleases`, `useGraphHealth`, `useNodeImpact`, `usePolicies`, `useResources`.
+  - Cache control: `agentGraphKeys`, `agentGraphInvalidation`, `useAgentGraphInvalidation`.
+
 - **`@bstockwelldev/agent-graph-sdk/graph`** (SDK 5/7, STO-620): pure graph helpers with no network or DOM.
   - Immutable edits: `addNode`, `connect`, `removeNode`, `setConfig`, `relabel`, `nextId`.
   - Traversal: `upstream`, `downstream`, `reachableFrom`, `hasCycle`, `computeFocusNodeIds`.

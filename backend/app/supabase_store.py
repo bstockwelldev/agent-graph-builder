@@ -20,6 +20,7 @@ Authenticated with the service-role key, which — same as MUI's own
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
 
@@ -30,6 +31,8 @@ from .models import GraphDefinition, NodeTrace, RunSummary
 _GRAPH_PREFIX = "graphs/"
 _RUN_PREFIX = "runs/"
 _TIMEOUT = 30.0
+
+logger = logging.getLogger(__name__)
 
 
 def _base_url() -> str:
@@ -55,6 +58,35 @@ def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {key}", "apikey": key}
 
 
+def key_kind() -> str:
+    """Non-secret description of the configured key (for /api/health):
+    its shape and length only, never the value."""
+    key = _service_role_key()
+    if key.startswith("sb_secret_"):
+        kind = "sb_secret"
+    elif key.startswith("sb_"):
+        kind = "sb_other"
+    elif key.count(".") == 2 and key.startswith("eyJ"):
+        kind = "jwt"
+    else:
+        kind = "unrecognized"
+    return f"{kind}({len(key)} chars)"
+
+
+def _raise_for_status(response: httpx.Response) -> None:
+    """``raise_for_status`` that logs Supabase's error body first — the bare
+    "400 Bad Request" hid why a key was rejected."""
+    if response.is_error:
+        logger.error(
+            "Supabase Storage %s %s -> %s: %s",
+            response.request.method,
+            response.request.url.path,
+            response.status_code,
+            response.text[:300],
+        )
+    response.raise_for_status()
+
+
 def _object_url(key: str) -> str:
     return f"{_base_url()}/storage/v1/object/{_bucket()}/{key}"
 
@@ -76,7 +108,7 @@ def put_json(key: str, payload: dict[str, Any]) -> None:
     headers = {**_headers(), "Content-Type": "application/json", "x-upsert": "true"}
     with _http_client() as client:
         response = client.post(_object_url(key), headers=headers, content=body)
-    response.raise_for_status()
+    _raise_for_status(response)
 
 
 def get_json(key: str) -> dict[str, Any] | None:
@@ -84,7 +116,7 @@ def get_json(key: str) -> dict[str, Any] | None:
         response = client.get(_object_url(key), headers=_headers())
     if response.status_code == 404:
         return None
-    response.raise_for_status()
+    _raise_for_status(response)
     return json.loads(response.content)
 
 
@@ -95,7 +127,7 @@ def delete_json(key: str) -> bool:
         response = client.delete(_object_url(key), headers=_headers())
     if response.status_code == 404:
         return False
-    response.raise_for_status()
+    _raise_for_status(response)
     return True
 
 
@@ -125,7 +157,7 @@ def list_keys(prefix: str, *, newest_first: bool = False, limit: int | None = No
                     "sortBy": sort_by,
                 },
             )
-            response.raise_for_status()
+            _raise_for_status(response)
             items = response.json()
             if not items:
                 break

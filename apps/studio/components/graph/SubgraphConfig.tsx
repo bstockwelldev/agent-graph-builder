@@ -1,10 +1,10 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { Diagnostic, GraphNode, GraphSummary, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
+import { useMemo } from "react";
+import type { Diagnostic, GraphNode } from "@bstockwelldev/agent-graph-sdk";
+import { useGraphSummaries, useReleases } from "@bstockwelldev/agent-graph-sdk/react";
 
-import { client } from "@/lib/api-client";
 import { color, spacing, text, typeScale } from "@/lib/graph-theme";
 import { referenceableGraphs, setMappingRow } from "@/lib/subgraphs";
 import { Combobox, type ComboboxOption } from "./ui/Combobox";
@@ -30,11 +30,13 @@ export function SubgraphConfig({
   fieldIssues: (key: string) => Diagnostic[];
   variables: readonly string[];
 }) {
-  const graphs = useGraphList();
+  const graphList = useGraphSummaries();
+  // null while loading; a failed load leaves the picker empty but usable.
+  const graphs = useMemo(() => graphList.data ?? (graphList.isError ? [] : null), [graphList.data, graphList.isError]);
   const targetId = typeof node.config.graphId === "string" ? node.config.graphId : "";
   const version = typeof node.config.version === "string" && node.config.version ? node.config.version : "latest";
   const mapping = (node.config.inputMapping ?? undefined) as Record<string, string> | undefined;
-  const releases = useReleases(targetId);
+  const releases = useReleases(targetId).data ?? [];
   const child = graphs?.find((graph) => graph.id === targetId);
 
   const graphOptions = useMemo<ComboboxOption[]>(() => {
@@ -101,48 +103,6 @@ export function SubgraphConfig({
       )}
     </Group>
   );
-}
-
-function useGraphList(): GraphSummary[] | null {
-  const [graphs, setGraphs] = useState<GraphSummary[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    client
-      .graphs.summaries.list()
-      .then((list) => {
-        if (!cancelled) setGraphs(list);
-      })
-      .catch(() => {
-        if (!cancelled) setGraphs([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return graphs;
-}
-
-function useReleases(graphId: string): ReleaseIndexEntry[] {
-  const [releases, setReleases] = useState<ReleaseIndexEntry[]>([]);
-  useEffect(() => {
-    if (!graphId) {
-      setReleases([]);
-      return;
-    }
-    let cancelled = false;
-    client
-      .releases.list(graphId)
-      .then((list) => {
-        if (!cancelled) setReleases(list);
-      })
-      .catch(() => {
-        if (!cancelled) setReleases([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [graphId]);
-  return releases;
 }
 
 const linkStyle = {
