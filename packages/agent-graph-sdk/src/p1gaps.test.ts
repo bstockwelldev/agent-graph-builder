@@ -44,8 +44,8 @@ describe("P1 gap client", () => {
     const result = { run, traces: [], original_run_id: "run_1", counterfactual: false, original_traces: [], changed_nodes: [], node_modes: {} };
     fetchMock.mockResolvedValue(json(result));
     const client = createAgentGraphClient({ baseUrl });
-    await client.replayRun("run_1");
-    await client.replayRun("run_1", { forced_routes: { router_1: "prompt_answer" } });
+    await client.runs.replay("run_1");
+    await client.runs.replay("run_1", { forced_routes: { router_1: "prompt_answer" } });
     expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ forced_routes: { router_1: "prompt_answer" } });
   });
@@ -53,8 +53,8 @@ describe("P1 gap client", () => {
   it("routes draft diff and routing-vs-release", async () => {
     fetchMock.mockResolvedValue(json({}));
     const client = createAgentGraphClient({ baseUrl });
-    await client.compareDraftToRelease("rel_1", { id: "g1" } as never).catch(() => undefined);
-    await client.compareRoutingToRelease("g1", "latest", []).catch(() => undefined);
+    await client.releases.compareDraft("rel_1", { id: "g1" } as never).catch(() => undefined);
+    await client.routingLab.compareRelease("g1", { releaseId: "latest", dataset: [] }).catch(() => undefined);
     expect(fetchMock.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
       [`${baseUrl}/api/graph-releases/rel_1/compare-draft`, "POST"],
       [`${baseUrl}/api/graphs/g1/routing-lab/compare-release/latest`, "POST"],

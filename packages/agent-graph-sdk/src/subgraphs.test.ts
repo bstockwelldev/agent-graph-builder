@@ -28,8 +28,8 @@ describe("subgraph client", () => {
 
   it("POSTs the draft + selection to extract, and GETs used-by", async () => {
     const client = createAgentGraphClient({ baseUrl: "http://x" });
-    await client.extractSubgraph("g1", { id: "g1" } as never, { node_ids: ["a", "b"], name: "Branch" }).catch(() => undefined);
-    await client.getGraphUsedBy("g1");
+    await client.graphs.extractSubgraph("g1", { draft: { id: "g1" } as never, nodeIds: ["a", "b"], name: "Branch" }).catch(() => undefined);
+    await client.graphs.usedBy("g1");
     const [extractCall, usedByCall] = fetchMock.mock.calls;
     expect(extractCall[0]).toBe("http://x/api/graphs/g1/extract-subgraph");
     expect(JSON.parse(extractCall[1].body)).toEqual({ draft: { id: "g1" }, node_ids: ["a", "b"], name: "Branch" });

@@ -38,8 +38,8 @@ describe("large-graph client", () => {
 
   it("POSTs the draft to health and impact routes", async () => {
     const client = createAgentGraphClient({ baseUrl: "http://x" });
-    await client.getGraphHealth("g1", { id: "g1" } as never).catch(() => undefined);
-    await client.getNodeImpact("g1", "a b", { id: "g1" } as never).catch(() => undefined);
+    await client.graphs.health("g1", { id: "g1" } as never).catch(() => undefined);
+    await client.graphs.impact("g1", { nodeId: "a b", draft: { id: "g1" } as never }).catch(() => undefined);
     expect(fetchMock.mock.calls.map((c) => [c[0], c[1].method, JSON.parse(c[1].body).id])).toEqual([
       ["http://x/api/graphs/g1/health", "POST", "g1"],
       ["http://x/api/graphs/g1/nodes/a%20b/impact", "POST", "g1"],

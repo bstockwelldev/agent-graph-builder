@@ -2,7 +2,7 @@ export * from "./types.js";
 export * from "./schema.js";
 export * from "./schemas.js";
 export * from "./bindings.js";
-export { createAgentGraphClient, streamRunEvents } from "./client.js";
+export { createAgentGraphClient } from "./client.js";
 // SDK 1/7: transport options and typed errors.
 export {
   AgentGraphApiError,
@@ -14,8 +14,8 @@ export {
   isAgentGraphApiError,
 } from "./errors.js";
 export { path as apiPath, query as apiQuery } from "./transport.js";
-export type { HeadersSource, RequestContext, RequestOptions, ResponseContext, RetryOptions, TransportOptions } from "./transport.js";
-export type { AgentGraphClient, AgentGraphClientOptions, DeprecatedClientMethods, RunHandle, RunsClient, StartRunRequest, VersionSkew } from "./client.js";
+export type { HeadersInput, HeadersSource, RequestContext, RequestOptions, ResponseContext, RetryOptions, TransportOptions } from "./transport.js";
+export type { AgentGraphClient, AgentGraphClientOptions, RunHandle, StartRunRequest, VersionSkew } from "./client.js";
 // SDK 4/7: namespaced API request objects and cursor pagination.
 export type {
   AgentGraphNamespaces,

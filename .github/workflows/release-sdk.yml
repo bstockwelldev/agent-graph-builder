@@ -1,0 +1,92 @@
+name: Release SDK
+
+# SDK 7/7 (STO-619): publishes @bstockwelldev/agent-graph-sdk to npm with
+# provenance, tags the release, and deploys the typedoc site to Pages.
+# Manual on purpose -- a publish can't be undone. Version first with
+# `pnpm changeset version` (merged to master), then run this workflow.
+# Needs the NPM_TOKEN repository secret, and Pages set to "GitHub Actions".
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: release-sdk
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the release tag
+      id-token: write # npm provenance
+    defaults:
+      run:
+        working-directory: packages/agent-graph-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build, test and check the package
+        run: |
+          pnpm run build
+          pnpm run typecheck
+          pnpm run test
+          pnpm run check
+      - name: Skip if this version is already on npm
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "@bstockwelldev/agent-graph-sdk@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@bstockwelldev/agent-graph-sdk@$VERSION is already published; nothing to do."
+          fi
+      - name: Publish to npm (with provenance)
+        if: steps.version.outputs.published != 'true'
+        run: npm publish --provenance --access public
+        env:
+          # setup-node's npmrc reads NODE_AUTH_TOKEN; the repo's .npmrc reads NPM_TOKEN.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Tag the release
+        if: steps.version.outputs.published != 'true'
+        run: |
+          TAG="agent-graph-sdk@${{ steps.version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+  docs:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @bstockwelldev/agent-graph-sdk run docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/agent-graph-sdk/docs-site
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -10,10 +10,12 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": [
-      "ES2022",
-      "DOM"
+      "ES2022"
     ],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src"

@@ -149,7 +149,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(session));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.sendChatMessage("chat1", "hi");
+    const result = await client.chatSessions.send("chat1", { content: "hi" });
 
     expect(result).toEqual(session);
     const [url, init] = fetchMock.mock.calls[0];
@@ -183,7 +183,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ deleted: true }));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.deleteGraph("graph1");
+    const result = await client.graphs.delete("graph1");
 
     expect(result).toEqual({ deleted: true });
     const [url, init] = fetchMock.mock.calls[0];
@@ -195,7 +195,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ run_id: "run1", graph_id: "graph1", status: "succeeded" }));
 
     const client = createAgentGraphClient({ baseUrl });
-    await client.resumeRun("run1", false, "not today");
+    await client.runs.resume("run1", { approve: false, reason: "not today" });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${baseUrl}/api/runs/run1/resume`);
@@ -207,7 +207,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(runs));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.listAllRuns();
+    const result = await client.runs.list();
 
     expect(result).toEqual(runs);
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/runs`, expect.objectContaining({}));
@@ -231,7 +231,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(payload));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.getAnalytics();
+    const result = await client.analytics.dashboard();
 
     expect(result).toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/analytics`, expect.objectContaining({}));
@@ -272,7 +272,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     };
     fetchMock.mockResolvedValueOnce(jsonResponse(payload));
 
-    const result = await createAgentGraphClient({ baseUrl }).getGraphAnalytics("g1", 25);
+    const result = await createAgentGraphClient({ baseUrl }).analytics.graph("g1", { window: 25 });
 
     expect(result).toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/graphs/g1/analytics?window=25`, expect.objectContaining({}));
@@ -284,7 +284,7 @@ describe("createAgentGraphClient resource CRUD", () => {
     ];
     fetchMock.mockResolvedValueOnce(jsonResponse(payload));
 
-    const result = await createAgentGraphClient({ baseUrl }).getNodeHistory("g1", "llm_1");
+    const result = await createAgentGraphClient({ baseUrl }).analytics.nodeHistory("g1", "llm_1");
 
     expect(result).toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/graphs/g1/nodes/llm_1/history`, expect.objectContaining({}));
@@ -339,7 +339,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ release, created: true }));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.publishRelease("g1", "first release", "me");
+    const result = await client.releases.publish("g1", { notes: "first release", author: "me" });
 
     expect(result).toEqual({ release, created: true });
     const [url, init] = fetchMock.mock.calls[0];
@@ -360,7 +360,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(index));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.listReleases("g1");
+    const result = await client.releases.list("g1");
 
     expect(result).toEqual(index);
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/graphs/g1/releases`, expect.objectContaining({}));
@@ -370,7 +370,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(release));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.getRelease("g1", "rel_1");
+    const result = await client.releases.get("g1", "rel_1");
 
     expect(result).toEqual(release);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -384,7 +384,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(compileResult));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.compileRelease("rel_1");
+    const result = await client.releases.compile("rel_1");
 
     expect(result).toEqual(compileResult);
     const [url, init] = fetchMock.mock.calls[0];
@@ -397,7 +397,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(run));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.startReleaseRun("rel_1", { question: "hi" }, "stub", "m1", "key1");
+    const { run: result } = await client.releases.run("rel_1", { input: { question: "hi" }, provider: "stub", model: "m1", apiKey: "key1" });
 
     expect(result).toEqual(run);
     const [url, init] = fetchMock.mock.calls[0];
@@ -415,7 +415,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(matrix));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.getRuntimeTargetCapabilities("langgraph");
+    const result = await client.runtimeTargets.capabilities("langgraph");
 
     expect(result).toEqual(matrix);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -438,7 +438,7 @@ describe("createAgentGraphClient releases", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(snapshot));
 
     const client = createAgentGraphClient({ baseUrl });
-    const result = await client.getRunGraphSnapshot("run_1");
+    const result = await client.runs.snapshot("run_1");
 
     expect(result).toEqual(snapshot);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -477,7 +477,7 @@ describe("createAgentGraphClient response validation", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ id: "g1", name: "Untitled" }));
 
     const client = createAgentGraphClient({ baseUrl });
-    await expect(client.getGraph("g1")).rejects.toThrow(/unexpected shape/);
+    await expect(client.graphs.get("g1")).rejects.toThrow(/unexpected shape/);
   });
 
   it("getRun rejects a RunSummary response with the wrong status enum", async () => {
@@ -486,7 +486,7 @@ describe("createAgentGraphClient response validation", () => {
     );
 
     const client = createAgentGraphClient({ baseUrl });
-    await expect(client.getRun("run1")).rejects.toThrow(/unexpected shape/);
+    await expect(client.runs.get("run1")).rejects.toThrow(/unexpected shape/);
   });
 
   it("compileGraph rejects a CompileResult response whose diagnostics aren't an array", async () => {
@@ -495,14 +495,14 @@ describe("createAgentGraphClient response validation", () => {
     );
 
     const client = createAgentGraphClient({ baseUrl });
-    await expect(client.compileGraph("g1")).rejects.toThrow(/unexpected shape/);
+    await expect(client.graphs.compile("g1")).rejects.toThrow(/unexpected shape/);
   });
 
   it("getAnalytics rejects a response missing the totals object", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ daily: [], by_graph: [] }));
 
     const client = createAgentGraphClient({ baseUrl });
-    await expect(client.getAnalytics()).rejects.toThrow(/unexpected shape/);
+    await expect(client.analytics.dashboard()).rejects.toThrow(/unexpected shape/);
   });
 
   it("prompts.get rejects a PromptTemplate response missing body", async () => {
@@ -533,7 +533,7 @@ describe("createAgentGraphClient response validation", () => {
     );
 
     const client = createAgentGraphClient({ baseUrl });
-    await expect(client.sendChatMessage("chat1", "hi")).rejects.toThrow(/unexpected shape/);
+    await expect(client.chatSessions.send("chat1", { content: "hi" })).rejects.toThrow(/unexpected shape/);
   });
 });
 
@@ -573,7 +573,7 @@ describe("createAgentGraphClient knowledge base", () => {
   it("getKnowledge fetches GET /api/graphs/{id}/knowledge", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ graphId: "g1", ...summary }));
 
-    const result = await createAgentGraphClient({ baseUrl }).getKnowledge("g1");
+    const result = await createAgentGraphClient({ baseUrl }).knowledge.get("g1");
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${baseUrl}/api/graphs/g1/knowledge`);
     expect(result.documents).toHaveLength(1);
@@ -584,7 +584,7 @@ describe("createAgentGraphClient knowledge base", () => {
       jsonResponse({ graphId: "g1", documents: [], chunkCount: 0, embeddingProvider: null, embeddingModelId: null }),
     );
 
-    const result = await createAgentGraphClient({ baseUrl }).getKnowledge("g1");
+    const result = await createAgentGraphClient({ baseUrl }).knowledge.get("g1");
 
     expect(result.embeddingProvider).toBeNull();
   });
@@ -593,7 +593,7 @@ describe("createAgentGraphClient knowledge base", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, documentId: "d1", addedChunkCount: 2, ...summary }));
     const file = new File(["hello"], "notes.md", { type: "text/markdown" });
 
-    const result = await createAgentGraphClient({ baseUrl }).uploadKnowledgeDocument("g1", file);
+    const result = await createAgentGraphClient({ baseUrl }).knowledge.upload("g1", file);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${baseUrl}/api/graphs/g1/knowledge`);
@@ -610,7 +610,7 @@ describe("createAgentGraphClient knowledge base", () => {
       jsonResponse({ ok: true, documents: [], chunkCount: 0, embeddingProvider: null, embeddingModelId: null }),
     );
 
-    const result = await createAgentGraphClient({ baseUrl }).deleteKnowledgeDocument("g1", "d1");
+    const result = await createAgentGraphClient({ baseUrl }).knowledge.delete("g1", "d1");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${baseUrl}/api/graphs/g1/knowledge/d1`);
@@ -621,7 +621,7 @@ describe("createAgentGraphClient knowledge base", () => {
   it("getKnowledge rejects a response missing the documents array", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ graphId: "g1", chunkCount: 0 }));
 
-    await expect(createAgentGraphClient({ baseUrl }).getKnowledge("g1")).rejects.toThrow(/unexpected shape/);
+    await expect(createAgentGraphClient({ baseUrl }).knowledge.get("g1")).rejects.toThrow(/unexpected shape/);
   });
 });
 
@@ -683,7 +683,7 @@ describe("createAgentGraphClient datasets", () => {
   it("createDatasetFromRuns maps camelCase options to the snake_case request", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(dataset));
 
-    const result = await createAgentGraphClient({ baseUrl }).createDatasetFromRuns({
+    const result = await createAgentGraphClient({ baseUrl }).datasets.fromRuns({
       name: "Captured",
       runIds: ["r1", "r2"],
       includeNodeOutputs: false,
@@ -703,7 +703,7 @@ describe("createAgentGraphClient datasets", () => {
   it("createDatasetFromRuns freezes node outputs by default", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(dataset));
 
-    await createAgentGraphClient({ baseUrl }).createDatasetFromRuns({ name: "X", runIds: ["r1"] });
+    await createAgentGraphClient({ baseUrl }).datasets.fromRuns({ name: "X", runIds: ["r1"] });
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string).include_node_outputs).toBe(true);

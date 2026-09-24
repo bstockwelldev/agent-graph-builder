@@ -42,3 +42,32 @@ jobs:
         run: pnpm run test
       - name: Build
         run: pnpm run build
+
+  sdk-package:
+    # SDK 7/7 (STO-619): what npm would publish -- tests type-check, the
+    # entry points' types resolve (node16 without DOM, node16 + DOM,
+    # bundler), the pack has exactly the right files, bundles stay within
+    # budget, and the API reference builds without warnings.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/agent-graph-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Typecheck (sources and tests)
+        run: pnpm run typecheck
+      - name: Package checks (types, pack, size)
+        run: pnpm run check
+      - name: API reference
+        run: pnpm run docs

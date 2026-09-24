@@ -14,7 +14,11 @@ import {
  * and typed errors. Every client method goes through `Transport.request`.
  */
 
-export type HeadersSource = HeadersInit | (() => HeadersInit | Promise<HeadersInit>);
+/** Anything `new Headers()` accepts. Derived from the runtime's own
+ * `Headers` (DOM lib or @types/node), so the SDK needs neither. */
+export type HeadersInput = ConstructorParameters<typeof Headers>[0];
+
+export type HeadersSource = HeadersInput | (() => HeadersInput | Promise<HeadersInput>);
 
 export type RetryOptions = {
   /** Extra attempts after the first (default 2). */
@@ -59,11 +63,11 @@ export type TransportOptions = {
 export type RequestOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
-  headers?: HeadersInit;
+  headers?: HeadersInput;
   retry?: RetryOptions | false;
 };
 
-type RequestInitLike = Omit<RequestInit, "headers" | "signal"> & { headers?: HeadersInit; signal?: AbortSignal | null };
+type RequestInitLike = Omit<RequestInit, "headers" | "signal"> & { headers?: HeadersInput; signal?: AbortSignal | null };
 
 export const API_VERSION_HEADER = "X-AGB-API-Version";
 const IDEMPOTENT = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -100,7 +104,7 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
     const retry = resolveRetry(scoped.retry ?? options.retry, method);
     const timeoutMs = scoped.timeoutMs ?? options.timeoutMs;
     const callerSignal = anySignal([scoped.signal, init.signal ?? undefined]);
-    const fetchImpl = options.fetch ?? ((input: RequestInfo | URL, reqInit?: RequestInit) => fetch(input, reqInit));
+    const fetchImpl = options.fetch ?? ((input: Parameters<typeof fetch>[0], reqInit?: RequestInit) => fetch(input, reqInit));
 
     for (let attempt = 1; ; attempt += 1) {
       throwIfAborted(callerSignal);
@@ -159,7 +163,7 @@ export function createTransport(options: TransportOptions = {}, scoped: RequestO
     const method = (init.method ?? "GET").toUpperCase();
     const url = `${baseUrl}${path}`;
     const signal = anySignal([scoped.signal, init.signal ?? undefined]);
-    const fetchImpl = options.fetch ?? ((input: RequestInfo | URL, reqInit?: RequestInit) => fetch(input, reqInit));
+    const fetchImpl = options.fetch ?? ((input: Parameters<typeof fetch>[0], reqInit?: RequestInit) => fetch(input, reqInit));
     const headers = new Headers(await resolveHeaders(options.headers));
     mergeHeaders(headers, scoped.headers);
     mergeHeaders(headers, init.headers);
@@ -230,16 +234,16 @@ function backoff(retry: Required<RetryOptions>, attempt: number, retryAfter: str
   return Math.random() * ceiling;
 }
 
-async function resolveHeaders(source: HeadersSource | undefined): Promise<HeadersInit | undefined> {
+async function resolveHeaders(source: HeadersSource | undefined): Promise<HeadersInput | undefined> {
   return typeof source === "function" ? await source() : source;
 }
 
-function mergeHeaders(target: Headers, source: HeadersInit | undefined): void {
+function mergeHeaders(target: Headers, source: HeadersInput | undefined): void {
   if (!source) return;
   new Headers(source).forEach((value, key) => target.set(key, value));
 }
 
-function combineHeaders(a: HeadersInit | undefined, b: HeadersInit | undefined): HeadersInit | undefined {
+function combineHeaders(a: HeadersInput | undefined, b: HeadersInput | undefined): HeadersInput | undefined {
   if (!a) return b;
   if (!b) return a;
   const merged = new Headers(a);

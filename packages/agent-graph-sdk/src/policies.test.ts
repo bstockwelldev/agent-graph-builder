@@ -47,7 +47,7 @@ describe("policy client", () => {
 
   it("saveGraphPolicies PUTs only the rules", async () => {
     fetchMock.mockResolvedValueOnce(json({ rules: {}, updated_at: "t" }));
-    await createAgentGraphClient({ baseUrl }).saveGraphPolicies("g1", { rules: { A: { enforcement: "off", params: {} } } });
+    await createAgentGraphClient({ baseUrl }).policies.graph.save("g1", { rules: { A: { enforcement: "off", params: {} } } });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${baseUrl}/api/graphs/g1/policies`);
     expect(init.method).toBe("PUT");
@@ -57,19 +57,19 @@ describe("policy client", () => {
   it("getEffectivePolicies picks the workspace or graph route", async () => {
     fetchMock.mockResolvedValue(json([]));
     const client = createAgentGraphClient({ baseUrl });
-    await client.getEffectivePolicies();
-    await client.getEffectivePolicies("g1");
+    await client.policies.effective();
+    await client.policies.effective({ graphId: "g1" });
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
       `${baseUrl}/api/policies/effective`,
       `${baseUrl}/api/graphs/g1/policies/effective`,
     ]);
   });
 
-  it("updatePolicyException PATCHes the expiry", async () => {
+  it("policies.exceptions.update PATCHes the expiry", async () => {
     fetchMock.mockResolvedValueOnce(
       json({ id: "pexc_1", graph_id: "g1", policy_code: "P", created_at: "a", expires_at: "2099-01-01T00:00:00Z" }),
     );
-    const result = await createAgentGraphClient({ baseUrl }).updatePolicyException("g1", "pexc_1", "2099-01-01T00:00:00Z");
+    const result = await createAgentGraphClient({ baseUrl }).policies.exceptions.update("g1", "pexc_1", { expiresAt: "2099-01-01T00:00:00Z" });
     expect(result.expires_at).toBe("2099-01-01T00:00:00Z");
     expect(fetchMock.mock.calls[0][1].method).toBe("PATCH");
   });
