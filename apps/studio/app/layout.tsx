@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { StudioDataProvider } from "@/components/studio/StudioDataProvider";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { WorkbenchProvider } from "@/components/workbench/WorkbenchProvider";
 
@@ -18,9 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body>
-        <WorkbenchProvider>
-          <StudioShell>{children}</StudioShell>
-        </WorkbenchProvider>
+        <StudioDataProvider>
+          <WorkbenchProvider>
+            <StudioShell>{children}</StudioShell>
+          </WorkbenchProvider>
+        </StudioDataProvider>
       </body>
     </html>
   );

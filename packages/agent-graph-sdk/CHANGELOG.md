@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **`@bstockwelldev/agent-graph-sdk/react`** (SDK 6/7, STO-618): TanStack Query hooks. `react` 18+ and `@tanstack/react-query` v5 are optional peer dependencies.
+  - `AgentGraphProvider` and `useAgentGraphClient`.
+  - Hooks: `useGraphs`, `useGraph`, `useRuns`, `useRun` (live over `runs.stream`), `useReleases`, `useGraphHealth`, `useNodeImpact`, `usePolicies`, `useResources`.
+  - Cache control: `agentGraphKeys`, `agentGraphInvalidation`, `useAgentGraphInvalidation`.
+
 - **`@bstockwelldev/agent-graph-sdk/graph`** (SDK 5/7, STO-620): pure graph helpers with no network or DOM.
   - Immutable edits: `addNode`, `connect`, `removeNode`, `setConfig`, `relabel`, `nextId`.
   - Traversal: `upstream`, `downstream`, `reachableFrom`, `hasCycle`, `computeFocusNodeIds`.

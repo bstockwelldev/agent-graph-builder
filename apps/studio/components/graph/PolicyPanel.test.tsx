@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetClientMock } from "@/lib/mockClient";
 
 import { PolicyPanel } from "./PolicyPanel";
+import { agentGraphWrapper } from "@/lib/agentGraphTestWrapper";
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
@@ -64,7 +65,7 @@ describe("PolicyPanel", () => {
   it("shows inherited enforcement and saves an override, then re-validates", async () => {
     const onPoliciesChanged = vi.fn();
     clientMock.policies.graph.save.mockResolvedValue({ rules: {} });
-    render(<PolicyPanel graphId="g1" onPoliciesChanged={onPoliciesChanged} />);
+    render(<PolicyPanel graphId="g1" onPoliciesChanged={onPoliciesChanged} />, { wrapper: agentGraphWrapper(clientMock) });
 
     const trigger = await screen.findByRole("combobox", { name: "Too many model nodes enforcement" });
     expect(trigger.textContent).toContain("Inherit (Block publish)");
@@ -85,7 +86,7 @@ describe("PolicyPanel", () => {
 
   it("lists exceptions expiring first and extends one by 30 days", async () => {
     clientMock.policies.exceptions.update.mockResolvedValue(exception("pexc_soon", 33));
-    render(<PolicyPanel graphId="g1" />);
+    render(<PolicyPanel graphId="g1" />, { wrapper: agentGraphWrapper(clientMock) });
 
     const rows = await screen.findAllByTestId("policy-exception");
     expect(within(rows[0]).getByText("Expiring soon")).toBeTruthy();
@@ -103,7 +104,7 @@ describe("PolicyPanel", () => {
 
   it("revokes only after confirmation", async () => {
     clientMock.policies.exceptions.delete.mockResolvedValue({ deleted: true });
-    render(<PolicyPanel graphId="g1" />);
+    render(<PolicyPanel graphId="g1" />, { wrapper: agentGraphWrapper(clientMock) });
     const [first] = await screen.findAllByTestId("policy-exception");
     fireEvent.click(within(first).getByRole("button", { name: /Revoke/ }));
     expect(clientMock.policies.exceptions.delete).not.toHaveBeenCalled();
