@@ -10,6 +10,8 @@ does not apply to this slice.
 
 from __future__ import annotations
 
+from collections import Counter
+
 from . import storage, subgraphs
 from .bindings import node_bindings
 from .builtin_tools import BUILTIN_TOOL_IDS
@@ -29,6 +31,35 @@ def validate_graph(
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     node_ids = {n.id for n in graph.nodes}
+
+    # Duplicate ids: everything below (adjacency maps, LangGraph add_node,
+    # release snapshot resolution, Studio's canvas) keys nodes and edges by
+    # id, so a repeated id silently collapses or repeats work. One
+    # diagnostic per duplicated id, not one per copy.
+    for node_id, count in Counter(n.id for n in graph.nodes).items():
+        if count > 1:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="GRAPH_DUPLICATE_NODE_ID",
+                    category="structure",
+                    node_id=node_id,
+                    message=f"Node id {node_id!r} is used by {count} nodes; ids must be unique",
+                    blocking=True,
+                )
+            )
+    for edge_id, count in Counter(e.id for e in graph.edges).items():
+        if count > 1:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="GRAPH_DUPLICATE_EDGE_ID",
+                    category="structure",
+                    edge_id=edge_id,
+                    message=f"Edge id {edge_id!r} is used by {count} edges; ids must be unique",
+                    blocking=True,
+                )
+            )
 
     if graph.entry_node_id not in node_ids:
         diagnostics.append(
