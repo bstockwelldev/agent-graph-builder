@@ -282,3 +282,13 @@ def test_supabase_graph_catalog_reads_once_and_rebuilds_when_missing(monkeypatch
     assert storage.delete_graph("g_parent") is True
     assert subgraphs.used_by("g_child") == []
     assert storage.rebuild_graph_catalog() == 2
+
+
+def test_secret_key_sent_on_apikey_header_only(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_testkey")
+    assert supabase_store._headers() == {"apikey": "sb_secret_testkey"}
+
+
+def test_legacy_jwt_key_keeps_bearer_header(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJlegacy")
+    assert supabase_store._headers() == {"Authorization": "Bearer eyJlegacy", "apikey": "eyJlegacy"}
