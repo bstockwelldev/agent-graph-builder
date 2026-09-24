@@ -20,6 +20,8 @@ import {
   effectivePolicyRuleSchema,
   graphHealthSchema,
   nodeImpactSchema,
+  subgraphExtractResponseSchema,
+  graphUsedBySchema,
   policyExceptionSchema,
   policyRuleInfoSchema,
   policySettingsSchema,
@@ -69,6 +71,8 @@ import type {
   EffectivePolicyRule,
   GraphHealth,
   NodeImpact,
+  SubgraphExtractResponse,
+  GraphUsedBy,
   PolicyException,
   PolicyRuleInfo,
   PolicySettings,
@@ -391,6 +395,18 @@ export function createAgentGraphClient(options: AgentGraphClientOptions = {}) {
         { method: "POST", body: JSON.stringify(draft) },
         nodeImpactSchema,
       ),
+    /** Wave 7c (STO-612): move a connected selection into a new saved graph;
+     * returns it plus the parent with a subgraph node in its place (unsaved). */
+    extractSubgraph: (graphId: string, draft: GraphDefinition, request: { node_ids: string[]; name: string }) =>
+      jsonFetch<SubgraphExtractResponse>(
+        baseUrl,
+        `/api/graphs/${graphId}/extract-subgraph`,
+        { method: "POST", body: JSON.stringify({ draft, ...request }) },
+        subgraphExtractResponseSchema,
+      ),
+    /** Wave 7c: saved graphs whose subgraph nodes reference `graphId`. */
+    getGraphUsedBy: (graphId: string) =>
+      jsonFetch<GraphUsedBy>(baseUrl, `/api/graphs/${graphId}/used-by`, undefined, graphUsedBySchema),
     /** STO-609: diff from a release to a draft graph (e.g. the live canvas, unsaved edits included). */
     compareDraftToRelease: (releaseId: string, draft: GraphDefinition) =>
       jsonFetch<ReleaseDiff>(

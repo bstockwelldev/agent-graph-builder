@@ -115,6 +115,7 @@ _DEFAULT_PORT_CATALOG: dict[NodeType, dict[str, list[GraphPort]]] = {
     NodeType.HUMAN_GATE: _single_io(PortKind.APPROVAL, PortKind.APPROVAL),
     NodeType.TOOL_LOOP: _single_io(PortKind.MESSAGE, PortKind.MESSAGE),
     NodeType.CODE_EXEC: _single_io(PortKind.STRUCTURED_JSON, PortKind.ARTIFACT),
+    NodeType.SUBGRAPH: _single_io(PortKind.MESSAGE, PortKind.MESSAGE),
     # Slice B: passthrough (default) + decision output ports, same as ROUTER.
     NodeType.BRANCH: _router_like_io(PortKind.MESSAGE),
 }

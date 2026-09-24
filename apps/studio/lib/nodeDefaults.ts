@@ -36,6 +36,8 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { content: "Describe what this step should produce.", codeExecLanguage: "python" };
     case "human_gate":
       return { content: "Review and approve to continue." };
+    case "subgraph":
+      return { graphId: "", version: "latest" };
   }
 }
 
@@ -88,6 +90,13 @@ export function templateVariables(template: string): string[] {
 
 /** Wave 4a: a library-bound prompt/LLM/tool-loop node's title is its
  * resource's name (null when the node isn't bound). */
+/** Wave 7c: "latest release" / "draft" / a pinned release id. */
+export function versionLabel(version: unknown): string {
+  if (version === "draft") return "draft";
+  if (typeof version === "string" && version && version !== "latest") return version;
+  return "latest release";
+}
+
 export function boundTitleFor(
   type: NodeType,
   config: Record<string, unknown>,
@@ -95,6 +104,7 @@ export function boundTitleFor(
 ): string | null {
   if (type === "prompt") return boundResourceName(config, "promptId", "prompts", names);
   if (type === "llm" || type === "tool_loop") return boundResourceName(config, "llmProfileId", "llm_profiles", names);
+  if (type === "subgraph") return boundResourceName(config, "graphId", "graphs", names);
   return null;
 }
 
@@ -141,6 +151,12 @@ export function summaryFor(type: NodeType, config: Record<string, unknown>, cont
     case "code_exec":
     case "human_gate":
       return snippet(config.content);
+    case "subgraph": {
+      const version = versionLabel(config.version);
+      const graphId = boundId(config, "graphId");
+      if (!graphId) return "Pick a graph";
+      return hasUserLabel ? `${resourceNames?.[`graphs:${graphId}`] ?? graphId} · ${version}` : version;
+    }
   }
 }
 
@@ -194,5 +210,7 @@ export function labelFor(type: NodeType, config: Record<string, unknown>): strin
       return String(config.codeExecLanguage ?? "code exec");
     case "human_gate":
       return "human gate";
+    case "subgraph":
+      return String(boundId(config, "graphId") ?? "subgraph");
   }
 }

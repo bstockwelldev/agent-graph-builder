@@ -13,7 +13,7 @@ import copy
 from typing import Any
 from uuid import uuid4
 
-from . import storage
+from . import storage, subgraphs
 from .bindings import node_bindings
 from .compiler import validate_graph
 from .events import now_iso
@@ -74,6 +74,38 @@ def resolve_resource_snapshots(
                 _snapshot_tool_server(
                     node.id, binding.resource_id, resource, snapshots, diagnostics
                 )
+
+    # Wave 7c (STO-612): freeze the exact child release each subgraph node
+    # resolves to, so a release run keeps running that child even after it
+    # publishes again. A draft or never-published child can't be frozen.
+    for node in subgraphs.subgraph_nodes(graph):
+        child_release = subgraphs.release_for(node)
+        if child_release is None:
+            child = storage.get_graph(subgraphs.target_graph_id(node))
+            child_name = child.name if child else subgraphs.target_graph_id(node)
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    category="capability",
+                    code="RELEASE_SUBGRAPH_UNPUBLISHED",
+                    node_id=node.id,
+                    message=(
+                        f"Subgraph node {node.id!r} uses the draft of {child_name!r}. "
+                        f"Publish {child_name!r} first"
+                        + (
+                            " and pick a release."
+                            if subgraphs.target_version(node) == "draft"
+                            else "."
+                        )
+                    ),
+                    blocking=True,
+                )
+            )
+            continue
+        snapshots[subgraphs.snapshot_key(node.id)] = {
+            "graph_id": child_release.graph_id,
+            "release_id": child_release.id,
+        }
 
     knowledge = storage.get_resource("knowledge", graph.id)
     if knowledge is not None:

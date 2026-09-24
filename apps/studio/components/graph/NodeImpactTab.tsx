@@ -6,6 +6,7 @@ import type { BindableResourceKind, GraphDefinition, NodeImpact } from "@bstockw
 import { client } from "@/lib/api-client";
 import { color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { relativeTime } from "@/lib/nodeMetrics";
+import { versionLabel } from "@/lib/nodeDefaults";
 import { SkeletonBlock } from "./ui/Skeleton";
 
 /**
@@ -86,6 +87,15 @@ export function NodeImpactTab({
           {impact.downstream.map((id) => (
             <NodeLink key={id} id={id} onSelect={onSelectNode} />
           ))}
+        </Section>
+      )}
+
+      {impact.uses_graph && (
+        <Section title="Uses graph">
+          <a href={`/graphs/${encodeURIComponent(impact.uses_graph.graph_id)}`} className="agb-focus-ring agb-hoverable" style={{ ...linkStyle, textDecoration: "none" }}>
+            {impact.uses_graph.name ?? impact.uses_graph.graph_id}
+            <span style={{ color: text.secondary }}> · {versionLabel(impact.uses_graph.version)}</span>
+          </a>
         </Section>
       )}
 

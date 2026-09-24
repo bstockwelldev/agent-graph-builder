@@ -41,6 +41,9 @@ class NodeType(StrEnum):
     TOOL_LOOP = "tool_loop"
     CODE_EXEC = "code_exec"
     BRANCH = "branch"
+    # Large-graph complexity, Wave 7c (STO-612): runs another saved graph
+    # as a nested run (subgraphs.py, nodes.py compute_subgraph).
+    SUBGRAPH = "subgraph"
 
 
 class EdgeKind(StrEnum):
@@ -325,6 +328,9 @@ class RunSummary(BaseModel):
     source: Literal["release", "draft_snapshot"] | None = None
     runtime_target: Literal["langgraph"] | None = None
     compiler_version: str | None = None
+    # Wave 7c: set on a subgraph node's nested child run.
+    parent_run_id: str | None = None
+    parent_node_id: str | None = None
 
 
 # P0 graph foundation, Slice D (design doc, "Persistence and API" +

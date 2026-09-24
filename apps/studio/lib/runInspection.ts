@@ -22,6 +22,7 @@ const NODE_TYPES: NodeType[] = [
   "tool_loop",
   "code_exec",
   "human_gate",
+  "subgraph",
 ];
 
 function nodeTypeFromEvent(event: PlatformEvent, fallback?: NodeType): NodeType {

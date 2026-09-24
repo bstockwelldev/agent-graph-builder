@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from . import runtime, storage
+from . import runtime, storage, subgraphs
 from .adapters import get_adapter
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .bindings import resource_usages
@@ -304,6 +304,47 @@ def node_impact_endpoint(graph_id: str, node_id: str, draft: GraphDefinition) ->
         return compute_node_impact(draft, node_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="node not found in draft") from exc
+
+
+class ExtractSubgraphRequest(BaseModel):
+    draft: GraphDefinition
+    node_ids: list[str]
+    name: str
+
+
+class ExtractSubgraphResponse(BaseModel):
+    child_graph: GraphDefinition
+    proposed_parent: GraphDefinition
+
+
+class GraphUsage(BaseModel):
+    graph_id: str
+    name: str
+    node_ids: list[str]
+
+
+@app.post("/api/graphs/{graph_id}/extract-subgraph")
+def extract_subgraph_endpoint(
+    graph_id: str, body: ExtractSubgraphRequest
+) -> ExtractSubgraphResponse:
+    """Wave 7c (STO-612): move a connected selection into a new saved graph
+    and return the parent as it would look with a subgraph node in its
+    place. The parent isn't saved -- Studio applies it as one undoable edit."""
+    _require_draft(graph_id, body.draft)
+    try:
+        child, proposed = subgraphs.extract_subgraph(body.draft, body.node_ids, body.name)
+    except subgraphs.ExtractError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    storage.save_graph(child)
+    return ExtractSubgraphResponse(child_graph=child, proposed_parent=proposed)
+
+
+@app.get("/api/graphs/{graph_id}/used-by")
+def graph_used_by_endpoint(graph_id: str) -> list[GraphUsage]:
+    """Wave 7c: saved graphs whose subgraph nodes reference this graph."""
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return [GraphUsage.model_validate(usage) for usage in subgraphs.used_by(graph_id)]
 
 
 @app.post("/api/graph-releases/{release_id}/compare-draft")

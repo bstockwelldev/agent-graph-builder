@@ -10,7 +10,7 @@ does not apply to this slice.
 
 from __future__ import annotations
 
-from . import storage
+from . import storage, subgraphs
 from .bindings import node_bindings
 from .builtin_tools import BUILTIN_TOOL_IDS
 from .contracts import validate_contracts
@@ -241,6 +241,11 @@ def validate_graph(
                 )
             )
 
+    # Graph-as-node subgraphs (Wave 7c, STO-612): the referenced graph /
+    # release must exist, references can't loop or nest past MAX_DEPTH, and
+    # a mapping key the child doesn't take is flagged (non-blocking).
+    diagnostics.extend(_validate_subgraphs(graph))
+
     # Port/contract validation (P0 graph foundation, Slice B): port
     # existence/direction, contract-kind compatibility, transform validity,
     # required-input coverage, and unambiguous input binding. Structural
@@ -258,6 +263,69 @@ def validate_graph(
     # with active policy exceptions already applied. See policies.py.
     diagnostics.extend(evaluate_graph_policies(graph, gate=policy_gate))
 
+    return diagnostics
+
+
+def _validate_subgraphs(graph: GraphDefinition) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    problems = subgraphs.reference_problems(graph)
+    for node in subgraphs.subgraph_nodes(graph):
+        target = subgraphs.target_graph_id(node)
+        if not target:
+            continue  # NODE_CONFIG_INVALID already covers a missing graphId
+        child = storage.get_graph(target)
+        if child is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="SUBGRAPH_TARGET_MISSING",
+                    node_id=node.id,
+                    message=f"subgraph node {node.id!r}: graphId: graph {target!r} not found",
+                    blocking=True,
+                    remediation="Pick another graph.",
+                )
+            )
+            continue
+        version = subgraphs.target_version(node)
+        if version not in ("latest", "draft") and subgraphs.release_for(node) is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="SUBGRAPH_VERSION_MISSING",
+                    node_id=node.id,
+                    message=(
+                        f"subgraph node {node.id!r}: version: release {version!r} "
+                        f"of {child.name!r} not found"
+                    ),
+                    blocking=True,
+                )
+            )
+        if node.id in problems:
+            code, message = problems[node.id]
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code=code,
+                    node_id=node.id,
+                    message=message,
+                    blocking=True,
+                )
+            )
+        inputs = subgraphs.child_inputs(child)
+        for key in node.config.get("inputMapping") or {}:
+            if key not in inputs:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        code="SUBGRAPH_INPUT_UNKNOWN",
+                        node_id=node.id,
+                        message=(
+                            f"subgraph node {node.id!r}: inputMapping: {child.name!r} has no "
+                            f"input {key!r} (inputs: {', '.join(inputs)})"
+                        ),
+                        blocking=False,
+                    )
+                )
     return diagnostics
 
 

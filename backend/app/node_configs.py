@@ -95,6 +95,18 @@ class HumanGateConfig(BaseModel):
         return value
 
 
+class SubgraphConfig(BaseModel):
+    """Large-graph complexity, Wave 7c (STO-612): another saved graph run as
+    a nested run. ``version`` is ``latest`` (newest release, else the saved
+    draft), ``draft``, or a release id; ``inputMapping`` maps each child
+    input variable to a template over the parent's variables plus
+    ``{upstream}``."""
+
+    graphId: str = Field(min_length=1)
+    version: str = Field(default="latest", min_length=1)
+    inputMapping: dict[str, str] | None = None
+
+
 _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.GUARDRAIL: GuardrailConfig,
     NodeType.RUBRIC: RubricConfig,
@@ -102,6 +114,7 @@ _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.TOOL_LOOP: ToolLoopConfig,
     NodeType.CODE_EXEC: CodeExecConfig,
     NodeType.HUMAN_GATE: HumanGateConfig,
+    NodeType.SUBGRAPH: SubgraphConfig,
 }
 
 
