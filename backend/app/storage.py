@@ -499,6 +499,12 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
     remote = _json_object_backend()
     if remote is not None:
         remote.save_run_snapshot(summary, traces)
+        # After the full snapshot, so an index entry never points at a run
+        # whose blob failed to write.
+        remote.put_json(
+            _run_index_key(summary.graph_id, summary.run_id),
+            {"summary": summary.model_dump(mode="json", by_alias=True)},
+        )
         return
     result_json = json.dumps(summary.result) if summary.result is not None else None
     route_decisions_json = json.dumps(
@@ -567,15 +573,72 @@ def get_run(run_id: str) -> RunSummary | None:
     return _row_to_run_summary(row)
 
 
+# Object-store/Blob run listing. Run blobs live flat at ``runs/{run_id}.json``
+# (so get_run needs only the run id); ``run_index/{graph_id}/{run_id}.json``
+# holds a summary-only copy so per-graph listing reads just that graph's
+# runs. Both listings take the newest `limit` keys from list metadata and
+# read only those — the old list-then-read-every-blob shape exhausted the
+# Vercel Blob Hobby quota on 2026-09-24. Metadata order is upload time, so a
+# run re-persisted after a pause can rank by its later write; results are
+# re-sorted by started_at after the bounded read.
+_RUN_PREFIX = "runs/"
+_RUN_INDEX_PREFIX = "run_index/"
+
+
+def _run_index_key(graph_id: str, run_id: str) -> str:
+    return f"{_RUN_INDEX_PREFIX}{graph_id}/{run_id}.json"
+
+
+def _read_run_summaries(remote, keys: list[str]) -> list[RunSummary]:
+    runs: list[RunSummary] = []
+    for key in keys:
+        payload = remote.get_json(key)
+        if payload is None:
+            continue
+        runs.append(RunSummary.model_validate(payload["summary"]))
+    runs.sort(key=lambda item: item.started_at or "", reverse=True)
+    return runs
+
+
+def backfill_run_index() -> int:
+    """One-shot: writes ``run_index/`` entries for runs saved before the
+    index existed (they are otherwise missing from list_runs_for_graph).
+    Reads every run blob once — run it manually, never per request. Returns
+    the number of entries written; no-op on SQLite/Turso.
+    """
+    remote = _json_object_backend()
+    if remote is None:
+        return 0
+    summaries: dict[str, list[dict[str, Any]]] = {}
+    for key in remote.list_keys(_RUN_PREFIX):
+        payload = remote.get_json(key)
+        if payload is None:
+            continue
+        summary = payload["summary"]
+        summaries.setdefault(summary["graph_id"], []).append(summary)
+    written = 0
+    # Listed per graph folder: Supabase Storage's list is not recursive.
+    for graph_id, graph_summaries in summaries.items():
+        indexed = set(remote.list_keys(f"{_RUN_INDEX_PREFIX}{graph_id}/"))
+        for summary in graph_summaries:
+            key = _run_index_key(graph_id, summary["run_id"])
+            if key not in indexed:
+                remote.put_json(key, {"summary": summary})
+                written += 1
+    return written
+
+
 def list_all_runs(*, limit: int | None = 200) -> list[RunSummary]:
     """Cross-graph run history (studio-consolidation Phase 5 — see
-    docs/planning/features/studio-consolidation-plan.md). AGB had no
-    cross-graph run listing before this — Phase 4c's as-built notes flagged
-    it as "a candidate Phase 5+ backend addition." Composes `list_graphs()`
-    + `list_runs_for_graph()` rather than adding a fifth per-backend
-    function: same N+1-ish shape `list_runs_for_graph` itself already has
-    on the remote backends (list-then-filter), not a new inefficiency.
+    docs/planning/features/studio-consolidation-plan.md). On the remote
+    backends this reads at most `limit` run blobs (newest by list
+    metadata), not every run of every graph; `limit=None` (paged routes)
+    reads every run.
     """
+    remote = _json_object_backend()
+    if remote is not None:
+        keys = remote.list_keys(_RUN_PREFIX, newest_first=True, limit=limit)
+        return _read_run_summaries(remote, keys)
     runs: list[RunSummary] = []
     for graph in list_graphs():
         runs.extend(list_runs_for_graph(graph.id, limit=limit))
@@ -587,7 +650,8 @@ def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSum
     """Newest first; `limit=None` returns every run (paged routes)."""
     remote = _json_object_backend()
     if remote is not None:
-        return remote.list_runs_for_graph(graph_id, limit=limit)
+        keys = remote.list_keys(f"{_RUN_INDEX_PREFIX}{graph_id}/", newest_first=True, limit=limit)
+        return _read_run_summaries(remote, keys)
     with _connect() as conn:
         rows = conn.execute(
             """

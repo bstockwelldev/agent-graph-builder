@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from botocore.exceptions import ClientError
@@ -17,11 +18,16 @@ class FakeS3:
 
     def __init__(self, page_size: int | None = None) -> None:
         self.objects: dict[str, bytes] = {}
+        self.last_modified: dict[str, datetime] = {}
         self.page_size = page_size
 
     def put_object(self, *, Bucket: str, Key: str, Body, ContentType: str | None = None) -> dict:
         del Bucket, ContentType
         self.objects[Key] = Body if isinstance(Body, bytes) else str(Body).encode("utf-8")
+        # Monotonic write time so newest-first listing is deterministic.
+        self.last_modified[Key] = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(
+            seconds=len(self.last_modified)
+        )
         return {}
 
     def get_object(self, *, Bucket: str, Key: str) -> dict:
@@ -56,7 +62,7 @@ class FakeS3:
         next_index = start + len(chunk)
         truncated = next_index < len(keys)
         result: dict = {
-            "Contents": [{"Key": key} for key in chunk],
+            "Contents": [{"Key": key, "LastModified": self.last_modified[key]} for key in chunk],
             "IsTruncated": truncated,
         }
         if truncated:

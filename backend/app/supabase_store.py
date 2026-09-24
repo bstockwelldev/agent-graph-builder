@@ -5,8 +5,8 @@ docs/planning/features/studio-consolidation-plan.md). A peer of
 `put_json`/`get_json`/`delete_json`/`list_keys` contract, so it slots into
 `storage.py`'s existing `_json_object_backend()` dispatch with one added
 branch, and the same `save_graph`/`get_graph`/`list_graphs`/
-`save_run_snapshot`/`get_run`/`list_runs_for_graph`/`get_run_traces`
-surface `storage.py` already calls generically.
+`save_run_snapshot`/`get_run`/`get_run_traces` surface `storage.py`
+already calls generically (run listing is generic in `storage.py`).
 
 Uses Supabase's native Storage REST API (one JSON object per key in a
 bucket), not S3 compatibility mode or a Postgres table — the smallest
@@ -93,21 +93,30 @@ def delete_json(key: str) -> bool:
     return True
 
 
-def list_keys(prefix: str) -> list[str]:
+def list_keys(prefix: str, *, newest_first: bool = False, limit: int | None = None) -> list[str]:
+    """Lists ``.json`` keys under `prefix`. `newest_first` sorts server-side
+    by ``created_at`` desc, so paging stops as soon as `limit` keys are
+    found — callers then read only those objects.
+    """
     url = f"{_base_url()}/storage/v1/object/list/{_bucket()}"
+    sort_by = (
+        {"column": "created_at", "order": "desc"}
+        if newest_first
+        else {"column": "name", "order": "asc"}
+    )
     keys: list[str] = []
     offset = 0
-    limit = 1000
+    page_size = 1000
     with _http_client() as client:
-        while True:
+        while limit is None or len(keys) < limit:
             response = client.post(
                 url,
                 headers={**_headers(), "Content-Type": "application/json"},
                 json={
                     "prefix": prefix,
-                    "limit": limit,
+                    "limit": page_size,
                     "offset": offset,
-                    "sortBy": {"column": "name", "order": "asc"},
+                    "sortBy": sort_by,
                 },
             )
             response.raise_for_status()
@@ -118,10 +127,10 @@ def list_keys(prefix: str) -> list[str]:
                 name = item.get("name")
                 if isinstance(name, str) and name.endswith(".json"):
                     keys.append(f"{prefix}{name}")
-            if len(items) < limit:
+            if len(items) < page_size:
                 break
-            offset += limit
-    return keys
+            offset += page_size
+    return keys if limit is None else keys[:limit]
 
 
 def save_graph(graph: GraphDefinition) -> None:
@@ -174,19 +183,6 @@ def get_run(run_id: str) -> RunSummary | None:
     if payload is None:
         return None
     return _summary_from_blob(payload)
-
-
-def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSummary]:
-    runs: list[RunSummary] = []
-    for key in list_keys(_RUN_PREFIX):
-        payload = get_json(key)
-        if payload is None:
-            continue
-        summary = _summary_from_blob(payload)
-        if summary.graph_id == graph_id:
-            runs.append(summary)
-    runs.sort(key=lambda item: item.started_at or "", reverse=True)
-    return runs[:limit]
 
 
 def get_run_traces(run_id: str) -> list[NodeTrace]:
