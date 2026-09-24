@@ -59,12 +59,19 @@ import {
   isCoachVisible,
   isEditableKeyboardTarget,
 } from "@/lib/graphAuthoring";
-import { boundTitleFor, defaultConfig, labelFor, nodeLabel, withUserLabel } from "@/lib/nodeDefaults";
+import {
+  boundTitleFor,
+  computeFocusNodeIds,
+  defaultConfig,
+  labelFor,
+  nodeLabel,
+  runInputVariables,
+  upstream,
+  withUserLabel,
+  type FocusDirection,
+} from "@bstockwelldev/agent-graph-sdk/graph";
 import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
-import { computeAncestorNodeIds } from "@/lib/runFromNode";
-import { runInputVariables } from "@/lib/runInputs";
 import { RESOURCE_PANEL, ResourceNamesProvider, useResourceNamesMap } from "./resourceBindings";
-import { computeFocusNodeIds, type FocusDirection } from "@/lib/graphFocus";
 import {
   GROUP_COLORS,
   buildGroupFrameNodes,
@@ -1460,10 +1467,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // run's real traced values for ancestors, which is a larger follow-up.
   const handleRunFromNode = useCallback(
     (nodeId: string, input: Record<string, string>, provider: ChatProvider, model?: string, apiKey?: string) => {
-      const ancestorIds = computeAncestorNodeIds(
-        nodeId,
-        edges.map((edge) => ({ source: edge.source, target: edge.target })),
-      );
+      // Every ancestor, never the node itself (even through a cycle).
+      const ancestorIds = [...upstream({ edges }, nodeId)].filter((id) => id !== nodeId);
       const nodeOutputs = Object.fromEntries(ancestorIds.map((id) => [id, null]));
       return runGraph({ input, provider, model, apiKey, nodeOutputs });
     },
@@ -2023,7 +2028,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onOpenRunPanel={() => workbench.open("run")}
       onRunFromHere={() => canvasActions.runFromNode(selectedNode.id)}
       onOpenResource={(kind, resourceId) => workbench.open(RESOURCE_PANEL[kind], { resourceId })}
-      templateVariables={runInputVariables(nodes)}
+      templateVariables={runInputVariables(nodes.map((node) => ({ type: node.data.nodeType, config: node.data.config })))}
       onPolicyExceptionCreated={refreshDiagnostics}
       getDraftGraph={buildGraphDefinition}
       onSelectNode={(nodeId) => focusNode(nodeId)}
@@ -2531,7 +2536,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         <RunPanel
           layout="rail"
           graphId={graphId}
-          inputVariables={runInputVariables(nodes)}
+          inputVariables={runInputVariables(nodes.map((node) => ({ type: node.data.nodeType, config: node.data.config })))}
           diagnostics={diagnostics}
           diagnosticsSectionRef={diagnosticsSectionRef}
           providerBlockMessage={providerBlockMessage}

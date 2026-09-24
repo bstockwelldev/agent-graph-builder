@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **`@bstockwelldev/agent-graph-sdk/graph`** (SDK 5/7, STO-620): pure graph helpers with no network or DOM.
+  - Immutable edits: `addNode`, `connect`, `removeNode`, `setConfig`, `relabel`, `nextId`.
+  - Traversal: `upstream`, `downstream`, `reachableFrom`, `hasCycle`, `computeFocusNodeIds`.
+  - `validateStructure`, which mirrors the compiler's structural diagnostics and is checked against `contract/structural-fixtures.json`.
+  - Node labels and summaries, node search, `runInputVariables`, and the counterfactual and policy helpers, all moved from Studio.
+- **`@bstockwelldev/agent-graph-sdk/testing`:** MSW (v2, optional peer dependency) handlers for every API route, backed by a stateful in-memory mock (`createHandlers`, `createMockStore`), plus fixture factories (`demoGraph`, `makeGraph`, `makeRun`, `makeRelease`, ...).
+
 - **Namespaced API** (SDK 4/7, STO-617): `client.graphs`, `runs`, `releases`, `policies` (`workspace`, `graph`, `exceptions`), `routingLab`, `knowledge`, `analytics`, `providers` and `runtimeTargets`, alongside the resource namespaces.
   - Ids stay positional; everything else is a camelCase request object, e.g. `releases.publish(graphId, { notes, author })`.
   - `runs.start` and `releases.run` return a `RunHandle`.

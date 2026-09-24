@@ -1,4 +1,4 @@
-import type { PolicyEnforcement, PolicyException, PolicyParamValue, PolicyRuleInfo, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
+import type { PolicyEnforcement, PolicyException, PolicyParamValue, PolicyRuleInfo, PolicySettings } from "../types.js";
 
 /**
  * Pure helpers for configurable policies (STO-608, backend/app/policies.py),

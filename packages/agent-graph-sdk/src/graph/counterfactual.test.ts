@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildReplayRequest, compareNodes, modelChoices, routeChoices } from "./counterfactual";
+import { buildReplayRequest, compareNodes, modelChoices, routeChoices } from "./counterfactual.js";
 
 const graph = {
   nodes: [

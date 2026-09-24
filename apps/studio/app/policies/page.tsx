@@ -25,7 +25,7 @@ import {
   setRuleParam,
   sortExceptions,
   type ExceptionState,
-} from "@/lib/policies";
+} from "@bstockwelldev/agent-graph-sdk/graph";
 import { cn } from "@/lib/utils";
 
 // Workspace policies (STO-608): the defaults every graph inherits unless its

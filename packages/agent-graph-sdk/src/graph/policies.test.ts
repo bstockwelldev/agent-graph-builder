@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { exceptionStatus, extendExpiry, formatExpiry, setRuleEnforcement, setRuleParam, sortExceptions } from "./policies";
+import { exceptionStatus, extendExpiry, formatExpiry, setRuleEnforcement, setRuleParam, sortExceptions } from "./policies.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;

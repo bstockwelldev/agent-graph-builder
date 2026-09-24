@@ -18,7 +18,7 @@ import {
   sortExceptions,
   SOURCE_LABEL,
   type ExceptionState,
-} from "@/lib/policies";
+} from "@bstockwelldev/agent-graph-sdk/graph";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Combobox } from "./ui/Combobox";

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 
 import { border, fontFamily, radius, shadow, spacing, surface, text, typeScale } from "@/lib/graph-theme";
-import { searchNodes, type SearchableNode } from "@/lib/graphSearch";
+import { searchNodes, type SearchableNode } from "@bstockwelldev/agent-graph-sdk/graph";
 import { IconButton } from "./ui/IconButton";
 
 /**

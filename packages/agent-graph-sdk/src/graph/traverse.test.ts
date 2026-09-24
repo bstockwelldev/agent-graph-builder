@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeFocusNodeIds } from "./graphFocus";
+import { computeFocusNodeIds } from "./traverse.js";
 
 describe("computeFocusNodeIds", () => {
   it("includes the node itself even with no edges", () => {

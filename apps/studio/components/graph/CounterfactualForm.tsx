@@ -10,7 +10,7 @@ import {
   modelChoices,
   routeChoices,
   type CounterfactualDraft,
-} from "@/lib/counterfactual";
+} from "@bstockwelldev/agent-graph-sdk/graph";
 import { color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { PROVIDER_OPTIONS } from "./ProviderModelPicker";
 import { Button } from "./ui/Button";

@@ -38,18 +38,6 @@ export function referenceableGraphs<T extends Pick<GraphDefinition, "id" | "node
   return graphs.filter((graph) => graph.id !== currentId && !reachesCurrent(graph.id));
 }
 
-/** The child's input variables: its input nodes' `variableName`s
- * (backend `subgraphs.child_inputs`), falling back to `question`. */
-export function childInputs(graph: Pick<GraphDefinition, "nodes">): string[] {
-  const names: string[] = [];
-  for (const node of graph.nodes) {
-    if (node.type !== "input") continue;
-    const raw = node.config.variableName;
-    const name = typeof raw === "string" && raw.trim() ? raw.trim() : "question";
-    if (!names.includes(name)) names.push(name);
-  }
-  return names.length > 0 ? names : ["question"];
-}
 
 /** Next `inputMapping` after editing one row: blank rows are dropped, and
  * an empty mapping becomes `undefined` (the default wiring). */

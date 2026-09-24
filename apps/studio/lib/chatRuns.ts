@@ -1,5 +1,5 @@
 import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
-import { runInputVariables } from "@/lib/runInputs";
+import { runInputVariables } from "@bstockwelldev/agent-graph-sdk/graph";
 
 /**
  * Pure helpers for running graphs from Chat (studio-ux-gap-remediation-
@@ -25,7 +25,7 @@ export type ParsedRunCommand = { ok: true; target: RunTarget } | { ok: false; er
 
 /** The graph's input variables (one per input node), from a stored graph. */
 export function graphInputVariables(graph: Pick<GraphDefinition, "nodes">): string[] {
-  return runInputVariables(graph.nodes.map((node) => ({ data: { nodeType: node.type, config: node.config } })) as never);
+  return runInputVariables(graph.nodes);
 }
 
 /**

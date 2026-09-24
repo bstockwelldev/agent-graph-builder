@@ -1,6 +1,4 @@
-import type { Node } from "@xyflow/react";
-import type { RunSummary } from "@bstockwelldev/agent-graph-sdk";
-import type { GraphNodeData } from "@/components/graph/nodes/GraphNodeView";
+import type { RunSummary } from "../types.js";
 
 /**
  * The run's input variables (Wave 2.5 run console: "one field per input
@@ -9,11 +7,11 @@ import type { GraphNodeData } from "@/components/graph/nodes/GraphNodeView";
  * the graph's input nodes -- in node order -- are exactly the fields a run
  * needs. Falls back to the backend's own default, `question`.
  */
-export function runInputVariables(nodes: Pick<Node<GraphNodeData>, "data">[]): string[] {
+export function runInputVariables(nodes: readonly { type: string; config?: Record<string, unknown> }[]): string[] {
   const names: string[] = [];
   for (const node of nodes) {
-    if (node.data.nodeType !== "input") continue;
-    const raw = node.data.config.variableName;
+    if (node.type !== "input") continue;
+    const raw = node.config?.variableName;
     const name = typeof raw === "string" && raw.trim() ? raw.trim() : "question";
     if (!names.includes(name)) names.push(name);
   }
