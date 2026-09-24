@@ -43,6 +43,9 @@ import type {
   nodeTypeSchema,
   platformEventSchema,
   effectivePolicyRuleSchema,
+  graphHealthSchema,
+  healthFactorSchema,
+  nodeImpactSchema,
   policyEnforcementSchema,
   policyExceptionSchema,
   policyParamSpecSchema,
@@ -225,3 +228,8 @@ export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
 export type KnowledgeSummary = z.infer<typeof knowledgeSummarySchema>;
 export type KnowledgeUploadResponse = z.infer<typeof knowledgeUploadResponseSchema>;
 export type KnowledgeDeleteResponse = z.infer<typeof knowledgeDeleteResponseSchema>;
+
+// Large-graph complexity, Wave 7a (STO-610).
+export type GraphHealth = z.infer<typeof graphHealthSchema>;
+export type HealthFactor = z.infer<typeof healthFactorSchema>;
+export type NodeImpact = z.infer<typeof nodeImpactSchema>;

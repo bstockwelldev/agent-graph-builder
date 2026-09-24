@@ -39,6 +39,9 @@ from .knowledge import (
     summarize_entry,
     upload_knowledge_document,
 )
+from .compiler import validate_graph
+from .graph_health import GraphHealth, compute_graph_health
+from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
@@ -275,6 +278,32 @@ def get_release_endpoint(graph_id: str, release_id: str) -> GraphRelease:
     if release is None:
         raise HTTPException(status_code=404, detail="release not found")
     return release
+
+
+def _require_draft(graph_id: str, draft: GraphDefinition) -> None:
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    if draft.id != graph_id:
+        raise HTTPException(status_code=422, detail="draft graph id does not match the route")
+
+
+@app.post("/api/graphs/{graph_id}/health")
+def graph_health_endpoint(graph_id: str, draft: GraphDefinition) -> GraphHealth:
+    """Wave 7a (STO-610): 0-100 health score with a per-factor breakdown,
+    computed against the draft (live canvas, unsaved edits included)."""
+    _require_draft(graph_id, draft)
+    return compute_graph_health(draft, validate_graph(draft), get_graph_analytics(graph_id))
+
+
+@app.post("/api/graphs/{graph_id}/nodes/{node_id}/impact")
+def node_impact_endpoint(graph_id: str, node_id: str, draft: GraphDefinition) -> NodeImpact:
+    """Wave 7a (STO-610): what changing `node_id` reaches -- downstream
+    nodes, bindings, runs, releases containing it, datasets stubbing it."""
+    _require_draft(graph_id, draft)
+    try:
+        return compute_node_impact(draft, node_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="node not found in draft") from exc
 
 
 @app.post("/api/graph-releases/{release_id}/compare-draft")

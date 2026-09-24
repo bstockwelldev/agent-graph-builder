@@ -8,7 +8,14 @@
  * selected node, which is what stays at full opacity while everything
  * else -- an unrelated parallel branch -- gets dimmed.
  */
-export function computeFocusNodeIds(nodeId: string, edges: { source: string; target: string }[]): Set<string> {
+/** Which side of the node a dependency view keeps (Wave 7a, STO-610). */
+export type FocusDirection = "both" | "upstream" | "downstream";
+
+export function computeFocusNodeIds(
+  nodeId: string,
+  edges: { source: string; target: string }[],
+  direction: FocusDirection = "both",
+): Set<string> {
   const forward = new Map<string, string[]>();
   const backward = new Map<string, string[]>();
   for (const edge of edges) {
@@ -26,7 +33,7 @@ export function computeFocusNodeIds(nodeId: string, edges: { source: string; tar
       queue.push(...(adjacency.get(current) ?? []));
     }
   };
-  walk(forward);
-  walk(backward);
+  if (direction !== "upstream") walk(forward);
+  if (direction !== "downstream") walk(backward);
   return visited;
 }
