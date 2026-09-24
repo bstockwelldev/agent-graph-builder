@@ -319,6 +319,8 @@ def storage_health() -> dict[str, bool | str]:
     payload: dict[str, bool | str] = {"ok": ok, "storage_backend": backend}
     if not ok:
         payload["message"] = STORAGE_MISCONFIGURED_DETAIL
+    if backend == "supabase":
+        payload["supabase_key"] = supabase_store.key_kind()
     return payload
 
 

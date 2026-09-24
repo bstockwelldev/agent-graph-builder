@@ -292,3 +292,38 @@ def test_secret_key_sent_on_apikey_header_only(monkeypatch) -> None:
 def test_legacy_jwt_key_keeps_bearer_header(monkeypatch) -> None:
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJlegacy")
     assert supabase_store._headers() == {"Authorization": "Bearer eyJlegacy", "apikey": "eyJlegacy"}
+
+
+def test_key_kind_reports_shape_and_length_never_the_value(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_abcdef")
+    assert supabase_store.key_kind() == "sb_secret(16 chars)"
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJa.bbb.ccc")
+    assert supabase_store.key_kind() == "jwt(12 chars)"
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "garbage")
+    assert supabase_store.key_kind() == "unrecognized(7 chars)"
+    assert "garbage" not in supabase_store.key_kind()
+
+
+def test_health_reports_supabase_key_kind(monkeypatch) -> None:
+    _enable_supabase(monkeypatch)
+    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    payload = storage.storage_health()
+    assert payload["storage_backend"] == "supabase"
+    assert payload["supabase_key"] == "unrecognized(19 chars)"
+
+
+def test_error_body_is_logged_on_failure(monkeypatch, caplog) -> None:
+    _enable_supabase(monkeypatch)
+
+    def reject(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"message": "Invalid Compact JWS"})
+
+    monkeypatch.setattr(
+        supabase_store, "_http_client", lambda: httpx.Client(transport=httpx.MockTransport(reject))
+    )
+    with caplog.at_level("ERROR"):
+        try:
+            supabase_store.list_keys("graphs/")
+        except httpx.HTTPStatusError:
+            pass
+    assert "Invalid Compact JWS" in caplog.text
