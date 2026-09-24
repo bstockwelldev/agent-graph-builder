@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .builtin_tools import BUILTIN_TOOL_IDS
-from .models import GraphDefinition, GraphNode
+from .models import GraphCatalogEntry, GraphNode
 
 # node type -> ((config field, registry kind), ...)
 BINDING_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -55,13 +55,15 @@ def node_bindings(node: GraphNode) -> list[Binding]:
 
 
 def resource_usages(
-    graphs: list[GraphDefinition],
+    graphs: list[GraphCatalogEntry],
     kind: str,
     resource_id: str,
     tools_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Every node that references `kind:resource_id`. For `mcp_servers`, also
-    the tool-bound nodes whose tool dispatches to that server (`via`)."""
+    the tool-bound nodes whose tool dispatches to that server (`via`).
+    Walks the graph catalog (storage.list_graph_catalog), whose bindings are
+    `node_bindings` output precomputed per graph."""
     via_tools: set[str] = set()
     if kind == "mcp_servers" and tools_by_id:
         via_tools = {
@@ -70,20 +72,19 @@ def resource_usages(
 
     usages: list[dict[str, Any]] = []
     for graph in graphs:
-        for node in graph.nodes:
-            for binding in node_bindings(node):
-                direct = binding.kind == kind and binding.resource_id == resource_id
-                via = binding.kind == "tools" and binding.resource_id in via_tools
-                if not (direct or via):
-                    continue
-                usages.append(
-                    {
-                        "graph_id": graph.id,
-                        "graph_name": graph.name,
-                        "node_id": node.id,
-                        "node_type": node.type.value,
-                        "field": binding.field,
-                        "via": None if direct else f"tools:{binding.resource_id}",
-                    }
-                )
+        for binding in graph.bindings:
+            direct = binding.kind == kind and binding.resource_id == resource_id
+            via = binding.kind == "tools" and binding.resource_id in via_tools
+            if not (direct or via):
+                continue
+            usages.append(
+                {
+                    "graph_id": graph.id,
+                    "graph_name": graph.name,
+                    "node_id": binding.node_id,
+                    "node_type": binding.node_type,
+                    "field": binding.field,
+                    "via": None if direct else f"tools:{binding.resource_id}",
+                }
+            )
     return usages

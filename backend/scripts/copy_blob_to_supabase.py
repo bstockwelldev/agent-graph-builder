@@ -13,6 +13,9 @@ Dry run by default. Needs both backends' env vars at once::
 
 Run from ``backend/``. Keys already present in Supabase are skipped unless
 ``--overwrite`` is passed, so re-running after a partial copy is safe.
+
+Raw key copies bypass ``storage.save_graph``/``save_run_snapshot``, so an
+applied copy then rebuilds Supabase's graph catalog and run index.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from app import supabase_store, vercel_blob
+from app import storage, supabase_store, vercel_blob
 
 
 def copy_all(*, apply: bool, overwrite: bool) -> dict[str, int]:
@@ -48,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     counts = copy_all(apply=args.apply, overwrite=args.overwrite)
+    if args.apply:
+        counts["catalog_graphs"] = storage.rebuild_graph_catalog(supabase_store)
+        counts["run_index_written"] = storage.backfill_run_index(supabase_store)
     mode = "applied" if args.apply else "dry run"
     print(f"[{mode}] " + ", ".join(f"{name}={value}" for name, value in counts.items()))
     return 0

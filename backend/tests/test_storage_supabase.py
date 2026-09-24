@@ -11,9 +11,9 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app import storage, supabase_store
+from app import storage, subgraphs, supabase_store
 from app.demo_graph import build_demo_graph
-from app.models import NodeTrace, NodeType, RunSummary
+from app.models import GraphNode, NodeTrace, NodeType, RunSummary
 
 _TEST_URL = "https://project-ref.supabase.co"
 _TEST_KEY = "service-role-secret"
@@ -49,8 +49,7 @@ class FakeSupabaseStorage:
             return httpx.Response(
                 200,
                 json=[
-                    {"name": key[len(prefix) :], "created_at": self.created_at[key]}
-                    for key in page
+                    {"name": key[len(prefix) :], "created_at": self.created_at[key]} for key in page
                 ],
             )
 
@@ -256,3 +255,30 @@ def test_supabase_backfill_indexes_legacy_runs(monkeypatch) -> None:
     assert "run_index/g_a/run_legacy.json" in fake.objects
     listed = storage.list_runs_for_graph("g_a")
     assert [run.run_id for run in listed] == ["run_new", "run_legacy"]
+
+
+def test_supabase_graph_catalog_reads_once_and_rebuilds_when_missing(monkeypatch) -> None:
+    fake = _enable_supabase(monkeypatch)
+    # Written through the backend directly, as before the catalog existed.
+    supabase_store.save_graph(build_demo_graph().model_copy(update={"id": "g_legacy"}))
+    child = build_demo_graph().model_copy(update={"id": "g_child"})
+    parent = build_demo_graph().model_copy(
+        update={
+            "id": "g_parent",
+            "nodes": [GraphNode(id="s", type=NodeType.SUBGRAPH, config={"graphId": "g_child"})],
+        }
+    )
+    storage.save_graph(child)  # scans the missing catalog once
+    storage.save_graph(parent)
+    fake.object_reads.clear()
+
+    ids = {entry.id for entry in storage.list_graph_catalog()}
+    parents = subgraphs.used_by("g_child")
+
+    assert ids == {"g_legacy", "g_child", "g_parent"}
+    assert [item["graph_id"] for item in parents] == ["g_parent"]
+    assert fake.object_reads == ["graph_catalog.json", "graph_catalog.json"]
+
+    assert storage.delete_graph("g_parent") is True
+    assert subgraphs.used_by("g_child") == []
+    assert storage.rebuild_graph_catalog() == 2

@@ -258,5 +258,5 @@ def build_analytics_dashboard(
 
 def get_analytics_dashboard(*, run_limit: int = 500) -> AnalyticsDashboardPayload:
     runs = storage.list_all_runs(limit=run_limit)
-    graph_names = {graph.id: graph.name for graph in storage.list_graphs()}
+    graph_names = {entry.id: entry.name for entry in storage.list_graph_catalog()}
     return build_analytics_dashboard(runs, graph_names)

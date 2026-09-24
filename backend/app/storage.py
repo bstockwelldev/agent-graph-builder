@@ -33,7 +33,17 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import object_store, supabase_store, vercel_blob
-from .models import GraphDefinition, NodeTrace, RouteDecision, RunSummary
+from .bindings import node_bindings
+from .models import (
+    CatalogBinding,
+    CatalogSubgraphRef,
+    GraphCatalogEntry,
+    GraphDefinition,
+    NodeTrace,
+    NodeType,
+    RouteDecision,
+    RunSummary,
+)
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "graphs.db"
 _VERCEL_EPHEMERAL_DB = Path("/tmp/graphs.db")
@@ -397,6 +407,7 @@ def save_graph(graph: GraphDefinition) -> None:
     remote = _json_object_backend()
     if remote is not None:
         remote.save_graph(graph)
+        _update_graph_catalog(remote, graph.id, graph_catalog_entry(graph))
         return
     with _connect() as conn:
         conn.execute(
@@ -425,6 +436,123 @@ def list_graphs() -> list[GraphDefinition]:
     with _connect() as conn:
         rows = conn.execute("select definition from graph order by updated_at desc").fetchall()
     return [GraphDefinition.model_validate(json.loads(r[0])) for r in rows]
+
+
+def list_graph_ids() -> list[str]:
+    """Every graph id, ascending, without loading any graph — so a paged
+    graph listing reads only the page it returns."""
+    remote = _json_object_backend()
+    if remote is not None:
+        return sorted(
+            key.removeprefix(_GRAPH_PREFIX).removesuffix(".json")
+            for key in remote.list_keys(_GRAPH_PREFIX)
+        )
+    with _connect() as conn:
+        rows = conn.execute("select id from graph order by id").fetchall()
+    return [row[0] for row in rows]
+
+
+# Graph catalog (object-store/Blob backends). One ``graph_catalog.json``
+# document holding a GraphCatalogEntry per graph, so cross-graph readers
+# (analytics names, resource "used by", subgraph parents) cost one read
+# instead of one per graph — list_graphs() read every graph blob, the same
+# shape that exhausted the Vercel Blob Hobby quota on 2026-09-24.
+# Maintained on save/delete with read-modify-write, like the release index;
+# concurrent saves can drop an entry, which rebuild_graph_catalog() repairs.
+# A missing catalog is rebuilt from a full scan once, so no backfill step.
+_GRAPH_PREFIX = "graphs/"
+_GRAPH_CATALOG_KEY = "graph_catalog.json"
+
+
+def graph_catalog_entry(graph: GraphDefinition) -> GraphCatalogEntry:
+    return GraphCatalogEntry(
+        id=graph.id,
+        name=graph.name,
+        updated_at=graph.updated_at,
+        bindings=[
+            CatalogBinding(
+                node_id=node.id,
+                node_type=node.type.value,
+                field=binding.field,
+                kind=binding.kind,
+                resource_id=binding.resource_id,
+            )
+            for node in graph.nodes
+            for binding in node_bindings(node)
+        ],
+        subgraphs=[
+            CatalogSubgraphRef(node_id=node.id, graph_id=str(node.config.get("graphId") or ""))
+            for node in graph.nodes
+            if node.type == NodeType.SUBGRAPH
+        ],
+    )
+
+
+def _write_graph_catalog(remote, entries: dict[str, GraphCatalogEntry]) -> None:
+    remote.put_json(
+        _GRAPH_CATALOG_KEY,
+        {
+            "graphs": {
+                graph_id: entry.model_dump(mode="json") for graph_id, entry in entries.items()
+            }
+        },
+    )
+
+
+def rebuild_graph_catalog(backend=None) -> int:
+    """Rebuilds the catalog from every graph blob (one read per graph) —
+    for repair, never per request. Returns the entry count; no-op on
+    SQLite/Turso, which have no catalog. `backend` overrides the configured
+    one (copy_blob_to_supabase repairs Supabase while Blob is configured)."""
+    remote = backend or _json_object_backend()
+    if remote is None:
+        return 0
+    entries = _scan_graph_catalog(remote)
+    _write_graph_catalog(remote, entries)
+    return len(entries)
+
+
+def _scan_graph_catalog(remote) -> dict[str, GraphCatalogEntry]:
+    return {graph.id: graph_catalog_entry(graph) for graph in remote.list_graphs()}
+
+
+def _read_graph_catalog(remote) -> dict[str, GraphCatalogEntry] | None:
+    payload = remote.get_json(_GRAPH_CATALOG_KEY)
+    if payload is None:
+        return None
+    return {
+        graph_id: GraphCatalogEntry.model_validate(entry)
+        for graph_id, entry in (payload.get("graphs") or {}).items()
+    }
+
+
+def _update_graph_catalog(remote, graph_id: str, entry: GraphCatalogEntry | None) -> None:
+    # Runs after the graph blob write/delete, so a scan of a missing
+    # catalog already reflects this change.
+    entries = _read_graph_catalog(remote)
+    if entries is None:
+        entries = _scan_graph_catalog(remote)
+    if entry is None:
+        entries.pop(graph_id, None)
+    else:
+        entries[graph_id] = entry
+    _write_graph_catalog(remote, entries)
+
+
+def list_graph_catalog() -> list[GraphCatalogEntry]:
+    """Every graph's catalog entry, newest-updated first. One object read on
+    the remote backends; built from the graph table on SQLite/Turso."""
+    remote = _json_object_backend()
+    if remote is not None:
+        catalog = _read_graph_catalog(remote)
+        if catalog is None:
+            catalog = _scan_graph_catalog(remote)
+            _write_graph_catalog(remote, catalog)
+        entries = list(catalog.values())
+    else:
+        entries = [graph_catalog_entry(graph) for graph in list_graphs()]
+    entries.sort(key=lambda entry: entry.updated_at or "", reverse=True)
+    return entries
 
 
 def _row_to_run_summary(row: tuple) -> RunSummary:
@@ -600,13 +728,14 @@ def _read_run_summaries(remote, keys: list[str]) -> list[RunSummary]:
     return runs
 
 
-def backfill_run_index() -> int:
+def backfill_run_index(backend=None) -> int:
     """One-shot: writes ``run_index/`` entries for runs saved before the
     index existed (they are otherwise missing from list_runs_for_graph).
     Reads every run blob once — run it manually, never per request. Returns
-    the number of entries written; no-op on SQLite/Turso.
+    the number of entries written; no-op on SQLite/Turso. `backend` as in
+    rebuild_graph_catalog.
     """
-    remote = _json_object_backend()
+    remote = backend or _json_object_backend()
     if remote is None:
         return 0
     summaries: dict[str, list[dict[str, Any]]] = {}
@@ -688,7 +817,10 @@ def delete_graph(graph_id: str) -> bool:
     if remote is not None:
         # Matches _graph_key("graphs/{id}.json") in object_store.py /
         # vercel_blob.py — not exposed as a shared helper, so inlined here.
-        return remote.delete_json(f"graphs/{graph_id}.json")
+        deleted = remote.delete_json(f"{_GRAPH_PREFIX}{graph_id}.json")
+        if deleted:
+            _update_graph_catalog(remote, graph_id, None)
+        return deleted
     with _connect() as conn:
         row = conn.execute("select 1 from graph where id = ?", (graph_id,)).fetchone()
         if row is None:

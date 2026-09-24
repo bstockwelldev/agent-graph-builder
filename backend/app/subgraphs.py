@@ -218,8 +218,8 @@ def reference_problems(graph: GraphDefinition) -> dict[str, tuple[str, str]]:
 def used_by(graph_id: str) -> list[dict[str, Any]]:
     """Saved graphs with a subgraph node pointing at `graph_id`."""
     parents: list[dict[str, Any]] = []
-    for candidate in storage.list_graphs():
-        node_ids = [n.id for n in subgraph_nodes(candidate) if target_graph_id(n) == graph_id]
+    for candidate in storage.list_graph_catalog():
+        node_ids = [ref.node_id for ref in candidate.subgraphs if ref.graph_id == graph_id]
         if node_ids:
             parents.append({"graph_id": candidate.id, "name": candidate.name, "node_ids": node_ids})
     return parents

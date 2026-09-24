@@ -163,6 +163,32 @@ class GraphDefinition(BaseModel):
     layers: list[GraphLayer] | None = None
 
 
+class CatalogBinding(BaseModel):
+    node_id: str
+    node_type: str
+    field: str
+    kind: str
+    resource_id: str
+
+
+class CatalogSubgraphRef(BaseModel):
+    node_id: str
+    graph_id: str
+
+
+class GraphCatalogEntry(BaseModel):
+    """What cross-graph readers need from a graph without loading it: names
+    for analytics, bindings for resource "used by", subgraph targets for
+    `subgraphs.used_by`. Kept in one document on the object-store backends
+    so those reads cost one object read, not one per graph (storage.py)."""
+
+    id: str
+    name: str
+    updated_at: str | None = None
+    bindings: list[CatalogBinding] = []
+    subgraphs: list[CatalogSubgraphRef] = []
+
+
 class Diagnostic(BaseModel):
     severity: Literal["error", "warning"]
     code: str
