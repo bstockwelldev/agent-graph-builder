@@ -1,32 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { GraphDefinition, PlatformEvent } from "@bstockwelldev/agent-graph-sdk";
+import type { PlatformEvent } from "@bstockwelldev/agent-graph-sdk";
 import {
   applyRunEvent,
   buildRunInput,
   findGraph,
-  graphInputVariables,
   matchRunIntent,
   needsConfirmation,
   parseRunCommand,
   stepsFromTraces,
 } from "./chatRuns";
 
-const node = (id: string, type: string, config: Record<string, unknown> = {}) => ({ id, type, position: { x: 0, y: 0 }, config }) as GraphDefinition["nodes"][number];
-const demo = { id: "demo_classify_and_route", name: "Classify & Route (demo)", nodes: [node("input_1", "input", { variableName: "question" })] };
-const twoInputs = {
-  id: "two_inputs",
-  name: "Explain for audience",
-  nodes: [node("a", "input", { variableName: "topic" }), node("b", "input", { variableName: "audience" })],
-};
+const demo = { id: "demo_classify_and_route", name: "Classify & Route (demo)", input_variables: ["question"] };
+const twoInputs = { id: "two_inputs", name: "Explain for audience", input_variables: ["topic", "audience"] };
 const graphs = [demo, twoInputs];
 
 // studio-ux-gap-remediation-plan.md §4-5 (STO-600/601).
 describe("chat runs", () => {
-  it("reads a graph's input variables", () => {
-    expect(graphInputVariables(twoInputs)).toEqual(["topic", "audience"]);
-    expect(graphInputVariables({ nodes: [] })).toEqual(["question"]);
-  });
-
   it("builds run input from key=value pairs or free text", () => {
     expect(buildRunInput(["topic", "audience"], 'topic=TCP audience="ten year olds"')).toEqual({ topic: "TCP", audience: "ten year olds" });
     expect(buildRunInput(["question"], "How does TCP work?")).toEqual({ question: "How does TCP work?" });

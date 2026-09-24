@@ -2,8 +2,7 @@
 
 import { ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Diagnostic, GraphDefinition, GraphNode, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
-import { runInputVariables } from "@bstockwelldev/agent-graph-sdk/graph";
+import type { Diagnostic, GraphNode, GraphSummary, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
 import { color, spacing, text, typeScale } from "@/lib/graph-theme";
@@ -53,7 +52,7 @@ export function SubgraphConfig({
     { value: "draft", label: "Draft", description: "Always the saved draft — can't be published" },
     ...releases.map((release) => ({ value: release.release_id, label: release.release_id, description: release.created_at, group: "Pinned release" })),
   ];
-  const inputs = child ? runInputVariables(child.nodes) : [];
+  const inputs = child ? child.input_variables : [];
 
   return (
     <Group title="Subgraph">
@@ -104,12 +103,12 @@ export function SubgraphConfig({
   );
 }
 
-function useGraphList(): GraphDefinition[] | null {
-  const [graphs, setGraphs] = useState<GraphDefinition[] | null>(null);
+function useGraphList(): GraphSummary[] | null {
+  const [graphs, setGraphs] = useState<GraphSummary[] | null>(null);
   useEffect(() => {
     let cancelled = false;
     client
-      .graphs.list()
+      .graphs.summaries.list()
       .then((list) => {
         if (!cancelled) setGraphs(list);
       })

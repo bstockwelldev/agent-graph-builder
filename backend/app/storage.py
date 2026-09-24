@@ -34,11 +34,13 @@ from typing import Any, Protocol
 
 from . import object_store, supabase_store, vercel_blob
 from .bindings import node_bindings
+from .graph_inputs import input_variables
 from .models import (
     CatalogBinding,
     CatalogSubgraphRef,
     GraphCatalogEntry,
     GraphDefinition,
+    GraphSummary,
     NodeTrace,
     NodeType,
     RouteDecision,
@@ -459,9 +461,13 @@ def list_graph_ids() -> list[str]:
 # shape that exhausted the Vercel Blob Hobby quota on 2026-09-24.
 # Maintained on save/delete with read-modify-write, like the release index;
 # concurrent saves can drop an entry, which rebuild_graph_catalog() repairs.
-# A missing catalog is rebuilt from a full scan once, so no backfill step.
+# A missing catalog -- or one written by an older _GRAPH_CATALOG_VERSION,
+# whose entries lack newer fields -- is rebuilt from a full scan once, so
+# no backfill step. Bump the version whenever GraphCatalogEntry gains a
+# field derived from the graph.
 _GRAPH_PREFIX = "graphs/"
 _GRAPH_CATALOG_KEY = "graph_catalog.json"
+_GRAPH_CATALOG_VERSION = 2
 
 
 def graph_catalog_entry(graph: GraphDefinition) -> GraphCatalogEntry:
@@ -469,6 +475,9 @@ def graph_catalog_entry(graph: GraphDefinition) -> GraphCatalogEntry:
         id=graph.id,
         name=graph.name,
         updated_at=graph.updated_at,
+        node_count=len(graph.nodes),
+        edge_count=len(graph.edges),
+        input_variables=input_variables(graph),
         bindings=[
             CatalogBinding(
                 node_id=node.id,
@@ -492,9 +501,10 @@ def _write_graph_catalog(remote, entries: dict[str, GraphCatalogEntry]) -> None:
     remote.put_json(
         _GRAPH_CATALOG_KEY,
         {
+            "version": _GRAPH_CATALOG_VERSION,
             "graphs": {
                 graph_id: entry.model_dump(mode="json") for graph_id, entry in entries.items()
-            }
+            },
         },
     )
 
@@ -518,7 +528,7 @@ def _scan_graph_catalog(remote) -> dict[str, GraphCatalogEntry]:
 
 def _read_graph_catalog(remote) -> dict[str, GraphCatalogEntry] | None:
     payload = remote.get_json(_GRAPH_CATALOG_KEY)
-    if payload is None:
+    if payload is None or payload.get("version") != _GRAPH_CATALOG_VERSION:
         return None
     return {
         graph_id: GraphCatalogEntry.model_validate(entry)
@@ -553,6 +563,12 @@ def list_graph_catalog() -> list[GraphCatalogEntry]:
         entries = [graph_catalog_entry(graph) for graph in list_graphs()]
     entries.sort(key=lambda entry: entry.updated_at or "", reverse=True)
     return entries
+
+
+def list_graph_summaries() -> list[GraphSummary]:
+    """Every graph without its nodes/edges, newest-updated first — one
+    catalog read on the remote backends (GET /api/graph-summaries)."""
+    return [entry.summary() for entry in list_graph_catalog()]
 
 
 def _row_to_run_summary(row: tuple) -> RunSummary:

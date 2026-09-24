@@ -56,6 +56,7 @@ from .models import (
     Fixture,
     GraphDefinition,
     GraphRelease,
+    GraphSummary,
     KnowledgeLineageEntry,
     NodeTrace,
     PolicyException,
@@ -209,6 +210,13 @@ def list_graphs(page: Page) -> list[GraphDefinition]:
     page_ids = paginate(storage.list_graph_ids(), page, key=lambda graph_id: (graph_id,))
     graphs = [storage.get_graph(graph_id) for graph_id in page_ids]
     return [graph for graph in graphs if graph is not None]
+
+
+@app.get("/api/graph-summaries")
+def list_graph_summaries(page: Page) -> list[GraphSummary]:
+    """Every saved graph without its nodes/edges -- for lists and pickers.
+    Unpaged order: newest-updated first. Paged order: by id."""
+    return paginate(storage.list_graph_summaries(), page, key=field_key("id"))
 
 
 @app.post("/api/graphs")

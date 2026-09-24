@@ -1,5 +1,6 @@
 import { http, HttpResponse, type HttpHandler } from "msw";
 
+import { summarizeGraph } from "../graph/summary.js";
 import { downstream, upstream } from "../graph/traverse.js";
 import { validateStructure } from "../graph/validate.js";
 import { documentFingerprint, semanticFingerprint } from "../schema.js";
@@ -347,6 +348,8 @@ export function mockRoutes(): Record<string, Handler> {
 
     // Graphs
     "GET /api/graphs": ({ request, store }) => listResponse(request, [...store.graphs.values()]),
+    "GET /api/graph-summaries": ({ request, store }) =>
+      listResponse(request, [...store.graphs.values()].map(summarizeGraph)),
     "POST /api/graphs": async ({ request, store }) => {
       const { name, template } = await body(request);
       const id = nextId(store, "graph");
@@ -789,4 +792,3 @@ export function createHandlers(options: CreateHandlersOptions = {}): HttpHandler
 function specificity(key: string): number {
   return key.split("/").filter((segment) => segment && !segment.startsWith("{")).length * 10 - (key.match(/\{/g)?.length ?? 0);
 }
-

@@ -1351,6 +1351,62 @@
         "title": "GraphRelease",
         "type": "object"
       },
+      "GraphSummary": {
+        "description": "A saved graph without its nodes/edges (GET /api/graph-summaries):\nenough for lists, pickers and `/run` parsing. Served from the graph\ncatalog -- one object read, not one per graph.",
+        "properties": {
+          "edge_count": {
+            "default": 0,
+            "title": "Edge Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_variables": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Variables",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "node_count": {
+            "default": 0,
+            "title": "Node Count",
+            "type": "integer"
+          },
+          "subgraph_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Subgraph Ids",
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "GraphSummary",
+        "type": "object"
+      },
       "GraphUsage": {
         "properties": {
           "graph_id": {
@@ -4728,6 +4784,79 @@
           }
         },
         "summary": "Simulate Release Endpoint"
+      }
+    },
+    "/api/graph-summaries": {
+      "get": {
+        "description": "Every saved graph without its nodes/edges -- for lists and pickers.\nUnpaged order: newest-updated first. Paged order: by id.",
+        "operationId": "list_graph_summaries_api_graph_summaries_get",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GraphSummary"
+                  },
+                  "title": "Response List Graph Summaries Api Graph Summaries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Graph Summaries"
       }
     },
     "/api/graphs": {

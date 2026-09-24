@@ -12,7 +12,7 @@ const { clientMock } = vi.hoisted(() => ({
       workspace: { get: vi.fn(), save: vi.fn() },
       exceptions: { list: vi.fn(), update: vi.fn(), delete: vi.fn() },
     },
-    graphs: { list: vi.fn() },
+    graphs: { summaries: { list: vi.fn() } },
   },
 }));
 
@@ -46,7 +46,7 @@ beforeEach(() => {
   ]);
   clientMock.policies.workspace.get.mockResolvedValue({ rules: {}, updated_at: null });
   clientMock.policies.exceptions.list.mockResolvedValue([exception("pexc_live", 20), exception("pexc_dead", -3)]);
-  clientMock.graphs.list.mockResolvedValue([{ id: "g1", name: "Support flow" }]);
+  clientMock.graphs.summaries.list.mockResolvedValue([{ id: "g1", name: "Support flow" }]);
 });
 
 afterEach(cleanup);

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Play } from "lucide-react";
-import type { ChatContext, ChatMessage, ChatRunRef, ChatSession, GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
+import type { ChatContext, ChatMessage, ChatRunRef, ChatSession, GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -64,14 +64,14 @@ export function ChatPanel() {
   const router = useRouter();
 
   // Graph runs from Chat (studio-ux-gap-remediation-plan.md §4, STO-600).
-  const [graphs, setGraphs] = useState<GraphDefinition[] | null>(null);
+  const [graphs, setGraphs] = useState<GraphSummary[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
   const [startingRun, setStartingRun] = useState(false);
 
-  async function loadGraphs(): Promise<GraphDefinition[]> {
+  async function loadGraphs(): Promise<GraphSummary[]> {
     if (graphs) return graphs;
-    const list = await client.graphs.list();
+    const list = await client.graphs.summaries.list();
     setGraphs(list);
     return list;
   }

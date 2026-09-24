@@ -1,5 +1,4 @@
-import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
-import { runInputVariables } from "@bstockwelldev/agent-graph-sdk/graph";
+import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 
 /**
  * Pure helpers for running graphs from Chat (studio-ux-gap-remediation-
@@ -13,7 +12,7 @@ import { runInputVariables } from "@bstockwelldev/agent-graph-sdk/graph";
 export type ReleaseSelector = "latest" | string | null;
 
 export type RunTarget = {
-  graph: Pick<GraphDefinition, "id" | "name" | "nodes">;
+  graph: RunnableGraph;
   release: ReleaseSelector;
   input: Record<string, string>;
   /** Proposed from free text ("run the support flow") rather than an
@@ -23,10 +22,9 @@ export type RunTarget = {
 
 export type ParsedRunCommand = { ok: true; target: RunTarget } | { ok: false; error: string };
 
-/** The graph's input variables (one per input node), from a stored graph. */
-export function graphInputVariables(graph: Pick<GraphDefinition, "nodes">): string[] {
-  return runInputVariables(graph.nodes);
-}
+/** What resolving a run needs from a graph: its summary's name and input
+ * variables (one per input node, computed server-side), not its nodes. */
+export type RunnableGraph = Pick<GraphSummary, "id" | "name" | "input_variables">;
 
 /**
  * Run input from the text after the graph: `key=value` pairs (quoted
@@ -50,7 +48,7 @@ function normalizeName(value: string): string {
 }
 
 /** A graph by exact id, or by name ignoring case and punctuation. */
-export function findGraph<G extends Pick<GraphDefinition, "id" | "name">>(graphs: readonly G[], query: string): G | null {
+export function findGraph<G extends Pick<GraphSummary, "id" | "name">>(graphs: readonly G[], query: string): G | null {
   const q = query.trim();
   if (!q) return null;
   const byId = graphs.find((graph) => graph.id === q);
@@ -63,7 +61,7 @@ export function findGraph<G extends Pick<GraphDefinition, "id" | "name">>(graphs
  * `/run <graph>[@latest|@rel_…] [input]`. The graph is an id, a quoted
  * name, or (unquoted) the longest leading run of words naming a graph.
  */
-export function parseRunCommand<G extends Pick<GraphDefinition, "id" | "name" | "nodes">>(
+export function parseRunCommand<G extends RunnableGraph>(
   text: string,
   graphs: readonly G[],
 ): ParsedRunCommand | null {
@@ -103,7 +101,7 @@ export function parseRunCommand<G extends Pick<GraphDefinition, "id" | "name" | 
 
   const selector = (selectorPart ?? "").replace(/^@/, "");
   const release: ReleaseSelector = !selector || selector === "draft" ? null : selector === "latest" || selector === "release" ? "latest" : selector;
-  return { ok: true, target: { graph, release, input: buildRunInput(graphInputVariables(graph), tail), inferred: false } };
+  return { ok: true, target: { graph, release, input: buildRunInput(graph.input_variables, tail), inferred: false } };
 }
 
 /** `name@selector`, where the selector is a single token (`@latest`, `@rel_…`). */
@@ -117,7 +115,7 @@ function splitSelector(value: string): [string, string | undefined] {
  * exact graph matches count; the result is always `inferred`, so Chat
  * proposes it as a confirm card instead of executing.
  */
-export function matchRunIntent<G extends Pick<GraphDefinition, "id" | "name" | "nodes">>(
+export function matchRunIntent<G extends RunnableGraph>(
   text: string,
   graphs: readonly G[],
 ): RunTarget | null {

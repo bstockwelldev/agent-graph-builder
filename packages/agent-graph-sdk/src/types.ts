@@ -50,6 +50,7 @@ import type {
   healthFactorSchema,
   nodeImpactSchema,
   subgraphExtractResponseSchema,
+  graphSummarySchema,
   graphUsedBySchema,
   policyEnforcementSchema,
   policyExceptionSchema,
@@ -239,6 +240,7 @@ export type GraphHealth = z.infer<typeof graphHealthSchema>;
 export type HealthFactor = z.infer<typeof healthFactorSchema>;
 export type NodeImpact = z.infer<typeof nodeImpactSchema>;
 export type SubgraphExtractResponse = z.infer<typeof subgraphExtractResponseSchema>;
+export type GraphSummary = z.infer<typeof graphSummarySchema>;
 export type GraphUsedBy = z.infer<typeof graphUsedBySchema>;
 export type GraphGroup = z.infer<typeof graphGroupSchema>;
 export type GraphLayer = z.infer<typeof graphLayerSchema>;
