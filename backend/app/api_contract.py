@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-API_VERSION = "0.3.0"
+API_VERSION = "0.4.0"
 API_VERSION_HEADER = "X-AGB-API-Version"
 
 CONTRACT_PATH = (

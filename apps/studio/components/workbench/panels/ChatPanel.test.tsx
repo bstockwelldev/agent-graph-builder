@@ -26,17 +26,23 @@ const api = vi.hoisted(() => {
         get: vi.fn(async () => session),
         update: vi.fn(async (s: unknown) => s),
         create: vi.fn(),
+        send: vi.fn(async () => session),
       },
-      listGraphs: vi.fn(async () => [
-        { id: "demo", name: "Support flow", entry_node_id: "i", edges: [], nodes: [{ id: "i", type: "input", position: { x: 0, y: 0 }, config: { variableName: "question" } }] },
-      ]),
-      listReleases: vi.fn(async () => [{ release_id: "rel_new", created_at: "2026-09-02", semantic_fingerprint: "a", document_fingerprint: "b" }]),
-      startRun: vi.fn(async () => ({ run_id: "run_d", graph_id: "demo", status: "queued" })),
-      startReleaseRun: vi.fn(async () => ({ run_id: "run_r", graph_id: "demo", status: "queued" })),
-      getRun: vi.fn(async (id: string) => ({ run_id: id, graph_id: "demo", status: "succeeded", provider: "stub", result: "ok" })),
-      getRunNodeTraces: vi.fn(async () => []),
-      sendChatMessage: vi.fn(async () => session),
-      listProviderModels: vi.fn(async () => ({ models: [], message: "" })),
+      graphs: {
+        list: vi.fn(async () => [
+          { id: "demo", name: "Support flow", entry_node_id: "i", edges: [], nodes: [{ id: "i", type: "input", position: { x: 0, y: 0 }, config: { variableName: "question" } }] },
+        ]),
+      },
+      releases: {
+        list: vi.fn(async () => [{ release_id: "rel_new", created_at: "2026-09-02", semantic_fingerprint: "a", document_fingerprint: "b" }]),
+        run: vi.fn(async () => ({ run: { run_id: "run_r", graph_id: "demo", status: "queued" } })),
+      },
+      runs: {
+        start: vi.fn(async () => ({ run: { run_id: "run_d", graph_id: "demo", status: "queued" } })),
+        get: vi.fn(async (id: string) => ({ run_id: id, graph_id: "demo", status: "succeeded", provider: "stub", result: "ok" })),
+        traces: vi.fn(async () => []),
+      },
+      providers: { models: vi.fn(async () => ({ models: [], message: "" })) },
     },
   };
 });
@@ -77,22 +83,22 @@ describe("ChatPanel graph runs", () => {
   it("/run on a draft starts at once via the run API and records a run card", async () => {
     const box = await renderChat();
     send(box, "/run Support flow How does TCP work?");
-    await vi.waitFor(() => expect(api.client.startRun).toHaveBeenCalledWith("demo", { question: "How does TCP work?" }, "stub", "stub"));
+    await vi.waitFor(() => expect(api.client.runs.start).toHaveBeenCalledWith({ graphId: "demo", input: { question: "How does TCP work?" }, provider: "stub", model: "stub" }));
     await vi.waitFor(() => expect(api.client.chatSessions.update).toHaveBeenCalled());
     const saved = api.client.chatSessions.update.mock.calls[0][0] as { messages: { role: string; content: string; run?: unknown }[] };
     expect(saved.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(saved.messages[1].run).toMatchObject({ run_id: "run_d", source: "draft", graph_name: "Support flow" });
     expect(await screen.findByRole("group", { name: "Run of Support flow" })).toBeTruthy();
-    expect(api.client.sendChatMessage).not.toHaveBeenCalled();
+    expect(api.client.chatSessions.send).not.toHaveBeenCalled();
   });
 
   it("a release run waits for an explicit confirm", async () => {
     const box = await renderChat();
     send(box, "/run demo@latest Hi");
     const confirm = await screen.findByRole("alertdialog", { name: "Confirm run of Support flow" });
-    expect(api.client.startReleaseRun).not.toHaveBeenCalled();
+    expect(api.client.releases.run).not.toHaveBeenCalled();
     fireEvent.click(within(confirm).getByRole("button", { name: /Run/ }));
-    await vi.waitFor(() => expect(api.client.startReleaseRun).toHaveBeenCalledWith("rel_new", { question: "Hi" }, "stub", "stub"));
+    await vi.waitFor(() => expect(api.client.releases.run).toHaveBeenCalledWith("rel_new", { input: { question: "Hi" }, provider: "stub", model: "stub" }));
   });
 
   it("a plain-text request is only proposed, and Cancel discards it", async () => {
@@ -102,14 +108,14 @@ describe("ChatPanel graph runs", () => {
     expect(within(confirm).getByText(/Proposed from your message/)).toBeTruthy();
     fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(api.client.startRun).not.toHaveBeenCalled();
+    expect(api.client.runs.start).not.toHaveBeenCalled();
   });
 
   it("ordinary messages still go to the model", async () => {
-    api.client.sendChatMessage.mockResolvedValueOnce({ ...api.session, messages: [] });
+    api.client.chatSessions.send.mockResolvedValueOnce({ ...api.session, messages: [] });
     const box = await renderChat();
     send(box, "run a marathon for me");
-    await vi.waitFor(() => expect(api.client.sendChatMessage).toHaveBeenCalled());
-    expect(api.client.startRun).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(api.client.chatSessions.send).toHaveBeenCalled());
+    expect(api.client.runs.start).not.toHaveBeenCalled();
   });
 });

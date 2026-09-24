@@ -176,7 +176,7 @@ def get_run(run_id: str) -> RunSummary | None:
     return _summary_from_blob(payload)
 
 
-def list_runs_for_graph(graph_id: str, *, limit: int = 50) -> list[RunSummary]:
+def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSummary]:
     runs: list[RunSummary] = []
     for key in list_keys(_RUN_PREFIX):
         payload = get_json(key)

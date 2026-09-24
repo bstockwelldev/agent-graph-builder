@@ -108,7 +108,7 @@ function useGraphList(): GraphDefinition[] | null {
   useEffect(() => {
     let cancelled = false;
     client
-      .listGraphs()
+      .graphs.list()
       .then((list) => {
         if (!cancelled) setGraphs(list);
       })
@@ -131,7 +131,7 @@ function useReleases(graphId: string): ReleaseIndexEntry[] {
     }
     let cancelled = false;
     client
-      .listReleases(graphId)
+      .releases.list(graphId)
       .then((list) => {
         if (!cancelled) setReleases(list);
       })

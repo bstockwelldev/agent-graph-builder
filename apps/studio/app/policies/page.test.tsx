@@ -1,17 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetClientMock } from "@/lib/mockClient";
+
 import PoliciesPage from "./page";
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
-    getEffectivePolicies: vi.fn(),
-    getWorkspacePolicies: vi.fn(),
-    saveWorkspacePolicies: vi.fn(),
-    listAllPolicyExceptions: vi.fn(),
-    listGraphs: vi.fn(),
-    updatePolicyException: vi.fn(),
-    deletePolicyException: vi.fn(),
+    policies: {
+      effective: vi.fn(),
+      workspace: { get: vi.fn(), save: vi.fn() },
+      exceptions: { list: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    },
+    graphs: { list: vi.fn() },
   },
 }));
 
@@ -36,23 +37,23 @@ const exception = (id: string, days: number) => ({
 });
 
 beforeEach(() => {
-  Object.values(clientMock).forEach((fn) => fn.mockReset());
-  clientMock.getEffectivePolicies.mockResolvedValue([
+  resetClientMock(clientMock);
+  clientMock.policies.effective.mockResolvedValue([
     rule("reliability", "POLICY_LLM_MODEL_NOT_PINNED", "LLM model not pinned"),
     rule("cost", "POLICY_TOO_MANY_MODEL_NODES", "Too many model nodes", [
       { name: "max_model_nodes", label: "Maximum model nodes", type: "integer", default: 5, minimum: 1 },
     ]),
   ]);
-  clientMock.getWorkspacePolicies.mockResolvedValue({ rules: {}, updated_at: null });
-  clientMock.listAllPolicyExceptions.mockResolvedValue([exception("pexc_live", 20), exception("pexc_dead", -3)]);
-  clientMock.listGraphs.mockResolvedValue([{ id: "g1", name: "Support flow" }]);
+  clientMock.policies.workspace.get.mockResolvedValue({ rules: {}, updated_at: null });
+  clientMock.policies.exceptions.list.mockResolvedValue([exception("pexc_live", 20), exception("pexc_dead", -3)]);
+  clientMock.graphs.list.mockResolvedValue([{ id: "g1", name: "Support flow" }]);
 });
 
 afterEach(cleanup);
 
 describe("/policies", () => {
   it("groups rules by category and commits a threshold on blur", async () => {
-    clientMock.saveWorkspacePolicies.mockResolvedValue({ rules: {}, updated_at: "2026-09-23T00:00:00Z" });
+    clientMock.policies.workspace.save.mockResolvedValue({ rules: {}, updated_at: "2026-09-23T00:00:00Z" });
     render(<PoliciesPage />);
 
     expect(await screen.findByText("Reliability")).toBeTruthy();
@@ -61,13 +62,13 @@ describe("/policies", () => {
     const input = screen.getByLabelText("Maximum model nodes") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "0" } });
     fireEvent.blur(input);
-    expect(clientMock.saveWorkspacePolicies).not.toHaveBeenCalled();
+    expect(clientMock.policies.workspace.save).not.toHaveBeenCalled();
     expect(input.value).toBe("5");
 
     fireEvent.change(input, { target: { value: "12" } });
     fireEvent.blur(input);
     await waitFor(() =>
-      expect(clientMock.saveWorkspacePolicies).toHaveBeenCalledWith({
+      expect(clientMock.policies.workspace.save).toHaveBeenCalledWith({
         rules: { POLICY_TOO_MANY_MODEL_NODES: { params: { max_model_nodes: 12 } } },
       }),
     );

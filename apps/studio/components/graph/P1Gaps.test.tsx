@@ -4,18 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CounterfactualForm, CounterfactualResultView } from "./CounterfactualForm";
 import { ReleasesPanel } from "./ReleasesPanel";
 import { RoutingLabPanel } from "./RoutingLabPanel";
+import { resetClientMock } from "@/lib/mockClient";
 
 // STO-609: draft diff (ReleasesPanel), routing lab vs release, counterfactual replay.
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
-    listReleases: vi.fn(),
-    getRelease: vi.fn(),
-    compareDraftToRelease: vi.fn(),
-    compareReleases: vi.fn(),
-    compareRoutingToRelease: vi.fn(),
-    compareRoutingDatasets: vi.fn(),
-    runRoutingDataset: vi.fn(),
+    releases: { list: vi.fn(), get: vi.fn(), compareDraft: vi.fn(), compare: vi.fn() },
+    routingLab: { run: vi.fn(), compare: vi.fn(), compareRelease: vi.fn() },
     datasets: { list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   },
 }));
@@ -40,10 +36,10 @@ const graph = {
 const release = { release_id: "rel_abc", semantic_fingerprint: "f".repeat(64), document_fingerprint: "d", created_at: "2026-09-23T00:00:00Z" };
 
 beforeEach(() => {
-  Object.values(clientMock).forEach((fn) => (typeof fn === "function" ? fn.mockReset() : undefined));
-  clientMock.listReleases.mockResolvedValue([release]);
+  resetClientMock(clientMock);
+  clientMock.releases.list.mockResolvedValue([release]);
   clientMock.datasets.list.mockResolvedValue([]);
-  clientMock.getRelease.mockResolvedValue({
+  clientMock.releases.get.mockResolvedValue({
     id: "rel_abc",
     graph_id: "g1",
     graph,
@@ -63,7 +59,7 @@ afterEach(cleanup);
 
 describe("ReleasesPanel · Diff vs draft", () => {
   it("diffs the live canvas against a release", async () => {
-    clientMock.compareDraftToRelease.mockResolvedValue({
+    clientMock.releases.compareDraft.mockResolvedValue({
       from_release_id: "rel_abc",
       to_release_id: null,
       to_label: "Draft",
@@ -80,7 +76,7 @@ describe("ReleasesPanel · Diff vs draft", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Diff vs draft" }));
     const diff = await screen.findByLabelText("Draft vs release diff");
     expect(getDraftGraph).toHaveBeenCalled();
-    expect(clientMock.compareDraftToRelease).toHaveBeenCalledWith("rel_abc", graph);
+    expect(clientMock.releases.compareDraft).toHaveBeenCalledWith("rel_abc", graph);
     expect(within(diff).getByText("Draft (unsaved)")).toBeTruthy();
     expect(within(diff).getByText("llm_classify")).toBeTruthy();
   });
@@ -88,17 +84,17 @@ describe("ReleasesPanel · Diff vs draft", () => {
 
 describe("RoutingLabPanel · compare against a release", () => {
   it("defaults to the latest release and labels baseline/candidate", async () => {
-    clientMock.compareRoutingToRelease.mockResolvedValue({
+    clientMock.routingLab.compareRelease.mockResolvedValue({
       baseline: { graph_id: "g1", dataset_size: 1, distributions: [], total_estimated_usd: 0, runs: [] },
       candidate: { graph_id: "g1", dataset_size: 1, distributions: [], total_estimated_usd: 0, runs: [] },
       distribution_deltas: [],
     });
     render(<RoutingLabPanel graphId="g1" />);
-    await waitFor(() => expect(clientMock.listReleases).toHaveBeenCalledWith("g1"));
+    await waitFor(() => expect(clientMock.releases.list).toHaveBeenCalledWith("g1"));
     const compare = await screen.findByRole("button", { name: "Compare" });
     await waitFor(() => expect((compare as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(compare);
-    await waitFor(() => expect(clientMock.compareRoutingToRelease).toHaveBeenCalledWith("g1", "latest", expect.any(Array)));
+    await waitFor(() => expect(clientMock.routingLab.compareRelease).toHaveBeenCalledWith("g1", { releaseId: "latest", dataset: expect.any(Array) }));
     expect(await screen.findByText("Release (latest)")).toBeTruthy();
     expect(screen.getByText("Draft")).toBeTruthy();
   });

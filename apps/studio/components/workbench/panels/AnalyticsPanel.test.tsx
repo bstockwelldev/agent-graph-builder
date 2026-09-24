@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/api-client", () => ({
   client: {
-    getGraphAnalytics: vi.fn(async () => ({
+    analytics: {
+      graph: vi.fn(async () => ({
       graph_id: "g",
       run_window: 4,
       totals: { invocations: 4, input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_usd: 0.25, avg_duration_ms: 0 },
@@ -27,7 +28,8 @@ vi.mock("@/lib/api-client", () => ({
           last_error: "timeout",
         },
       ],
-    })),
+      })),
+    },
   },
 }));
 

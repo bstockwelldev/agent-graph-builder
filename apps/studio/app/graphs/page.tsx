@@ -30,7 +30,7 @@ export default function GraphsPage() {
     setLoading(true);
     setError(null);
     try {
-      setGraphs(await client.listGraphs());
+      setGraphs(await client.graphs.list());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -46,7 +46,7 @@ export default function GraphsPage() {
     setCreating(true);
     try {
       const name = template === "demo" ? "Demo graph" : `New graph ${new Date().toLocaleTimeString()}`;
-      const created = await client.createGraph(name, template);
+      const created = await client.graphs.create({ name, template });
       setGraphs((prev) => [created, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -59,7 +59,7 @@ export default function GraphsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await client.deleteGraph(deleteTarget.id);
+      await client.graphs.delete(deleteTarget.id);
       setGraphs((prev) => prev.filter((graph) => graph.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {

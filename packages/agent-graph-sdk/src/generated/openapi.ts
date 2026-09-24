@@ -4,7 +4,7 @@
 // `pnpm --filter @bstockwelldev/agent-graph-sdk run generate`.
 
 /** The API contract version these types were generated from (server header X-AGB-API-Version). */
-export const CONTRACT_API_VERSION = "0.3.0";
+export const CONTRACT_API_VERSION = "0.4.0";
 
 export type paths = {
     "/api/agents": {
@@ -356,7 +356,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List Graphs */
+        /**
+         * List Graphs
+         * @description Paged order (with `limit`/`cursor`): by id.
+         */
         get: operations["list_graphs_api_graphs_get"];
         put?: never;
         /** Create Graph */
@@ -734,7 +737,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List Graph Runs */
+        /**
+         * List Graph Runs
+         * @description Unpaged: the 50 newest. Paged: every run, newest first.
+         */
         get: operations["list_graph_runs_api_graphs__graph_id__runs_get"];
         put?: never;
         post?: never;
@@ -1219,7 +1225,8 @@ export type paths = {
          *     'pick a graph -> see its runs', not a single global run feed... a true
          *     cross-graph GET /api/runs endpoint is a candidate Phase 5+ backend
          *     addition"). Backs the analytics dashboard below; the studio UI itself
-         *     still uses the per-graph route for its Runs screen.
+         *     still uses the per-graph route for its Runs screen. Unpaged: the 200
+         *     newest. Paged (SDK 4/7): every run, newest first.
          */
         get: operations["list_all_runs_api_runs_get"];
         put?: never;
@@ -2600,7 +2607,12 @@ export type $defs = Record<string, never>;
 export interface operations {
     list_agents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2616,6 +2628,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2795,7 +2816,12 @@ export interface operations {
     };
     list_agents_versions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 resource_id: string;
@@ -2911,7 +2937,12 @@ export interface operations {
     };
     list_chat_sessions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2927,6 +2958,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3143,7 +3183,12 @@ export interface operations {
     };
     list_datasets: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3159,6 +3204,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3541,7 +3595,12 @@ export interface operations {
     };
     list_graphs_api_graphs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3555,6 +3614,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphDefinition"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3932,7 +4000,11 @@ export interface operations {
     get_graph_knowledge_lineage_api_graphs__graph_id__knowledge_lineage_get: {
         parameters: {
             query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
                 document_id?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
             };
             header?: never;
             path: {
@@ -4131,7 +4203,12 @@ export interface operations {
     };
     list_policy_exceptions_endpoint_api_graphs__graph_id__policy_exceptions_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 graph_id: string;
@@ -4267,7 +4344,12 @@ export interface operations {
     };
     list_releases_endpoint_api_graphs__graph_id__releases_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 graph_id: string;
@@ -4474,7 +4556,12 @@ export interface operations {
     };
     list_graph_runs_api_graphs__graph_id__runs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 graph_id: string;
@@ -4624,7 +4711,12 @@ export interface operations {
     };
     list_llm_profiles: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4640,6 +4732,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4819,7 +4920,12 @@ export interface operations {
     };
     list_llm_profiles_versions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 resource_id: string;
@@ -4915,7 +5021,12 @@ export interface operations {
     };
     list_mcp_servers: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4931,6 +5042,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5110,7 +5230,12 @@ export interface operations {
     };
     list_mcp_servers_versions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 resource_id: string;
@@ -5299,7 +5424,12 @@ export interface operations {
     };
     list_all_policy_exceptions_endpoint_api_policy_exceptions_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5315,11 +5445,25 @@ export interface operations {
                     "application/json": components["schemas"]["PolicyException"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     list_prompts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5335,6 +5479,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5514,7 +5667,12 @@ export interface operations {
     };
     list_prompts_versions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 resource_id: string;
@@ -5711,7 +5869,12 @@ export interface operations {
     };
     list_all_runs_api_runs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5725,6 +5888,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5993,7 +6165,12 @@ export interface operations {
     };
     list_tools: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6009,6 +6186,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6188,7 +6374,12 @@ export interface operations {
     };
     list_tools_versions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
             header?: never;
             path: {
                 resource_id: string;

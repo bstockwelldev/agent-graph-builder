@@ -1,15 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetClientMock } from "@/lib/mockClient";
+
 import { KnowledgePanel } from "./KnowledgePanel";
 import { AgentGraphApiError } from "@bstockwelldev/agent-graph-sdk";
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
-    getKnowledge: vi.fn(),
-    getKnowledgeLineage: vi.fn(),
-    uploadKnowledgeDocument: vi.fn(),
-    deleteKnowledgeDocument: vi.fn(),
+    knowledge: { get: vi.fn(), lineage: vi.fn(), upload: vi.fn(), delete: vi.fn() },
   },
 }));
 
@@ -43,8 +42,8 @@ const lineageRow = {
 };
 
 beforeEach(() => {
-  Object.values(clientMock).forEach((fn) => fn.mockReset());
-  clientMock.getKnowledgeLineage.mockResolvedValue([]);
+  resetClientMock(clientMock);
+  clientMock.knowledge.lineage.mockResolvedValue([]);
   try {
     window.localStorage.clear();
   } catch {
@@ -55,16 +54,16 @@ afterEach(() => cleanup());
 
 describe("KnowledgePanel", () => {
   it("shows the empty state for a graph with no documents", async () => {
-    clientMock.getKnowledge.mockResolvedValue(empty);
+    clientMock.knowledge.get.mockResolvedValue(empty);
     render(<KnowledgePanel graphId="g1" />);
 
     expect(await screen.findByText(/No documents yet/)).toBeTruthy();
-    expect(clientMock.getKnowledge).toHaveBeenCalledWith("g1");
+    expect(clientMock.knowledge.get).toHaveBeenCalledWith("g1");
   });
 
   it("lists documents with embedding info and per-document usage", async () => {
-    clientMock.getKnowledge.mockResolvedValue(populated);
-    clientMock.getKnowledgeLineage.mockResolvedValue([lineageRow]);
+    clientMock.knowledge.get.mockResolvedValue(populated);
+    clientMock.knowledge.lineage.mockResolvedValue([lineageRow]);
     render(<KnowledgePanel graphId="g1" />);
 
     expect(await screen.findByText(/1 document · 3 chunks/)).toBeTruthy();
@@ -74,8 +73,8 @@ describe("KnowledgePanel", () => {
   });
 
   it("uploads the chosen file and shows the resulting document list", async () => {
-    clientMock.getKnowledge.mockResolvedValue(empty);
-    clientMock.uploadKnowledgeDocument.mockResolvedValue({
+    clientMock.knowledge.get.mockResolvedValue(empty);
+    clientMock.knowledge.upload.mockResolvedValue({
       ok: true,
       documentId: "d1",
       addedChunkCount: 3,
@@ -88,12 +87,12 @@ describe("KnowledgePanel", () => {
     fireEvent.change(screen.getByLabelText("Upload knowledge document"), { target: { files: [file] } });
 
     expect(await screen.findByText("notes.md")).toBeTruthy();
-    expect(clientMock.uploadKnowledgeDocument).toHaveBeenCalledWith("g1", file);
+    expect(clientMock.knowledge.upload).toHaveBeenCalledWith("g1", file);
   });
 
   it("surfaces the backend's error detail when an upload fails", async () => {
-    clientMock.getKnowledge.mockResolvedValue(empty);
-    clientMock.uploadKnowledgeDocument.mockRejectedValue(
+    clientMock.knowledge.get.mockResolvedValue(empty);
+    clientMock.knowledge.upload.mockRejectedValue(
       new AgentGraphApiError({ status: 503, method: "POST", path: "/api/graphs/g1/knowledge", url: "/api/graphs/g1/knowledge", body: JSON.stringify({ detail: "No embedding provider configured" }) }),
     );
     render(<KnowledgePanel graphId="g1" />);
@@ -107,32 +106,32 @@ describe("KnowledgePanel", () => {
   });
 
   it("requires a second click to confirm removing a document", async () => {
-    clientMock.getKnowledge.mockResolvedValue(populated);
-    clientMock.deleteKnowledgeDocument.mockResolvedValue({ ok: true, ...empty });
+    clientMock.knowledge.get.mockResolvedValue(populated);
+    clientMock.knowledge.delete.mockResolvedValue({ ok: true, ...empty });
     render(<KnowledgePanel graphId="g1" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Remove notes.md" }));
-    expect(clientMock.deleteKnowledgeDocument).not.toHaveBeenCalled();
+    expect(clientMock.knowledge.delete).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Confirm remove notes.md" }));
-    await waitFor(() => expect(clientMock.deleteKnowledgeDocument).toHaveBeenCalledWith("g1", "d1"));
+    await waitFor(() => expect(clientMock.knowledge.delete).toHaveBeenCalledWith("g1", "d1"));
     expect(await screen.findByText(/No documents yet/)).toBeTruthy();
   });
 
   it("cancelling a pending remove leaves the document in place", async () => {
-    clientMock.getKnowledge.mockResolvedValue(populated);
+    clientMock.knowledge.get.mockResolvedValue(populated);
     render(<KnowledgePanel graphId="g1" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Remove notes.md" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.getByRole("button", { name: "Remove notes.md" })).toBeTruthy();
-    expect(clientMock.deleteKnowledgeDocument).not.toHaveBeenCalled();
+    expect(clientMock.knowledge.delete).not.toHaveBeenCalled();
   });
 
   it("still lists documents when the lineage request fails", async () => {
-    clientMock.getKnowledge.mockResolvedValue(populated);
-    clientMock.getKnowledgeLineage.mockRejectedValue(new Error("lineage exploded"));
+    clientMock.knowledge.get.mockResolvedValue(populated);
+    clientMock.knowledge.lineage.mockRejectedValue(new Error("lineage exploded"));
     render(<KnowledgePanel graphId="g1" />);
 
     expect(await screen.findByText("notes.md")).toBeTruthy();
@@ -142,7 +141,7 @@ describe("KnowledgePanel", () => {
   it("makes no requests without a graph id", () => {
     render(<KnowledgePanel graphId={null} />);
 
-    expect(clientMock.getKnowledge).not.toHaveBeenCalled();
+    expect(clientMock.knowledge.get).not.toHaveBeenCalled();
     expect(screen.getByText(/No documents yet/)).toBeTruthy();
   });
 });

@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- **Namespaced API** (SDK 4/7, STO-617): `client.graphs`, `runs`, `releases`, `policies` (`workspace`, `graph`, `exceptions`), `routingLab`, `knowledge`, `analytics`, `providers` and `runtimeTargets`, alongside the resource namespaces.
+  - Ids stay positional; everything else is a camelCase request object, e.g. `releases.publish(graphId, { notes, author })`.
+  - `runs.start` and `releases.run` return a `RunHandle`.
+  - `datasets.fromRuns` and `chatSessions.send` are new.
+- **Cursor pagination:** every list has `list()` (unpaged, as before), `listPage({ limit, cursor })` → `{ items, nextCursor }`, and `iterate({ pageSize })`.
+  - Knowledge lineage uses `lineagePage` and `iterateLineage`.
+  - Also exported: `collectAll`, `NEXT_CURSOR_HEADER`, and the `Page`, `PageRequest` and `IterateRequest` types.
+  - Requires API 0.4.0, which adds `?limit=&cursor=` and `X-Next-Cursor`.
+- Request types are exported, plus `DeprecatedClientMethods`: `Omit<AgentGraphClient, keyof DeprecatedClientMethods>` is a client type without the aliases.
+- `Transport.requestWithHeaders`.
+
+### Deprecated
+- Every flat client method (`getGraph`, `startRun`, `publishRelease`, `createPolicyException`, ...). Each still works as an alias of its namespaced method, sends the same request, and names its replacement in TSDoc. The aliases will be removed at 1.0.
+
 - **OpenAPI contract** (SDK 3/7, STO-616): `contract/openapi.json`, exported by the backend.
   - `src/generated/openapi.ts` is generated from it (`pnpm run generate`) and exported as `ApiPaths`, `ApiComponents` and `ApiOperations`, along with `CONTRACT_API_VERSION`.
   - Contract drift tests fail on stale generated types or on a hand-written schema that doesn't match its contract model.

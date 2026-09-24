@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api-client", () => ({
   client: {
-    providerCredentials: vi.fn(async () => ({ label: "API key", env_var: "X", configured: false })),
-    listProviderModels: vi.fn(async () => ({ models: [], message: "" })),
+    providers: {
+      credentials: vi.fn(async () => ({ label: "API key", env_var: "X", configured: false })),
+      models: vi.fn(async () => ({ models: [], message: "" })),
+    },
   },
 }));
 

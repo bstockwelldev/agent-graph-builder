@@ -3347,13 +3347,53 @@
   },
   "info": {
     "title": "Agent Graph Builder POC",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/api/agents": {
       "get": {
         "operationId": "list_agents",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3369,6 +3409,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Agents"
@@ -3602,6 +3652,44 @@
               "title": "Resource Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -3740,6 +3828,46 @@
     "/api/chat-sessions": {
       "get": {
         "operationId": "list_chat_sessions",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3755,6 +3883,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Chat Sessions"
@@ -4031,6 +4169,46 @@
     "/api/datasets": {
       "get": {
         "operationId": "list_datasets",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4046,6 +4224,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Datasets"
@@ -4544,7 +4732,48 @@
     },
     "/api/graphs": {
       "get": {
+        "description": "Paged order (with `limit`/`cursor`): by id.",
         "operationId": "list_graphs_api_graphs_get",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4559,6 +4788,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Graphs"
@@ -5074,6 +5313,44 @@
               ],
               "title": "Document Id"
             }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -5418,6 +5695,44 @@
               "title": "Graph Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -5615,6 +5930,44 @@
             "schema": {
               "title": "Graph Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
             }
           }
         ],
@@ -5911,6 +6264,7 @@
     },
     "/api/graphs/{graph_id}/runs": {
       "get": {
+        "description": "Unpaged: the 50 newest. Paged: every run, newest first.",
         "operationId": "list_graph_runs_api_graphs__graph_id__runs_get",
         "parameters": [
           {
@@ -5920,6 +6274,44 @@
             "schema": {
               "title": "Graph Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
             }
           }
         ],
@@ -6064,6 +6456,46 @@
     "/api/llm-profiles": {
       "get": {
         "operationId": "list_llm_profiles",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6079,6 +6511,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Llm Profiles"
@@ -6312,6 +6754,44 @@
               "title": "Resource Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -6432,6 +6912,46 @@
     "/api/mcp-servers": {
       "get": {
         "operationId": "list_mcp_servers",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6447,6 +6967,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Mcp Servers"
@@ -6680,6 +7210,44 @@
               "title": "Resource Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
           }
         ],
         "responses": {
@@ -6898,6 +7466,46 @@
     "/api/policy-exceptions": {
       "get": {
         "operationId": "list_all_policy_exceptions_endpoint_api_policy_exceptions_get",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6912,6 +7520,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List All Policy Exceptions Endpoint"
@@ -6920,6 +7538,46 @@
     "/api/prompts": {
       "get": {
         "operationId": "list_prompts",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -6935,6 +7593,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Prompts"
@@ -7167,6 +7835,44 @@
             "schema": {
               "title": "Resource Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
             }
           }
         ],
@@ -7444,8 +8150,48 @@
     },
     "/api/runs": {
       "get": {
-        "description": "Cross-graph run history (studio-consolidation Phase 5) \u2014 flagged as\na gap in Phase 4c's as-built notes (\"/runs in the studio becomes\n'pick a graph -> see its runs', not a single global run feed... a true\ncross-graph GET /api/runs endpoint is a candidate Phase 5+ backend\naddition\"). Backs the analytics dashboard below; the studio UI itself\nstill uses the per-graph route for its Runs screen.",
+        "description": "Cross-graph run history (studio-consolidation Phase 5) \u2014 flagged as\na gap in Phase 4c's as-built notes (\"/runs in the studio becomes\n'pick a graph -> see its runs', not a single global run feed... a true\ncross-graph GET /api/runs endpoint is a candidate Phase 5+ backend\naddition\"). Backs the analytics dashboard below; the studio UI itself\nstill uses the per-graph route for its Runs screen. Unpaged: the 200\nnewest. Paged (SDK 4/7): every run, newest first.",
         "operationId": "list_all_runs_api_runs_get",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -7460,6 +8206,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List All Runs"
@@ -7842,6 +8598,46 @@
     "/api/tools": {
       "get": {
         "operationId": "list_tools",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -7857,6 +8653,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Tools"
@@ -8089,6 +8895,44 @@
             "schema": {
               "title": "Resource Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
             }
           }
         ],

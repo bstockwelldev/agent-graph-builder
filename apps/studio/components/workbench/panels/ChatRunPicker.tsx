@@ -45,7 +45,7 @@ export function ChatRunPicker({
     if (!graphId) return;
     let cancelled = false;
     client
-      .listReleases(graphId)
+      .releases.list(graphId)
       .then((list) => {
         if (!cancelled) setReleases([...list].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)));
       })

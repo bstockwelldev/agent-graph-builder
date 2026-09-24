@@ -44,7 +44,7 @@ export function NodeImpactTab({
     let cancelled = false;
     setError(null);
     client
-      .getNodeImpact(graphId, nodeId, getDraftGraph())
+      .graphs.impact(graphId, { nodeId, draft: getDraftGraph() })
       .then((result) => {
         if (cancelled) return;
         setImpact(result);
