@@ -17,9 +17,11 @@ export type GraphUrlState = {
   panel: string | null;
   tab: string | null;
   section: string | null;
+  /** Wave 7d: canvas view (overview / layers / heatmap); canvas is omitted. */
+  view: string | null;
 };
 
-const KEYS = ["node", "edge", "run", "panel", "tab", "section"] as const;
+const KEYS = ["node", "edge", "run", "panel", "tab", "section", "view"] as const;
 
 export const EMPTY_GRAPH_URL_STATE: GraphUrlState = {
   node: null,
@@ -28,6 +30,7 @@ export const EMPTY_GRAPH_URL_STATE: GraphUrlState = {
   panel: null,
   tab: null,
   section: null,
+  view: null,
 };
 
 export function parseGraphUrlState(search: string): GraphUrlState {
@@ -56,6 +59,7 @@ export function serializeGraphUrlState(state: Partial<GraphUrlState>, currentSea
     ["tab", node && state.tab && state.tab !== "configure" ? state.tab : null],
     ["run", state.run],
     ["panel", state.panel],
+    ["view", state.view && state.view !== "canvas" ? state.view : null],
   ];
   for (const [key, value] of ordered) {
     if (value) params.set(key, value);

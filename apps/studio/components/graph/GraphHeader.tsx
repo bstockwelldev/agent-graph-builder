@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, Download, Focus, GitBranch, HelpCircle, LayoutGrid, MoreHorizontal, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, Download, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
 import type { Diagnostic, GraphHealth, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 import { HEALTH_BAND } from "@/lib/graphHealth";
+import { GRAPH_VIEWS, type GraphView } from "@/lib/graphLayers";
 import { validationSummary } from "@/lib/diagnostics";
 import { color, radius, shell, spacing, status as statusColor, surface, text, typeScale } from "@/lib/graph-theme";
 import type { LayoutSpacing } from "@/layout/dagreLayout";
@@ -15,7 +16,7 @@ import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./No
 
 export type RunPanelSectionId = "run-controls" | "run-simulate" | "run-diagnostics" | "observe-events" | "observe-history";
 
-type MenuId = "run" | "layout" | "overflow";
+type MenuId = "run" | "layout" | "view" | "overflow";
 
 export type GraphHeaderLayoutControls = {
   orientation: GraphOrientation;
@@ -79,6 +80,9 @@ export function GraphHeader({
   onShowShortcuts,
   health = null,
   onOpenFind,
+  view = "canvas",
+  onViewChange,
+  onManageLayers,
   usedBy = [],
   onOpenGraph,
 }: {
@@ -107,6 +111,10 @@ export function GraphHeader({
   /** Wave 7a (STO-610): health score chip + find-on-canvas entry. */
   health?: Pick<GraphHealth, "score" | "band"> | null;
   onOpenFind?: () => void;
+  /** Wave 7d: the canvas view and its switcher, plus "Manage layers". */
+  view?: GraphView;
+  onViewChange?: (view: GraphView) => void;
+  onManageLayers?: () => void;
   /** Wave 7c: saved graphs whose subgraph nodes run this one. */
   usedBy?: { graph_id: string; name: string }[];
   onOpenGraph?: (graphId: string) => void;
@@ -114,6 +122,7 @@ export function GraphHeader({
   const [menu, setMenu] = useState<{ id: MenuId; x: number; y: number } | null>(null);
   const runMenuRef = useRef<HTMLButtonElement>(null);
   const layoutMenuRef = useRef<HTMLButtonElement>(null);
+  const viewMenuRef = useRef<HTMLButtonElement>(null);
   const overflowMenuRef = useRef<HTMLButtonElement>(null);
 
   const openMenu = (id: MenuId, trigger: HTMLElement | null, align: "left" | "right" = "left") => {
@@ -163,6 +172,15 @@ export function GraphHeader({
       separatorBefore: true,
       onClick: () => layout.onShowMinimapChange(!layout.showMinimap),
     },
+  ];
+
+  const viewActions: NodeContextMenuAction[] = [
+    ...GRAPH_VIEWS.map((option) => ({
+      label: option.label,
+      checked: view === option.value,
+      onClick: () => onViewChange?.(option.value),
+    })),
+    ...(onManageLayers ? [{ label: "Manage layers…", separatorBefore: true, onClick: onManageLayers }] : []),
   ];
 
   const overflowActions: NodeContextMenuAction[] = [
@@ -316,6 +334,17 @@ export function GraphHeader({
 
       {/* Tools */}
       <div style={{ ...groupStyle, paddingLeft: spacing[2], borderLeft: `1px solid ${surface.border}` }}>
+        {onViewChange && (
+          <IconButton
+            ref={viewMenuRef}
+            label={`View: ${GRAPH_VIEWS.find((option) => option.value === view)?.label ?? "Canvas"}`}
+            icon={<Layers size={16} />}
+            aria-haspopup="menu"
+            aria-expanded={menu?.id === "view"}
+            pressed={view !== "canvas" || menu?.id === "view"}
+            onClick={() => openMenu("view", viewMenuRef.current, "right")}
+          />
+        )}
         {!compact && (
           <>
             <IconButton
@@ -358,8 +387,10 @@ export function GraphHeader({
           x={menu.x}
           y={menu.y}
           width={MENU_WIDTH}
-          title={menu.id === "run" ? "Run" : menu.id === "layout" ? "Layout" : "More"}
-          actions={menu.id === "run" ? runActions : menu.id === "layout" ? layoutActions : overflowActions}
+          title={menu.id === "run" ? "Run" : menu.id === "layout" ? "Layout" : menu.id === "view" ? "View" : "More"}
+          actions={
+            menu.id === "run" ? runActions : menu.id === "layout" ? layoutActions : menu.id === "view" ? viewActions : overflowActions
+          }
           onClose={() => setMenu(null)}
         />
       )}

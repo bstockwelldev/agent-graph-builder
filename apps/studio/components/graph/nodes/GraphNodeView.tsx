@@ -72,6 +72,9 @@ export interface GraphNodeData extends Record<string, unknown> {
   /** Outgoing edge count, for router/branch "N routes" summaries. */
   routeCount?: number;
   traceSummary?: NodeTraceSummary | null;
+  /** Wave 7d Heatmap view: this node's metric tint and value badge.
+   * `null` (in heatmap view) means no data -- rendered neutral. */
+  heat?: { label: string; color: string } | null;
 }
 
 const STATUS_ICON: Partial<Record<NodeRunStatus, LucideIcon>> = {
@@ -202,7 +205,14 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
           : handleStyle;
 
   const issueColor = compileIssue?.severity === "error" ? color.error[600] : color.warning[600];
-  const borderColor = nodeStatus !== "idle" ? statusColor[nodeStatus] : compileIssue ? issueColor : tokens.border;
+  const heat = nodeData.heat;
+  const borderColor = heat
+    ? heat.color
+    : nodeStatus !== "idle"
+      ? statusColor[nodeStatus]
+      : compileIssue
+        ? issueColor
+        : tokens.border;
   const running = nodeStatus === "running";
 
   const cardStyle: CSSProperties = {
@@ -214,7 +224,8 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
     display: "flex",
     flexDirection: "column",
     gap: 2,
-    background: tokens.bg,
+    // Heatmap view: the metric colour washes over the type background.
+    background: heat ? `linear-gradient(0deg, ${heat.color}33, ${heat.color}33), ${tokens.bg}` : tokens.bg,
     border: `2px solid ${borderColor}`,
     color: text.primary,
     opacity: dimmed ? 0.35 : 1,
@@ -296,6 +307,11 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
           <Icon size={14} strokeWidth={2.25} color={tokens.accent} aria-hidden="true" style={{ flexShrink: 0 }} />
           <span style={{ ...eyebrowStyle, color: tokens.label }}>{typeTitle}</span>
           <span style={{ flex: 1 }} />
+          {heat && (
+            <span data-testid="heat-badge" style={{ fontSize: 11, fontWeight: 700, lineHeight: "16px", padding: "0 6px", borderRadius: 999, background: heat.color, color: "#111318" }}>
+              {heat.label}
+            </span>
+          )}
           {bindings.length > 0 && (
             <span
               role="img"

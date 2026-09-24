@@ -44,6 +44,7 @@ import type {
   platformEventSchema,
   effectivePolicyRuleSchema,
   graphGroupSchema,
+  graphLayerSchema,
   graphHealthSchema,
   healthFactorSchema,
   nodeImpactSchema,
@@ -239,3 +240,4 @@ export type NodeImpact = z.infer<typeof nodeImpactSchema>;
 export type SubgraphExtractResponse = z.infer<typeof subgraphExtractResponseSchema>;
 export type GraphUsedBy = z.infer<typeof graphUsedBySchema>;
 export type GraphGroup = z.infer<typeof graphGroupSchema>;
+export type GraphLayer = z.infer<typeof graphLayerSchema>;

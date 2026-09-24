@@ -20,7 +20,7 @@ Design pass for roadmap P3 "Large-graph complexity management". The pillar comes
 | 7a | Find on canvas, dependency view, blast radius, health score | **Shipped** ([STO-610](https://linear.app/stockwise-productions-prototypes/issue/STO-610)) |
 | 7b | Visual groups with collapse and expand; display-only, no runtime change | **Shipped** ([STO-611](https://linear.app/stockwise-productions-prototypes/issue/STO-611)) |
 | 7c | Graph-as-node subgraphs: typed interface, nested runs, "Extract to graph" | **Shipped** ([STO-612](https://linear.app/stockwise-productions-prototypes/issue/STO-612)) |
-| 7d | Multiple graph views and architecture layers | Planned |
+| 7d | Multiple graph views and architecture layers | **Shipped** ([STO-622](https://linear.app/stockwise-productions-prototypes/issue/STO-622)) — pillar complete |
 
 ## 7a — what shipped
 
@@ -247,3 +247,49 @@ Studio applies the returned parent as one undoable edit.
   - The child's ⋯ menu shows "Used by 1 graph".
   - Pointing the child back at the parent raised `SUBGRAPH_CYCLE`, shown inline on the Graph field.
   - The mobile canvas renders.
+
+## 7d — what shipped
+
+### Model (display-only)
+
+- New field `GraphDefinition.layers: [{id, label, color?}]`, plus `node.extensions.layer`.
+- **Fingerprints:**
+  - The semantic fingerprint ignores both: `_semantic_payload` pops `layers`, and `layer` joins `_DISPLAY_ONLY_EXTENSION_KEYS`.
+  - The document fingerprint includes `layers` only when non-empty, so the digest of a graph without layers is unchanged.
+  - The SDK mirrors this. The cross-wire digest is checked against the backend.
+- A node on an undefined layer gets the non-blocking warning `LAYER_UNKNOWN`.
+
+### Views (`?view=`, `lib/graphLayers.ts`)
+
+The header has a new **View** menu (layers icon, on desktop and compact) with Canvas, Overview, Layers, Heatmap and "Manage layers…". Every view is derived in GraphEditor's render memos and never writes positions. Switching views refits the canvas.
+
+| View | What it shows |
+| --- | --- |
+| **Overview** | Every 7b group rendered collapsed. The saved `collapsed` flag is untouched. Expanding a card drills back into Canvas. |
+| **Layers** | Swimlanes (`laneLayout`): one band per layer, plus Unassigned if needed, in layer order. Columns come from a left-to-right dagre rank pass, and nodes sharing a lane and column stack. Bands are derived `laneBand` nodes. A chip bar toggles lanes, and nodes can't be dragged in this view. |
+| **Heatmap** | Fetches graph analytics when the view opens. A metric picker offers p95 latency, failure rate and executions. Node cards get a tint and a value badge on a green → amber → red ramp scaled to the max value; nodes with no data stay neutral. A legend shows the run window. |
+
+### Layer editing
+
+- **Inspector:** a Layer picker at the top of the Configure tab, with a "Manage…" button.
+- **"Manage layers" dialog** (`manage-layers-dialog.tsx`):
+  - add, rename, recolour (the six group swatches) and delete layers;
+  - "Use default layers": Ingress, Reasoning, Tools, Egress;
+  - auto-assign by type, applied to unassigned nodes or to every node.
+- Every layer change is undoable, because `CanvasSnapshot` now includes `layers`.
+
+## Verification (7d)
+
+- **Backend:** pytest 515/515 (`test_graph_layers.py`).
+- **SDK:** vitest 117/117.
+- **Studio:**
+  - vitest 310/310 (`graphLayers.test.ts`, `manage-layers-dialog.test.tsx`, URL `view` round-trip);
+  - tsc clean, eslint 0 errors.
+- **Root:** build green.
+- **Playwright** on a stub backend, at 1440 and 390:
+  - Manage layers → defaults → reassign every node, then Layers view: four lanes (Ingress 1, Reasoning 5, Tools 1, Egress 1).
+  - Hiding Tools removes `tool_lookup`.
+  - After two runs, Heatmap shows badges on all 8 nodes. The Executions metric shows 2× / 1×.
+  - Overview shows the new group as a card. Back on Canvas it's expanded again, and every node position is unchanged.
+  - `?view=layers` restores after reload. The saved graph has the four layers and `tool_lookup.extensions.layer = "tools"`.
+  - On mobile the lane chips wrap across the full width.

@@ -110,6 +110,8 @@ def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
         # Wave 7b (STO-611): only present when the graph has groups, so
         # every pre-existing document fingerprint stays byte-identical.
         **({"groups": [g.model_dump(mode="json") for g in graph.groups]} if graph.groups else {}),
+        # Wave 7d (STO-622): same rule for architecture layers.
+        **({"layers": [la.model_dump(mode="json") for la in graph.layers]} if graph.layers else {}),
     }
 
 
@@ -118,7 +120,8 @@ def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
 # renaming a node is cosmetic, exactly like moving it, so it must not change
 # the semantic fingerprint or appear in semantic diffs. Mirrored by
 # packages/agent-graph-sdk/src/schema.ts's DISPLAY_ONLY_EXTENSION_KEYS.
-_DISPLAY_ONLY_EXTENSION_KEYS = frozenset({"label"})
+# Wave 7d adds `layer` (the node's architecture layer, graph.layers).
+_DISPLAY_ONLY_EXTENSION_KEYS = frozenset({"label", "layer"})
 
 
 def _semantic_extensions(extensions: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -137,6 +140,7 @@ def _semantic_payload(graph: GraphDefinition) -> dict[str, Any]:
     # visual groups.
     payload = _document_payload(graph)
     payload.pop("groups", None)  # Wave 7b: visual groups are display-only.
+    payload.pop("layers", None)  # Wave 7d: so are architecture layers.
     for node in payload["nodes"]:
         node.pop("position", None)
         node["extensions"] = _semantic_extensions(node["extensions"])

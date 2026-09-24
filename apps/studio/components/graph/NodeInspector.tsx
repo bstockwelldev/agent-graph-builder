@@ -25,6 +25,7 @@ import type {
   EdgeKind,
   GraphDefinition,
   GraphEdge,
+  GraphLayer,
   GraphNode,
   Diagnostic,
   NodeTrace,
@@ -147,6 +148,10 @@ export function NodeInspector({
   onSelectNode,
   onOpenReleases,
   onImpactHighlight,
+  layers = [],
+  currentLayer = null,
+  onLayerChange,
+  onManageLayers,
 }: {
   node: GraphNode;
   graphId?: string | null;
@@ -194,6 +199,11 @@ export function NodeInspector({
   onSelectNode?: (nodeId: string) => void;
   onOpenReleases?: () => void;
   onImpactHighlight?: (nodeIds: string[] | null) => void;
+  /** Wave 7d (STO-622): the graph's architecture layers and this node's. */
+  layers?: GraphLayer[];
+  currentLayer?: string | null;
+  onLayerChange?: (layer: string | null) => void;
+  onManageLayers?: () => void;
 }) {
   const [activeTab, setActiveTabState] = useState("configure");
   const setActiveTab = (tab: string) => {
@@ -336,6 +346,9 @@ export function NodeInspector({
       header={header}
       tabs={<IconTabs aria-label="Node sections" tabs={tabs} activeId={activeTab} onChange={setActiveTab} />}
     >
+      {activeTab === "configure" && onLayerChange && (
+        <LayerField layers={layers} value={currentLayer} onChange={onLayerChange} onManageLayers={onManageLayers} />
+      )}
       {activeTab === "configure" && (
         <ConfigureTab
           node={node}
@@ -894,6 +907,44 @@ function formatTraceDuration(trace: NodeTrace): string | null {
   const ms = new Date(trace.completed_at).getTime() - new Date(trace.started_at).getTime();
   if (ms < 0) return null;
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** Wave 7d: which architecture layer (swimlane) the node sits in. */
+function LayerField({
+  layers,
+  value,
+  onChange,
+  onManageLayers,
+}: {
+  layers: GraphLayer[];
+  value: string | null;
+  onChange: (layer: string | null) => void;
+  onManageLayers?: () => void;
+}) {
+  const known = value && layers.some((layer) => layer.id === value) ? value : "";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
+      <span style={{ fontSize: 12, color: text.secondary, flexShrink: 0 }}>Layer</span>
+      {layers.length > 0 ? (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Combobox
+            id="node-layer"
+            aria-label="Layer"
+            value={known}
+            options={[{ value: "", label: "Unassigned" }, ...layers.map((layer) => ({ value: layer.id, label: layer.label }))]}
+            onChange={(v) => onChange(v || null)}
+          />
+        </div>
+      ) : (
+        <span style={{ fontSize: 12, color: text.muted, flex: 1 }}>No layers yet</span>
+      )}
+      {onManageLayers && (
+        <Button variant="secondary" onClick={onManageLayers} style={{ fontSize: 12, flexShrink: 0 }}>
+          Manage…
+        </Button>
+      )}
+    </div>
+  );
 }
 
 function RunTab({
