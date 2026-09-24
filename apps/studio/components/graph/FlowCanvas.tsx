@@ -56,6 +56,12 @@ type FlowCanvasProps = {
   graphId: string | null;
   nodes: Node<GraphNodeData>[];
   edges: Edge[];
+  /** Wave 7b: what React Flow actually draws when it differs from the
+   * graph -- group frames added, collapsed members hidden, crossing edges
+   * rerouted. Layout, fit and focus keep working from `nodes`/`edges`. */
+  renderNodes?: Node<GraphNodeData>[];
+  renderEdges?: Edge[];
+  onSelectionContextMenu?: (x: number, y: number) => void;
   setNodes: Dispatch<SetStateAction<Node<GraphNodeData>[]>>;
   onNodesChange: OnNodesChange<Node<GraphNodeData>>;
   onEdgesChange: OnEdgesChange<Edge>;
@@ -115,6 +121,9 @@ function FlowCanvasInner({
   graphId,
   nodes,
   edges,
+  renderNodes,
+  renderEdges,
+  onSelectionContextMenu,
   setNodes,
   onNodesChange,
   onEdgesChange,
@@ -160,11 +169,11 @@ function FlowCanvasInner({
   edgesRef.current = edges;
   const displayEdges = useMemo(
     () =>
-      edges.map((edge) => ({
+      (renderEdges ?? edges).map((edge) => ({
         ...edge,
         style: applyEdgePointerAffordance(edge.style, edge.id === hoveredEdgeId || edge.id === selectedEdgeId),
       })),
-    [edges, hoveredEdgeId, selectedEdgeId],
+    [edges, renderEdges, hoveredEdgeId, selectedEdgeId],
   );
   const {
     effectiveRankDir,
@@ -377,7 +386,7 @@ function FlowCanvasInner({
         {liveAnnouncement}
       </div>
       <ReactFlow
-        nodes={nodes}
+        nodes={renderNodes ?? nodes}
         edges={displayEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -425,6 +434,10 @@ function FlowCanvasInner({
         onEdgeContextMenu={(event, edge) => {
           event.preventDefault();
           onEdgeContextMenu?.(edge.id, event.clientX, event.clientY);
+        }}
+        onSelectionContextMenu={(event) => {
+          event.preventDefault();
+          onSelectionContextMenu?.(event.clientX, event.clientY);
         }}
         onPaneContextMenu={(event) => {
           event.preventDefault();

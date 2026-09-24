@@ -126,6 +126,18 @@ class GraphEdge(BaseModel):
     extensions: dict[str, Any] | None = None
 
 
+class GraphGroup(BaseModel):
+    """Large-graph complexity, Wave 7b (STO-611): a visual frame around a
+    set of nodes. Display-only -- never part of the semantic fingerprint,
+    never read by the compiler's execution path or the runtime."""
+
+    id: str
+    label: str
+    color: str | None = None
+    node_ids: list[str] = Field(default_factory=list)
+    collapsed: bool = False
+
+
 class GraphDefinition(BaseModel):
     id: str
     name: str
@@ -134,6 +146,7 @@ class GraphDefinition(BaseModel):
     edges: list[GraphEdge]
     orientation: Literal["auto", "horizontal", "vertical"] = "auto"
     updated_at: str | None = None
+    groups: list[GraphGroup] | None = None
 
 
 class Diagnostic(BaseModel):

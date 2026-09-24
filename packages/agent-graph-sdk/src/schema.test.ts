@@ -140,6 +140,16 @@ describe("documentFingerprint / semanticFingerprint", () => {
     );
   });
 
+  it("keeps groups out of the semantic fingerprint and out of groupless documents (Wave 7b)", () => {
+    const plain = labeledFixture();
+    const grouped: GraphDefinition = { ...plain, groups: [{ id: "g1", label: "Intake", node_ids: ["n1"] }] };
+    expect(semanticFingerprint(grouped)).toBe(semanticFingerprint(plain));
+    expect(documentFingerprint(grouped)).not.toBe(documentFingerprint(plain));
+    expect(documentFingerprint({ ...plain, groups: [] })).toBe(documentFingerprint(plain));
+    expect(fingerprintGraph(grouped)).not.toBe(fingerprintGraph(plain));
+    expect(fingerprintGraphSemantics(grouped)).toBe(fingerprintGraphSemantics(plain));
+  });
+
   it("fingerprintGraph (local dirty check) sees a rename", () => {
     expect(fingerprintGraph(labeledFixture({ label: "A" }))).not.toBe(fingerprintGraph(labeledFixture({ label: "B" })));
   });

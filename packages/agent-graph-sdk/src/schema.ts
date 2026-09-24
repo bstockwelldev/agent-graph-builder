@@ -79,6 +79,8 @@ export function fingerprintGraph(graph: GraphDefinition): string {
       kind: edge.kind,
       condition: edge.condition ?? null,
     })),
+    // Wave 7b: groups are display-only but saved, so they mark the graph dirty.
+    groups: graph.groups ?? null,
   };
   return JSON.stringify(payload);
 }
@@ -168,6 +170,11 @@ function documentPayload(graph: GraphDefinition) {
       transform: edge.transform ? transformPayload(edge.transform) : null,
       extensions: edge.extensions ?? null,
     })),
+    // Mirrors fingerprint.py: only present when the graph has groups, so
+    // pre-existing document fingerprints are unchanged.
+    ...(graph.groups && graph.groups.length > 0
+      ? { groups: graph.groups.map((g) => ({ id: g.id, label: g.label, color: g.color ?? null, node_ids: g.node_ids, collapsed: g.collapsed ?? false })) }
+      : {}),
   };
 }
 
@@ -185,7 +192,8 @@ function semanticExtensions(extensions: Record<string, unknown> | null): Record<
 }
 
 function semanticPayload(graph: GraphDefinition) {
-  const payload = documentPayload(graph);
+  // Wave 7b: visual groups are display-only, like positions.
+  const { groups: _groups, ...payload } = documentPayload(graph) as ReturnType<typeof documentPayload> & { groups?: unknown };
   return {
     ...payload,
     nodes: payload.nodes.map(({ position: _position, ...rest }) => ({

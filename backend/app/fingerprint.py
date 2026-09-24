@@ -107,6 +107,9 @@ def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
             }
             for edge in graph.edges
         ],
+        # Wave 7b (STO-611): only present when the graph has groups, so
+        # every pre-existing document fingerprint stays byte-identical.
+        **({"groups": [g.model_dump(mode="json") for g in graph.groups]} if graph.groups else {}),
     }
 
 
@@ -130,8 +133,10 @@ def _semantic_extensions(extensions: dict[str, Any] | None) -> dict[str, Any] | 
 def _semantic_payload(graph: GraphDefinition) -> dict[str, Any]:
     # Excludes node.position (canvas layout) — "moving a node must not
     # invalidate runtime reproducibility" (design doc, Fingerprint section)
-    # — and display-only extension keys (the node's user-given name).
+    # — display-only extension keys (the node's user-given name), and
+    # visual groups.
     payload = _document_payload(graph)
+    payload.pop("groups", None)  # Wave 7b: visual groups are display-only.
     for node in payload["nodes"]:
         node.pop("position", None)
         node["extensions"] = _semantic_extensions(node["extensions"])

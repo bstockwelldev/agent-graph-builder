@@ -43,6 +43,7 @@ import type {
   nodeTypeSchema,
   platformEventSchema,
   effectivePolicyRuleSchema,
+  graphGroupSchema,
   graphHealthSchema,
   healthFactorSchema,
   nodeImpactSchema,
@@ -233,3 +234,4 @@ export type KnowledgeDeleteResponse = z.infer<typeof knowledgeDeleteResponseSche
 export type GraphHealth = z.infer<typeof graphHealthSchema>;
 export type HealthFactor = z.infer<typeof healthFactorSchema>;
 export type NodeImpact = z.infer<typeof nodeImpactSchema>;
+export type GraphGroup = z.infer<typeof graphGroupSchema>;

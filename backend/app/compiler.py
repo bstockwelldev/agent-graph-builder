@@ -249,11 +249,46 @@ def validate_graph(
     # node), so there's no overlap.
     diagnostics.extend(validate_contracts(graph))
 
+    # Wave 7b (STO-611): visual groups are display-only, so problems with
+    # them are warnings, never blocking.
+    diagnostics.extend(_validate_groups(graph, node_ids))
+
     # Cross-cutting policy overlays (P2, docs/planning/roadmap.md's
     # Strategic Roadmap Addendum): security, reliability, and cost checks,
     # with active policy exceptions already applied. See policies.py.
     diagnostics.extend(evaluate_graph_policies(graph, gate=policy_gate))
 
+    return diagnostics
+
+
+def _validate_groups(graph: GraphDefinition, node_ids: set[str]) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    owner: dict[str, str] = {}
+    for group in graph.groups or []:
+        for node_id in group.node_ids:
+            if node_id not in node_ids:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        category="structure",
+                        code="GROUP_UNKNOWN_NODE",
+                        message=f"Group {group.label!r} refers to missing node {node_id!r}.",
+                        blocking=False,
+                    )
+                )
+            elif node_id in owner and owner[node_id] != group.id:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="warning",
+                        category="structure",
+                        code="GROUP_OVERLAP",
+                        node_id=node_id,
+                        message=f"Node {node_id!r} is in more than one group.",
+                        blocking=False,
+                    )
+                )
+            else:
+                owner[node_id] = group.id
     return diagnostics
 
 

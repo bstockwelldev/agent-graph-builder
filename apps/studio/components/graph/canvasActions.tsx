@@ -16,6 +16,10 @@ export type CanvasActions = {
   focusNode: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
   selectEdge: (edgeId: string) => void;
+  /** Wave 7b visual groups: collapse/expand, and commit an inline rename
+   * (`null` cancels). */
+  toggleGroup: (groupId: string) => void;
+  renameGroup: (groupId: string, label: string | null) => void;
 };
 
 const noop = () => {};
@@ -27,6 +31,8 @@ const CanvasActionsContext = createContext<CanvasActions>({
   focusNode: noop,
   deleteNode: noop,
   selectEdge: noop,
+  toggleGroup: noop,
+  renameGroup: noop,
 });
 
 export const CanvasActionsProvider = CanvasActionsContext.Provider;

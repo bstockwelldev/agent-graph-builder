@@ -99,6 +99,15 @@ export const graphEdgeSchema = z.object({
   extensions: z.record(z.string(), z.unknown()).nullish(),
 });
 
+/** Wave 7b (STO-611): a display-only frame around a set of nodes. */
+export const graphGroupSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  color: z.string().nullish(),
+  node_ids: z.array(z.string()),
+  collapsed: z.boolean().optional(),
+});
+
 export const graphDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -107,6 +116,7 @@ export const graphDefinitionSchema = z.object({
   edges: z.array(graphEdgeSchema),
   orientation: graphOrientationSchema.optional(),
   updated_at: z.string().nullish(),
+  groups: z.array(graphGroupSchema).nullish(),
 });
 
 // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
