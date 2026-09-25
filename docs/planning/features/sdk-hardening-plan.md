@@ -437,6 +437,13 @@ Linear STO-619 · GitHub #71.
 - Root build and frozen install: green.
 - Playwright smoke on the stub backend: graph list, publish, a chat `/run` to Succeeded, and the policies page, with no failed calls.
 
+#### Release outcome (2026-09-25)
+
+- **1.0.0 is published to npm** (`latest`). It went out from a maintainer's terminal, not CI, because the first two CI attempts hit repository and account setup: no npm token, an invalid token, and an account without 2FA (npm requires 2FA to publish).
+- **Provenance and Pages were dropped.** The repo is private, so npm issues no provenance, and this plan has no GitHub Pages. The release workflow now publishes with `--provenance=false`, and the docs job uploads the typedoc site as a build artifact.
+- **The root package is `private`,** after a mistyped `cd` nearly published the whole repository as `agent-graph-builder`.
+- Making the repo public would allow provenance and Pages again.
+
 ## Sequencing
 
 | PR | Phase | Priority | Breaking? | Linear | GitHub |
