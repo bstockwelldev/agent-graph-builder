@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// Runs in ./vitest.jsdom-env.ts (jsdom with Node AbortSignal) -- see vitest.config.ts.
 import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
 import { StrictMode, type ReactNode } from "react";

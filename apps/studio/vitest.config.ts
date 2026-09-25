@@ -6,7 +6,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: "jsdom",
+    // jsdom, keeping Node's AbortSignal so Node's fetch (Node 22+) accepts
+    // it -- shared with the SDK's /react tests; see the file for why.
+    environment: "../../packages/agent-graph-sdk/vitest.jsdom-env.ts",
     include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules/**", ".next/**"],
   },
