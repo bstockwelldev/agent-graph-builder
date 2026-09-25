@@ -639,7 +639,7 @@ One shared component, `components/navigation/mobile-tab-bar.tsx` (`MobileTabBar`
   - The landmark is labelled "Studio tabs", distinct from the rail's "Studio".
 - **Canvas tray** (`GraphEditor.tsx`, `workbench.isCompact` = below 1100px): **Graphs · Add · Run · Chat · More**.
   - Add and Run show as pressed while their drawers are open.
-  - More opens a `NodeContextMenu` with Focus mode, Workflow summary, Releases, Routing lab, Knowledge, and Shortcuts & gestures. It opens above the tray (the new `bottomReserve` prop).
+  - More opens a `NodeContextMenu` with Focus mode, Releases, Routing lab, Knowledge, and Shortcuts & gestures. It opens above the tray (the new `bottomReserve` prop).
   - The graph switcher stays in the graph header.
   - Drawers (z-50) and the selection dock (z-40) sit over the tray (z-30). The dock already reserves 96px at the bottom.
 
@@ -657,9 +657,8 @@ One shared component, `components/navigation/mobile-tab-bar.tsx` (`MobileTabBar`
     - The last list item sits above the bar.
     - On the canvas, the global bar is absent and the tray is visible.
     - Add and Run show as pressed.
-    - The More menu lists all six items. Its bottom is at 770 and the tray top at 779.
+    - The More menu lists all five items. Its bottom is at 770 and the tray top at 779.
     - Focus mode toggles to checked.
-    - Workflow summary opens.
     - The node dock sits over the tray.
   - **820×1180:** the global bar is hidden (the rail shows) and the canvas tray works.
   - **1440:** no bar and no tray; unchanged.

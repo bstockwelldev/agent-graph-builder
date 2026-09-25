@@ -104,4 +104,31 @@ describe("GraphHeader", () => {
     expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByRole("status").textContent).toContain("Unsaved");
   });
+
+  const structure = { nodes: 8, edges: 8, entrypoints: ["input: question"], terminals: ["output"] };
+
+  it("shows graph structure as a chip with entry and terminal nodes", () => {
+    renderHeader({ structure });
+    const chip = screen.getByLabelText(/8 nodes · 8 edges/);
+    expect(chip.getAttribute("aria-label")).toContain("Entry: input: question · Terminal: output");
+  });
+
+  it("moves the structure summary into the overflow menu when compact", () => {
+    renderHeader({ structure, compact: true });
+    expect(screen.queryByLabelText(/8 nodes · 8 edges/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.getByText("8 nodes · 8 edges")).toBeTruthy();
+  });
+
+  it("lists recent runs in the Run menu", () => {
+    const onSelectRun = vi.fn();
+    renderHeader({
+      recentRuns: [{ run_id: "run_1", graph_id: "g", status: "succeeded", result: null, started_at: null }],
+      onSelectRun,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run options" }));
+    expect(screen.getByText("Recent runs")).toBeTruthy();
+    fireEvent.click(screen.getByText("succeeded · run_1"));
+    expect(onSelectRun).toHaveBeenCalledWith("run_1");
+  });
 });
