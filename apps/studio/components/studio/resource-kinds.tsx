@@ -559,7 +559,7 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
           <Label htmlFor={`${props.idPrefix}-type`}>Transform</Label>
           <Select value={type} onValueChange={(value) => props.setForm({ type: value as TransformDefinition["type"] })}>
             <SelectTrigger id={`${props.idPrefix}-type`} className="w-full">
-              <SelectValue />
+              <SelectValue>{(value: string) => TRANSFORM_TYPES.find((option) => option.value === value)?.label ?? value}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {TRANSFORM_TYPES.map((option) => (
