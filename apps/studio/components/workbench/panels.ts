@@ -12,6 +12,7 @@ export type WorkbenchPanelId =
   | "knowledge"
   | "policies"
   | "health"
+  | "graphConfig"
   | "chat"
   | "agents"
   | "prompts"
@@ -53,6 +54,8 @@ export const WORKBENCH_PANELS: Record<
   policies: { title: "Policies", hotkey: null, scope: "graph" },
   // Wave 7a (STO-610): the graph health score's breakdown.
   health: { title: "Health", hotkey: null, scope: "graph" },
+  // The whole graph as JSON/YAML, beside Import/Export in the header's ⋯ menu.
+  graphConfig: { title: "Graph config", hotkey: null, scope: "graph" },
   // App-wide panels (rendered by StudioShell, available on every route).
   chat: { title: "Chat", hotkey: "mod+shift+c", scope: "global" },
   agents: { title: "Agents", hotkey: null, scope: "global" },

@@ -64,7 +64,7 @@ import { TemplateEditor } from "./ui/TemplateEditor";
 import { Toggle } from "./ui/Toggle";
 import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
-import { JsonEditor } from "./ui/JsonEditor";
+import { RawConfigEditor } from "./ui/RawConfigEditor";
 import { NodeHistoryTab } from "./NodeHistoryTab";
 import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
@@ -395,7 +395,7 @@ export function NodeInspector({
         ))}
       {activeTab === "raw" && (
         <Group title="Raw config" icon={<Braces size={13} />}>
-          <JsonEditor value={node.config} onApply={onConfigChange} />
+          <RawConfigEditor value={node.config} onApply={onConfigChange} />
         </Group>
       )}
     </PanelFrame>
@@ -1084,7 +1084,8 @@ export function EdgeInspector({
         // Scoped to kind/condition only -- patchFlowEdgeData only applies
         // those two from a patch (studio-config-editor-and-console-plan.md §6).
         <Group title="Raw" icon={<Braces size={13} />}>
-          <JsonEditor
+          <RawConfigEditor
+            label="Raw edge config"
             value={{ kind: edge.kind, condition: edge.condition ?? null }}
             onApply={(next) => onChange(next)}
             parse={parseEdgeRawConfig}

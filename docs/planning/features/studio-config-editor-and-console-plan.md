@@ -124,6 +124,32 @@ with two notes below.
       plain `<textarea>` (`components/graph/ui/fields.tsx`'s `TextArea`)
       with monospace styling — no Monaco/CodeMirror.
 
+**Update 2026-09-25: YAML views and a live graph-scope editor.**
+
+- `JsonEditor` became `components/graph/ui/RawConfigEditor.tsx`, with
+  JSON | YAML tabs on every raw editor (node, edge, graph). YAML is a view
+  only. `lib/jsonEditor.ts`'s `toCanonicalJson`/`fromCanonicalJson`
+  convert at the edit boundary, so every validator still parses canonical
+  JSON and the API and storage never see YAML. The `yaml` package, already
+  in the lockfile transitively, is now a direct studio dependency.
+- Switching views keeps unapplied edits and is blocked while the text has a
+  syntax error. The chosen view is remembered per browser
+  (`agb.rawEditor.syntax`). If the value changes underneath (a canvas edit
+  or undo), a draft with no edits follows it; a draft with edits is kept
+  and flagged ("Apply keeps your version; Reset loads the latest").
+- **Graph scope is now also a live editor,** not only Export/Import: the
+  header ⋯ menu has "Graph config (JSON/YAML)", which opens the
+  `graphConfig` side panel (`GraphConfigPanel.tsx`). Apply goes through
+  `applyGraphDefinition`, the same path as Import. It is undoable, marks
+  the graph unsaved, and is persisted only by Save. Validation is the full
+  `graphDefinitionSchema` plus `parseGraphRawConfig`. That rejects a
+  changed `id` and an `entry_node_id` the studio would re-derive, rather
+  than silently ignoring them.
+- Now that node ports and edge ports/transforms survive a save
+  (incidents/demo-graph-contract-warnings-2026-09-25.md), the graph editor
+  is the interim way to set a transform. The edge Raw tab is still
+  limited to `kind`/`condition`.
+
 ---
 
 ## 7. App-wide console/log drawer

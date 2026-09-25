@@ -31,3 +31,26 @@ export function importGraphJson(text: string): GraphImportResult {
   }
   return { ok: true, graph: result.data };
 }
+
+/** The studio derives the entry node (first `input` node, else the first node) on save. */
+export function derivedEntryNodeId(graph: Pick<GraphDefinition, "nodes">): string {
+  return (graph.nodes.find((node) => node.type === "input") ?? graph.nodes[0])?.id ?? "";
+}
+
+/**
+ * Graph-level raw editor: full schema validation (as import) plus the two
+ * fields the editor can't change -- rejected rather than silently ignored.
+ */
+export function parseGraphRawConfig(json: string, graphId: string): { ok: true; value: GraphDefinition } | { ok: false; error: string } {
+  const result = importGraphJson(json);
+  if (!result.ok) return result;
+  const graph = result.graph;
+  if (graph.id !== graphId) {
+    return { ok: false, error: `"id" can't be changed here (expected "${graphId}"). Export and import to create a copy.` };
+  }
+  const entry = derivedEntryNodeId(graph);
+  if (graph.entry_node_id !== entry) {
+    return { ok: false, error: `"entry_node_id" must be "${entry}": the entry is the first input node (or the first node).` };
+  }
+  return { ok: true, value: graph };
+}
