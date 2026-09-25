@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
 
-import { exportGraphJson, importGraphJson } from "./graphJsonPortability";
+import { exportGraphJson, importGraphJson, parseGraphRawConfig } from "./graphJsonPortability";
 
 const SAMPLE_GRAPH: GraphDefinition = {
   id: "graph_1",
@@ -38,5 +38,30 @@ describe("exportGraphJson / importGraphJson", () => {
     const broken = { ...SAMPLE_GRAPH, nodes: [{ ...SAMPLE_GRAPH.nodes[0], type: "not_a_real_type" }] };
     const result = importGraphJson(JSON.stringify(broken));
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("parseGraphRawConfig", () => {
+  it("accepts an edited graph", () => {
+    const edited = { ...SAMPLE_GRAPH, name: "Renamed" };
+    expect(parseGraphRawConfig(exportGraphJson(edited), "graph_1")).toEqual({ ok: true, value: edited });
+  });
+
+  it("rejects a changed id instead of ignoring it", () => {
+    const result = parseGraphRawConfig(exportGraphJson({ ...SAMPLE_GRAPH, id: "other" }), "graph_1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/"id" can't be changed/);
+  });
+
+  it("rejects an entry_node_id the studio would re-derive", () => {
+    const result = parseGraphRawConfig(exportGraphJson({ ...SAMPLE_GRAPH, entry_node_id: "output_1" }), "graph_1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/"entry_node_id" must be "input_1"/);
+  });
+
+  it("reports schema errors by path", () => {
+    const result = parseGraphRawConfig('{"id":"graph_1","name":"x","nodes":"nope","edges":[]}', "graph_1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/nodes/);
   });
 });

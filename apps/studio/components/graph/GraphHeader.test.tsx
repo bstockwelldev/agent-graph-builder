@@ -67,6 +67,13 @@ describe("GraphHeader", () => {
     }
   });
 
+  it("opens the graph config editor from the overflow menu, next to Import/Export", () => {
+    const props = renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /Graph config \(JSON\/YAML\)/ }));
+    expect(props.onTogglePanel).toHaveBeenCalledWith("graphConfig");
+  });
+
   it("shows an open panel as checked in the overflow menu, not as a label swap", () => {
     renderHeader({ activePanel: "releases" });
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));

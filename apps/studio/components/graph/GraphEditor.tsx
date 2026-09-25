@@ -116,6 +116,7 @@ import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunSelection } from "./RunPanel";
 import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
+import { GraphConfigPanel } from "./GraphConfigPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { PolicyPanel } from "./PolicyPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
@@ -201,6 +202,7 @@ const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
   "knowledge",
   "policies",
   "health",
+  "graphConfig",
   "chat",
 ]);
 
@@ -1049,19 +1051,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }
   }, [buildGraphDefinition]);
 
-  const handleImportFile = useCallback(
-    async (file: File) => {
-      const text = await file.text();
-      const result = importGraphJson(text);
-      if (!result.ok) {
-        setSaveError(result.error);
-        return;
-      }
-      if (dirty && !window.confirm("Importing will replace the current unsaved graph. Continue?")) {
-        return;
-      }
+  // Replaces the canvas with `graph` (undoable; persisted only on Save).
+  // Shared by Import and the graph config panel.
+  const applyGraphDefinition = useCallback(
+    (graph: GraphDefinition) => {
       recordMutation();
-      const graph = result.graph;
       syncIdCounter(graph);
       setGraphName(graph.name);
       setGraphOrientation(graph.orientation ?? "auto");
@@ -1074,7 +1068,23 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setDiagnostics([]);
       setSaveError(null);
     },
-    [dirty, recordMutation, setEdges, setNodes],
+    [recordMutation, setEdges, setNodes],
+  );
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const result = importGraphJson(text);
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      if (dirty && !window.confirm("Importing will replace the current unsaved graph. Continue?")) {
+        return;
+      }
+      applyGraphDefinition(result.graph);
+    },
+    [applyGraphDefinition, dirty],
   );
 
   const paintInspectionPath = useCallback(
@@ -2589,6 +2599,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="graphConfig" side="right" mode="docked-reserve" dockedClassName="w-[32rem] border-l overflow-y-auto">
+        <GraphConfigPanel graph={buildGraphDefinition()} onApply={applyGraphDefinition} onClose={workbench.close} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="health" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <HealthPanel

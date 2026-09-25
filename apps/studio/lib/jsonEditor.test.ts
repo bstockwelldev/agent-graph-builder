@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatConfigJson, formatEdgeRawConfig, parseConfigJson, parseEdgeRawConfig } from "./jsonEditor";
+import { formatConfigJson, formatEdgeRawConfig, fromCanonicalJson, parseConfigJson, parseEdgeRawConfig, toCanonicalJson } from "./jsonEditor";
 
 describe("parseConfigJson", () => {
   it("accepts a valid JSON object", () => {
@@ -79,5 +79,37 @@ describe("parseEdgeRawConfig / formatEdgeRawConfig", () => {
   it("round-trips through formatEdgeRawConfig", () => {
     const formatted = formatEdgeRawConfig({ kind: "default", condition: null });
     expect(parseEdgeRawConfig(formatted)).toEqual({ ok: true, value: { kind: "default", condition: null } });
+  });
+});
+
+describe("JSON / YAML views", () => {
+  it("round-trips a value through YAML without changing it", () => {
+    const json = formatConfigJson({ provider: "groq", temperature: 0.2, tags: ["a", "b"], nested: { on: true, none: null } });
+    const yaml = fromCanonicalJson(json, "yaml");
+    expect(yaml).toContain("provider: groq");
+    expect(toCanonicalJson(yaml, "yaml")).toEqual({ ok: true, json });
+  });
+
+  it("keeps YAML-ambiguous strings as strings", () => {
+    const json = formatConfigJson({ answer: "yes", version: "1.10", empty: "" });
+    const back = toCanonicalJson(fromCanonicalJson(json, "yaml"), "yaml");
+    expect(back).toEqual({ ok: true, json });
+  });
+
+  it("reports invalid YAML and duplicate keys", () => {
+    const bad = toCanonicalJson("a: [1, 2", "yaml");
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.error).toMatch(/^Invalid YAML/);
+    expect(toCanonicalJson("a: 1\na: 2", "yaml").ok).toBe(false);
+  });
+
+  it("passes JSON through untouched", () => {
+    expect(toCanonicalJson('{"a":1}', "json")).toEqual({ ok: true, json: '{"a":1}' });
+    expect(fromCanonicalJson('{"a":1}', "json")).toBe('{"a":1}');
+  });
+
+  it("feeds YAML through the existing validators", () => {
+    const converted = toCanonicalJson("kind: conditional\ncondition: technical", "yaml");
+    expect(converted.ok && parseEdgeRawConfig(converted.json)).toEqual({ ok: true, value: { kind: "conditional", condition: "technical" } });
   });
 });

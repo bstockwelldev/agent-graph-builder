@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, FileCode2, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
 import type { Diagnostic, GraphHealth, GraphOrientation, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 import type { GraphStructure } from "@/lib/graphAuthoring";
 import { HEALTH_BAND } from "@/lib/graphHealth";
@@ -258,7 +258,14 @@ export function GraphHeader({
       groupLabel: index === 0 ? `Used by ${usedBy.length} graph${usedBy.length === 1 ? "" : "s"}` : undefined,
       onClick: () => onOpenGraph?.(parent.graph_id),
     })),
-    { label: "Export JSON", icon: <Download size={14} />, separatorBefore: true, onClick: onExport },
+    {
+      label: "Graph config (JSON/YAML)",
+      icon: <FileCode2 size={14} />,
+      checked: activePanel === "graphConfig",
+      separatorBefore: true,
+      onClick: () => onTogglePanel("graphConfig"),
+    },
+    { label: "Export JSON", icon: <Download size={14} />, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
     { label: "Shortcuts", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
   ];
@@ -418,7 +425,7 @@ export function GraphHeader({
           icon={<MoreHorizontal size={18} />}
           aria-haspopup="menu"
           aria-expanded={menu?.id === "overflow"}
-          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health"}
+          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health" || activePanel === "graphConfig"}
           onClick={() => openMenu("overflow", overflowMenuRef.current, "right")}
         />
       </div>

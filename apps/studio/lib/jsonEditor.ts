@@ -13,6 +13,8 @@
  * strict as the typed form, not more, not less.
  */
 
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+
 export type ConfigParseResult =
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; error: string };
@@ -66,4 +68,50 @@ export function parseEdgeRawConfig(text: string): EdgeConfigParseResult {
     return { ok: false, error: '"condition" must be a string or null.' };
   }
   return { ok: true, value: { kind: kind as EdgeKindValue, condition: (condition as string | null) ?? null } };
+}
+
+// --- JSON / YAML views ----------------------------------------------------
+// JSON stays the canonical format (API, storage, the validators above); YAML
+// is an editing view only. YAML text is converted to JSON text before any
+// validator runs, and a value is always formatted as JSON first, so every
+// parse/format pair above works unchanged for both syntaxes.
+
+export type RawSyntax = "json" | "yaml";
+
+export const RAW_SYNTAX_STORAGE_KEY = "agb.rawEditor.syntax";
+
+export type SyntaxConversion = { ok: true; json: string } | { ok: false; error: string };
+
+/** Text in `syntax` -> canonical JSON text (pretty-printed). */
+export function toCanonicalJson(text: string, syntax: RawSyntax): SyntaxConversion {
+  if (syntax === "json") return { ok: true, json: text };
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(text);
+  } catch (err) {
+    return { ok: false, error: `Invalid YAML: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}` };
+  }
+  return { ok: true, json: JSON.stringify(parsed ?? null, null, 2) };
+}
+
+/** Canonical JSON text -> text in `syntax`. `json` must already be valid JSON. */
+export function fromCanonicalJson(json: string, syntax: RawSyntax): string {
+  if (syntax === "json") return json;
+  return stringifyYaml(JSON.parse(json), { lineWidth: 0 });
+}
+
+export function readRawSyntax(): RawSyntax {
+  try {
+    return window.localStorage.getItem(RAW_SYNTAX_STORAGE_KEY) === "yaml" ? "yaml" : "json";
+  } catch {
+    return "json";
+  }
+}
+
+export function writeRawSyntax(syntax: RawSyntax): void {
+  try {
+    window.localStorage.setItem(RAW_SYNTAX_STORAGE_KEY, syntax);
+  } catch {
+    // Storage unavailable — the choice just isn't remembered.
+  }
 }
