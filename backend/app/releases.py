@@ -14,7 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from . import storage, subgraphs
-from .bindings import node_bindings
+from .bindings import edge_bindings, node_bindings
 from .compiler import validate_graph
 from .events import now_iso
 from .fingerprint import diff_graphs, release_document_fingerprint, release_semantic_fingerprint
@@ -74,6 +74,24 @@ def resolve_resource_snapshots(
                 _snapshot_tool_server(
                     node.id, binding.resource_id, resource, snapshots, diagnostics
                 )
+
+    # Transforms library references on edges (node references are covered by
+    # node_bindings above).
+    for edge, binding in edge_bindings(graph):
+        resource = storage.get_resource(binding.kind, binding.resource_id)
+        if resource is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    category="capability",
+                    code="RELEASE_RESOURCE_UNRESOLVED",
+                    edge_id=edge.id,
+                    message=f"Edge {edge.id!r} references unresolved transform {binding.resource_id!r}",
+                    blocking=True,
+                )
+            )
+            continue
+        snapshots[f"{binding.kind}:{binding.resource_id}"] = copy.deepcopy(resource)
 
     # Wave 7c (STO-612): freeze the exact child release each subgraph node
     # resolves to, so a release run keeps running that child even after it

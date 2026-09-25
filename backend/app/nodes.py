@@ -34,6 +34,7 @@ from .ports import default_input_port, resolve_node_input
 from .providers.base import ChatModel
 from .resource_models import McpServerConfig, ToolDefinition
 from .rubric import analyze_prompt
+from .transforms import apply_transform, node_transform_spec
 
 NodeResult = tuple[Any, Any, dict[str, Any]]
 
@@ -663,6 +664,29 @@ async def compute_subgraph(node: GraphNode, state: dict[str, Any], ctx: ExecCont
     return info, summary.result, {}
 
 
+async def compute_transform(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """A deterministic reshape of the upstream value (transforms.py), inline
+    or from the Transforms library (release runs read the pinned snapshot)."""
+    upstream = get_upstream_output(node, state, ctx.graph)
+    config = dict(node.config)
+    ref = config.get("transformId")
+    if isinstance(ref, str) and ref:
+        definition = _resolve_resource(ctx, "transforms", ref)
+        if definition is None:
+            raise ValueError(f"transform node {node.id!r}: transformId: transforms {ref!r} not found")
+        config.update(
+            type=definition.get("type"),
+            pointer=definition.get("pointer"),
+            field=definition.get("field"),
+            template=definition.get("template"),
+            targetType=definition.get("target_type"),
+        )
+    spec = node_transform_spec(config)
+    output = apply_transform(spec, upstream)
+    input_repr = {"transform": spec.type, "transformId": ref or None, "input": upstream}
+    return input_repr, output, {}
+
+
 EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitable[NodeResult]]] = {
     "input": compute_input,
     "prompt": compute_prompt,
@@ -677,4 +701,5 @@ EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitabl
     "code_exec": compute_code_exec,
     "human_gate": compute_human_gate,
     "subgraph": compute_subgraph,
+    "transform": compute_transform,
 }

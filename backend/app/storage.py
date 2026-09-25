@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import object_store, supabase_store
-from .bindings import node_bindings
+from .bindings import edge_bindings, node_bindings
 from .graph_inputs import input_variables
 from .models import (
     CatalogBinding,
@@ -456,7 +456,7 @@ def list_graph_ids() -> list[str]:
 # field derived from the graph.
 _GRAPH_PREFIX = "graphs/"
 _GRAPH_CATALOG_KEY = "graph_catalog.json"
-_GRAPH_CATALOG_VERSION = 2
+_GRAPH_CATALOG_VERSION = 3
 
 
 def graph_catalog_entry(graph: GraphDefinition) -> GraphCatalogEntry:
@@ -477,6 +477,16 @@ def graph_catalog_entry(graph: GraphDefinition) -> GraphCatalogEntry:
             )
             for node in graph.nodes
             for binding in node_bindings(node)
+        ]
+        + [
+            CatalogBinding(
+                node_id=edge.id,
+                node_type="edge",
+                field=binding.field,
+                kind=binding.kind,
+                resource_id=binding.resource_id,
+            )
+            for edge, binding in edge_bindings(graph)
         ],
         subgraphs=[
             CatalogSubgraphRef(node_id=node.id, graph_id=str(node.config.get("graphId") or ""))

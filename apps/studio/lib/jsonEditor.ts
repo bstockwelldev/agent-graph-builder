@@ -13,6 +13,7 @@
  * strict as the typed form, not more, not less.
  */
 
+import { edgeTransformSchema, type EdgeTransform } from "@bstockwelldev/agent-graph-sdk";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 export type ConfigParseResult =
@@ -37,11 +38,9 @@ export function formatConfigJson(value: Record<string, unknown>): string {
 }
 
 // --- Edge raw config -----------------------------------------------------
-// Deliberately narrower than the full GraphEdge shape: `patchFlowEdgeData`
-// (NodeInspector.tsx) only ever actually applies `kind`/`condition` from a
-// patch today — exposing source_port/target_port/transform here would let
-// an edit look accepted while silently doing nothing, which is exactly
-// what this editor's design spec says never to do.
+// The fields an edge edit actually applies (GraphEditor's patchEdgeById):
+// kind, condition and transform. Ports are left out — nothing edits them
+// yet, so exposing them here would look accepted while doing nothing.
 
 const EDGE_KINDS = ["sequence", "conditional", "default"] as const;
 export type EdgeKindValue = (typeof EDGE_KINDS)[number];
@@ -49,25 +48,44 @@ export type EdgeKindValue = (typeof EDGE_KINDS)[number];
 export interface EdgeRawConfig {
   kind: EdgeKindValue;
   condition: string | null;
+  transform: EdgeTransform | null;
 }
 
 export type EdgeConfigParseResult = { ok: true; value: EdgeRawConfig } | { ok: false; error: string };
 
-export function formatEdgeRawConfig(edge: { kind: string; condition?: string | null }): string {
-  return JSON.stringify({ kind: edge.kind, condition: edge.condition ?? null }, null, 2);
+/** Drops unset (null/undefined) transform fields so the raw view stays readable. */
+export function compactTransform(transform: EdgeTransform | null | undefined): EdgeTransform | null {
+  if (!transform) return null;
+  return Object.fromEntries(Object.entries(transform).filter(([, v]) => v !== null && v !== undefined)) as EdgeTransform;
+}
+
+export function formatEdgeRawConfig(edge: { kind: string; condition?: string | null; transform?: EdgeTransform | null }): string {
+  return JSON.stringify({ kind: edge.kind, condition: edge.condition ?? null, transform: compactTransform(edge.transform) }, null, 2);
 }
 
 export function parseEdgeRawConfig(text: string): EdgeConfigParseResult {
   const base = parseConfigJson(text);
   if (!base.ok) return base;
-  const { kind, condition } = base.value;
+  const { kind, condition, transform } = base.value;
   if (typeof kind !== "string" || !(EDGE_KINDS as readonly string[]).includes(kind)) {
     return { ok: false, error: `"kind" must be one of: ${EDGE_KINDS.join(", ")}.` };
   }
   if (condition !== null && condition !== undefined && typeof condition !== "string") {
     return { ok: false, error: '"condition" must be a string or null.' };
   }
-  return { ok: true, value: { kind: kind as EdgeKindValue, condition: (condition as string | null) ?? null } };
+  let parsedTransform: EdgeTransform | null = null;
+  if (transform !== null && transform !== undefined) {
+    const result = edgeTransformSchema.safeParse(transform);
+    if (!result.success) {
+      const detail = result.error.issues.map((issue) => `transform.${issue.path.join(".") || "(root)"}: ${issue.message}`).join("; ");
+      return { ok: false, error: detail };
+    }
+    parsedTransform = compactTransform(result.data);
+  }
+  return {
+    ok: true,
+    value: { kind: kind as EdgeKindValue, condition: (condition as string | null) ?? null, transform: parsedTransform },
+  };
 }
 
 // --- JSON / YAML views ----------------------------------------------------

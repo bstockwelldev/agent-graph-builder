@@ -10,6 +10,7 @@ import {
   PenLine,
   Repeat,
   ShieldCheck,
+  Shuffle,
   Workflow,
   Wrench,
   type LucideIcon,
@@ -32,4 +33,5 @@ export const NODE_TYPE_ICONS: Record<NodeType, LucideIcon> = {
   code_exec: Code2,
   branch: GitFork,
   subgraph: Workflow,
+  transform: Shuffle,
 };

@@ -19,6 +19,7 @@ from typing import Protocol
 
 from .compiler import validate_graph
 from .models import CapabilityEntry, CapabilityMatrix, CompileResult, Diagnostic, GraphDefinition
+from .nodes import EXECUTORS
 from .runtime import compile_workflow
 
 
@@ -51,10 +52,12 @@ _LANGGRAPH_CAPABILITY_MATRIX = CapabilityMatrix(
         CapabilityEntry(
             feature="deterministic_transforms",
             supported=True,
-            notes="Applied by generated adapter wrappers.",
+            notes="Applied per edge in ports.resolve_node_input; also the transform node.",
         ),
         CapabilityEntry(
-            feature="current_12_executors", supported=True, notes="Uses existing executor registry."
+            feature="node_executors",
+            supported=True,
+            notes=f"All {len(EXECUTORS)} node types run through the executor registry.",
         ),
         CapabilityEntry(
             feature="human_gate_pause_resume",

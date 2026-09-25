@@ -1,6 +1,6 @@
 ---
 title: Agent Graph Builder POC — product roadmap
-last_updated: 2026-09-23
+last_updated: 2026-09-25
 ---
 
 # Product roadmap
@@ -70,7 +70,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | ~~**P1**~~ | ~~**Studio consolidation Phase 3 — registries**~~ | High | High | **Shipped 2026-09-15.** Stored prompts/tools/mcp_servers/agents/llm_profiles + generic CRUD; builtin `web_search`/`calculator` + MCP JSON-RPC client; `DELETE /api/graphs/{id}`. `lookup_topic` kept (not retired) for backward compat; flow-scoped allowlist and MCP schema validation deferred. |
 | ~~**P1**~~ | ~~**Studio consolidation Phase 4 — studio app**~~ | High | High | **Shipped 2026-09-16.** `apps/studio` (Next.js) fully ported alongside `apps/playground` across sub-phases 4a–4f: pnpm migration, design system, shell/CRUD, graph editor with all 12 node types, run surface + GenUI, and SDK Zod hardening (every `jsonFetch` response now schema-validated). Playground parity confirmed via live Playwright pass — identical run event logs/traces for the same graph in both apps. `apps/playground` stays deployed until Phase 6 cutover. |
 | ~~**P2**~~ | ~~**Studio consolidation Phase 5 — hardening**~~ | Medium | High | **Shipped 2026-09-16.** Telemetry (Langfuse, opt-in, fails open), per-graph RAG knowledge base, Supabase durable storage backend + studio OAuth, run analytics/spend estimation with a real dashboard — all ported from micro-ui-agent-builder with 57 new backend tests (226 total) and live end-to-end verification per area. |
-| ~~**P2**~~ | ~~**Studio consolidation Phase 6 — cutover**~~ | High | High | **Functionally done.** `apps/playground` no longer exists on disk, and `vercel.json`/root `package.json` have zero references to it — confirmed by inspection 2026-09-22. Only the docs haven't caught up: `README.md` and root `AGENTS.md` still describe a playground POC. That's a documentation task, already tracked in the "Documentation Contradictions to Resolve" table below — keeping this as a separate live P2 build row double-counted the same gap. |
+| ~~**P2**~~ | ~~**Studio consolidation Phase 6 — cutover**~~ | High | High | **Done 2026-09-25.** `apps/playground` no longer exists on disk, and `vercel.json`/root `package.json` have zero references to it — confirmed by inspection 2026-09-22. The docs caught up on 2026-09-25: `README.md` and root `AGENTS.md` now describe the Studio (see the resolved rows in "Documentation Contradictions to Resolve" below). |
 | ~~**P0**~~ | ~~**P0 graph foundation (Slices A-D) + Studio releases UI**~~ | High | Foundation | **Shipped 2026-09-20.** Canonical typed ports + contract validation (`ports.py`, `contracts.py`), immutable `GraphRelease`s with LangGraph capability reports (`releases.py`, `adapters.py`), version-pinned `RunGraphSnapshot` run identity, and the Studio `ReleasesPanel`/run-history UI. See [p0-graph-foundation-design-plan.md](features/p0-graph-foundation-design-plan.md). |
 
 ---
@@ -127,8 +127,8 @@ Forward-synced 2026-09-22: created Linear issues mirroring the 7 fully spec'd ba
 
 | Doc / area | Current contradiction | Required update |
 | --- | --- | --- |
-| `README.md` | Still describes a playground POC with exactly six node types and `apps/playground` as the primary UI. | During Phase 6 docs, rewrite around `apps/studio`, current node/runtime capabilities, and the graph-native control-plane positioning. |
-| Root `AGENTS.md` | "Where to work" table still lists `apps/playground/` (Vite/React) as the Playground path; `apps/playground` does not exist on disk. | Update the table to `apps/studio/` (Next.js), matching the app that's actually deployed. |
+| ~~`README.md`~~ | ~~Still describes a playground POC with exactly six node types and `apps/playground` as the primary UI.~~ | **Resolved 2026-09-25.** Rewritten around `apps/studio`: a "Try it" section (live URL, Stub default, demo walkthrough), the 13-type node vocabulary, pnpm run instructions for the workspace (each one verified: bare metal, Docker, pytest, `pnpm test`, stub smoke test), the three seams, and a "shipped vs. still simplified" table (in-memory `RUN_PAUSES`/live runs/SSE, no multi-tenancy, no `code_exec` sandbox, no retries). The Docker check found and fixed a broken studio container (`docker-compose.yml` now keeps the SDK's `node_modules` in a named volume). |
+| ~~Root `AGENTS.md`~~ | ~~"Where to work" table still lists `apps/playground/` (Vite/React) as the Playground path; `apps/playground` does not exist on disk.~~ | **Resolved 2026-09-25.** The table already pointed at `apps/studio/`. Also fixed the `npm ci`/`npm run build` commands (the repo is pnpm-only), the CI description, and the deprecated `spin-up.ps1` Docker pointer. `scripts/dev-registry.entry.json` now opens `:3000`, not the playground's `:5173`. |
 | `studio-consolidation-plan.md` | Locks Next.js 15 studio and shadcn/local UI primitives; attached UX reference recommends MUI shell patterns and newer dependency baselines. | Translate UX patterns into the current studio stack unless a separate design-system migration is approved. Do not silently switch to MUI. |
 | Existing shipped UX plans | Focus on playground shell/panel polish. | Treat them as historical shipped work; use Studio UX Revision as the forward UX plan. |
 | Existing validation scope | Mostly structural/config validation. | Extend toward contracts, policy overlays, compatibility reports, and simulation. |

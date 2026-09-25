@@ -26,6 +26,8 @@ export const nodeTypeSchema = z.enum([
   "branch",
   // Large-graph complexity, Wave 7c (STO-612): graph-as-node.
   "subgraph",
+  // Deterministic reshape step (backend transforms.py).
+  "transform",
 ]);
 
 export const edgeKindSchema = z.enum(["sequence", "conditional", "default"]);
@@ -69,14 +71,20 @@ export const graphPortSchema = z.object({
   contract: portContractSchema,
 });
 
-// Schema-only in Slice A — per-type fields (pointer/field/template/
-// target_type) are added as Slice B needs them for transform application.
+export const transformTypeSchema = z.enum(["select", "wrap", "format_message", "coerce"]);
+export const transformTargetTypeSchema = z.enum(["string", "number", "boolean"]);
+
+// Deterministic transform (backend app/transforms.py): inline (`type` plus
+// its field) or a Transforms library reference (`transform_id`). Nullish,
+// not optional: the API serializes unset fields as null.
+// The backend rejects a transform with neither (EdgeTransform validator).
 export const edgeTransformSchema = z.object({
-  type: z.enum(["select", "wrap", "format_message", "coerce"]),
-  pointer: z.string().optional(),
-  field: z.string().optional(),
-  template: z.string().optional(),
-  target_type: z.enum(["string", "number", "boolean"]).optional(),
+  type: transformTypeSchema.nullish(),
+  pointer: z.string().nullish(),
+  field: z.string().nullish(),
+  template: z.string().nullish(),
+  target_type: transformTargetTypeSchema.nullish(),
+  transform_id: z.string().nullish(),
 });
 
 export const graphNodeSchema = z.object({
@@ -490,6 +498,18 @@ export const agentProfileSchema = z.object({
   default_flow_id: z.string().nullish(),
   system_instructions: z.string().nullish(),
   optional_elements: z.array(z.string()),
+});
+
+/** A Transforms library entry (`/api/transforms`). */
+export const transformDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  type: transformTypeSchema,
+  pointer: z.string().nullish(),
+  field: z.string().nullish(),
+  template: z.string().nullish(),
+  target_type: transformTargetTypeSchema.nullish(),
 });
 
 export const llmProfileSchema = z.object({
