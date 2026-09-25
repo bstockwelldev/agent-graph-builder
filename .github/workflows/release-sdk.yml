@@ -1,10 +1,14 @@
 name: Release SDK
 
-# SDK 7/7 (STO-619): publishes @bstockwelldev/agent-graph-sdk to npm with
-# provenance, tags the release, and deploys the typedoc site to Pages.
+# SDK 7/7 (STO-619): publishes @bstockwelldev/agent-graph-sdk to npm, tags the
+# release, and attaches the typedoc site as a build artifact.
 # Manual on purpose -- a publish can't be undone. Version first with
 # `pnpm changeset version` (merged to master), then run this workflow.
-# Needs the NPM_TOKEN repository secret, and Pages set to "GitHub Actions".
+# Needs the NPM_TOKEN repository secret: a granular token with read+write on
+# the package (npm requires 2FA for publishing, so the token must be allowed
+# to bypass it -- or publish from a terminal instead). No provenance: npm only
+# issues it for public repositories, and this one is private. The docs job
+# uploads an artifact rather than deploying to Pages, which this plan lacks.
 
 on:
   workflow_dispatch:
@@ -20,7 +24,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the release tag
-      id-token: write # npm provenance
     defaults:
       run:
         working-directory: packages/agent-graph-sdk
@@ -51,9 +54,9 @@ jobs:
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "::notice::@bstockwelldev/agent-graph-sdk@$VERSION is already published; nothing to do."
           fi
-      - name: Publish to npm (with provenance)
+      - name: Publish to npm
         if: steps.version.outputs.published != 'true'
-        run: npm publish --provenance --access public
+        run: npm publish --access public --provenance=false
         env:
           # setup-node's npmrc reads NODE_AUTH_TOKEN; the repo's .npmrc reads NPM_TOKEN.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -68,12 +71,6 @@ jobs:
   docs:
     needs: publish
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -85,8 +82,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @bstockwelldev/agent-graph-sdk run docs
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: agent-graph-sdk-docs
           path: packages/agent-graph-sdk/docs-site
-      - id: deploy
-        uses: actions/deploy-pages@v4

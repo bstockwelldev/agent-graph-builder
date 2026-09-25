@@ -1,11 +1,12 @@
 // SDK 7/7 (STO-619): verifies what `npm pack` would publish -- every
 // `exports` target and the docs are in, and nothing else (sources, tests,
 // fixtures, tooling) leaks. Run after `pnpm run build`.
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-const [report] = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: new URL("..", import.meta.url), encoding: "utf8" }));
+const [report] = JSON.parse(execSync("npm pack --dry-run --json --ignore-scripts", { cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8" }));
 const files = new Set(report.files.map((file) => file.path));
 
 const targets = Object.values(pkg.exports).flatMap((entry) => (typeof entry === "string" ? [entry] : Object.values(entry)));
