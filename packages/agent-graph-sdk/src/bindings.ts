@@ -21,6 +21,7 @@ export const NODE_BINDING_FIELDS: Readonly<Record<string, readonly (readonly [st
     ["systemPromptId", "prompts"],
   ],
   tool: [["toolName", "tools"]],
+  transform: [["transformId", "transforms"]],
 };
 
 /** The API path segment for each bindable registry (backend/app/main.py `_RESOURCE_ROUTE_PATHS`). */

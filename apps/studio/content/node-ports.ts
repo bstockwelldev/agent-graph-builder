@@ -49,16 +49,30 @@ export const NODE_PORT_CATALOG: Record<NodeType, { input: GraphPort[]; output: G
   code_exec: singleIo("structured-json", "artifact"),
   subgraph: singleIo("message", "message"),
   branch: routerLikeIo("message"),
+  // Output kind depends on the configured transform (`transformOutputKind`).
+  transform: singleIo("structured-json", "structured-json"),
 };
+
+/** Mirror of backend ports.py `_transform_output_kind`: text-producing transforms emit a message. */
+export function transformOutputKind(config: Record<string, unknown> | undefined): PortKind {
+  if (config?.type === "format_message") return "message";
+  if (config?.type === "coerce" && config.targetType === "string") return "message";
+  return "structured-json";
+}
 
 /** The node's declared input ports: an explicit `input_ports` override, else the catalog default. */
 export function inputPortsFor(node: Pick<GraphNode, "type" | "input_ports">): GraphPort[] {
   return node.input_ports ?? NODE_PORT_CATALOG[node.type].input;
 }
 
-/** The node's declared output ports: an explicit `output_ports` override, else the catalog default. */
-export function outputPortsFor(node: Pick<GraphNode, "type" | "output_ports">): GraphPort[] {
-  return node.output_ports ?? NODE_PORT_CATALOG[node.type].output;
+/** The node's declared output ports: an explicit `output_ports` override, else the catalog
+ * default (for a transform node, typed by its config). */
+export function outputPortsFor(node: Pick<GraphNode, "type" | "output_ports"> & { config?: Record<string, unknown> }): GraphPort[] {
+  if (node.output_ports) return node.output_ports;
+  if (node.type === "transform") {
+    return [{ id: "output", name: "output", direction: "output", contract: { kind: transformOutputKind(node.config) } }];
+  }
+  return NODE_PORT_CATALOG[node.type].output;
 }
 
 /**

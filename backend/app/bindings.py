@@ -28,6 +28,7 @@ BINDING_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
     "llm": (("llmProfileId", "llm_profiles"), ("systemPromptId", "prompts")),
     "tool_loop": (("llmProfileId", "llm_profiles"), ("systemPromptId", "prompts")),
     "tool": (("toolName", "tools"),),
+    "transform": (("transformId", "transforms"),),
 }
 
 # Tool ids that are code, not stored resources (see compiler.py).

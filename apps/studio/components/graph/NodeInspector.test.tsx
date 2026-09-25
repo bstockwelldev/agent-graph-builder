@@ -58,4 +58,25 @@ describe("NodeInspector (v2)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open prompt" }));
     expect(onOpenResource).toHaveBeenCalledWith("prompts", "p_explain");
   });
+
+  it("edits a transform node's type and field in its camelCase config", () => {
+    const onConfigChange = vi.fn();
+    render(
+      <NodeInspector
+        node={{ id: "shape_1", type: "transform", position: { x: 0, y: 0 }, config: { type: "coerce", targetType: "number" } }}
+        onConfigChange={onConfigChange}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        userLabel=""
+        derivedLabel="Transform"
+        onLabelChange={vi.fn()}
+        templateVariables={[]}
+      />,
+    );
+    expect(screen.queryByRole("radio", { name: "None" })).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "String" }));
+    expect(onConfigChange).toHaveBeenLastCalledWith({ type: "coerce", targetType: "string" });
+    fireEvent.click(screen.getByRole("radio", { name: "Select" }));
+    expect(onConfigChange).toHaveBeenLastCalledWith({ type: "select", pointer: "" });
+  });
 });

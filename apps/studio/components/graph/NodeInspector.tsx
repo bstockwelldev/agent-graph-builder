@@ -23,6 +23,7 @@ import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import type {
   BindableResourceKind,
   ChatProvider,
+  EdgeTransform,
   GraphDefinition,
   GraphEdge,
   GraphLayer,
@@ -65,7 +66,7 @@ import { Toggle } from "./ui/Toggle";
 import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { RawConfigEditor } from "./ui/RawConfigEditor";
-import { TransformFields } from "./TransformFields";
+import { TransformFields, type TransformType } from "./TransformFields";
 import { NodeHistoryTab } from "./NodeHistoryTab";
 import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
@@ -90,7 +91,34 @@ const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   code_exec: ["content", "codeExecLanguage", "toolName"],
   human_gate: ["content", "genuiCheckpointSurfaceJson"],
   subgraph: ["graphId", "version", "inputMapping"],
+  transform: ["transformId", "type", "pointer", "field", "template", "targetType"],
 };
+
+/** A transform node's camelCase config as the shared TransformFields value. */
+function nodeTransformValue(config: Record<string, unknown>): EdgeTransform | null {
+  if (typeof config.type !== "string") return null;
+  return {
+    type: config.type as TransformType,
+    pointer: (config.pointer as string | undefined) ?? null,
+    field: (config.field as string | undefined) ?? null,
+    template: (config.template as string | undefined) ?? null,
+    target_type: (config.targetType as EdgeTransform["target_type"]) ?? null,
+  };
+}
+
+const NODE_TRANSFORM_KEYS = new Set(["type", "pointer", "field", "template", "targetType"]);
+
+/** Writes `transform` back into a transform node's config (dropping the other types' fields). */
+function withNodeTransform(config: Record<string, unknown>, transform: EdgeTransform | null): Record<string, unknown> {
+  const rest = Object.fromEntries(Object.entries(config).filter(([key]) => !NODE_TRANSFORM_KEYS.has(key)));
+  if (!transform?.type) return rest;
+  const next: Record<string, unknown> = { ...rest, type: transform.type };
+  if (transform.pointer != null) next.pointer = transform.pointer;
+  if (transform.field != null) next.field = transform.field;
+  if (transform.template != null) next.template = transform.template;
+  if (transform.target_type != null) next.targetType = transform.target_type;
+  return next;
+}
 
 /** Contract diagnostics a transform on this edge resolves (backend contracts.py). */
 const TRANSFORM_ISSUE_CODES = new Set(["CONTRACT_KIND_INFERRED_MISMATCH", "EDGE_CONTRACT_KIND_INCOMPATIBLE", "EDGE_TRANSFORM_INVALID"]);
@@ -355,6 +383,7 @@ export function NodeInspector({
           outgoingEdges={outgoingEdges}
           onEdgeChange={onEdgeChange}
           set={set}
+          replaceConfig={onConfigChange}
           templateVariables={templateVariables}
           onOpenResource={onOpenResource}
         />
@@ -463,6 +492,7 @@ function ConfigureTab({
   outgoingEdges,
   onEdgeChange,
   set,
+  replaceConfig,
   templateVariables,
   onOpenResource,
 }: {
@@ -472,6 +502,7 @@ function ConfigureTab({
   outgoingEdges: GraphEdge[];
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   set: (key: string, value: unknown) => void;
+  replaceConfig: (config: Record<string, unknown>) => void;
   templateVariables: readonly string[];
   onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
 }) {
@@ -672,6 +703,25 @@ function ConfigureTab({
           <Field label="Sandbox executor tool" hint="Optional tool that runs the code." issues={fieldIssues("toolName")}>
             {(id) => <TextInput id={id} value={str("toolName")} placeholder="None" onChange={(e) => set("toolName", e.target.value)} />}
           </Field>
+        </Group>
+      )}
+
+      {node.type === "transform" && (
+        <Group title="Transform" icon={<Shuffle size={13} />}>
+          <ResourceBindingField
+            kind="transforms"
+            label="Transform"
+            value={str("transformId") || undefined}
+            onChange={(id) => set("transformId", id)}
+            onOpen={onOpenResource}
+            issues={fieldIssues("transformId")}
+          >
+            <TransformFields
+              value={nodeTransformValue(node.config)}
+              onChange={(transform) => replaceConfig(withNodeTransform(node.config, transform))}
+            />
+            <FieldIssues issues={["type", "pointer", "field", "template", "targetType"].flatMap((key) => fieldIssues(key))} />
+          </ResourceBindingField>
         </Group>
       )}
 

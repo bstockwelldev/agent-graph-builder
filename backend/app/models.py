@@ -44,6 +44,9 @@ class NodeType(StrEnum):
     # Large-graph complexity, Wave 7c (STO-612): runs another saved graph
     # as a nested run (subgraphs.py, nodes.py compute_subgraph).
     SUBGRAPH = "subgraph"
+    # A deterministic reshape step (transforms.py): select / wrap /
+    # format_message / coerce, inline or bound to a Transforms library entry.
+    TRANSFORM = "transform"
 
 
 class EdgeKind(StrEnum):

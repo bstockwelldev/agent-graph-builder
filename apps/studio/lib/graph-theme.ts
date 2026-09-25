@@ -108,6 +108,8 @@ export const nodeType = {
   branch: { bg: "#162524", border: "#2f9a8c", accent: "#5fd0c0", label: "#abe7df" },
   // Wave 7c: graph-as-node.
   subgraph: { bg: "#1c1f2a", border: "#8a7fd0", accent: "#bdb4f5", label: "#ddd8fa" },
+  // Deterministic reshape step.
+  transform: { bg: "#2a1c18", border: "#c8684a", accent: "#f09a7c", label: "#f7cbbb" },
 } as const;
 
 /** Blueprint-style canvas pane — subtle paper tone over dark base. */

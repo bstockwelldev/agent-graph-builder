@@ -2078,7 +2078,8 @@
           "tool_loop",
           "code_exec",
           "branch",
-          "subgraph"
+          "subgraph",
+          "transform"
         ],
         "title": "NodeType",
         "type": "string"

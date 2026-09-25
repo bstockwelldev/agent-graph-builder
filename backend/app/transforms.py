@@ -16,7 +16,7 @@ import re
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from .models import EdgeTransform, GraphDefinition
+from .models import EdgeTransform, GraphDefinition, NodeType
 
 
 class TransformSpec(Protocol):
@@ -33,7 +33,12 @@ class TransformError(ValueError):
 
 # The one field each transform type needs (shared by contract validation,
 # the Transforms library model and the transform node config).
-REQUIRED_FIELD = {"select": "pointer", "wrap": "field", "format_message": "template", "coerce": "target_type"}
+REQUIRED_FIELD = {
+    "select": "pointer",
+    "wrap": "field",
+    "format_message": "template",
+    "coerce": "target_type",
+}
 
 
 def transform_field_error(spec: TransformSpec) -> str | None:
@@ -69,10 +74,37 @@ def materialize_transforms(
             edges.append(edge)
             continue
         inline = {key: definition.get(key) for key in TRANSFORM_FIELDS}
-        edges.append(edge.model_copy(update={"transform": EdgeTransform(**inline, transform_id=ref)}))
-    if not any(edge.transform and edge.transform.transform_id for edge in graph.edges):
-        return graph, missing
-    return graph.model_copy(update={"edges": edges}), missing
+        edges.append(
+            edge.model_copy(update={"transform": EdgeTransform(**inline, transform_id=ref)})
+        )
+    nodes = []
+    for node in graph.nodes:
+        ref = node.config.get("transformId") if node.type == NodeType.TRANSFORM else None
+        definition = lookup(ref) if isinstance(ref, str) and ref else None
+        if definition is None:
+            nodes.append(node)
+            continue
+        inline = {
+            "type": definition.get("type"),
+            "pointer": definition.get("pointer"),
+            "field": definition.get("field"),
+            "template": definition.get("template"),
+            "targetType": definition.get("target_type"),
+        }
+        nodes.append(node.model_copy(update={"config": {**node.config, **inline}}))
+    return graph.model_copy(update={"edges": edges, "nodes": nodes}), missing
+
+
+def node_transform_spec(config: dict[str, Any]) -> EdgeTransform:
+    """A transform node's inline config (camelCase `targetType`) as a spec."""
+    return EdgeTransform.model_construct(
+        type=config.get("type"),
+        pointer=config.get("pointer"),
+        field=config.get("field"),
+        template=config.get("template"),
+        target_type=config.get("targetType"),
+        transform_id=config.get("transformId") or None,
+    )
 
 
 def apply_transform(spec: TransformSpec, value: Any) -> Any:

@@ -2294,7 +2294,7 @@ export type components = {
          * NodeType
          * @enum {string}
          */
-        NodeType: "input" | "prompt" | "llm" | "tool" | "router" | "output" | "guardrail" | "rubric" | "human_gate" | "tool_loop" | "code_exec" | "branch" | "subgraph";
+        NodeType: "input" | "prompt" | "llm" | "tool" | "router" | "output" | "guardrail" | "rubric" | "human_gate" | "tool_loop" | "code_exec" | "branch" | "subgraph" | "transform";
         /** PlatformEvent */
         PlatformEvent: {
             /**

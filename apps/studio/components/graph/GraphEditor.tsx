@@ -244,6 +244,7 @@ const nodeTypes = {
   code_exec: GraphNodeView,
   human_gate: GraphNodeView,
   subgraph: GraphNodeView,
+  transform: GraphNodeView,
   // Wave 7b: derived visual group frames (never in `nodes` state).
   groupFrame: GroupFrame,
   // Wave 7d: derived swimlane bands (Layers view).

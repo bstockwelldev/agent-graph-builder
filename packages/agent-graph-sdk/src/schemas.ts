@@ -26,6 +26,8 @@ export const nodeTypeSchema = z.enum([
   "branch",
   // Large-graph complexity, Wave 7c (STO-612): graph-as-node.
   "subgraph",
+  // Deterministic reshape step (backend transforms.py).
+  "transform",
 ]);
 
 export const edgeKindSchema = z.enum(["sequence", "conditional", "default"]);
