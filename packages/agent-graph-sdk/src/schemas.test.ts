@@ -132,6 +132,17 @@ describe("graphNodeSchema / graphEdgeSchema (Slice A port/contract fields)", () 
     expect(graphEdgeSchema.safeParse(edge).success).toBe(true);
   });
 
+  it("parses a transform as the API serializes it (unset fields are null)", () => {
+    const edge = {
+      id: "e1",
+      source: "n1",
+      target: "n2",
+      kind: "sequence",
+      transform: { type: "wrap", pointer: null, field: "x", template: null, target_type: null },
+    };
+    expect(graphEdgeSchema.safeParse(edge).success).toBe(true);
+  });
+
   it("parses a node/edge with the new port/transform fields present", () => {
     const node = {
       id: "n1",

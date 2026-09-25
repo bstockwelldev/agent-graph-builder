@@ -36,6 +36,7 @@ from .models import (
 )
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .ports import default_input_port, default_output_port, project_node_output, resolve_node_input
+from .transforms import materialize_transforms
 from .providers.base import get_chat_model, resolve_chat_provider
 from .releases import resolve_resource_snapshots
 from .telemetry.provider import get_server_telemetry
@@ -238,7 +239,19 @@ def _make_node_runner(node, ctx: ExecContext):
         )
         RUN_TRACES[ctx.run_id][node.id] = trace
 
+        # `resolved_inputs` resolves this node's own input port(s) against the
+        # pre-executor state — a cheap dict lookup (plus any edge transform),
+        # not a recomputation of executor side effects — so router/branch's
+        # `passthrough` projection (Slice B) can carry the routed message
+        # rather than the decision dict. Resolved inside the try so a failing
+        # edge transform fails this node like any executor error.
+        input_port = default_input_port(node)
         try:
+            resolved_inputs = (
+                {input_port.id: resolve_node_input(node, input_port.id, state, ctx.graph)}
+                if input_port
+                else {}
+            )
             input_repr, output, delta = await executor(node, state, ctx)
         except RunPaused:
             trace.status = "paused"
@@ -265,18 +278,6 @@ def _make_node_runner(node, ctx: ExecContext):
         delta = dict(delta)
         # P0 graph foundation: project onto the node's declared output
         # port(s) instead of writing the raw executor value directly.
-        # `resolved_inputs` re-resolves this node's own input port(s)
-        # against the pre-executor state — a cheap dict lookup, not a
-        # recomputation of executor side effects — so router/branch's
-        # `passthrough` projection (Slice B) can carry the routed message
-        # rather than the decision dict, without threading a second return
-        # value through every `nodes.py` executor.
-        input_port = default_input_port(node)
-        resolved_inputs = (
-            {input_port.id: resolve_node_input(node, input_port.id, state, ctx.graph)}
-            if input_port
-            else {}
-        )
         delta["node_outputs"] = {
             **delta.get("node_outputs", {}),
             node.id: project_node_output(node, resolved_inputs, output),
@@ -564,6 +565,7 @@ def _prepare_run(
         return get_chat_model(effective_model, provider=resolved_provider.value, api_key=api_key)
 
     seeded_node_outputs = _project_fixture_node_outputs(graph, fixture_node_outputs)
+    graph = _with_library_transforms(graph, release_resource_snapshots)
 
     ctx = ExecContext(
         run_id=run_id,
@@ -587,6 +589,21 @@ def _prepare_run(
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
+
+
+def _with_library_transforms(
+    graph: GraphDefinition, release_resource_snapshots: dict[str, dict[str, Any]] | None
+) -> GraphDefinition:
+    """Copies Transforms-library references inline for execution — from the
+    release's pinned snapshots on a release run (never live storage), else
+    live storage. An unresolved one fails its edge with a clear error."""
+
+    def lookup(ref: str) -> dict[str, Any] | None:
+        if release_resource_snapshots is not None:
+            return release_resource_snapshots.get(f"transforms:{ref}")
+        return storage.get_resource("transforms", ref)
+
+    return materialize_transforms(graph, lookup)[0]
 
 
 def start_run(
@@ -681,6 +698,7 @@ def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | No
         return None
 
     run_input = RUN_STORE[run_id].input if run_id in RUN_STORE else {}
+    graph = _with_library_transforms(graph, None)
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
     _start_telemetry_trace(run_id, graph.id)

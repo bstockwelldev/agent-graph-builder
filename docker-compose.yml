@@ -30,9 +30,14 @@ services:
       - ./apps/studio:/workspace/apps/studio
       - ./packages/agent-graph-sdk:/workspace/packages/agent-graph-sdk
       - studio_node_modules:/workspace/apps/studio/node_modules
+      # Keep the image's installed SDK deps (zod etc.). Without this the
+      # bind mount above exposes the host's node_modules, whose pnpm links
+      # don't resolve inside the container (Windows junctions point at D:\).
+      - sdk_node_modules:/workspace/packages/agent-graph-sdk/node_modules
     depends_on:
       - backend
 
 volumes:
   graph_db:
   studio_node_modules:
+  sdk_node_modules:

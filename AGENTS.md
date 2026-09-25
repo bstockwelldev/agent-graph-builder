@@ -4,7 +4,7 @@ Lean router for autonomous work in **this repository only**.
 
 ## Purpose
 
-Visual graph authoring studio + FastAPI/LangGraph execution API. Proves graph-driven agent workflows with streamed node-level observability.
+Visual graph authoring studio (Next.js, `apps/studio`) + FastAPI/LangGraph execution API + `@bstockwelldev/agent-graph-sdk` (1.0.0 on npm). 13 `NodeType`s (`backend/app/models.py`), six provider adapters behind `ChatModel`, releases, replay, streamed node-level events. There is no `apps/playground` anymore — ignore older docs that mention it.
 
 ## Where to work
 
@@ -20,8 +20,11 @@ Visual graph authoring studio + FastAPI/LangGraph execution API. Proves graph-dr
 From repo root:
 
 ```bash
-npm ci && npm test && npm run build   # SDK dist first (studio Vitest imports it), then tests, then full build
+pnpm install && pnpm test && pnpm run build   # pnpm workspace; `test` builds SDK dist first (studio Vitest imports it)
+pnpm dev                                        # studio on :3000, proxies /api to 127.0.0.1:8000 (API_PROXY_TARGET)
 ```
+
+Studio-only gates (CI runs these): `pnpm --filter @bstockwelldev/agent-graph-studio run lint` / `run typecheck`.
 
 From `backend/`:
 
@@ -31,11 +34,13 @@ uv run pytest -q
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-API contract (after changing a Pydantic model or route): `cd backend && uv run python -m scripts.export_openapi`, then `pnpm --filter @bstockwelldev/agent-graph-sdk run generate`. CI fails on drift in either file. Structural graph checks: update `packages/agent-graph-sdk/contract/structural-fixtures.json` when compiler structure rules change (backend and SDK both test against it); a new route needs a handler in the SDK's `src/testing/handlers.ts` (a coverage test enforces it). SDK changes need a changeset (`pnpm changeset`); release = `pnpm changeset version` merged, then run the **Release SDK** workflow (manual; needs the `NPM_TOKEN` secret).
+API contract (after changing a Pydantic model or route): `cd backend && uv run python -m scripts.export_openapi`, then `pnpm --filter @bstockwelldev/agent-graph-sdk run generate`. CI fails on drift in either file. Structural graph checks: update `packages/agent-graph-sdk/contract/structural-fixtures.json` when compiler structure rules change (backend and SDK both test against it); a new route needs a handler in the SDK's `src/testing/handlers.ts` (a coverage test enforces it). SDK changes need a changeset (`pnpm changeset`); release = `pnpm changeset version` merged, then run the **Release SDK** workflow (manual; publishes via npm Trusted Publishing, so there is no npm token to manage).
 
-Docker (full stack): `docker compose up` or `scripts/spin-up.ps1`.
+Docker (full stack, studio :3000 + API :8000): `docker compose up --build`, or `scripts/dev.ps1 up` / `scripts/dev.sh up` (`spin-up.*` are deprecated forwarders).
 
-Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"supabase"}`; Supabase Storage bucket `agent-graph-builder` in the `supabase-tabletop-studio-db` project). The Vercel Blob backend was removed after the 2026-09-24 store suspension; the old store is purged manually — don't reintroduce or read from it. Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
+Tests write to the default dev DB: `uv run pytest` leaves test graphs in `backend/graphs.db` (no `GRAPH_DB_PATH` isolation in `conftest.py`). Delete it (gitignored) for a clean demo-only library.
+
+Production: a Vercel deployment backed by Supabase Storage (`GET /api/health` reports `storage_backend`). The Vercel Blob backend was removed and must not be reintroduced. Hostnames, project and bucket names live with the operator, not in this repo.
 
 Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set secrets in the Vercel dashboard (Project → Environment Variables); do not commit them:
 
@@ -67,7 +72,7 @@ docs/planning/            # Roadmap + locked feature specs
 
 ## CI
 
-GitHub Actions on push/PR to `master`: backend `uv sync --extra dev` + `uv run pytest`; root `npm ci && npm run build`.
+GitHub Actions (`.github/workflows/ci.yml`) on push to `master`/`main` and on every PR: `backend` (`uv sync --extra dev` + `uv run pytest`), `studio` (`pnpm install --frozen-lockfile`, build SDK, studio lint + typecheck, `pnpm run test`, `pnpm run build`), and `sdk-package` (build, typecheck, `pnpm run check`, `pnpm run docs` in `packages/agent-graph-sdk`).
 
 Remote: `origin` → `bstockwelldev/agent-graph-builder`.
 

@@ -173,7 +173,7 @@ describe("NODE_TYPES (studio-consolidation Phase 1)", () => {
 
   it("includes both the original six and the six absorbed node types", () => {
     // + subgraph (large-graph Wave 7c).
-    expect(NODE_TYPES).toHaveLength(13);
+    expect(NODE_TYPES).toHaveLength(14);
     for (const type of [...original, ...absorbed, "subgraph"]) {
       expect(NODE_TYPES).toContain(type);
     }

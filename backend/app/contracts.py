@@ -25,6 +25,7 @@ from .models import (
     NodeType,
     PortKind,
 )
+from .transforms import transform_field_error
 from .ports import (
     accepts_any_kind,
     default_input_port,
@@ -189,7 +190,7 @@ def _kind_incompatibility(
             return None
         return (
             f"target port {target_port.id!r} expects 'message' from a {source_kind.value!r} "
-            "source; add a format_message transform"
+            "source; add a format_message transform (select the edge → Transform → Format message)"
         )
 
     if source_kind in _STRUCTURED_KINDS or target_kind in _STRUCTURED_KINDS:
@@ -199,22 +200,14 @@ def _kind_incompatibility(
             return None
         return (
             f"{source_kind.value!r} -> {target_kind.value!r} requires an explicit transform "
-            "or a compatible JSON Schema on both ports"
+            "or a compatible JSON Schema on both ports (select the edge → Transform)"
         )
 
     return f"port kind {source_kind.value!r} is not compatible with {target_kind.value!r}"
 
 
 def _validate_transform(transform: EdgeTransform) -> str | None:
-    if transform.type == "select" and not transform.pointer:
-        return "select transform requires 'pointer'"
-    if transform.type == "wrap" and not transform.field:
-        return "wrap transform requires 'field'"
-    if transform.type == "coerce" and not transform.target_type:
-        return "coerce transform requires 'target_type'"
-    if transform.type == "format_message" and not transform.template:
-        return "format_message transform requires 'template'"
-    return None
+    return transform_field_error(transform)
 
 
 def _validate_schema(

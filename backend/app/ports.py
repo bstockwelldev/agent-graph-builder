@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from .models import GraphDefinition, GraphNode, GraphPort, NodeType, PortContract, PortKind
+from .transforms import TransformError, apply_transform
 
 _ROUTER_LIKE_TYPES = frozenset({NodeType.ROUTER, NodeType.BRANCH})
 
@@ -118,6 +119,8 @@ _DEFAULT_PORT_CATALOG: dict[NodeType, dict[str, list[GraphPort]]] = {
     NodeType.SUBGRAPH: _single_io(PortKind.MESSAGE, PortKind.MESSAGE),
     # Slice B: passthrough (default) + decision output ports, same as ROUTER.
     NodeType.BRANCH: _router_like_io(PortKind.MESSAGE),
+    # Output kind depends on the configured transform (`_transform_output_kind`).
+    NodeType.TRANSFORM: _single_io(PortKind.STRUCTURED_JSON, PortKind.STRUCTURED_JSON),
 }
 
 
@@ -127,7 +130,9 @@ _DEFAULT_PORT_CATALOG: dict[NodeType, dict[str, list[GraphPort]]] = {
 # arrived unchanged. Checking a kind contract on their inferred default
 # input produced warnings (e.g. "message -> structured-json") that no node
 # setting could resolve. Author-declared `input_ports` are still checked.
-_KIND_AGNOSTIC_DEFAULT_INPUTS = frozenset({NodeType.TOOL, NodeType.OUTPUT})
+# `transform` reshapes whatever it receives (a transform that can't apply
+# fails at runtime with a precise error), so its input is agnostic too.
+_KIND_AGNOSTIC_DEFAULT_INPUTS = frozenset({NodeType.TOOL, NodeType.OUTPUT, NodeType.TRANSFORM})
 
 
 def accepts_any_kind(node: GraphNode) -> bool:
@@ -149,7 +154,22 @@ def output_ports_for(node: GraphNode) -> list[GraphPort]:
     """The node's full declared output-port list. See `input_ports_for`."""
     if node.output_ports:
         return node.output_ports
+    if node.type == NodeType.TRANSFORM:
+        kind = _transform_output_kind(node.config)
+        return [GraphPort(id="output", name="output", direction="output", contract=PortContract(kind=kind))]
     return _DEFAULT_PORT_CATALOG[node.type]["output"]
+
+
+def _transform_output_kind(config: dict[str, Any]) -> PortKind:
+    """Text-producing transforms emit a message; the rest stay structured.
+    A library-bound node is resolved inline before validation
+    (`transforms.materialize_transforms`), so its real type is visible here."""
+    transform_type = config.get("type")
+    if transform_type == "format_message":
+        return PortKind.MESSAGE
+    if transform_type == "coerce" and config.get("targetType") == "string":
+        return PortKind.MESSAGE
+    return PortKind.STRUCTURED_JSON
 
 
 def default_input_port(node: GraphNode) -> GraphPort | None:
@@ -217,7 +237,14 @@ def resolve_node_input(
             source_port = default_output_port(source_node) if source_node else None
             port_id = source_port.id if source_port else "output"
         if port_id in source_outputs:
-            return source_outputs[port_id]
+            value = source_outputs[port_id]
+            if edge.transform is None:
+                return value
+            try:
+                return apply_transform(edge.transform, value)
+            except TransformError as exc:
+                where = f"edge {edge.id} transform {edge.transform.type}"
+                raise TransformError(f"{where}: {exc}") from exc
     return ""
 
 

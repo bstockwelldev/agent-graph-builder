@@ -815,6 +815,7 @@ _RESOURCE_ROUTE_PATHS: dict[str, str] = {
     "mcp_servers": "mcp-servers",
     "agents": "agents",
     "llm_profiles": "llm-profiles",
+    "transforms": "transforms",
     "chat_sessions": "chat-sessions",
     "datasets": "datasets",
 }
@@ -825,7 +826,9 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         try:
             return model.model_validate(body)
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            # exc.json(): errors() keeps raw exception objects in `ctx`
+            # (from model validators), which aren't JSON serializable.
+            raise HTTPException(status_code=422, detail=json.loads(exc.json())) from exc
 
     @app.get(f"/api/{path}", name=f"list_{kind}", operation_id=f"list_{kind}")
     def list_resources_route(page: Page) -> list[dict[str, Any]]:

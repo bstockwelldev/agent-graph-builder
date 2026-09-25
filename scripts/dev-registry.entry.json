@@ -9,7 +9,7 @@
         "sh": "scripts/dev.sh"
       },
       "urls": {
-        "app": "http://localhost:5173",
+        "app": "http://localhost:3000",
         "api": "http://localhost:8000"
       }
     },

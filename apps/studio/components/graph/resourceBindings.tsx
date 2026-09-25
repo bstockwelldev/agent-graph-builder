@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import type { BindableResourceKind } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
 import { useResourceChanged } from "@/lib/resourceEvents";
+import { describeTransform } from "@/lib/transforms";
 
 /** A registry item as a binding picker needs it. */
 export type BindableResource = {
@@ -16,16 +17,18 @@ export type BindableResource = {
 };
 
 /** The workbench panel that edits each registry (components/workbench/panels.ts). */
-export const RESOURCE_PANEL: Record<BindableResourceKind, "prompts" | "llmProfiles" | "tools"> = {
+export const RESOURCE_PANEL: Record<BindableResourceKind, "prompts" | "llmProfiles" | "tools" | "transforms"> = {
   prompts: "prompts",
   llm_profiles: "llmProfiles",
   tools: "tools",
+  transforms: "transforms",
 };
 
 export const RESOURCE_NOUN: Record<BindableResourceKind, string> = {
   prompts: "prompt",
   llm_profiles: "LLM profile",
   tools: "tool",
+  transforms: "transform",
 };
 
 async function listBindable(kind: BindableResourceKind): Promise<BindableResource[]> {
@@ -38,6 +41,9 @@ async function listBindable(kind: BindableResourceKind): Promise<BindableResourc
       name: p.name,
       detail: [p.model, p.model_provider].filter(Boolean).join(" · "),
     }));
+  }
+  if (kind === "transforms") {
+    return (await client.transforms.list()).map((t) => ({ id: t.id, name: t.name, detail: describeTransform(t) }));
   }
   return (await client.tools.list()).map((t) => ({ id: t.id, name: t.id, detail: t.description }));
 }

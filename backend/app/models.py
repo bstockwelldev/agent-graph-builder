@@ -17,7 +17,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .events import PlatformEvent
 
@@ -44,6 +44,9 @@ class NodeType(StrEnum):
     # Large-graph complexity, Wave 7c (STO-612): runs another saved graph
     # as a nested run (subgraphs.py, nodes.py compute_subgraph).
     SUBGRAPH = "subgraph"
+    # A deterministic reshape step (transforms.py): select / wrap /
+    # format_message / coerce, inline or bound to a Transforms library entry.
+    TRANSFORM = "transform"
 
 
 class EdgeKind(StrEnum):
@@ -93,16 +96,28 @@ class GraphPort(BaseModel):
     contract: PortContract
 
 
-class EdgeTransform(BaseModel):
-    """Declarative edge transform (P0 graph foundation, Slice A). Schema
-    only — no application logic exists yet; that lands with Slice B's
-    contract validation pass."""
+TransformType = Literal["select", "wrap", "format_message", "coerce"]
 
-    type: Literal["select", "wrap", "format_message", "coerce"]
+
+class EdgeTransform(BaseModel):
+    """Declarative edge transform, applied by `ports.resolve_node_input`
+    (engine: `transforms.py`). Either inline (`type` plus its field) or a
+    reference to a Transforms library entry (`transform_id`), which
+    `transforms.materialize_transforms` copies inline before validation and
+    execution."""
+
+    type: TransformType | None = None
     pointer: str | None = None
     field: str | None = None
     template: str | None = None
     target_type: Literal["string", "number", "boolean"] | None = None
+    transform_id: str | None = None
+
+    @model_validator(mode="after")
+    def _type_or_reference(self) -> EdgeTransform:
+        if self.type is None and not self.transform_id:
+            raise ValueError("a transform needs a type or a transform_id")
+        return self
 
 
 class GraphNode(BaseModel):
