@@ -74,7 +74,7 @@ A warning appears only when the user can do something about it, and whatever it 
 ### P2 — Port authoring and display
 
 - An "Advanced → Ports" section in the node inspector to declare ports and schemas (the explicit contract opt-in).
-- Node cards show `in: any` for kind-agnostic inputs instead of `in: structured json`.
+- ~~Node cards show `in: any` for kind-agnostic inputs instead of `in: structured json`.~~ Done 2026-09-25: cards, the I/O tab and connect-drag feedback treat tool/output/transform default inputs as `any` (`content/node-ports.ts` `acceptsAnyKind`).
 
 ### Non-goals
 

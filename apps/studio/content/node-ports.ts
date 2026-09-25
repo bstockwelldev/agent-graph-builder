@@ -60,6 +60,23 @@ export function transformOutputKind(config: Record<string, unknown> | undefined)
   return "structured-json";
 }
 
+/**
+ * Mirror of backend ports.py `_KIND_AGNOSTIC_DEFAULT_INPUTS`: these node types
+ * never consume the incoming value as typed data (tool reads its input
+ * variable, output passes through, transform reshapes whatever arrives), so
+ * their default input accepts any kind. Author-declared ports are typed.
+ */
+const KIND_AGNOSTIC_INPUT_TYPES = new Set<NodeType>(["tool", "output", "transform"]);
+
+export function acceptsAnyKind(node: Pick<GraphNode, "type" | "input_ports">): boolean {
+  return !node.input_ports?.length && KIND_AGNOSTIC_INPUT_TYPES.has(node.type);
+}
+
+/** Display label for an input port's kind: "any" for kind-agnostic default inputs. */
+export function inputKindLabel(node: Pick<GraphNode, "type" | "input_ports">, port: GraphPort): string {
+  return acceptsAnyKind(node) ? "any" : port.contract.kind;
+}
+
 /** The node's declared input ports: an explicit `input_ports` override, else the catalog default. */
 export function inputPortsFor(node: Pick<GraphNode, "type" | "input_ports">): GraphPort[] {
   return node.input_ports ?? NODE_PORT_CATALOG[node.type].input;
