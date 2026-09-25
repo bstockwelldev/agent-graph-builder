@@ -610,6 +610,23 @@ class PublishResourceVersionResponse(BaseModel):
     created: bool
 
 
+class TransformPreviewRequest(BaseModel):
+    """Try a transform on a sample value (`POST /api/transforms/preview`).
+    `transform` is inline or a library reference (`transform_id`)."""
+
+    transform: EdgeTransform
+    value: Any = None
+
+
+class TransformPreviewResponse(BaseModel):
+    """`ok` with the `output`, or not `ok` with the same `error` a run would
+    fail with. Always 200: a transform that doesn't apply is a result here."""
+
+    ok: bool
+    output: Any = None
+    error: str | None = None
+
+
 # P2, "Cross-cutting policy overlays" (docs/planning/roadmap.md's Strategic
 # Roadmap Addendum): a named, time-boxed waiver for one policy diagnostic
 # code on one graph — optionally scoped to a single node — so a compile or

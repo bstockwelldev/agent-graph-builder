@@ -67,6 +67,7 @@ import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { RawConfigEditor } from "./ui/RawConfigEditor";
 import { TransformFields, type TransformType } from "./TransformFields";
+import { TransformTryIt } from "./TransformTryIt";
 import { NodeHistoryTab } from "./NodeHistoryTab";
 import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
@@ -514,6 +515,9 @@ function ConfigureTab({
   const toolOptions = useToolOptions(node.type === "tool");
   const str = (key: string, fallback = "") => (node.config[key] as string | undefined) ?? fallback;
   const vars = [...new Set([...templateVariables, "upstream"])];
+  // The transform node's "Try it" runs the bound library entry, else the inline config.
+  const tryTransform: EdgeTransform | null =
+    node.type !== "transform" ? null : str("transformId") ? { transform_id: str("transformId") } : nodeTransformValue(node.config);
 
   return (
     <div>
@@ -722,6 +726,7 @@ function ConfigureTab({
             />
             <FieldIssues issues={["type", "pointer", "field", "template", "targetType"].flatMap((key) => fieldIssues(key))} />
           </ResourceBindingField>
+          {tryTransform && <TransformTryIt transform={tryTransform} />}
         </Group>
       )}
 
@@ -1154,6 +1159,7 @@ export function EdgeInspector({
                   }}
                 />
               </ResourceBindingField>
+              {edge.transform && <TransformTryIt transform={edge.transform} />}
             </Group>
           ) : (
             <Button variant="secondary" onClick={() => setAddingTransform(true)}>

@@ -3350,6 +3350,50 @@
         "title": "SimulateResult",
         "type": "object"
       },
+      "TransformPreviewRequest": {
+        "description": "Try a transform on a sample value (`POST /api/transforms/preview`).\n`transform` is inline or a library reference (`transform_id`).",
+        "properties": {
+          "transform": {
+            "$ref": "#/components/schemas/EdgeTransform"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "transform"
+        ],
+        "title": "TransformPreviewRequest",
+        "type": "object"
+      },
+      "TransformPreviewResponse": {
+        "description": "`ok` with the `output`, or not `ok` with the same `error` a run would\nfail with. Always 200: a transform that doesn't apply is a result here.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "output": {
+            "title": "Output"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "TransformPreviewResponse",
+        "type": "object"
+      },
       "UpdatePolicyExceptionRequest": {
         "description": "Extend (or shorten) a waiver, optionally re-stating why.",
         "properties": {
@@ -9307,6 +9351,45 @@
           }
         },
         "summary": "Create Transforms"
+      }
+    },
+    "/api/transforms/preview": {
+      "post": {
+        "description": "Applies a transform to a sample value without running a graph \u2014 the\ntransform editors' \"Try it\". Library references read live storage.",
+        "operationId": "preview_transform",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Transform Route"
       }
     },
     "/api/transforms/{resource_id}": {

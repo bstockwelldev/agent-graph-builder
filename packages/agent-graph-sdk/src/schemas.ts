@@ -500,6 +500,13 @@ export const agentProfileSchema = z.object({
   optional_elements: z.array(z.string()),
 });
 
+/** `POST /api/transforms/preview`: the output, or the error a run would fail with. */
+export const transformPreviewResponseSchema = z.object({
+  ok: z.boolean(),
+  output: z.unknown(),
+  error: z.string().nullish(),
+});
+
 /** A Transforms library entry (`/api/transforms`). */
 export const transformDefinitionSchema = z.object({
   id: z.string(),

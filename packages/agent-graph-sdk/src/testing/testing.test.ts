@@ -56,6 +56,13 @@ describe("the mock API, through the real client", () => {
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());
 
+  it("previews transforms, inline or from the library", async () => {
+    expect(await client.transforms.preview({ type: "select", pointer: "/a/b" }, { a: { b: 2 } })).toEqual({ ok: true, output: 2, error: null });
+    expect((await client.transforms.preview({ type: "coerce", target_type: "number" }, "x")).ok).toBe(false);
+    await client.transforms.create({ id: "t1", name: "Line", type: "format_message", template: "Hi {value.name}" });
+    expect((await client.transforms.preview({ transform_id: "t1" }, { name: "Ada" })).output).toBe("Hi Ada");
+  });
+
   it("serves graphs, validation and analysis", async () => {
     expect((await client.graphs.list()).map((g) => g.id)).toEqual(["demo_classify_and_route"]);
     const created = await client.graphs.create({ name: "Mine" });

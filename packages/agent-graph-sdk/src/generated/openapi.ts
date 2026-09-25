@@ -1584,6 +1584,27 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/transforms/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Transform Route
+         * @description Applies a transform to a sample value without running a graph — the
+         *     transform editors' "Try it". Library references read live storage.
+         */
+        post: operations["preview_transform"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -2717,6 +2738,29 @@ export type components = {
             run: components["schemas"]["RunSummary"];
             /** Traces */
             traces: components["schemas"]["NodeTrace"][];
+        };
+        /**
+         * TransformPreviewRequest
+         * @description Try a transform on a sample value (`POST /api/transforms/preview`).
+         *     `transform` is inline or a library reference (`transform_id`).
+         */
+        TransformPreviewRequest: {
+            transform: components["schemas"]["EdgeTransform"];
+            /** Value */
+            value?: unknown;
+        };
+        /**
+         * TransformPreviewResponse
+         * @description `ok` with the `output`, or not `ok` with the same `error` a run would
+         *     fail with. Always 200: a transform that doesn't apply is a result here.
+         */
+        TransformPreviewResponse: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Output */
+            output?: unknown;
         };
         /**
          * UpdatePolicyExceptionRequest
@@ -6949,6 +6993,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResourceVersion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_transform: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransformPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransformPreviewResponse"];
                 };
             };
             /** @description Validation Error */

@@ -337,6 +337,36 @@ async function body(request: Request): Promise<Json> {
   return text ? (JSON.parse(text) as Json) : {};
 }
 
+// ------------------------------------------------------- transforms
+
+type TransformJson = { type?: string | null; pointer?: string | null; field?: string | null; template?: string | null; target_type?: string | null; transform_id?: string | null };
+
+/** A small stand-in for backend app/transforms.py, enough for UI tests. */
+function mockApplyTransform(transform: TransformJson, value: unknown): unknown {
+  const read = (current: unknown, key: string) => {
+    if (current && typeof current === "object" && key in current) return (current as Record<string, unknown>)[key];
+    throw new Error(`no field '${key}'`);
+  };
+  switch (transform.type) {
+    case "select":
+      return (transform.pointer ?? "").split("/").slice(1).reduce(read, typeof value === "string" ? JSON.parse(value) : value);
+    case "wrap":
+      return { [transform.field ?? "value"]: value };
+    case "format_message":
+      return (transform.template ?? "").replace(/\{value((?:\.[\w-]+)*)\}/g, (_match, path: string) => {
+        const resolved = path.split(".").slice(1).reduce(read, value);
+        return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
+      });
+    case "coerce":
+      if (transform.target_type === "string") return typeof value === "string" ? value : JSON.stringify(value);
+      if (transform.target_type === "number" && !Number.isNaN(Number(value))) return Number(value);
+      if (transform.target_type === "boolean" && ["true", "false"].includes(String(value).toLowerCase())) return String(value).toLowerCase() === "true";
+      throw new Error(`'${String(value)}' can't be coerced to ${String(transform.target_type)}`);
+    default:
+      throw new Error("transform needs a type");
+  }
+}
+
 // ------------------------------------------------------------ routes
 
 type Handler = (args: { request: Request; params: Record<string, string>; store: MockStore }) => Response | Promise<Response>;
@@ -346,6 +376,17 @@ type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export function mockRoutes(): Record<string, Handler> {
   const routes: Record<string, Handler> = {
     "GET /api/health": () => HttpResponse.json({ ok: true, storage_backend: "memory" }),
+
+    "POST /api/transforms/preview": async ({ request, store }) => {
+      const { transform, value } = (await body(request)) as { transform: TransformJson; value: unknown };
+      const spec = transform.transform_id ? (store.resources.transforms.get(transform.transform_id) as TransformJson | undefined) : transform;
+      if (!spec) return HttpResponse.json({ ok: false, output: null, error: `library transform '${transform.transform_id}' not found` });
+      try {
+        return HttpResponse.json({ ok: true, output: mockApplyTransform(spec, value), error: null });
+      } catch (err) {
+        return HttpResponse.json({ ok: false, output: null, error: err instanceof Error ? err.message : String(err) });
+      }
+    },
 
     // Graphs
     "GET /api/graphs": ({ request, store }) => listResponse(request, [...store.graphs.values()]),

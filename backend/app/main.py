@@ -78,6 +78,8 @@ from .models import (
     RunRoutingDatasetRequest,
     RunSummary,
     SimulateResult,
+    TransformPreviewRequest,
+    TransformPreviewResponse,
     UpdatePolicyExceptionRequest,
 )
 from .node_analytics import GraphAnalytics, NodeExecution, get_graph_analytics, get_node_history
@@ -116,6 +118,7 @@ from .resource_versions import (
     publish_resource_version,
 )
 from .routing_lab import compare_routing_reports, run_routing_dataset
+from .transforms import preview_transform
 from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
 
@@ -834,6 +837,16 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         if not storage.delete_resource(kind, resource_id):
             raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
         return {"deleted": True}
+
+
+@app.post("/api/transforms/preview", operation_id="preview_transform")
+def preview_transform_route(body: TransformPreviewRequest) -> TransformPreviewResponse:
+    """Applies a transform to a sample value without running a graph — the
+    transform editors' "Try it". Library references read live storage."""
+    ok, output, error = preview_transform(
+        body.transform, body.value, lambda ref: storage.get_resource("transforms", ref)
+    )
+    return TransformPreviewResponse(ok=ok, output=output, error=error)
 
 
 for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
