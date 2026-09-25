@@ -96,6 +96,15 @@ class TestCoerce:
             apply_transform(t(type="coerce", target_type=target), value)
 
 
+def test_capability_matrix_counts_every_node_type() -> None:
+    from app.models import NodeType
+
+    entry = next(
+        e for e in LangGraphAdapter().capabilities().capabilities if e.feature == "node_executors"
+    )
+    assert entry.notes == f"All {len(NodeType)} node types run through the executor registry."
+
+
 def test_capability_matrix_claims_transforms_are_applied() -> None:
     entry = next(
         e

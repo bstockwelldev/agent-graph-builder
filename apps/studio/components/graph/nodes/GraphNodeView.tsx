@@ -28,7 +28,7 @@ import {
   surface,
   text,
 } from "@/lib/graph-theme";
-import { computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
+import { acceptsAnyKind, computePortDragCompatibility, inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { boundTitleFor, summaryFor } from "@bstockwelldev/agent-graph-sdk/graph";
 import { nodeBindings } from "@bstockwelldev/agent-graph-sdk";
@@ -152,7 +152,8 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   // resource's name (unless the user named the node) and carries a glyph.
   const bindings = nodeBindings(type, nodeData.config).filter((binding) => binding.kind !== "tools");
   const boundTitle = nodeData.userLabel ? null : boundTitleFor(type, nodeData.config, resourceNames);
-  const inputs = portSummary(inputPortsFor({ type }));
+  const declaredInputs = { type, input_ports: nodeData.ports?.input_ports };
+  const inputs = acceptsAnyKind(declaredInputs) ? "any" : portSummary(inputPortsFor(declaredInputs));
   const outputs = portSummary(outputPortsFor({ type, config: nodeData.config }));
 
   const [hovered, setHovered] = useState(false);
@@ -195,7 +196,9 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
     const sourcePort = sourceType ? outputPortsFor({ type: sourceType, config: sourceData?.config })[0] : undefined;
     const targetPort = inputPortsFor({ type })[0];
     if (sourcePort && targetPort) {
-      dragCompatibility = computePortDragCompatibility(sourcePort.contract.kind, targetPort.contract.kind);
+      dragCompatibility = acceptsAnyKind(declaredInputs)
+        ? "compatible"
+        : computePortDragCompatibility(sourcePort.contract.kind, targetPort.contract.kind);
     }
   }
   const targetHandleStyle: CSSProperties =

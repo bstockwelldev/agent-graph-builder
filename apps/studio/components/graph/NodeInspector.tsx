@@ -19,7 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
-import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
+import { inputKindLabel, inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import type {
   BindableResourceKind,
   ChatProvider,
@@ -777,6 +777,7 @@ function IoTab({
             <PortRow
               key={port.id}
               port={port}
+              kindLabel={inputKindLabel(node, port)}
               connectedEdges={incomingEdges.filter((edge) => (edge.target_port ?? defaultInputPortId) === port.id)}
               edgeLabel={(edge) => `from ${edge.source}`}
               issues={issues.filter((issue) => issue.port_id === port.id)}
@@ -805,11 +806,13 @@ function IoTab({
 
 function PortRow({
   port,
+  kindLabel = port.contract.kind,
   connectedEdges,
   edgeLabel,
   issues,
 }: {
   port: { id: string; name: string; contract: { kind: string } };
+  kindLabel?: string;
   connectedEdges: GraphEdge[];
   edgeLabel: (edge: GraphEdge) => string;
   issues: Diagnostic[];
@@ -819,7 +822,7 @@ function PortRow({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: spacing[2] }}>
         <code style={{ fontFamily: fontFamily.mono, fontSize: 12.5, fontWeight: 600, color: text.primary }}>{port.name}</code>
         <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 999, border: `1px solid ${border.subtle}`, color: text.muted }}>
-          {portKindLabel(port.contract.kind)}
+          {portKindLabel(kindLabel)}
         </span>
       </div>
       <Muted style={{ marginTop: 2 }}>
