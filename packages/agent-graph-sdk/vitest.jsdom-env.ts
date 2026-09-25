@@ -13,7 +13,8 @@ import { builtinEnvironments, type Environment } from "vitest/environments";
  * their fetch and AbortController come from the same realm.
  *
  * Applied to `src/react/**` by vitest.config.ts (a docblock can only name
- * a built-in or packaged environment, not a path).
+ * a built-in or packaged environment, not a path), and to every Studio test
+ * by apps/studio/vitest.config.ts.
  */
 export default {
   name: "jsdom-node-abort",
