@@ -120,7 +120,7 @@ export type RunHandle = {
 
 const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
 
-function paged<T, P extends object = Record<string, never>>(
+function paged<T, P extends object = object>(
   transport: Transport,
   route: (params: P) => string,
   schema: z.ZodType<T>,

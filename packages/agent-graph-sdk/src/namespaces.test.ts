@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createAgentGraphClient } from "./client.js";
 import { collectAll, NEXT_CURSOR_HEADER } from "./pagination.js";
 
-// SDK 4/7 (STO-617): namespaces, request objects, cursor pagination, and
-// the flat methods as deprecated aliases.
+// SDK 4/7 (STO-617): namespaces, request objects and cursor pagination.
+// (The flat aliases it deprecated were removed in 1.0.)
 
 const json = (body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { headers: { "content-type": "application/json", ...headers } });
@@ -130,28 +130,7 @@ describe("request objects", () => {
   });
 });
 
-describe("deprecated flat aliases", () => {
-  it("send exactly what their namespaced method sends", async () => {
-    const fetch = vi.fn().mockImplementation(async () => json({}));
-    const client = createAgentGraphClient({ fetch });
-    const pairs: [() => Promise<unknown>, () => Promise<unknown>][] = [
-      [() => client.createPolicyException("g", "P", "t", undefined, "r"), () => client.policies.exceptions.create("g", { code: "P", expiresAt: "t", reason: "r" })],
-      [() => client.publishRelease("g", "n"), () => client.releases.publish("g", { notes: "n" })],
-      [() => client.extractSubgraph("g", graph("g") as never, { node_ids: ["a"], name: "s" }), () => client.graphs.extractSubgraph("g", { draft: graph("g") as never, nodeIds: ["a"], name: "s" })],
-      [() => client.compareRoutingDatasets("g", "h", []), () => client.routingLab.compare("g", { otherGraphId: "h", dataset: [] })],
-      [() => client.getKnowledgeLineage("g", "d"), () => client.knowledge.lineage("g", { documentId: "d" })],
-      [() => client.getGraphAnalytics("g", 20), () => client.analytics.graph("g", { window: 20 })],
-      [() => client.sendChatMessage("s", "hi"), () => client.chatSessions.send("s", { content: "hi" })],
-      [() => client.resumeRun("r"), () => client.runs.resume("r")],
-    ];
-    for (const [alias, namespaced] of pairs) {
-      fetch.mockClear();
-      await alias().catch(() => undefined);
-      await namespaced().catch(() => undefined);
-      expect(sent(fetch, 0)).toEqual(sent(fetch, 1));
-    }
-  });
-
+describe("client.with()", () => {
   it("client.with() scopes the namespaces too", async () => {
     const fetch = vi.fn().mockImplementation(async () => json(graph("g")));
     await createAgentGraphClient({ fetch }).with({ headers: { "X-Trace": "1" } }).graphs.get("g");

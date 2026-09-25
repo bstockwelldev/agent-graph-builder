@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": []
+  },
+  "files": [
+    "consumer-core.ts",
+    "consumer-ui.ts"
+  ]
+}

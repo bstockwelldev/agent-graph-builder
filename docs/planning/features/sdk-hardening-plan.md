@@ -370,7 +370,7 @@ Linear STO-618 · GitHub #70. Non-breaking.
 - Root build and frozen install: green.
 - Playwright on the stub backend (1440 and 390 widths): the Impact tab, the graph Policies panel and the chat run picker work. The impact endpoint was requested once even in Next dev's StrictMode, and there were no errors.
 
-### Phase 5c — Docs, packaging and release (SDK 7/7, Low)
+### Phase 5c — Docs, packaging and release (SDK 7/7, Low) — **Shipped (1.0.0 versioned; publish is a manual workflow run)**
 
 Linear STO-619 · GitHub #71.
 
@@ -382,6 +382,60 @@ Linear STO-619 · GitHub #71.
 - **Documentation:** a README with quick-starts for the browser, Node and React; TSDoc; and a typedoc site.
 - **Release tooling:** Changesets, an npm publish workflow with provenance, and a bundle-size check in CI.
 - **Versions:** 0.2.0 after SDK 1/7–3/7 land. 1.0 once the namespaces are stable and the aliases are removed.
+
+#### As built
+
+**1.0 breaking changes**
+- The flat client methods deprecated in SDK 4/7 are removed, along with `streamRunEvents`, `DeprecatedClientMethods` and `RunsClient`. `AgentGraphClient` is now only the namespaces plus `with()`.
+- The SDK's own tests were migrated to the namespaces, and `tsconfig.test.json` now type-checks them. Checking the tests surfaced a real type bug: `graphs.listPage({ limit })` didn't type-check because the default parameter type was `Record<string, never>`. It's fixed.
+- 0.2.0 was skipped: npm had only 0.1.0, so the package goes straight to 1.0.0.
+
+**Packaging**
+- Exports: `.`, `./graph`, `./react`, `./testing` and `./package.json`.
+- `sideEffects: false` and `engines: node >= 18`.
+- `files`: dist, README, CHANGELOG and LICENSE.
+- License: MIT.
+- Peer dependencies: `zod` (required); `react`, `@tanstack/react-query` and `msw` (optional). Studio now declares `zod` itself.
+- The build drops the DOM lib: `lib: ES2022` plus `@types/node`. The DOM-only aliases `HeadersInit` and `RequestInfo` are replaced by `HeadersInput`, which is derived from the runtime's own `Headers` type, and by `Parameters<typeof fetch>[0]`.
+
+**Checks** (a new `sdk-package` CI job runs all four)
+1. `check:types` type-checks consumer files that import the package by name, so they resolve through `exports`, just as a user's code would. There are three configurations:
+   - core and `/graph` under `moduleResolution` node16 with Node types and no DOM lib;
+   - `/testing` and `/react` under node16 with the DOM lib, which msw and TanStack Query need themselves;
+   - everything under `bundler`.
+
+   All three use `skipLibCheck: false`.
+2. `check:pack` runs `npm pack --dry-run` and fails if any `exports` target or doc file is missing, or if anything other than dist and those files is included (91 files, 128 kB packed).
+3. `check:size` bundles each entry point with esbuild (minified, peer dependencies external) and checks it against the gzip budgets in `size-budget.json`:
+
+   | Entry | Size | Budget |
+   | --- | --- | --- |
+   | core | 13.3 kB | 16 kB |
+   | `/graph` | 5.4 kB | 7 kB |
+   | `/react` | 7.2 kB | 9 kB |
+   | `/testing` | 14.5 kB | 18 kB |
+4. `docs` builds the typedoc site (four entry-point modules, README as the landing page) with warnings treated as errors.
+
+**Docs**
+- The package README has quick-starts for the browser, Node and React, a client reference table, pagination, errors, `/graph`, `/testing`, and a table for upgrading from 0.x.
+
+**Release**
+- Changesets is set up at the repo root (`.changeset/`); Studio is ignored.
+- The `sdk-1-0` changeset (major) was versioned with `changeset version`. That set the package to 1.0.0 and generated the CHANGELOG's 1.0.0 entry; the detailed SDK 1/7–6/7 notes sit beneath it.
+- `.github/workflows/release-sdk.yml` runs on manual dispatch or a published GitHub release. The trigger is manual because a publish can't be undone. It:
+  1. builds, tests and runs the package checks;
+  2. skips if the version is already on npm;
+  3. runs `npm publish --provenance`;
+  4. tags `agent-graph-sdk@<version>`;
+  5. deploys the typedoc site to GitHub Pages.
+- The operator needs to add the `NPM_TOKEN` secret and set Pages to use GitHub Actions.
+
+**Verification**
+- SDK: vitest 227, plus 1 end-to-end test; typecheck of sources and tests; `check` (types, pack, size); docs build.
+- Studio: vitest 273/273, tsc clean, eslint 0 errors.
+- Backend pytest: 571/571.
+- Root build and frozen install: green.
+- Playwright smoke on the stub backend: graph list, publish, a chat `/run` to Succeeded, and the policies page, with no failed calls.
 
 ## Sequencing
 

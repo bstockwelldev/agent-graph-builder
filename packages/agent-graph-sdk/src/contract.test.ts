@@ -100,7 +100,7 @@ describe("API version skew", () => {
       .mockResolvedValueOnce(withVersion(ahead))
       .mockResolvedValueOnce(withVersion(`${major + 1}.0.0`));
     const client = createAgentGraphClient({ fetch, onVersionSkew });
-    for (let i = 0; i < 4; i++) await client.listGraphs();
+    for (let i = 0; i < 4; i++) await client.graphs.list();
     expect(onVersionSkew).toHaveBeenCalledTimes(1);
     expect(onVersionSkew).toHaveBeenCalledWith({ serverVersion: ahead, clientVersion: CONTRACT_API_VERSION });
 
@@ -115,11 +115,11 @@ describe("API version skew", () => {
   it("defaults to a console warning, and false silences it", async () => {
     const { createAgentGraphClient } = await import("./client.js");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await createAgentGraphClient({ fetch: vi.fn().mockResolvedValue(withVersion("99.0.0")) }).listGraphs();
+    await createAgentGraphClient({ fetch: vi.fn().mockResolvedValue(withVersion("99.0.0")) }).graphs.list();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0][0])).toContain("99.0.0");
     warn.mockClear();
-    await createAgentGraphClient({ fetch: vi.fn().mockResolvedValue(withVersion("99.0.0")), onVersionSkew: false }).listGraphs();
+    await createAgentGraphClient({ fetch: vi.fn().mockResolvedValue(withVersion("99.0.0")), onVersionSkew: false }).graphs.list();
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });

@@ -30,9 +30,9 @@ describe("requests", () => {
       fetch,
       headers: async () => ({ Authorization: `Bearer ${token}`, "X-App": "studio" }),
     });
-    await client.getGraph("g1");
+    await client.graphs.get("g1");
     token = "t2";
-    await client.with({ headers: { "X-App": "cli", "X-Trace": "1" } }).saveGraph(graph as never);
+    await client.with({ headers: { "X-App": "cli", "X-Trace": "1" } }).graphs.update(graph as never);
 
     const [, getInit] = fetch.mock.calls[0] as [string, RequestInit];
     const getHeaders = new Headers(getInit.headers);
@@ -48,7 +48,7 @@ describe("requests", () => {
 
   it("encodes every path segment", async () => {
     const fetch = vi.fn().mockResolvedValue(json(graph));
-    await createAgentGraphClient({ baseUrl: "http://api", fetch }).getGraph("a b/c?d");
+    await createAgentGraphClient({ baseUrl: "http://api", fetch }).graphs.get("a b/c?d");
     expect(fetch.mock.calls[0][0]).toBe("http://api/api/graphs/a%20b%2Fc%3Fd");
     expect(path`/api/x/${"1/2"}/y/${3}`).toBe("/api/x/1%2F2/y/3");
     expect(query({ a: "x y", b: undefined, c: 0 })).toBe("?a=x+y&c=0");
@@ -60,7 +60,7 @@ describe("typed errors", () => {
   it("exposes 422 diagnostics and the detail text", async () => {
     const diagnostics = [{ severity: "error", code: "RELEASE_SUBGRAPH_UNPUBLISHED", message: "Publish child first.", blocking: true }];
     const fetch = vi.fn().mockResolvedValue(json({ detail: { message: "publish blocked", diagnostics } }, 422));
-    const error = await createAgentGraphClient({ fetch }).publishRelease("g1", {}).catch((e: unknown) => e);
+    const error = await createAgentGraphClient({ fetch }).releases.publish("g1").catch((e: unknown) => e);
     expect(isAgentGraphApiError(error)).toBe(true);
     const apiError = error as AgentGraphApiError;
     expect([apiError.status, apiError.method, apiError.path]).toEqual([422, "POST", "/api/graphs/g1/releases"]);
@@ -76,17 +76,17 @@ describe("typed errors", () => {
       .mockResolvedValueOnce(json({ diagnostics: [{ severity: "error", code: "X", message: "m", blocking: true }] }, 422))
       .mockResolvedValueOnce(new Response("<html>bad gateway</html>", { status: 400 }));
     const client = createAgentGraphClient({ fetch, retry: false });
-    const notFound = (await client.getGraph("x").catch((e: unknown) => e)) as AgentGraphApiError;
+    const notFound = (await client.graphs.get("x").catch((e: unknown) => e)) as AgentGraphApiError;
     expect([notFound.status, notFound.detail, errorText(notFound)]).toEqual([404, "graph not found", "graph not found"]);
-    const blocked = (await client.getGraph("y").catch((e: unknown) => e)) as AgentGraphApiError;
+    const blocked = (await client.graphs.get("y").catch((e: unknown) => e)) as AgentGraphApiError;
     expect(blocked.diagnostics?.map((d) => d.code)).toEqual(["X"]);
-    const html = (await client.getGraph("z").catch((e: unknown) => e)) as AgentGraphApiError;
+    const html = (await client.graphs.get("z").catch((e: unknown) => e)) as AgentGraphApiError;
     expect([html.detail, html.diagnostics]).toEqual(["<html>bad gateway</html>", undefined]);
   });
 
   it("rejects a schema mismatch with AgentGraphResponseError", async () => {
     const fetch = vi.fn().mockResolvedValue(json({ nope: true }));
-    const error = await createAgentGraphClient({ fetch }).getGraph("g").catch((e: unknown) => e);
+    const error = await createAgentGraphClient({ fetch }).graphs.get("g").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AgentGraphResponseError);
     expect((error as AgentGraphResponseError).issues.length).toBeGreaterThan(0);
   });
@@ -102,7 +102,7 @@ describe("retries", () => {
       .mockRejectedValueOnce(new TypeError("fetch failed"))
       .mockResolvedValueOnce(json(graph));
     const onResponse = vi.fn();
-    const result = await createAgentGraphClient({ fetch, retry: fastRetry, onResponse }).getGraph("g");
+    const result = await createAgentGraphClient({ fetch, retry: fastRetry, onResponse }).graphs.get("g");
     expect(result.name).toBe("G");
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(onResponse.mock.calls.map((c) => [c[0].attempt, c[0].status])).toEqual([
@@ -114,22 +114,22 @@ describe("retries", () => {
 
   it("never retries a POST by default, and gives up after the retry budget", async () => {
     const post = vi.fn().mockResolvedValue(json({ detail: "busy" }, 503));
-    await expect(createAgentGraphClient({ fetch: post, retry: fastRetry }).compileGraph("g")).rejects.toBeInstanceOf(AgentGraphApiError);
+    await expect(createAgentGraphClient({ fetch: post, retry: fastRetry }).graphs.compile("g")).rejects.toBeInstanceOf(AgentGraphApiError);
     expect(post).toHaveBeenCalledTimes(1);
 
     const down = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-    await expect(createAgentGraphClient({ fetch: down, retry: fastRetry }).getGraph("g")).rejects.toBeInstanceOf(AgentGraphNetworkError);
+    await expect(createAgentGraphClient({ fetch: down, retry: fastRetry }).graphs.get("g")).rejects.toBeInstanceOf(AgentGraphNetworkError);
     expect(down).toHaveBeenCalledTimes(3);
 
     const once = vi.fn().mockResolvedValue(json({}, 500));
-    await createAgentGraphClient({ fetch: once }).with({ retry: false }).getGraph("g").catch(() => undefined);
+    await createAgentGraphClient({ fetch: once }).with({ retry: false }).graphs.get("g").catch(() => undefined);
     expect(once).toHaveBeenCalledTimes(1);
   });
 
   it("honours Retry-After on 429", async () => {
     vi.useFakeTimers();
     const fetch = vi.fn().mockResolvedValueOnce(json({}, 429, { "Retry-After": "2" })).mockResolvedValueOnce(json(graph));
-    const pending = createAgentGraphClient({ fetch, retry: { retries: 1, maxDelayMs: 10_000 } }).getGraph("g");
+    const pending = createAgentGraphClient({ fetch, retry: { retries: 1, maxDelayMs: 10_000 } }).graphs.get("g");
     await vi.advanceTimersByTimeAsync(1_900);
     expect(fetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(200);
@@ -149,7 +149,7 @@ describe("cancellation and timeouts", () => {
 
   it("passes the caller's signal through client.with and rejects when it aborts", async () => {
     const controller = new AbortController();
-    const pending = createAgentGraphClient({ fetch: hang as never }).with({ signal: controller.signal }).getGraph("g");
+    const pending = createAgentGraphClient({ fetch: hang as never }).with({ signal: controller.signal }).graphs.get("g");
     await new Promise((resolve) => setTimeout(resolve, 5)); // let the request reach fetch
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
@@ -158,7 +158,7 @@ describe("cancellation and timeouts", () => {
     // Aborted before the request is sent: fetch is never called.
     const calls = hang.mock.calls.length;
     const early = new AbortController();
-    const skipped = createAgentGraphClient({ fetch: hang as never }).with({ signal: early.signal }).getGraph("g");
+    const skipped = createAgentGraphClient({ fetch: hang as never }).with({ signal: early.signal }).graphs.get("g");
     early.abort();
     await expect(skipped).rejects.toMatchObject({ name: "AbortError" });
     expect(hang.mock.calls.length).toBe(calls);
@@ -166,7 +166,7 @@ describe("cancellation and timeouts", () => {
 
   it("times out with AgentGraphTimeoutError and doesn't retry an aborted request", async () => {
     const error = await createAgentGraphClient({ fetch: hang as never, timeoutMs: 20, retry: { retries: 0 } })
-      .getGraph("g")
+      .graphs.get("g")
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AgentGraphTimeoutError);
     expect((error as AgentGraphTimeoutError).timeoutMs).toBe(20);
@@ -176,7 +176,7 @@ describe("cancellation and timeouts", () => {
     const controller = new AbortController();
     controller.abort();
     const fetch = vi.fn();
-    await expect(createAgentGraphClient({ fetch }).validateGraph(graph as never, { signal: controller.signal })).rejects.toBeDefined();
+    await expect(createAgentGraphClient({ fetch }).graphs.validate(graph as never, { signal: controller.signal })).rejects.toBeDefined();
     expect(fetch).not.toHaveBeenCalled();
   });
 });

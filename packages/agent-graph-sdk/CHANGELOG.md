@@ -1,14 +1,41 @@
 # Changelog — @bstockwelldev/agent-graph-sdk
 
-## Unreleased
+## 1.0.0
 
-### Added
+### Major Changes
+
+- **1.0.** The SDK hardening epic (SDK 1/7–7/7) as a stable release:
+
+  - **Namespaced client** (`client.graphs`, `runs`, `releases`, `policies`, `routingLab`, `knowledge`, `analytics`, `providers`, `runtimeTargets`, plus the resource kinds). It has request objects, cursor pagination (`listPage` / `iterate`), typed errors, retries, timeouts and `client.with()`.
+  - **Runs:** `runs.start` returns a handle; `runs.stream` is resumable; `runs.wait` settles a run.
+  - **Contract:** OpenAPI-generated types, and a version-skew warning.
+  - **New entry points:**
+    - `/graph`: pure edits, traversal and `validateStructure`;
+    - `/react`: TanStack Query hooks;
+    - `/testing`: MSW handlers for every route, plus fixture factories.
+  - **Graph summaries:** `client.graphs.summaries` and `useGraphSummaries` list graphs without loading their definitions.
+
+  **Breaking:**
+
+  - The flat client methods deprecated in 0.x are removed (`getGraph`, `startRun`, `publishRelease`, ...). Use the namespaces; the README has a mapping table.
+  - `streamRunEvents` is removed. Use `client.runs.stream` or `client.runs.wait`.
+  - `DeprecatedClientMethods` and `RunsClient` are removed.
+  - `zod` is now a peer dependency.
+  - The package is MIT-licensed, has `sideEffects: false`, and its core types no longer require the DOM lib.
+
+### Details (0.1.0 → 1.0.0)
+
+Everything listed as deprecated below was removed in 1.0 (see Major Changes).
+
+#### Added
+
 - **Graph summaries:** `client.graphs.summaries` (`list`/`listPage`/`iterate`) over `GET /api/graph-summaries`, which returns each graph's `id`, `name`, counts, `input_variables` and `subgraph_ids` without nodes or edges. The server reads one catalog, not every graph, so prefer it over `graphs.list()` for lists and pickers.
   - `GraphSummary` type and `graphSummarySchema`.
   - `useGraphSummaries` hook and `agentGraphKeys.graphSummaries()`, which `agentGraphInvalidation(...).graphs()` also refreshes.
   - `summarizeGraph(graph)` in `/graph`, and a mock route in `/testing`.
 
 - **`@bstockwelldev/agent-graph-sdk/react`** (SDK 6/7, STO-618): TanStack Query hooks. `react` 18+ and `@tanstack/react-query` v5 are optional peer dependencies.
+
   - `AgentGraphProvider` and `useAgentGraphClient`.
   - Hooks: `useGraphs`, `useGraph`, `useRuns`, `useRun` (live over `runs.stream`), `useReleases`, `useGraphHealth`, `useNodeImpact`, `usePolicies`, `useResources`.
   - Cache control: `agentGraphKeys`, `agentGraphInvalidation`, `useAgentGraphInvalidation`.
@@ -31,7 +58,8 @@
 - Request types are exported, plus `DeprecatedClientMethods`: `Omit<AgentGraphClient, keyof DeprecatedClientMethods>` is a client type without the aliases.
 - `Transport.requestWithHeaders`.
 
-### Deprecated
+#### Deprecated
+
 - Every flat client method (`getGraph`, `startRun`, `publishRelease`, `createPolicyException`, ...). Each still works as an alias of its namespaced method, sends the same request, and names its replacement in TSDoc. The aliases will be removed at 1.0.
 
 - **OpenAPI contract** (SDK 3/7, STO-616): `contract/openapi.json`, exported by the backend.
@@ -40,7 +68,8 @@
 - **Version-skew warning:** when the server's `X-AGB-API-Version` is ahead of the contract, the client calls `onVersionSkew`, once per client. It defaults to `console.warn`; pass `false` to silence it.
 - Exported `isServerAhead` and `API_VERSION_HEADER`.
 
-### Changed
+#### Changed
+
 - `ReplayRequest` and `ModelOverride` are now typed from the generated contract.
 - `replayRequestSchema` and `modelOverrideSchema` are removed. They were request bodies that were never used for validation.
 
@@ -51,7 +80,8 @@
 - Exported `parseSse`, `streamRun`, `waitForRun` and `isSettledRun`.
 - Run-step helpers `applyRunEvent`, `stepsFromTraces` and `formatStepDuration`, moved here from Studio.
 
-### Deprecated
+#### Deprecated
+
 - `streamRunEvents`: use `client.runs.stream` or `client.runs.wait`. It now wraps the resumable stream instead of `EventSource`.
 
 - **Transport options** (SDK 1/7, STO-614): `createAgentGraphClient({ baseUrl, fetch, headers, timeoutMs, retry, onRequest, onResponse })`.
@@ -67,10 +97,12 @@
   - the helpers `isAgentGraphApiError` and `errorText`.
 - `apiPath` and `apiQuery` helpers for encoded paths and query strings.
 
-### Changed
+#### Changed
+
 - Every path segment is now URL-encoded, so ids containing `/`, spaces or `?` round-trip.
 - Headers are merged instead of replaced. `Content-Type: application/json` is sent only with string bodies, so `FormData` uploads get their multipart boundary.
 - Failures now reject with the typed errors above instead of a plain `Error`. The message format (`"POST /path failed (422): …"`) is kept, but it now carries the backend's `detail` text rather than raw JSON.
 
 ## 0.1.0
+
 - Initial client, schemas and graph helpers.

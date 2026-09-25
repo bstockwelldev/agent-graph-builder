@@ -1,8 +1,30 @@
 {
   "name": "@bstockwelldev/agent-graph-sdk",
-  "version": "0.1.0",
-  "description": "Types, API client, and graph schema helpers for Agent Graph Builder",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Agent Graph Builder: typed API client, run streaming, graph helpers, React hooks and an MSW test kit",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bstockwelldev/agent-graph-builder.git",
+    "directory": "packages/agent-graph-sdk"
+  },
+  "homepage": "https://github.com/bstockwelldev/agent-graph-builder/tree/master/packages/agent-graph-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/bstockwelldev/agent-graph-builder/issues"
+  },
+  "keywords": [
+    "agent",
+    "graph",
+    "langgraph",
+    "llm",
+    "workflow",
+    "sdk"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -21,30 +43,40 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "generate": "node scripts/generate.mjs",
-    "generate:check": "node scripts/generate.mjs --check"
+    "generate:check": "node scripts/generate.mjs --check",
+    "check:types": "tsc -p type-tests/tsconfig.node16.json && tsc -p type-tests/tsconfig.node16-dom.json && tsc -p type-tests/tsconfig.bundler.json",
+    "check:pack": "node scripts/check-pack.mjs",
+    "check:size": "node scripts/check-size.mjs",
+    "check": "pnpm run check:types && pnpm run check:pack && pnpm run check:size",
+    "docs": "typedoc"
   },
   "dependencies": {
-    "@noble/hashes": "^1.8.0",
-    "zod": "^3.24.1"
+    "@noble/hashes": "^1.8.0"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
     "msw": "^2.0.0",
-    "react": ">=18"
+    "react": ">=18",
+    "zod": "^3.24.0"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-query": {
@@ -60,14 +92,18 @@
   "devDependencies": {
     "@tanstack/react-query": "^5.103.2",
     "@testing-library/react": "^16.3.3",
+    "@types/node": "^20.19.43",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "esbuild": "^0.25.12",
     "jsdom": "^26.1.0",
     "msw": "^2.15.0",
     "openapi-typescript": "^7.13.0",
     "react": "19.1.2",
     "react-dom": "19.1.2",
+    "typedoc": "^0.28.20",
     "typescript": "^5.7.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "zod": "^3.24.1"
   }
 }

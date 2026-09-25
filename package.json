@@ -1,7 +1,7 @@
 {
   "name": "agent-graph-builder",
   "version": "0.2.0",
-  "description": "Agent Graph Builder — visual graph authoring studio and TypeScript SDK",
+  "description": "Agent Graph Builder \u2014 visual graph authoring studio and TypeScript SDK",
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"
@@ -11,6 +11,11 @@
     "build": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-studio run build",
     "build:sdk": "pnpm --filter @bstockwelldev/agent-graph-sdk run build",
     "dev": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
-    "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-studio run test"
+    "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-studio run test",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1"
   }
 }

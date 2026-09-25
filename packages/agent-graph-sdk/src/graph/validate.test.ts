@@ -9,7 +9,7 @@ import { STRUCTURAL_CODES, validateStructure } from "./validate.js";
 // on contract/structural-fixtures.json (the backend's
 // tests/test_structural_fixtures.py checks the same file).
 
-type Expected = { code: string; severity: string; node_id: string | null; edge_id: string | null };
+type Expected = { code: string; severity: "error" | "warning"; node_id: string | null; edge_id: string | null };
 const fixtures = JSON.parse(readFileSync(new URL("../../contract/structural-fixtures.json", import.meta.url), "utf8")) as {
   codes: string[];
   cases: { name: string; graph: unknown; expected: Expected[] }[];
