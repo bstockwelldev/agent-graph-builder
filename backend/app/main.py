@@ -21,9 +21,10 @@ from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .bindings import resource_usages
 from .chat_context import ChatContext, build_chat_system_prompt
 from .datasets import DatasetBuildError, build_dataset_from_runs
-from .demo_graph import build_demo_graph
+from .demo_graph import build_demo_graph, protected_graph
 from .env_config import (
     load_app_env,
+    public_demo_mode_enabled,
     resolve_azure_api_key,
     resolve_azure_deployment_name,
     resolve_azure_endpoint,
@@ -95,8 +96,14 @@ from .policies import (
     save_policy_settings,
     update_policy_exception,
 )
+from .fingerprint import document_fingerprint, semantic_fingerprint
 from .provider_credentials import get_provider_credentials
-from .providers.base import get_chat_model
+from .providers.base import (
+    PUBLIC_DEMO_PROVIDER_MESSAGE,
+    LiveProviderBlocked,
+    get_chat_model,
+    require_live_provider_allowed,
+)
 from .releases import (
     ReleasePublishBlocked,
     compare_draft_to_release,
@@ -123,6 +130,17 @@ from .spa_cache import SpaCacheControlMiddleware
 logger = logging.getLogger(__name__)
 
 
+def _seed_demo_graph() -> None:
+    """Writes the canonical demo when it is missing or differs from
+    `build_demo_graph()` -- restoring edits made before it was read-only and
+    picking up changes to demo_graph.py on the next cold start."""
+    demo = build_demo_graph()
+    stored = storage.get_graph(demo.id)
+    if stored is None or document_fingerprint(stored) != document_fingerprint(demo):
+        demo.updated_at = datetime.now(UTC).isoformat()
+        storage.save_graph(demo)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     load_app_env()
@@ -130,14 +148,40 @@ async def lifespan(_app: FastAPI):
     # abort startup — that turns every request, /api/health included, into
     # FUNCTION_INVOCATION_FAILED instead of a diagnosable error response.
     try:
-        if storage.storage_is_healthy() and storage.get_graph(build_demo_graph().id) is None:
-            storage.save_graph(build_demo_graph())
+        if storage.storage_is_healthy():
+            _seed_demo_graph()
     except Exception:
         logger.warning("Demo graph seed skipped: storage backend unavailable", exc_info=True)
     yield
 
 
 app = FastAPI(title="Agent Graph Builder POC", version=API_VERSION, lifespan=lifespan)
+
+
+@app.exception_handler(LiveProviderBlocked)
+async def live_provider_blocked_handler(_request: Request, exc: LiveProviderBlocked) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
+        content={"detail": {"code": "live_provider_requires_api_key", "message": str(exc)}},
+    )
+
+
+def _require_writable_graph(graph_id: str) -> None:
+    """404 for an unknown graph, 403 for a seeded read-only one."""
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    if protected_graph(graph_id) is not None:
+        raise _read_only_graph_error()
+
+
+def _read_only_graph_error() -> HTTPException:
+    return HTTPException(
+        status_code=403,
+        detail={
+            "code": "graph_read_only",
+            "message": "This demo graph is read-only. Save your changes as a copy.",
+        },
+    )
 
 
 @app.middleware("http")
@@ -197,6 +241,7 @@ def health_check() -> JSONResponse:
     # rather than 503ing the whole API the way storage misconfiguration does,
     # so it's nested here and never flips the top-level `ok`/status code.
     payload["telemetry"] = telemetry_health()
+    payload["public_demo_mode"] = public_demo_mode_enabled()
     status_code = 200 if payload["ok"] else 503
     return JSONResponse(status_code=status_code, content=payload)
 
@@ -240,6 +285,13 @@ def get_graph(graph_id: str) -> GraphDefinition:
 def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
     if graph.id != graph_id:
         raise HTTPException(status_code=400, detail="graph id mismatch between path and body")
+    canonical = protected_graph(graph_id)
+    if canonical is not None:
+        # The Studio saves before every compile/run; a layout-only change
+        # to the demo is accepted but not persisted, so Run keeps working.
+        if semantic_fingerprint(graph) != semantic_fingerprint(canonical):
+            raise _read_only_graph_error()
+        return storage.get_graph(graph_id) or canonical
     graph.updated_at = datetime.now(UTC).isoformat()
     storage.save_graph(graph)
     return graph
@@ -249,6 +301,8 @@ def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
 def delete_graph(graph_id: str) -> dict[str, bool]:
     """Added for studio-consolidation Phase 3 — graphs were previously
     never deletable through this API."""
+    if protected_graph(graph_id) is not None:
+        raise _read_only_graph_error()
     if not storage.delete_graph(graph_id):
         raise HTTPException(status_code=404, detail="graph not found")
     return {"deleted": True}
@@ -534,8 +588,7 @@ async def compare_routing_to_release_endpoint(
 def create_policy_exception_endpoint(
     graph_id: str, request: CreatePolicyExceptionRequest
 ) -> PolicyException:
-    if storage.get_graph(graph_id) is None:
-        raise HTTPException(status_code=404, detail="graph not found")
+    _require_writable_graph(graph_id)
     return create_policy_exception(
         graph_id,
         policy_code=request.policy_code,
@@ -560,8 +613,7 @@ def list_policy_exceptions_endpoint(
 def update_policy_exception_endpoint(
     graph_id: str, exception_id: str, request: UpdatePolicyExceptionRequest
 ) -> PolicyException:
-    if storage.get_graph(graph_id) is None:
-        raise HTTPException(status_code=404, detail="graph not found")
+    _require_writable_graph(graph_id)
     updated = update_policy_exception(
         graph_id, exception_id, expires_at=request.expires_at, reason=request.reason
     )
@@ -611,8 +663,7 @@ def get_graph_policies_endpoint(graph_id: str) -> PolicySettings:
 
 @app.put("/api/graphs/{graph_id}/policies")
 def put_graph_policies_endpoint(graph_id: str, settings: PolicySettings) -> PolicySettings:
-    if storage.get_graph(graph_id) is None:
-        raise HTTPException(status_code=404, detail="graph not found")
+    _require_writable_graph(graph_id)
     try:
         return save_policy_settings(graph_scope(graph_id), settings)
     except PolicySettingsInvalid as exc:
@@ -628,8 +679,7 @@ def get_graph_effective_policies_endpoint(graph_id: str) -> list[EffectivePolicy
 
 @app.delete("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
 def delete_policy_exception_endpoint(graph_id: str, exception_id: str) -> dict[str, bool]:
-    if storage.get_graph(graph_id) is None:
-        raise HTTPException(status_code=404, detail="graph not found")
+    _require_writable_graph(graph_id)
     if not delete_policy_exception(graph_id, exception_id):
         raise HTTPException(status_code=404, detail="policy exception not found")
     return {"deleted": True}
@@ -646,6 +696,7 @@ def compile_release_endpoint(release_id: str) -> CompileResult:
 
 @app.post("/api/graph-releases/{release_id}/runs")
 async def start_release_run(release_id: str, request: ReleaseRunRequest) -> RunSummary:
+    require_live_provider_allowed(request.provider, request.api_key)
     graph_id = storage.get_release_graph_id(release_id)
     release = get_release(release_id, graph_id) if graph_id is not None else None
     if release is None:
@@ -710,8 +761,7 @@ async def upload_graph_knowledge(
     graph_id: str,
     file: UploadFile = File(...),  # noqa: B008 - FastAPI's own dependency idiom
 ) -> dict[str, Any]:
-    if storage.get_graph(graph_id) is None:
-        raise HTTPException(status_code=404, detail="graph not found")
+    _require_writable_graph(graph_id)
     content = await file.read()
     try:
         return await upload_knowledge_document(
@@ -723,8 +773,7 @@ async def upload_graph_knowledge(
 
 @app.delete("/api/graphs/{graph_id}/knowledge/{document_id}")
 def delete_graph_knowledge_document(graph_id: str, document_id: str) -> dict[str, Any]:
-    if storage.get_graph(graph_id) is None:
-        raise HTTPException(status_code=404, detail="graph not found")
+    _require_writable_graph(graph_id)
     result = delete_knowledge_document(graph_id, document_id)
     if result is None:
         raise HTTPException(status_code=404, detail="document not found")
@@ -1001,6 +1050,8 @@ def get_node_history_route(graph_id: str, node_id: str, limit: int = 20) -> list
 
 @app.get("/api/providers/{provider}/ready")
 def provider_ready(provider: str) -> dict[str, bool | str]:
+    if public_demo_mode_enabled() and provider != "stub":
+        return {"ready": False, "message": PUBLIC_DEMO_PROVIDER_MESSAGE}
     if provider == "groq":
         ready = bool(resolve_groq_api_key())
         return {
@@ -1043,6 +1094,7 @@ async def provider_models(provider: str, graph_id: str | None = None) -> dict:
 
 @app.post("/api/runs")
 async def start_run(request: RunRequest) -> RunSummary:
+    require_live_provider_allowed(request.provider, request.api_key)
     graph = storage.get_graph(request.graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")

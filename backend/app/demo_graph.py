@@ -10,6 +10,13 @@ from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode, NodePositio
 DEMO_GRAPH_ID = "demo_classify_and_route"
 
 
+def protected_graph(graph_id: str) -> GraphDefinition | None:
+    """The canonical definition of a seeded, read-only graph, or None for
+    ordinary graphs. Every visitor to the public deploy lands on the demo,
+    so no one may edit or delete it; the Studio forks edits into a copy."""
+    return build_demo_graph() if graph_id == DEMO_GRAPH_ID else None
+
+
 def build_demo_graph() -> GraphDefinition:
     nodes = [
         GraphNode(

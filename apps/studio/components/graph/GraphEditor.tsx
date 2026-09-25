@@ -39,6 +39,7 @@ import {
 } from "@bstockwelldev/agent-graph-sdk";
 
 import { client, waitForRun } from "@/lib/api-client";
+import { isReadOnlyGraphError } from "@/lib/apiErrors";
 import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
 import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
@@ -54,6 +55,7 @@ import {
 import {
   cloneCanvasSnapshot,
   coachStep,
+  copyGraphDefinition,
   dismissCoach,
   edgeContract,
   graphStructure,
@@ -256,6 +258,8 @@ function nextId(prefix: string): string {
   return `${prefix}_${idCounter}`;
 }
 
+const forkNoticeKey = (graphId: string) => `agb:fork-notice:${graphId}`;
+
 function syncIdCounter(graph: GraphDefinition) {
   let max = idCounter;
   for (const item of [...graph.nodes, ...graph.edges]) {
@@ -373,6 +377,24 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [savedFingerprint, setSavedFingerprint] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [forkNotice, setForkNotice] = useState<string | null>(null);
+  // Kept in storage until dismissed or superseded (read-once would lose it
+  // to StrictMode's double effect run).
+  useEffect(() => {
+    try {
+      setForkNotice(sessionStorage.getItem(forkNoticeKey(graphId)));
+    } catch {
+      setForkNotice(null);
+    }
+  }, [graphId]);
+  const dismissForkNotice = useCallback(() => {
+    setForkNotice(null);
+    try {
+      sessionStorage.removeItem(forkNoticeKey(graphId));
+    } catch {
+      // Nothing stored.
+    }
+  }, [graphId]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
@@ -1014,20 +1036,44 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [applyCanvasSnapshot, deleteSelection, getCanvasSnapshot, redo, selectedEdgeId, selectedNodeId, undo]);
 
+  // The seeded demo is read-only on the server (403 graph_read_only):
+  // edits to it are saved as a copy the visitor owns, and the editor moves
+  // there. Nothing else in the editor changes.
+  const forkToCopy = useCallback(
+    async (graph: GraphDefinition) => {
+      const copy = copyGraphDefinition(graph);
+      await client.graphs.update(copy);
+      // Survives the route change to the copy, which resets editor state.
+      try {
+        sessionStorage.setItem(forkNoticeKey(copy.id), `The demo is read-only, so your changes were saved as "${copy.name}".`);
+      } catch {
+        // Storage blocked: the copy still opens, just without the notice.
+      }
+      router.push(`/graphs/${copy.id}`);
+    },
+    [router],
+  );
+
   const handleSave = useCallback(async () => {
     if (!dirty) return;
     setSaving(true);
     setSaveError(null);
+    dismissForkNotice();
     try {
       const graph = buildGraphDefinition();
-      await client.graphs.update(graph);
-      setSavedFingerprint(fingerprintGraph(graph));
+      try {
+        await client.graphs.update(graph);
+        setSavedFingerprint(fingerprintGraph(graph));
+      } catch (err: unknown) {
+        if (!isReadOnlyGraphError(err)) throw err;
+        await forkToCopy(graph);
+      }
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
-  }, [buildGraphDefinition, dirty]);
+  }, [buildGraphDefinition, dirty, dismissForkNotice, forkToCopy]);
 
   // Raw JSON/YAML config editor, Phase 2 - graph scope
   // (studio-config-editor-and-console-plan.md §6): copy-paste/backup/
@@ -1283,15 +1329,45 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [applyRunInspection, graphId],
   );
 
+  // Compile/Run save first, writing the run's provider/model onto LLM
+  // nodes. On the read-only demo that write is refused, so retry the canvas
+  // as loaded: the server accepts it when it matches the demo (layout aside)
+  // and the run-level provider/model still apply. Real edits fork instead;
+  // null means the editor is moving to the copy.
+  const persistForRun = useCallback(
+    async (synced: Node<GraphNodeData>[]): Promise<GraphDefinition | null> => {
+      dismissForkNotice();
+      const graph = buildGraphDefinition(synced);
+      try {
+        await client.graphs.update(graph);
+        if (synced !== nodes) setNodes(synced);
+        setSavedFingerprint(fingerprintGraph(graph));
+        return graph;
+      } catch (err: unknown) {
+        if (!isReadOnlyGraphError(err)) throw err;
+      }
+      const asLoaded = buildGraphDefinition(nodes);
+      try {
+        await client.graphs.update(asLoaded);
+        setSavedFingerprint(fingerprintGraph(asLoaded));
+        return asLoaded;
+      } catch (err: unknown) {
+        if (!isReadOnlyGraphError(err)) throw err;
+      }
+      if (synced !== nodes) setNodes(synced);
+      await forkToCopy(graph);
+      return null;
+    },
+    [buildGraphDefinition, dismissForkNotice, forkToCopy, nodes, setNodes],
+  );
+
   const handleCompile = useCallback(
     async (selection: RunSelection) => {
       setCompiling(true);
       try {
         const synced = applyRunSelectionToLlmNodes(nodes, selection.provider, selection.model);
-        if (synced !== nodes) setNodes(synced);
-        const graph = buildGraphDefinition(synced);
-        await client.graphs.update(graph);
-        setSavedFingerprint(fingerprintGraph(graph));
+        const graph = await persistForRun(synced);
+        if (!graph) return;
         const result = await client.graphs.compile(graph.id);
         setDiagnostics(result.diagnostics);
         if (!result.ok) focusDiagnostics();
@@ -1299,7 +1375,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [buildGraphDefinition, focusDiagnostics, nodes, setNodes],
+    [focusDiagnostics, nodes, persistForRun],
   );
 
   // Phase 10 Slice C ("Run from selected node" —
@@ -1331,11 +1407,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         }
 
         const synced = applyRunSelectionToLlmNodes(nodes, provider, model);
-        if (synced !== nodes) setNodes(synced);
-
-        const graph = buildGraphDefinition(synced);
-        await client.graphs.update(graph);
-        setSavedFingerprint(fingerprintGraph(graph));
+        const graph = await persistForRun(synced);
+        if (!graph) return;
         const compileResult = await client.graphs.compile(graph.id);
         setDiagnostics(compileResult.diagnostics);
         if (!compileResult.ok) {
@@ -1477,7 +1550,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [buildGraphDefinition, focusDiagnostics, graphId, nodes, refreshRunHistory, setNodes],
+    [focusDiagnostics, graphId, nodes, persistForRun, refreshRunHistory],
   );
 
   const handleRun = useCallback(
@@ -2220,11 +2293,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         }}
       />
 
-      {saveError && (
+      {saveError ? (
         <div className="glass-panel ring-destructive/30 absolute left-4 top-20 z-20 max-w-sm rounded-lg p-3 ring-1">
           <p className="text-destructive text-xs">{saveError}</p>
         </div>
-      )}
+      ) : forkNotice ? (
+        <div role="status" className="glass-panel absolute left-4 right-4 top-20 z-20 flex max-w-sm items-start gap-2 rounded-lg p-3">
+          <p className="text-xs">{forkNotice}</p>
+          <button type="button" aria-label="Dismiss" className="text-muted-foreground ml-auto" onClick={dismissForkNotice}>
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1">
         <CanvasActionsProvider value={canvasActions}>

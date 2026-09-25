@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .env_config import (
+    public_demo_mode_enabled,
     resolve_azure_api_key,
     resolve_google_api_key,
     resolve_groq_api_key,
@@ -63,7 +64,10 @@ def get_provider_credentials(provider: str) -> dict[str, str | bool]:
 
     resolve = field["resolve"]
     assert callable(resolve)
-    configured = bool(resolve())
+    # In PUBLIC_DEMO_MODE the server's key is off limits (see
+    # providers/base.py), so report it unconfigured: the Run panel asks for
+    # the caller's own key and replay falls back to stub.
+    configured = bool(resolve()) and not public_demo_mode_enabled()
     return {
         "provider": provider,
         "requires_api_key": True,

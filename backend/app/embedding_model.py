@@ -16,6 +16,8 @@ from typing import Literal
 
 import httpx
 
+from .env_config import public_demo_mode_enabled
+
 EmbeddingProvider = Literal["openai", "google"]
 EmbeddingTask = Literal["document", "query"]
 
@@ -46,6 +48,10 @@ def _first_env(*names: str) -> str:
 
 
 def resolve_embedding_model() -> ResolvedEmbeddingModel | None:
+    # Embeddings run on the server's key only; PUBLIC_DEMO_MODE turns them
+    # off (uploads 403, retrieval is skipped like any unconfigured provider).
+    if public_demo_mode_enabled():
+        return None
     openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if openai_key:
         model_id = os.environ.get("OPENAI_EMBEDDING_MODEL", "").strip() or (

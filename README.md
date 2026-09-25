@@ -330,7 +330,8 @@ vercel deploy --prod
 
 | Variable | Required | Purpose |
 | -------- | -------- | ------- |
-| `GROQ_API_KEY` | Optional | Live LLM runs (default `CHAT_PROVIDER=stub` in `vercel.json`) |
+| `PUBLIC_DEMO_MODE` | Set in `vercel.json` | `1` = anonymous public deploy: see **Public demo mode** below |
+| `GROQ_API_KEY` | Optional | Live LLM runs (default `CHAT_PROVIDER=stub` in `vercel.json`); unused by visitors while `PUBLIC_DEMO_MODE=1` |
 | `SUPABASE_URL` | Yes (prod) | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | With Supabase URL | Service-role key (server-only) |
 | `SUPABASE_STORAGE_BUCKET` | Optional | Private bucket; default `agent-graph-builder` |
@@ -343,6 +344,16 @@ vercel deploy --prod
 | `TURSO_AUTH_TOKEN` | With Turso URL | Turso database token |
 
 Backend selection (first match wins): Supabase → `OBJECT_STORE_*` → `TURSO_*` → file SQLite. With none set, `vercel.json`'s `GRAPH_DB_PATH=/tmp/graphs.db` is per-isolate, and the API returns 503 on Vercel rather than lose data. Stub-provider runs without a shared store show as **Offline** in the Run panel and are also kept in the browser.
+
+**Public demo mode.** The prod Studio needs no login and the backend has no sessions, so `vercel.json` sets `PUBLIC_DEMO_MODE=1`. With it on:
+
+- Only **Stub** runs on the server. Groq, Google, Azure, OpenAI-compatible and Ollama runs need an API key sent with the request (the Run panel's key field). Without one, `POST /api/runs`, release runs and chat messages return 403 `live_provider_requires_api_key`. `/api/providers/{p}/ready` reports not ready and `/credentials` reports `configured: false`, so a server key is never offered.
+- Knowledge uploads return 403, and retrieval is skipped, because embeddings would run on the server's key.
+- `GET /api/health` includes `"public_demo_mode": true`. Check it after each deploy.
+
+To use the server's own keys on a private deploy, remove `PUBLIC_DEMO_MODE` from `vercel.json` (or set it to `0` there).
+
+**The seeded demo is read-only** (every deploy, not only public mode). `demo_classify_and_route` can't be deleted, and `PUT` returns 403 `graph_read_only` unless the body matches the canonical demo apart from layout. Layout-only saves return 200 but aren't stored. The demo's graph policies, policy exceptions and knowledge are locked too. In the Studio, Run on an unedited demo runs it as-is; Save or Run after a real edit saves a copy (`graph_<id>`, "… (copy)") and opens it. On each cold start the backend re-seeds the demo if it's missing or differs from `backend/app/demo_graph.py`.
 
 ## Deliberate simplifications vs. the full EDD
 

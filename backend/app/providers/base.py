@@ -11,7 +11,18 @@ import os
 from enum import StrEnum
 from typing import Protocol
 
+from ..env_config import public_demo_mode_enabled
 from ..provider_defaults import resolve_model_for_provider
+
+PUBLIC_DEMO_PROVIDER_MESSAGE = (
+    "Live providers on this public demo need your own API key. "
+    "Paste one in the Run panel, or run with Stub."
+)
+
+
+class LiveProviderBlocked(PermissionError):
+    """A live provider was asked to run on the server's own key in
+    PUBLIC_DEMO_MODE. main.py maps it to 403."""
 
 
 class ChatProvider(StrEnum):
@@ -57,9 +68,22 @@ def resolve_chat_provider(explicit: str | None = None) -> ChatProvider:
     return ChatProvider.OLLAMA
 
 
+def require_live_provider_allowed(provider: str | None, api_key: str | None) -> None:
+    """In PUBLIC_DEMO_MODE only Stub runs without a caller-supplied key.
+    Every chat model is built through `get_chat_model`, which calls this, so
+    no route can reach a server key; routes also call it up front to fail
+    with a clean 403 before a run starts."""
+    if not public_demo_mode_enabled():
+        return
+    if resolve_chat_provider(provider) == ChatProvider.STUB or (api_key or "").strip():
+        return
+    raise LiveProviderBlocked(PUBLIC_DEMO_PROVIDER_MESSAGE)
+
+
 def get_chat_model(
     model: str | None = None, provider: str | None = None, *, api_key: str | None = None
 ) -> ChatModel:
+    require_live_provider_allowed(provider, api_key)
     resolved = resolve_chat_provider(provider)
     resolved_model = resolve_model_for_provider(resolved, model)
 

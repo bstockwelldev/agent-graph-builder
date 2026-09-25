@@ -19,3 +19,11 @@ export function errorDetail(error: unknown): string {
 export function blockingDiagnostics(error: unknown): Diagnostic[] {
   return isAgentGraphApiError(error) ? (error.diagnostics ?? []).filter((d) => d.blocking) : [];
 }
+
+/** The seeded demo refused a save (403 `graph_read_only`); the editor
+ * forks the edits into a copy instead. */
+export function isReadOnlyGraphError(error: unknown): boolean {
+  if (!isAgentGraphApiError(error) || error.status !== 403) return false;
+  const detail = error.detail;
+  return typeof detail === "object" && detail !== null && (detail as { code?: unknown }).code === "graph_read_only";
+}
