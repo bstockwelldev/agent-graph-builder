@@ -1,12 +1,17 @@
 """Run analytics / spend estimation (studio-consolidation Phase 5 — see
 docs/planning/features/studio-consolidation-plan.md). Ported from
 micro-ui-agent-builder's `lib/server/estimate-llm-spend.ts` +
-`analytics-dashboard.ts`, reading from `storage.list_runs_with_traces()` (one read per run)
-instead of MUI's own JSONL append log
+`analytics-dashboard.ts`, reading durable run snapshots instead of MUI's
+own JSONL append log
 (`run-analytics-store.ts` is not ported at all — AGB's durable run
 snapshots already are the append log, and a JSONL side-file duplicating
 that data was never necessary here, exactly per the plan's own call: "AGB's
 durable run snapshots are a better source than MUI's JSONL").
+
+The dashboard covers the last N days. On the object-store backends it reads
+precomputed per-day usage files (storage.py "Analytics daily usage"),
+recorded as each run persists, so a view costs one read per day rather than
+one per run; SQLite/Turso aggregate the same window from their tables.
 
 One real gap, disclosed rather than worked around: MUI's token counts come
 from the Vercel AI SDK's real `usage` metadata on every model call. AGB's
@@ -23,7 +28,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
@@ -173,6 +178,84 @@ class AnalyticsDashboardPayload(BaseModel):
     by_graph: list[AnalyticsGraphRow]
 
 
+class RunUsage(BaseModel):
+    """One run's contribution to the dashboard -- what the daily usage files
+    store per run (storage.record_daily_usage), so the dashboard never
+    reads runs or traces. `estimated_usd` uses the rates at record time."""
+
+    run_id: str
+    graph_id: str
+    started_at: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_usd: float = 0.0
+    duration_ms: int | None = None
+
+
+def run_usage(run: RunSummary, traces: list[NodeTrace] | None = None) -> RunUsage:
+    estimate = estimate_run_tokens(run, traces)
+    return RunUsage(
+        run_id=run.run_id,
+        graph_id=run.graph_id,
+        started_at=run.started_at,
+        input_tokens=estimate.input_tokens,
+        output_tokens=estimate.output_tokens,
+        estimated_usd=estimate.estimated_usd,
+        duration_ms=_run_duration_ms(run),
+    )
+
+
+def record_run_usage(run: RunSummary, traces: list[NodeTrace]) -> None:
+    """Adds `run` to its day's usage file (remote backends; SQLite/Turso
+    aggregate from their tables). Called whenever a run snapshot persists."""
+    day = _day_key(run.started_at)
+    if day is None or not storage.analytics_daily_supported():
+        return
+    storage.record_daily_usage(day, run.run_id, run_usage(run, traces).model_dump(mode="json"))
+
+
+def _scan_daily_usage(backend=None) -> dict[str, dict[str, dict[str, Any]]]:
+    usage: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    for run, traces in storage.list_runs_with_traces(limit=None, backend=backend):
+        day = _day_key(run.started_at)
+        if day is not None:
+            usage[day][run.run_id] = run_usage(run, traces).model_dump(mode="json")
+    return dict(usage)
+
+
+def rebuild_daily_usage(backend=None) -> int:
+    """Rebuilds every daily usage file from the run blobs (one read per run)
+    -- for repair, never per request. Returns the number of days written.
+    `backend` overrides the configured one (copy_blob_to_supabase)."""
+    usage = _scan_daily_usage(backend)
+    storage.write_daily_usage(usage, backend=backend)
+    return len(usage)
+
+
+def _window(days: int, today: date) -> list[str]:
+    return [(today - timedelta(days=offset)).isoformat() for offset in range(days - 1, -1, -1)]
+
+
+def _usage_in_window(window: list[str]) -> list[RunUsage]:
+    if storage.analytics_daily_supported():
+        usage = storage.read_daily_usage(window)
+        if usage is None:
+            # Never built on this store: one full scan, then per-day reads.
+            usage = _scan_daily_usage()
+            storage.write_daily_usage(usage)
+        return [
+            RunUsage.model_validate(entry)
+            for day in window
+            for entry in usage.get(day, {}).values()
+        ]
+    in_window = set(window)
+    return [
+        run_usage(run, traces)
+        for run, traces in storage.list_runs_with_traces(limit=None)
+        if _day_key(run.started_at) in in_window
+    ]
+
+
 def build_analytics_dashboard(
     runs: list[RunSummary],
     graph_names: dict[str, str],
@@ -183,6 +266,22 @@ def build_analytics_dashboard(
 ) -> AnalyticsDashboardPayload:
     """`traces_by_run` avoids a trace read per run; runs missing from it
     fall back to storage."""
+    usages = [
+        run_usage(run, traces_by_run.get(run.run_id) if traces_by_run is not None else None)
+        for run in runs
+    ]
+    return build_dashboard_from_usage(
+        usages, graph_names, max_daily_days=max_daily_days, max_graphs=max_graphs
+    )
+
+
+def build_dashboard_from_usage(
+    usages: list[RunUsage],
+    graph_names: dict[str, str],
+    *,
+    max_daily_days: int = _DEFAULT_MAX_DAILY_DAYS,
+    max_graphs: int = _DEFAULT_MAX_GRAPHS,
+) -> AnalyticsDashboardPayload:
     input_tokens = 0
     output_tokens = 0
     estimated_usd = 0.0
@@ -196,32 +295,29 @@ def build_analytics_dashboard(
         lambda: {"invocations": 0, "tokens": 0, "estimated_usd": 0.0}
     )
 
-    for run in runs:
-        estimate = estimate_run_tokens(
-            run, traces_by_run.get(run.run_id) if traces_by_run is not None else None
-        )
-        input_tokens += estimate.input_tokens
-        output_tokens += estimate.output_tokens
-        estimated_usd += estimate.estimated_usd
+    for usage in usages:
+        total_tokens = usage.input_tokens + usage.output_tokens
+        input_tokens += usage.input_tokens
+        output_tokens += usage.output_tokens
+        estimated_usd += usage.estimated_usd
 
-        duration_ms = _run_duration_ms(run)
-        if duration_ms is not None:
-            duration_sum += duration_ms
+        if usage.duration_ms is not None:
+            duration_sum += usage.duration_ms
             duration_count += 1
 
-        day = _day_key(run.started_at)
+        day = _day_key(usage.started_at)
         if day is not None:
             bucket = daily[day]
             bucket["invocations"] += 1
-            bucket["tokens"] += estimate.total_tokens
-            bucket["estimated_usd"] += estimate.estimated_usd
+            bucket["tokens"] += total_tokens
+            bucket["estimated_usd"] += usage.estimated_usd
 
-        graph_bucket = by_graph[run.graph_id]
+        graph_bucket = by_graph[usage.graph_id]
         graph_bucket["invocations"] += 1
-        graph_bucket["tokens"] += estimate.total_tokens
-        graph_bucket["estimated_usd"] += estimate.estimated_usd
+        graph_bucket["tokens"] += total_tokens
+        graph_bucket["estimated_usd"] += usage.estimated_usd
 
-    invocations = len(runs)
+    invocations = len(usages)
     avg_duration_ms = round(duration_sum / duration_count) if duration_count else 0
 
     sorted_days = sorted(daily.keys())
@@ -265,11 +361,13 @@ def build_analytics_dashboard(
     )
 
 
-def get_analytics_dashboard(*, run_limit: int = 500) -> AnalyticsDashboardPayload:
-    pairs = storage.list_runs_with_traces(limit=run_limit)
+def get_analytics_dashboard(
+    *, days: int = _DEFAULT_MAX_DAILY_DAYS, today: date | None = None
+) -> AnalyticsDashboardPayload:
+    """Totals, daily points and top graphs over the last `days` days
+    (UTC dates of run start). On the remote backends: one read per day plus
+    the graph catalog, however many runs there are."""
+    window = _window(days, today or datetime.now(UTC).date())
+    usages = _usage_in_window(window)
     graph_names = {entry.id: entry.name for entry in storage.list_graph_catalog()}
-    return build_analytics_dashboard(
-        [run for run, _ in pairs],
-        graph_names,
-        traces_by_run={run.run_id: traces for run, traces in pairs},
-    )
+    return build_dashboard_from_usage(usages, graph_names, max_daily_days=days)

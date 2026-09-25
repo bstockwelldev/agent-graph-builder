@@ -360,3 +360,26 @@ def test_other_400_still_raises(monkeypatch) -> None:
     except httpx.HTTPStatusError:
         return
     raise AssertionError("expected HTTPStatusError")
+
+
+def test_supabase_dashboard_reads_daily_files(monkeypatch) -> None:
+    from datetime import date
+
+    from app.analytics import get_analytics_dashboard, record_run_usage
+
+    fake = _enable_supabase(monkeypatch)
+    get_analytics_dashboard(days=2, today=date(2026, 1, 2))  # builds + marks the empty store
+    for index in range(3):
+        run = _run(f"run_{index}", "g_a", "2026-01-02T00:00:00Z")
+        storage.save_run_snapshot(run, [])
+        record_run_usage(run, [])
+    fake.object_reads.clear()
+
+    dashboard = get_analytics_dashboard(days=2, today=date(2026, 1, 2))
+
+    assert dashboard.totals.invocations == 3
+    assert not [key for key in fake.object_reads if key.startswith("runs/")]
+    assert sorted(key for key in fake.object_reads if key.startswith("analytics_daily/")) == [
+        "analytics_daily/2026-01-01.json",
+        "analytics_daily/2026-01-02.json",
+    ]

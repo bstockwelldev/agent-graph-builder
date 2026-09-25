@@ -55,7 +55,7 @@ export default function AnalyticsPage() {
     <StudioPage>
       <StudioPageHeader
         title="Analytics"
-        description="Run totals, a daily trend, and per-graph spend across every graph. Token counts and spend are rough estimates, not billing truth."
+        description="Run totals, a daily trend, and per-graph spend across every graph over the last 30 days. Token counts and spend are rough estimates, not billing truth."
         loading={loading}
       />
       {error && !loading ? <p className="text-destructive text-sm">{error}</p> : null}
@@ -117,7 +117,7 @@ export default function AnalyticsPage() {
                   </table>
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">No runs yet.</p>
+                <p className="text-muted-foreground text-sm">No runs in the last 30 days.</p>
               )}
             </CardContent>
           </Card>
@@ -151,7 +151,7 @@ export default function AnalyticsPage() {
                   </table>
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">No runs yet.</p>
+                <p className="text-muted-foreground text-sm">No runs in the last 30 days.</p>
               )}
             </CardContent>
           </Card>

@@ -38,7 +38,7 @@ def test_apply_skips_existing_unless_overwrite(stores) -> None:
     assert supa["graphs/a.json"] == {"id": "a"}
 
 
-def test_apply_repairs_supabase_catalog_and_run_index(stores, monkeypatch) -> None:
+def test_apply_repairs_supabase_catalog_run_index_and_analytics(stores, monkeypatch) -> None:
     calls: list[tuple[str, object]] = []
     monkeypatch.setattr(
         storage, "rebuild_graph_catalog", lambda backend: calls.append(("catalog", backend)) or 1
@@ -46,9 +46,18 @@ def test_apply_repairs_supabase_catalog_and_run_index(stores, monkeypatch) -> No
     monkeypatch.setattr(
         storage, "backfill_run_index", lambda backend: calls.append(("runs", backend)) or 1
     )
+    monkeypatch.setattr(
+        copy_blob_to_supabase,
+        "rebuild_daily_usage",
+        lambda backend: calls.append(("analytics", backend)) or 1,
+    )
 
     copy_blob_to_supabase.main([])
     assert calls == []
 
     copy_blob_to_supabase.main(["--apply"])
-    assert calls == [("catalog", supabase_store), ("runs", supabase_store)]
+    assert calls == [
+        ("catalog", supabase_store),
+        ("runs", supabase_store),
+        ("analytics", supabase_store),
+    ]

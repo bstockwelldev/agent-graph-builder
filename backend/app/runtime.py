@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import operator
 import os
 import uuid
@@ -19,6 +20,7 @@ from typing import Annotated, Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from . import storage
+from .analytics import record_run_usage
 from .compiler import compile_graph as validate_and_diagnose
 from .events import RunEventBus, create_bus, now_iso
 from .fingerprint import semantic_fingerprint
@@ -43,6 +45,8 @@ from .telemetry.types import (
     TelemetryToolEvent,
     TelemetryTraceContext,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _merge_dicts(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -108,6 +112,10 @@ def _persist_run_snapshot(run_id: str) -> None:
         return
     traces = list(RUN_TRACES.get(run_id, {}).values())
     storage.save_run_snapshot(summary, traces)
+    try:
+        record_run_usage(summary, traces)
+    except Exception:  # noqa: BLE001 - analytics is secondary; the run is already saved
+        logger.exception("failed to record analytics usage for run %s", run_id)
 
 
 def compile_workflow(graph: GraphDefinition) -> CompileResult:

@@ -463,8 +463,7 @@ def _llm_run(run_id: str, graph_id: str, started_at: str) -> tuple[RunSummary, l
     return _run(run_id, graph_id, started_at), [trace]
 
 
-def test_vercel_blob_analytics_reads_each_run_blob_once(monkeypatch) -> None:
-    from app.analytics import get_analytics_dashboard
+def test_vercel_blob_graph_analytics_reads_each_run_blob_once(monkeypatch) -> None:
     from app.node_analytics import get_graph_analytics
 
     fake = _enable_blob(monkeypatch)
@@ -475,20 +474,102 @@ def test_vercel_blob_analytics_reads_each_run_blob_once(monkeypatch) -> None:
         )
     fake.blob_reads.clear()
 
-    dashboard = get_analytics_dashboard(run_limit=3)
-
-    run_reads = [path for path in fake.blob_reads if path.startswith("runs/")]
-    assert sorted(run_reads) == ["runs/run_1.json", "runs/run_2.json", "runs/run_3.json"]
-    assert fake.blob_reads.count("graph_catalog.json") == 1
-    assert len(fake.blob_reads) == 4
-    assert dashboard.totals.invocations == 3
-    # chars/4 heuristic: 400 prompt chars + 80 output chars per run.
-    assert dashboard.totals.input_tokens == 300
-    assert dashboard.totals.output_tokens == 60
-
-    fake.blob_reads.clear()
     graph = get_graph_analytics("graph_a", run_window=2)
 
     assert sorted(fake.blob_reads) == ["runs/run_2.json", "runs/run_3.json"]
     assert graph.run_window == 2
+    # chars/4 heuristic: 400 prompt chars per run.
     assert graph.totals.input_tokens == 200
+
+
+def _persist(run: RunSummary, traces: list[NodeTrace]) -> None:
+    """What runtime does when a run finishes (or pauses): save, then record."""
+    from app import runtime
+
+    runtime.RUN_STORE[run.run_id] = run
+    runtime.RUN_TRACES[run.run_id] = {trace.node_id: trace for trace in traces}
+    try:
+        runtime._persist_run_snapshot(run.run_id)
+    finally:
+        runtime.RUN_STORE.pop(run.run_id, None)
+        runtime.RUN_TRACES.pop(run.run_id, None)
+
+
+def test_vercel_blob_dashboard_reads_one_file_per_day_not_per_run(monkeypatch) -> None:
+    from datetime import date
+
+    from app.analytics import get_analytics_dashboard
+
+    fake = _enable_blob(monkeypatch)
+    storage.save_graph(_catalog_graph("graph_a"))
+    get_analytics_dashboard(days=3, today=date(2026, 1, 3))  # empty store: builds + marks
+    for index in range(6):
+        _persist(*_llm_run(f"run_{index}", "graph_a", f"2026-01-0{index % 3 + 1}T00:00:00Z"))
+    # Outside the 3-day window: counted in its own day file, not the dashboard.
+    _persist(*_llm_run("run_old", "graph_a", "2025-12-01T00:00:00Z"))
+    fake.blob_reads.clear()
+
+    dashboard = get_analytics_dashboard(days=3, today=date(2026, 1, 3))
+
+    assert not [path for path in fake.blob_reads if path.startswith("runs/")]
+    assert sorted(path for path in fake.blob_reads if path.startswith("analytics_daily/")) == [
+        "analytics_daily/2026-01-01.json",
+        "analytics_daily/2026-01-02.json",
+        "analytics_daily/2026-01-03.json",
+    ]
+    assert len(fake.blob_reads) == 5  # + marker + graph catalog
+    assert dashboard.totals.invocations == 6
+    assert dashboard.totals.input_tokens == 600
+    assert [point.invocations for point in dashboard.daily] == [2, 2, 2]
+    assert [(row.graph_id, row.name) for row in dashboard.by_graph] == [
+        ("graph_a", "Graph graph_a")
+    ]
+
+
+def test_vercel_blob_repersisted_run_replaces_its_daily_entry(monkeypatch) -> None:
+    from datetime import date
+
+    from app.analytics import get_analytics_dashboard
+
+    _enable_blob(monkeypatch)
+    get_analytics_dashboard(days=1, today=date(2026, 1, 1))
+    run, traces = _llm_run("run_paused", "graph_a", "2026-01-01T00:00:00Z")
+    _persist(run.model_copy(update={"status": "paused"}), traces)
+    _persist(run, traces)  # resumed and finished
+
+    dashboard = get_analytics_dashboard(days=1, today=date(2026, 1, 1))
+
+    assert dashboard.totals.invocations == 1
+
+
+def test_vercel_blob_first_dashboard_view_builds_daily_files_from_runs(monkeypatch) -> None:
+    from datetime import date
+
+    from app.analytics import get_analytics_dashboard, rebuild_daily_usage
+
+    fake = _enable_blob(monkeypatch)
+    # Saved before daily files existed: storage only, nothing recorded.
+    for index in range(3):
+        storage.save_run_snapshot(*_llm_run(f"run_{index}", "graph_a", "2026-01-01T00:00:00Z"))
+
+    dashboard = get_analytics_dashboard(days=1, today=date(2026, 1, 1))
+
+    assert dashboard.totals.invocations == 3
+    assert "analytics_daily_built.json" in fake.objects
+    assert len(json.loads(fake.objects["analytics_daily/2026-01-01.json"])["runs"]) == 3
+    fake.blob_reads.clear()
+    get_analytics_dashboard(days=1, today=date(2026, 1, 1))
+    assert not [path for path in fake.blob_reads if path.startswith("runs/")]
+    assert rebuild_daily_usage() == 1
+
+
+def test_vercel_blob_analytics_failure_does_not_block_saving_the_run(monkeypatch) -> None:
+    fake = _enable_blob(monkeypatch)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("analytics store down")
+
+    monkeypatch.setattr(storage, "record_daily_usage", boom)
+    _persist(*_llm_run("run_saved", "graph_a", "2026-01-01T00:00:00Z"))
+
+    assert "runs/run_saved.json" in fake.objects

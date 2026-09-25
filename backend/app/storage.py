@@ -794,14 +794,16 @@ def list_all_runs(*, limit: int | None = 200) -> list[RunSummary]:
 
 
 def list_runs_with_traces(
-    *, graph_id: str | None = None, limit: int
+    *, graph_id: str | None = None, limit: int | None, backend=None
 ) -> list[tuple[RunSummary, list[NodeTrace]]]:
     """The newest `limit` runs (of one graph, or of every graph) with their
     node traces, newest first. On the remote backends each run's blob holds
     both, so this is one read per run -- analytics used to list runs and then
     re-read every blob through get_run_traces, doubling the reads.
+    `limit=None` reads every run (analytics rebuilds only); `backend` as in
+    rebuild_graph_catalog.
     """
-    remote = _json_object_backend()
+    remote = backend or _json_object_backend()
     if remote is None:
         runs = (
             list_runs_for_graph(graph_id, limit=limit)
@@ -826,6 +828,68 @@ def list_runs_with_traces(
         pairs.append((RunSummary.model_validate(payload["summary"]), traces))
     pairs.sort(key=lambda pair: pair[0].started_at or "", reverse=True)
     return pairs
+
+
+# Analytics daily usage (object-store/Blob backends): one
+# ``analytics_daily/{YYYY-MM-DD}.json`` per day holding a usage entry per run
+# (keyed by run id, so a paused run re-persisted on resume replaces its entry
+# instead of double-counting). The dashboard reads one object per day in its
+# window instead of every run -- analytics.py builds the entries. Updated with
+# read-modify-write like the graph catalog, so concurrent completions on the
+# same day can drop an entry; analytics.rebuild_daily_usage() repairs it.
+# ``analytics_daily_built.json`` marks the files as complete; while it's
+# missing (fresh deploy) analytics rebuilds them from the run blobs once.
+_ANALYTICS_DAILY_PREFIX = "analytics_daily/"
+_ANALYTICS_DAILY_MARKER_KEY = "analytics_daily_built.json"
+_ANALYTICS_DAILY_VERSION = 1
+
+
+def _analytics_daily_key(day: str) -> str:
+    return f"{_ANALYTICS_DAILY_PREFIX}{day}.json"
+
+
+def analytics_daily_supported() -> bool:
+    """Whether daily usage files exist (remote backends); SQLite/Turso
+    aggregate straight from their tables instead."""
+    return _json_object_backend() is not None
+
+
+def read_daily_usage(days: list[str]) -> dict[str, dict[str, dict[str, Any]]] | None:
+    """Each day's run entries (`{day: {run_id: entry}}`), one read per day;
+    None when the files were never built (or by an older version)."""
+    remote = _json_object_backend()
+    if remote is None:
+        return None
+    marker = remote.get_json(_ANALYTICS_DAILY_MARKER_KEY)
+    if marker is None or marker.get("version") != _ANALYTICS_DAILY_VERSION:
+        return None
+    usage: dict[str, dict[str, dict[str, Any]]] = {}
+    for day in days:
+        payload = remote.get_json(_analytics_daily_key(day))
+        usage[day] = (payload or {}).get("runs") or {}
+    return usage
+
+
+def record_daily_usage(day: str, run_id: str, entry: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is None:
+        return
+    key = _analytics_daily_key(day)
+    payload = remote.get_json(key) or {"version": _ANALYTICS_DAILY_VERSION, "runs": {}}
+    payload.setdefault("runs", {})[run_id] = entry
+    remote.put_json(key, payload)
+
+
+def write_daily_usage(usage: dict[str, dict[str, dict[str, Any]]], backend=None) -> None:
+    """Replaces each given day's file, then marks the set as built."""
+    remote = backend or _json_object_backend()
+    if remote is None:
+        return
+    for day, runs in usage.items():
+        remote.put_json(
+            _analytics_daily_key(day), {"version": _ANALYTICS_DAILY_VERSION, "runs": runs}
+        )
+    remote.put_json(_ANALYTICS_DAILY_MARKER_KEY, {"version": _ANALYTICS_DAILY_VERSION})
 
 
 def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSummary]:
