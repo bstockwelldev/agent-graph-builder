@@ -20,6 +20,7 @@ from .models import CompileResult, Diagnostic, EdgeKind, GraphDefinition, NodeTy
 from .node_configs import validate_node_config
 from .nodes import EXECUTORS
 from .policies import evaluate_graph_policies
+from .transforms import materialize_transforms
 
 # Tool ids valid without a stored registry entry (studio-consolidation
 # Phase 3): the original POC demo tool, plus the two builtins.
@@ -241,6 +242,23 @@ def validate_graph(
                     remediation="Pick another resource, or switch the field back to inline.",
                 )
             )
+
+    # Transforms library references on edges: resolve them inline so the
+    # contract pass below checks the real transform, and flag missing ones.
+    graph, missing_transforms = materialize_transforms(
+        graph, lambda ref: storage.get_resource("transforms", ref)
+    )
+    for edge_id, ref in missing_transforms:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="UNRESOLVED_RESOURCE_BINDING",
+                edge_id=edge_id,
+                message=f"edge {edge_id!r}: transform: transforms {ref!r} not found",
+                blocking=True,
+                remediation="Pick another transform from the library, or switch the edge to an inline transform.",
+            )
+        )
 
     # Generic safety net: any NodeType with no registered executor in
     # nodes.py's EXECUTORS dict blocks compile with a clear diagnostic

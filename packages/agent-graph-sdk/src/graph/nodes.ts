@@ -38,6 +38,24 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { content: "Review and approve to continue." };
     case "subgraph":
       return { graphId: "", version: "latest" };
+    case "transform":
+      return { type: "format_message", template: "{value}" };
+  }
+}
+
+/** A transform node's one-line description ("select /answer"). */
+function transformSummary(config: Record<string, unknown>): string {
+  switch (config.type) {
+    case "select":
+      return `select ${String(config.pointer ?? "")}`.trim();
+    case "wrap":
+      return `wrap as ${String(config.field ?? "")}`.trim();
+    case "coerce":
+      return `to ${String(config.targetType ?? "")}`.trim();
+    case "format_message":
+      return "format message";
+    default:
+      return "transform";
   }
 }
 
@@ -151,6 +169,11 @@ export function summaryFor(type: NodeType, config: Record<string, unknown>, cont
     case "code_exec":
     case "human_gate":
       return snippet(config.content);
+    case "transform": {
+      const bound = boundResourceName(config, "transformId", "transforms", resourceNames);
+      if (bound) return hasUserLabel ? `Library · ${bound}` : "Library transform";
+      return hasUserLabel ? transformSummary(config) : null;
+    }
     case "subgraph": {
       const version = versionLabel(config.version);
       const graphId = boundId(config, "graphId");
@@ -212,5 +235,7 @@ export function labelFor(type: NodeType, config: Record<string, unknown>): strin
       return "human gate";
     case "subgraph":
       return String(boundId(config, "graphId") ?? "subgraph");
+    case "transform":
+      return boundId(config, "transformId") ?? transformSummary(config);
   }
 }

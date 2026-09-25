@@ -10,6 +10,7 @@ import {
   Server,
   ShieldCheck,
   SlidersHorizontal,
+  Shuffle,
   Workflow,
   Wrench,
   type LucideIcon,
@@ -33,6 +34,7 @@ export const RESOURCE_ITEMS: readonly NavItem[] = [
   { href: "/tools", label: "Tools", icon: Wrench, description: "Tool definitions agents and tool nodes can call." },
   { href: "/mcp", label: "MCP", icon: Server, description: "Model Context Protocol servers that expose tools." },
   { href: "/llm-profiles", label: "LLM Profiles", icon: SlidersHorizontal, description: "Named provider/model/parameter presets." },
+  { href: "/transforms", label: "Transforms", icon: Shuffle, description: "Reusable data reshaping between steps: select, wrap, format, convert." },
   { href: "/genui", label: "GenUI", icon: Layers, description: "Schema-driven UI surfaces for human-gate checkpoints." },
 ];
 

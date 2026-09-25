@@ -23,6 +23,7 @@ import {
   knowledgeSummarySchema,
   knowledgeUploadResponseSchema,
   llmProfileSchema,
+  transformDefinitionSchema,
   mcpServerConfigSchema,
   nodeExecutionSchema,
   nodeImpactSchema,
@@ -402,6 +403,8 @@ export function buildNamespaces(transport: Transport) {
     mcpServers: { ...resourceNamespace(transport, "mcp-servers", mcpServerConfigSchema), versions: versionNamespace(transport, "mcp-servers") },
     agents: { ...resourceNamespace(transport, "agents", agentProfileSchema), versions: versionNamespace(transport, "agents") },
     llmProfiles: { ...resourceNamespace(transport, "llm-profiles", llmProfileSchema), versions: versionNamespace(transport, "llm-profiles") },
+    /** Reusable deterministic transforms, bound by id from edges and transform nodes. */
+    transforms: { ...resourceNamespace(transport, "transforms", transformDefinitionSchema), versions: versionNamespace(transport, "transforms") },
     /** Saved Routing Lab fixture datasets. */
     datasets: {
       ...resourceNamespace(transport, "datasets", fixtureDatasetSchema),

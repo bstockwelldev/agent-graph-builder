@@ -9,6 +9,7 @@ import type {
   ResourceUsage,
   ResourceVersionIndexEntry,
   ToolDefinition,
+  TransformDefinition,
 } from "@bstockwelldev/agent-graph-sdk";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { client } from "@/lib/api-client";
+import { describeTransform } from "@/lib/transforms";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,7 +33,7 @@ import { cn } from "@/lib/utils";
  * Copy (titles, descriptions, empty/delete text, card content) is each
  * page's existing wording, moved here verbatim.
  */
-export type ResourceKindId = "prompts" | "tools" | "agents" | "mcp" | "llmProfiles";
+export type ResourceKindId = "prompts" | "tools" | "agents" | "mcp" | "llmProfiles" | "transforms";
 
 export type ResourceLike = { id: string };
 
@@ -499,5 +501,119 @@ export const llmProfileKind: ResourceKindConfig<LlmProfile> = {
   ),
 };
 
+// ------------------------------------------------------------- transforms
+
+const TRANSFORM_TYPES: { value: TransformDefinition["type"]; label: string; field: "pointer" | "field" | "template" | "target_type" }[] = [
+  { value: "select", label: "Select a field", field: "pointer" },
+  { value: "wrap", label: "Wrap under a field", field: "field" },
+  { value: "format_message", label: "Format a message", field: "template" },
+  { value: "coerce", label: "Convert type", field: "target_type" },
+];
+const TARGET_TYPES = ["string", "number", "boolean"] as const;
+
+export const transformKind: ResourceKindConfig<TransformDefinition> = {
+  id: "transforms",
+  panelId: "transforms",
+  routeHref: "/transforms",
+  client: client.transforms,
+  noun: "transform",
+  panelTitle: "Transforms",
+  pageTitle: "Transforms",
+  pageDescription:
+    "Reusable, deterministic data reshaping between steps: select a field, wrap a value, format a message, or convert a type. Bind one from an edge or a Transform node.",
+  dialogDescription: "A named transform. No code and no model call: a transform that can't apply fails the step.",
+  emptyText: "No transforms.",
+  listLayout: "grid",
+  itemLabel: (transform) => transform.name,
+  deleteDescription: (transform) => `Remove transform "${transform.name}"? Edges and nodes that use it will fail validation.`,
+  renderCardHeader: (transform) => (
+    <>
+      <CardTitle className="text-base">{transform.name}</CardTitle>
+      <CardDescription className="font-mono text-xs">{describeTransform(transform)}</CardDescription>
+      {transform.description && <CardDescription>{transform.description}</CardDescription>}
+    </>
+  ),
+  emptyForm: () => ({ id: genId("tf"), name: "", type: "format_message", template: "{value}", description: "" }),
+  normalize: (form) => {
+    const id = form.id?.trim();
+    const name = form.name?.trim();
+    const spec = TRANSFORM_TYPES.find((option) => option.value === form.type);
+    if (!id || !name || !spec) return null;
+    const value = form[spec.field];
+    if (typeof value !== "string" || !value.trim()) return null;
+    return {
+      id,
+      name,
+      description: form.description?.trim() || null,
+      type: spec.value,
+      [spec.field]: spec.field === "template" ? value : value.trim(),
+    } as TransformDefinition;
+  },
+  renderFields: (props) => {
+    const type = props.form.type ?? "format_message";
+    return (
+      <>
+        <IdField {...props} />
+        <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
+        <div className="space-y-1.5">
+          <Label htmlFor={`${props.idPrefix}-type`}>Transform</Label>
+          <Select value={type} onValueChange={(value) => props.setForm({ type: value as TransformDefinition["type"] })}>
+            <SelectTrigger id={`${props.idPrefix}-type`} className="w-full">
+              <SelectValue>{(value: string) => TRANSFORM_TYPES.find((option) => option.value === value)?.label ?? value}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSFORM_TYPES.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {type === "select" && (
+          <TextField
+            id={`${props.idPrefix}-pointer`}
+            label="Field path (JSON Pointer)"
+            value={props.form.pointer ?? ""}
+            onChange={(pointer) => props.setForm({ pointer })}
+            placeholder="/answer"
+            mono
+          />
+        )}
+        {type === "wrap" && (
+          <TextField id={`${props.idPrefix}-field`} label="Field name" value={props.form.field ?? ""} onChange={(field) => props.setForm({ field })} placeholder="topic" mono />
+        )}
+        {type === "format_message" && (
+          <AreaField
+            id={`${props.idPrefix}-template`}
+            label="Message template ({value}, {value.field})"
+            value={props.form.template ?? ""}
+            onChange={(template) => props.setForm({ template })}
+            rows={3}
+          />
+        )}
+        {type === "coerce" && (
+          <div className="space-y-1.5">
+            <Label htmlFor={`${props.idPrefix}-target`}>Convert to</Label>
+            <Select value={props.form.target_type ?? ""} onValueChange={(value) => props.setForm({ target_type: value as TransformDefinition["target_type"] })}>
+              <SelectTrigger id={`${props.idPrefix}-target`} className="w-full">
+                <SelectValue placeholder="Pick a type" />
+              </SelectTrigger>
+              <SelectContent>
+                {TARGET_TYPES.map((target) => (
+                  <SelectItem key={target} value={target}>
+                    {target}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <AreaField id={`${props.idPrefix}-description`} label="Description" value={props.form.description ?? ""} onChange={(description) => props.setForm({ description })} rows={2} />
+      </>
+    );
+  },
+};
+
 /** Every CRUD registry, in nav order (studio-nav.tsx RESOURCE_ITEMS). */
-export const RESOURCE_KINDS: readonly AnyResourceKind[] = [agentKind, promptKind, toolKind, mcpKind, llmProfileKind];
+export const RESOURCE_KINDS: readonly AnyResourceKind[] = [agentKind, promptKind, toolKind, mcpKind, llmProfileKind, transformKind];

@@ -14,9 +14,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from .models import Fixture
+from .models import Fixture, TransformType
+from .transforms import transform_field_error
 
 
 class PromptTemplate(BaseModel):
@@ -62,6 +63,28 @@ class LlmProfile(BaseModel):
     model: str
     model_provider: str | None = None
     description: str | None = None
+
+
+class TransformDefinition(BaseModel):
+    """A reusable, named transform (the Transforms library): bound by id from
+    an edge (`transform.transform_id`) or a transform node (`transformId`),
+    and pinned into release snapshots like any other bound resource."""
+
+    id: str
+    name: str
+    description: str | None = None
+    type: TransformType
+    pointer: str | None = None
+    field: str | None = None
+    template: str | None = None
+    target_type: Literal["string", "number", "boolean"] | None = None
+
+    @model_validator(mode="after")
+    def _complete(self) -> TransformDefinition:
+        error = transform_field_error(self)
+        if error:
+            raise ValueError(error)
+        return self
 
 
 class FixtureDataset(BaseModel):
@@ -131,6 +154,7 @@ RESOURCE_MODELS: dict[str, type[BaseModel]] = {
     "mcp_servers": McpServerConfig,
     "agents": AgentProfile,
     "llm_profiles": LlmProfile,
+    "transforms": TransformDefinition,
     "chat_sessions": ChatSession,
     "datasets": FixtureDataset,
 }

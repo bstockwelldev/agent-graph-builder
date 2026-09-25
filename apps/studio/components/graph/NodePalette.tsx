@@ -23,6 +23,7 @@ export const NODE_TYPES: NodeType[] = [
   "code_exec",
   "human_gate",
   "subgraph",
+  "transform",
 ];
 
 export function NodePalette({

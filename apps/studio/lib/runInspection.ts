@@ -23,6 +23,7 @@ const NODE_TYPES: NodeType[] = [
   "code_exec",
   "human_gate",
   "subgraph",
+  "transform",
 ];
 
 function nodeTypeFromEvent(event: PlatformEvent, fallback?: NodeType): NodeType {

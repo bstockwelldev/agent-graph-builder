@@ -1,7 +1,7 @@
 ---
 title: RCA + PTR — demo graph contract warnings users couldn't resolve
 date: 2026-09-25
-status: p0-implemented
+status: p1-implemented
 severity: P2 (UX — permanent false-positive warnings on the flagship demo)
 ---
 
@@ -63,11 +63,13 @@ A warning appears only when the user can do something about it, and whatever it 
 - The studio round-trips node `input_ports`/`output_ports` and edge `source_port`/`target_port`/`transform` through load and save (`lib/graphAuthoring.ts` `nodePorts`/`edgeContract`), so a save never drops them.
 - Tests: `test_demo_graph_has_no_inferred_kind_mismatches`, `test_inferred_kind_mismatch_still_warns_for_consuming_nodes`, and studio `contract round-trip` tests.
 
-### P1 — Make remaining contract warnings actionable
+### P1 — Make remaining contract warnings actionable (implemented 2026-09-25)
 
-- Each contract diagnostic carries a `fix` hint that names the control that resolves it (for example "Edge → Transform → Format message"), rendered in the Issues tab and the edge inspector.
-- **Edge transform editor** in `EdgeInspector` (`select` pointer, `wrap` field, `format_message` template, `coerce` type), shown only for edges with a kind mismatch.
-- **Apply transforms at runtime** in `ports.resolve_node_input` before an executor reads its input. Until then, change `adapters.py`'s `deterministic_transforms` entry to `supported=False` so the capability matrix is honest.
+- Kind-mismatch messages now end with the control that fixes them ("select the edge → Transform → Format message").
+- **Edge transform editor** in `EdgeInspector` (`components/graph/TransformFields.tsx`): shown for an edge with a transform or a kind-mismatch diagnostic, or on "Add transform"; Inline or Library.
+- **Transforms are applied at runtime** in `ports.resolve_node_input` (engine: `backend/app/transforms.py`); a failing transform fails the target node. The capability claim now names where.
+- Beyond the original plan, transforms became first-class on two more surfaces: a reusable **Transforms library** (Resources → Transforms, bound by id and pinned in releases) and a **`transform` node** in the palette. See `p0-graph-foundation-design-plan.md` → "Transform surfaces".
+- Also fixed: the SDK rejected a graph containing any edge transform (the API sends unset fields as `null`; the schema said optional).
 
 ### P2 — Port authoring and display
 

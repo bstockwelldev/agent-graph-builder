@@ -28,9 +28,10 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .models import NodeType
+from .transforms import node_transform_spec, transform_field_error
 
 
 class GuardrailConfig(BaseModel):
@@ -107,6 +108,30 @@ class SubgraphConfig(BaseModel):
     inputMapping: dict[str, str] | None = None
 
 
+class TransformNodeConfig(BaseModel):
+    """A transform node (transforms.py): inline (``type`` plus the one field
+    that type needs) or bound to a Transforms library entry
+    (``transformId``, resolved like any other binding)."""
+
+    type: Literal["select", "wrap", "format_message", "coerce"] | None = None
+    pointer: str | None = None
+    field: str | None = None
+    template: str | None = None
+    targetType: Literal["string", "number", "boolean"] | None = None
+    transformId: str | None = None
+
+    @model_validator(mode="after")
+    def _complete(self) -> TransformNodeConfig:
+        if self.transformId:
+            return self
+        if self.type is None:
+            raise ValueError("choose a transform type, or bind one from the library")
+        error = transform_field_error(node_transform_spec(self.model_dump()))
+        if error:
+            raise ValueError(error)
+        return self
+
+
 _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.GUARDRAIL: GuardrailConfig,
     NodeType.RUBRIC: RubricConfig,
@@ -115,6 +140,7 @@ _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.CODE_EXEC: CodeExecConfig,
     NodeType.HUMAN_GATE: HumanGateConfig,
     NodeType.SUBGRAPH: SubgraphConfig,
+    NodeType.TRANSFORM: TransformNodeConfig,
 }
 
 
