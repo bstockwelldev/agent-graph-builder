@@ -1,8 +1,8 @@
 """Run analytics / spend estimation (studio-consolidation Phase 5 — see
 docs/planning/features/studio-consolidation-plan.md). Ported from
 micro-ui-agent-builder's `lib/server/estimate-llm-spend.ts` +
-`analytics-dashboard.ts`, reading from `storage.list_all_runs()` /
-`storage.get_run_traces()` instead of MUI's own JSONL append log
+`analytics-dashboard.ts`, reading from `storage.list_runs_with_traces()` (one read per run)
+instead of MUI's own JSONL append log
 (`run-analytics-store.ts` is not ported at all — AGB's durable run
 snapshots already are the append log, and a JSONL side-file duplicating
 that data was never necessary here, exactly per the plan's own call: "AGB's
@@ -21,6 +21,7 @@ order-of-magnitude spend/usage dashboard, not a billing source.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -28,7 +29,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from . import storage
-from .models import NodeType, RunSummary
+from .models import NodeTrace, NodeType, RunSummary
 
 _DEFAULT_MAX_DAILY_DAYS = 30
 _DEFAULT_MAX_GRAPHS = 12
@@ -104,11 +105,14 @@ class RunTokenEstimate(BaseModel):
     estimated_usd: float
 
 
-def estimate_run_tokens(run: RunSummary) -> RunTokenEstimate:
+def estimate_run_tokens(run: RunSummary, traces: list[NodeTrace] | None = None) -> RunTokenEstimate:
+    """`traces` when the caller already has them; otherwise one storage read."""
     input_tokens = 0
     output_tokens = 0
     estimated_usd = 0.0
-    for trace in storage.get_run_traces(run.run_id):
+    if traces is None:
+        traces = storage.get_run_traces(run.run_id)
+    for trace in traces:
         if trace.node_type not in _TOKEN_NODE_TYPES or trace.status != "succeeded":
             continue
         input_repr = trace.input if isinstance(trace.input, dict) else {}
@@ -175,7 +179,10 @@ def build_analytics_dashboard(
     *,
     max_daily_days: int = _DEFAULT_MAX_DAILY_DAYS,
     max_graphs: int = _DEFAULT_MAX_GRAPHS,
+    traces_by_run: Mapping[str, list[NodeTrace]] | None = None,
 ) -> AnalyticsDashboardPayload:
+    """`traces_by_run` avoids a trace read per run; runs missing from it
+    fall back to storage."""
     input_tokens = 0
     output_tokens = 0
     estimated_usd = 0.0
@@ -190,7 +197,9 @@ def build_analytics_dashboard(
     )
 
     for run in runs:
-        estimate = estimate_run_tokens(run)
+        estimate = estimate_run_tokens(
+            run, traces_by_run.get(run.run_id) if traces_by_run is not None else None
+        )
         input_tokens += estimate.input_tokens
         output_tokens += estimate.output_tokens
         estimated_usd += estimate.estimated_usd
@@ -257,6 +266,10 @@ def build_analytics_dashboard(
 
 
 def get_analytics_dashboard(*, run_limit: int = 500) -> AnalyticsDashboardPayload:
-    runs = storage.list_all_runs(limit=run_limit)
+    pairs = storage.list_runs_with_traces(limit=run_limit)
     graph_names = {entry.id: entry.name for entry in storage.list_graph_catalog()}
-    return build_analytics_dashboard(runs, graph_names)
+    return build_analytics_dashboard(
+        [run for run, _ in pairs],
+        graph_names,
+        traces_by_run={run.run_id: traces for run, traces in pairs},
+    )

@@ -11,8 +11,8 @@ link each one back to a run.
 
 Latency comes from each NodeTrace's own started_at/completed_at, so it's
 the node's own execution time, not the whole run's. Built from
-`storage.list_runs_for_graph` + `storage.get_run_traces` (the same N+1
-shape analytics.py already uses) over a bounded window of recent runs.
+`storage.list_runs_with_traces` -- one read per run -- over a bounded
+window of recent runs.
 """
 
 from __future__ import annotations
@@ -139,7 +139,9 @@ def build_graph_analytics(
             succeeded=v["succeeded"],
             failed=v["failed"],
             success_rate=_rate(v["succeeded"], v["failed"]),
-            avg_duration_ms=round(sum(v["durations"]) / len(v["durations"])) if v["durations"] else None,
+            avg_duration_ms=round(sum(v["durations"]) / len(v["durations"]))
+            if v["durations"]
+            else None,
             p95_duration_ms=percentile(v["durations"], 95),
             last_run_id=v["last_run_id"],
             last_run_at=v["last_run_at"],
@@ -153,7 +155,9 @@ def build_graph_analytics(
     succeeded_runs = sum(1 for run in runs if run.status == "succeeded")
     failed_runs = sum(1 for run in runs if run.status == "failed")
     run_durations = [d for d in (_run_duration_ms(run) for run in runs) if d is not None]
-    totals = build_analytics_dashboard(runs, {graph_id: graph_id}).totals
+    totals = build_analytics_dashboard(
+        runs, {graph_id: graph_id}, traces_by_run=traces_by_run
+    ).totals
 
     return GraphAnalytics(
         graph_id=graph_id,
@@ -195,8 +199,8 @@ def build_node_history(
 
 
 def _load(graph_id: str, run_window: int) -> tuple[list[RunSummary], dict[str, list[NodeTrace]]]:
-    runs = storage.list_runs_for_graph(graph_id, limit=run_window)
-    return runs, {run.run_id: storage.get_run_traces(run.run_id) for run in runs}
+    pairs = storage.list_runs_with_traces(graph_id=graph_id, limit=run_window)
+    return [run for run, _ in pairs], {run.run_id: traces for run, traces in pairs}
 
 
 def get_graph_analytics(graph_id: str, *, run_window: int = DEFAULT_RUN_WINDOW) -> GraphAnalytics:

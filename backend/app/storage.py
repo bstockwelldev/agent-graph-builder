@@ -793,6 +793,41 @@ def list_all_runs(*, limit: int | None = 200) -> list[RunSummary]:
     return runs[:limit]
 
 
+def list_runs_with_traces(
+    *, graph_id: str | None = None, limit: int
+) -> list[tuple[RunSummary, list[NodeTrace]]]:
+    """The newest `limit` runs (of one graph, or of every graph) with their
+    node traces, newest first. On the remote backends each run's blob holds
+    both, so this is one read per run -- analytics used to list runs and then
+    re-read every blob through get_run_traces, doubling the reads.
+    """
+    remote = _json_object_backend()
+    if remote is None:
+        runs = (
+            list_runs_for_graph(graph_id, limit=limit)
+            if graph_id is not None
+            else list_all_runs(limit=limit)
+        )
+        return [(run, get_run_traces(run.run_id)) for run in runs]
+    if graph_id is not None:
+        index_keys = remote.list_keys(
+            f"{_RUN_INDEX_PREFIX}{graph_id}/", newest_first=True, limit=limit
+        )
+        keys = [f"{_RUN_PREFIX}{key.rsplit('/', 1)[-1]}" for key in index_keys]
+    else:
+        keys = remote.list_keys(_RUN_PREFIX, newest_first=True, limit=limit)
+    pairs: list[tuple[RunSummary, list[NodeTrace]]] = []
+    for key in keys:
+        payload = remote.get_json(key)
+        if payload is None:
+            continue
+        traces = [NodeTrace.model_validate(item) for item in payload.get("traces") or []]
+        traces.sort(key=lambda trace: trace.node_id)
+        pairs.append((RunSummary.model_validate(payload["summary"]), traces))
+    pairs.sort(key=lambda pair: pair[0].started_at or "", reverse=True)
+    return pairs
+
+
 def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSummary]:
     """Newest first; `limit=None` returns every run (paged routes)."""
     remote = _json_object_backend()
