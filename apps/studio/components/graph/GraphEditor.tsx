@@ -185,9 +185,22 @@ function isDesktopViewport(): boolean {
 }
 
 // The node/edge inspector (and, when nothing is selected, the workflow
-// summary) shares its HUD slot with these four panels (see
-// showSelectionDock below), gating the dock's own render.
-const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge", "policies", "health"]);
+// summary) shares its HUD slot with these panels (see showSelectionDock
+// below), gating the dock's own render. "chat" is included even though it
+// renders outside this dock slot (mounted app-wide in studio-shell.tsx as a
+// `floating` WorkbenchDrawer, fixed at `right-4 top-20`) — without it, the
+// docked-reserve workflow-summary/inspector column stayed rendered
+// underneath the fixed-position chat panel, and since both sit flush
+// against the viewport's right edge, their content visibly overlapped.
+const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
+  "run",
+  "releases",
+  "routingLab",
+  "knowledge",
+  "policies",
+  "health",
+  "chat",
+]);
 
 // Compact/mobile selection dock positioning. The dock used to anchor at a
 // hardcoded `top-24` (96px) regardless of the HUD's actual rendered
