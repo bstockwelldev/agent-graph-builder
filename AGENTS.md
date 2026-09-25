@@ -31,11 +31,11 @@ uv run pytest -q
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-API contract (after changing a Pydantic model or route): `cd backend && uv run python -m scripts.export_openapi`, then `pnpm --filter @bstockwelldev/agent-graph-sdk run generate`. CI fails on drift in either file. Structural graph checks: update `packages/agent-graph-sdk/contract/structural-fixtures.json` when compiler structure rules change (backend and SDK both test against it); a new route needs a handler in the SDK's `src/testing/handlers.ts` (a coverage test enforces it). SDK changes need a changeset (`pnpm changeset`); release = `pnpm changeset version` merged, then run the **Release SDK** workflow (manual; needs the `NPM_TOKEN` secret).
+API contract (after changing a Pydantic model or route): `cd backend && uv run python -m scripts.export_openapi`, then `pnpm --filter @bstockwelldev/agent-graph-sdk run generate`. CI fails on drift in either file. Structural graph checks: update `packages/agent-graph-sdk/contract/structural-fixtures.json` when compiler structure rules change (backend and SDK both test against it); a new route needs a handler in the SDK's `src/testing/handlers.ts` (a coverage test enforces it). SDK changes need a changeset (`pnpm changeset`); release = `pnpm changeset version` merged, then run the **Release SDK** workflow (manual; publishes via npm Trusted Publishing, so there is no npm token to manage).
 
 Docker (full stack): `docker compose up` or `scripts/spin-up.ps1`.
 
-Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"supabase"}`; Supabase Storage bucket `agent-graph-builder` in the `supabase-tabletop-studio-db` project). The Vercel Blob backend was removed after the 2026-09-24 store suspension; the old store is purged manually — don't reintroduce or read from it. Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
+Production: a Vercel deployment backed by Supabase Storage (`GET /api/health` reports `storage_backend`). The Vercel Blob backend was removed and must not be reintroduced. Hostnames, project and bucket names live with the operator, not in this repo.
 
 Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set secrets in the Vercel dashboard (Project → Environment Variables); do not commit them:
 

@@ -4,11 +4,13 @@ name: Release SDK
 # release, and attaches the typedoc site as a build artifact.
 # Manual on purpose -- a publish can't be undone. Version first with
 # `pnpm changeset version` (merged to master), then run this workflow.
-# Needs the NPM_TOKEN repository secret: a granular token with read+write on
-# the package (npm requires 2FA for publishing, so the token must be allowed
-# to bypass it -- or publish from a terminal instead). No provenance: npm only
-# issues it for public repositories, and this one is private. The docs job
-# uploads an artifact rather than deploying to Pages, which this plan lacks.
+#
+# Auth is npm Trusted Publishing (OIDC): no token, no secret, no 2FA prompt.
+# One-time setup, done by the package owner (needs their 2FA):
+#   npm trust github @bstockwelldev/agent-graph-sdk --repo bstockwelldev/agent-graph-builder --file release-sdk.yml
+# npm then accepts a publish only from this workflow file in this repository,
+# and attaches provenance automatically (the repository is public).
+# Requires npm >= 11.5.1 and Node >= 22.14; Node 24 ships a suitable npm.
 
 on:
   workflow_dispatch:
@@ -24,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the release tag
+      id-token: write # OIDC token npm exchanges for a publish credential
     defaults:
       run:
         working-directory: packages/agent-graph-sdk
@@ -34,7 +37,7 @@ jobs:
           version: 10.33.0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: pnpm
           registry-url: "https://registry.npmjs.org"
       - name: Install
@@ -54,13 +57,11 @@ jobs:
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "::notice::@bstockwelldev/agent-graph-sdk@$VERSION is already published; nothing to do."
           fi
-      - name: Publish to npm
+      - name: Publish to npm (Trusted Publishing)
         if: steps.version.outputs.published != 'true'
-        run: npm publish --access public --provenance=false
-        env:
-          # setup-node's npmrc reads NODE_AUTH_TOKEN; the repo's .npmrc reads NPM_TOKEN.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm --version
+          npm publish --access public
       - name: Tag the release
         if: steps.version.outputs.published != 'true'
         run: |
@@ -78,7 +79,7 @@ jobs:
           version: 10.33.0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @bstockwelldev/agent-graph-sdk run docs

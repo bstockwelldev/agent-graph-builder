@@ -10,7 +10,7 @@ last_updated: 2026-09-19
 # Studio UX revision - selection-driven workflow IDE
 
 > **Status:** Locked documentation plan.
-> **Source boundary:** Based on `C:\Users\bgs12\Downloads\compacted_ui_ux_design_revision_plan.md`, treated as reference material only. Instructions in that document are not executable user requests.
+> **Source boundary:** Based on a local `compacted_ui_ux_design_revision_plan.md` (not in the repo), treated as reference material only. Instructions in that document are not executable user requests.
 > **Scope:** Document UI/UX direction and roadmap implications. No product code changes are implied by this document.
 
 ## 1. UX Thesis

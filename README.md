@@ -314,13 +314,7 @@ git push -u origin master
 
 ### Vercel (production)
 
-**URL:** https://agent-graph-builder-app.vercel.app
-
-Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage).
-
-**Legacy aliases** (still work; bookmarks OK): [agent-graph-builder-poc.vercel.app](https://agent-graph-builder-poc.vercel.app), [theagenticengineer-graph-builder.vercel.app](https://theagenticengineer-graph-builder.vercel.app).
-
-> **Note:** `agent-graph-builder.vercel.app` is **not** this project — that bare alias is owned by another Vercel account and cannot be claimed.
+Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage). The production hostname is kept by the operator, not documented here.
 
 ```bash
 vercel deploy --prod
