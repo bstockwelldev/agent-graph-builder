@@ -4,13 +4,13 @@ Lean router for autonomous work in **this repository only**.
 
 ## Purpose
 
-Visual graph authoring playground + FastAPI/LangGraph execution API. Proves graph-driven agent workflows with streamed node-level observability.
+Visual graph authoring studio + FastAPI/LangGraph execution API. Proves graph-driven agent workflows with streamed node-level observability.
 
 ## Where to work
 
 | Area | Path | Notes |
 | ---- | ---- | ----- |
-| Playground (Vite/React) | `apps/playground/` | Canvas, run panel, SSE event log |
+| Studio (Next.js) | `apps/studio/` | Canvas, run panel, SSE event log (styling rules: `apps/studio/AGENTS.md`) |
 | SDK (shared types/client) | `packages/agent-graph-sdk/` | Graph schema, API client, fingerprints |
 | Backend (FastAPI) | `backend/app/` | Compile, run, providers, storage |
 | Planning | `docs/planning/` | Roadmap, feature specs, incidents |
@@ -20,7 +20,7 @@ Visual graph authoring playground + FastAPI/LangGraph execution API. Proves grap
 From repo root:
 
 ```bash
-npm ci && npm test && npm run build   # SDK dist first (playground Vitest imports it), then tests, then full build
+npm ci && npm test && npm run build   # SDK dist first (studio Vitest imports it), then tests, then full build
 ```
 
 From `backend/`:
@@ -35,29 +35,30 @@ API contract (after changing a Pydantic model or route): `cd backend && uv run p
 
 Docker (full stack): `docker compose up` or `scripts/spin-up.ps1`.
 
-Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"supabase"}`; Supabase Storage bucket `agent-graph-builder` in the `supabase-tabletop-studio-db` project). Prod left Vercel Blob on 2026-09-24: the Hobby Blob store was suspended for exceeding its monthly operation limits (2k advanced / 10k simple), which locks it for 30 days — do not re-add `BLOB_READ_WRITE_TOKEN` to prod without fixing the N+1 list reads first. Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
+Production URL: https://agent-graph-builder-app.vercel.app (`GET /api/health` → `{ok:true, storage_backend:"supabase"}`; Supabase Storage bucket `agent-graph-builder` in the `supabase-tabletop-studio-db` project). The Vercel Blob backend was removed after the 2026-09-24 store suspension; the old store is purged manually — don't reintroduce or read from it. Legacy aliases: `agent-graph-builder-poc.vercel.app`, `theagenticengineer-graph-builder.vercel.app`. Bare `agent-graph-builder.vercel.app` is unavailable (another account).
 
 Production deploy (operator): `vercel deploy --prod` from repo root after merge. Set secrets in the Vercel dashboard (Project → Environment Variables); do not commit them:
 
 | Variable | Purpose |
 | -------- | ------- |
 | `GROQ_API_KEY` | Live LLM provider (optional; `CHAT_PROVIDER=stub` until set) |
-| `BLOB_READ_WRITE_TOKEN` | **Recommended on Vercel** — Blob store injects this (`vercel blob create-store`) |
-| `BLOB_STORE_ID` | Optional. Blob store id if not encoded in the token |
+| `SUPABASE_URL` | **Prod storage** — Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-only; required with `SUPABASE_URL`) |
+| `SUPABASE_STORAGE_BUCKET` | Optional. Private bucket, default `agent-graph-builder` |
 | `OBJECT_STORE_BUCKET` | S3-compatible alternative (Cloudflare R2, AWS S3, MinIO, Azure S3 API) |
 | `OBJECT_STORE_ENDPOINT` | Optional custom endpoint (R2/MinIO/Azure). Empty = AWS default |
 | `OBJECT_STORE_ACCESS_KEY_ID` | Object-store access key |
 | `OBJECT_STORE_SECRET_ACCESS_KEY` | Object-store secret |
 | `OBJECT_STORE_REGION` | Optional. Default `us-east-1` (AWS) or `auto` when endpoint is set |
-| `TURSO_DATABASE_URL` | Optional libsql URL (unused if Blob or `OBJECT_STORE_*` is set) |
+| `TURSO_DATABASE_URL` | Optional libsql URL (unused if Supabase or `OBJECT_STORE_*` is set) |
 | `TURSO_AUTH_TOKEN` | Turso token (required with `TURSO_DATABASE_URL`) |
 
-Backend selection: `BLOB_READ_WRITE_TOKEN` → else `OBJECT_STORE_*` (bucket + both keys) → else `TURSO_*` → else file SQLite. Without a shared store, production uses ephemeral `/tmp/graphs.db` per serverless isolate (`GRAPH_DB_PATH` in `vercel.json`). Local/Docker use file SQLite at `GRAPH_DB_PATH` or `backend/graphs.db`.
+Backend selection: `SUPABASE_*` → else `OBJECT_STORE_*` (bucket + both keys) → else `TURSO_*` → else file SQLite. On Vercel without a shared store the API returns 503 (per-isolate `/tmp/graphs.db` would lose runs across requests). Local/Docker use file SQLite at `GRAPH_DB_PATH` or `backend/graphs.db`; stub runs there show as **Offline** in the Run panel and are also cached in the browser (`apps/studio/lib/runCache.ts`).
 
 ## Layout
 
 ```
-apps/playground/          # React Flow editor + run UX
+apps/studio/              # Next.js studio: React Flow editor + run UX
 packages/agent-graph-sdk/ # Types, client, graph fingerprints
 backend/app/              # FastAPI routes, runtime, providers
 docs/planning/            # Roadmap + locked feature specs

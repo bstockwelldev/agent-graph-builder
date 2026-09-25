@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { flowEdgeLabel, shouldRunDagre } from "./graphAuthoring";
+import { edgeContract, flowEdgeLabel, nodePorts, shouldRunDagre } from "./graphAuthoring";
 
 // studio-graph-workbench-redesign-plan.md, Slice 6.
 describe("flowEdgeLabel", () => {
@@ -30,5 +30,21 @@ describe("shouldRunDagre", () => {
   it("runs when the effective direction changes", () => {
     expect(shouldRunDagre({ ...base, rankDirChanged: true })).toBe(true);
     expect(shouldRunDagre(base)).toBe(false);
+  });
+});
+
+describe("contract round-trip", () => {
+  it("keeps author-declared node ports and omits empty ones", () => {
+    const port = { id: "in", name: "in", direction: "input" as const, contract: { kind: "message" as const } };
+    const base = { id: "n", type: "llm" as const, position: { x: 0, y: 0 }, config: {} };
+    expect(nodePorts({ ...base, input_ports: [port], output_ports: [] })).toEqual({ input_ports: [port] });
+    expect(nodePorts(base)).toBeUndefined();
+  });
+
+  it("keeps edge ports and transform so a save never strips them", () => {
+    const base = { id: "e", source: "a", target: "b", kind: "sequence" as const };
+    const transform = { type: "format_message" as const, template: "{value}" };
+    expect(edgeContract({ ...base, target_port: "input", transform })).toEqual({ target_port: "input", transform });
+    expect(edgeContract(base)).toBeUndefined();
   });
 });

@@ -24,17 +24,37 @@ def test_demo_graph_has_no_blocking_contract_diagnostics() -> None:
     assert not any(d.blocking for d in diagnostics), diagnostics
 
 
-def test_demo_graph_warns_on_inferred_kind_mismatches() -> None:
-    """The default port catalog itself has real kind mismatches (router's
-    message output feeding tool's structured-json input; tool's tool-result
-    output feeding output's message input) that every existing graph relies
-    on — Slice B surfaces them as non-blocking warnings, not errors."""
+def test_demo_graph_has_no_inferred_kind_mismatches() -> None:
+    """`tool` reads its argument from a state variable and `output` passes
+    whatever arrives through, so their default inputs accept any kind: the
+    router -> tool and tool -> output edges used to warn with no node
+    setting that could resolve it (incidents/demo-graph-contract-warnings)."""
+    diagnostics = validate_contracts(build_demo_graph())
+    assert [d for d in diagnostics if d.code == "CONTRACT_KIND_INFERRED_MISMATCH"] == []
+
+
+def test_inferred_kind_mismatch_still_warns_for_consuming_nodes() -> None:
+    """`code_exec` does consume its structured-json input, so a message feed
+    into its default port still warns (non-blocking)."""
     graph = build_demo_graph()
-    diagnostics = validate_contracts(graph)
-    inferred = [d for d in diagnostics if d.code == "CONTRACT_KIND_INFERRED_MISMATCH"]
-    assert len(inferred) == 2
-    assert {d.edge_id for d in inferred} == {"e_router_tool", "e_tool_output"}
-    assert all(d.severity == "warning" and not d.blocking for d in inferred)
+    llm_node = next(n for n in graph.nodes if n.type == NodeType.LLM)
+    code_node = GraphNode(
+        id="code_1", type=NodeType.CODE_EXEC, position=NodePosition(x=0, y=0), config={}
+    )
+    rewired = graph.model_copy(
+        update={
+            "nodes": [*graph.nodes, code_node],
+            "edges": [
+                *graph.edges,
+                GraphEdge(id="e_code", source=llm_node.id, target="code_1", kind=EdgeKind.SEQUENCE),
+            ],
+        }
+    )
+    inferred = [
+        d for d in validate_contracts(rewired) if d.code == "CONTRACT_KIND_INFERRED_MISMATCH"
+    ]
+    assert [d.edge_id for d in inferred] == ["e_code"]
+    assert inferred[0].severity == "warning" and not inferred[0].blocking
 
 
 def test_compile_graph_still_reports_ok_for_demo_graph() -> None:

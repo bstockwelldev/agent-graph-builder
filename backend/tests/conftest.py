@@ -13,8 +13,8 @@ _OBJECT_STORE_ENV = (
     "OBJECT_STORE_ACCESS_KEY_ID",
     "OBJECT_STORE_SECRET_ACCESS_KEY",
     "OBJECT_STORE_REGION",
+    # Removed Blob backend: cleared so a stale local token can't mask a regression.
     "BLOB_READ_WRITE_TOKEN",
-    "BLOB_STORE_ID",
 )
 
 

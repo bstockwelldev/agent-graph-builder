@@ -111,7 +111,11 @@ def _persist_run_snapshot(run_id: str) -> None:
     if summary is None or summary.completed_at is None:
         return
     traces = list(RUN_TRACES.get(run_id, {}).values())
-    storage.save_run_snapshot(summary, traces)
+    try:
+        storage.save_run_snapshot(summary, traces)
+    except Exception:  # noqa: BLE001 - the run already finished; a storage outage must not 500 it or leave its stream open
+        logger.exception("failed to persist run snapshot for run %s", run_id)
+        return
     try:
         record_run_usage(summary, traces)
     except Exception:  # noqa: BLE001 - analytics is secondary; the run is already saved

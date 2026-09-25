@@ -1,7 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { GraphNodeData } from "@/components/graph/nodes/GraphNodeView";
 import { EDGE_KIND_TAXONOMY } from "../content/taxonomy";
-import type { EdgeKind, GraphGroup, GraphLayer, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import type { EdgeKind, GraphEdge, GraphGroup, GraphLayer, GraphNode, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 
 export type CanvasSnapshot = {
   nodes: Node<GraphNodeData>[];
@@ -228,5 +228,26 @@ export function graphStructure(nodes: Node<GraphNodeData>[], edges: Edge[]): Gra
     edges: edges.length,
     entrypoints: nodes.filter((node) => !targetIds.has(node.id)).map(name),
     terminals: nodes.filter((node) => !sourceIds.has(node.id)).map(name),
+  };
+}
+
+// Contract fields the studio can't edit yet (node ports; edge ports and
+// transform) ride along on `data` so saving never strips them.
+export function nodePorts(n: GraphNode): GraphNodeData["ports"] {
+  if (!n.input_ports?.length && !n.output_ports?.length) return undefined;
+  return {
+    ...(n.input_ports?.length ? { input_ports: n.input_ports } : {}),
+    ...(n.output_ports?.length ? { output_ports: n.output_ports } : {}),
+  };
+}
+
+export type EdgeContract = Pick<GraphEdge, "source_port" | "target_port" | "transform">;
+
+export function edgeContract(e: GraphEdge): EdgeContract | undefined {
+  if (!e.source_port && !e.target_port && !e.transform) return undefined;
+  return {
+    ...(e.source_port ? { source_port: e.source_port } : {}),
+    ...(e.target_port ? { target_port: e.target_port } : {}),
+    ...(e.transform ? { transform: e.transform } : {}),
   };
 }

@@ -437,6 +437,13 @@ export const providerCredentialsSchema = z.object({
   configured: z.boolean(),
 });
 
+/** GET /api/health. `storage_backend` is "supabase", "object_store", "turso" or "sqlite" (local, not shared). */
+export const serverHealthSchema = z.object({
+  ok: z.boolean(),
+  storage_backend: z.string(),
+  message: z.string().optional(),
+});
+
 export const providerReadySchema = z.object({
   ready: z.boolean(),
   message: z.string(),

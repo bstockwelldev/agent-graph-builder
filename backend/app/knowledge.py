@@ -4,7 +4,7 @@ micro-ui-agent-builder's `lib/server/flow-knowledge-rag.ts` +
 `flow-knowledge-store.ts`, combined into one module and keyed by AGB's
 `graph_id` (MUI's "flow") rather than a flat local JSON file: entries are
 stored via `storage.save_resource("knowledge", graph_id, ...)`, which
-already dispatches to `object_store.py`/`vercel_blob.py`/SQLite/Turso —
+already dispatches to `supabase_store.py`/`object_store.py`/SQLite/Turso —
 replacing MUI's raw-floats-in-a-JSON-file store with AGB's existing durable
 backend, not a new one.
 

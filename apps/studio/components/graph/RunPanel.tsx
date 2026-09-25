@@ -54,7 +54,8 @@ import type {
 import { accentSurface, border, color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { CounterfactualForm, CounterfactualResultView } from "./CounterfactualForm";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
-import { ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
+import { OfflineBadge, ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
+import { isOfflineRun, useStorageBackend } from "@/lib/serverHealth";
 import { RunWaterfall } from "./RunWaterfall";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
@@ -358,6 +359,7 @@ export function RunPanel({
   const [provider, setProvider] = useState<ChatProvider>("stub");
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const storageBackend = useStorageBackend();
   const [apiKeyLabel, setApiKeyLabel] = useState("API key");
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
@@ -617,6 +619,7 @@ export function RunPanel({
 
   // ---- header -------------------------------------------------------------
   const chipLabel = sendsModel && selectedModel ? shortModel(selectedModel) : providerLabel(provider);
+  const offline = isOfflineRun(provider, storageBackend);
   const header = (
     <PanelHeader
       icon={
@@ -638,20 +641,23 @@ export function RunPanel({
         </button>
       }
       actions={
-        <button
-          type="button"
-          aria-expanded={modelSettingsOpen}
-          aria-controls="run-model-settings"
-          aria-label={`Model: ${providerLabel(provider)}${sendsModel && selectedModel ? ` · ${selectedModel}` : ""}. Change model settings`}
-          title="Model settings for this run"
-          onClick={() => setModelSettingsOpen((open) => !open)}
-          className="agb-focus-ring agb-hoverable"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, maxWidth: 170, padding: "0 8px 0 10px", borderRadius: 999, border: `1px solid ${modelSettingsOpen ? border.focus : border.default}`, background: surface.inset, color: text.primary, fontSize: 12, fontWeight: 550, cursor: "pointer" }}
-        >
-          <ProviderDot provider={provider} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chipLabel}</span>
-          <ChevronDown size={13} aria-hidden="true" style={{ flexShrink: 0, color: text.secondary, transform: modelSettingsOpen ? "rotate(180deg)" : undefined }} />
-        </button>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {offline && <OfflineBadge />}
+          <button
+            type="button"
+            aria-expanded={modelSettingsOpen}
+            aria-controls="run-model-settings"
+            aria-label={`Model: ${providerLabel(provider)}${sendsModel && selectedModel ? ` · ${selectedModel}` : ""}. Change model settings`}
+            title="Model settings for this run"
+            onClick={() => setModelSettingsOpen((open) => !open)}
+            className="agb-focus-ring agb-hoverable"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, maxWidth: 170, padding: "0 8px 0 10px", borderRadius: 999, border: `1px solid ${modelSettingsOpen ? border.focus : border.default}`, background: surface.inset, color: text.primary, fontSize: 12, fontWeight: 550, cursor: "pointer" }}
+          >
+            <ProviderDot provider={provider} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chipLabel}</span>
+            <ChevronDown size={13} aria-hidden="true" style={{ flexShrink: 0, color: text.secondary, transform: modelSettingsOpen ? "rotate(180deg)" : undefined }} />
+          </button>
+        </span>
       }
     />
   );
@@ -964,6 +970,7 @@ export function RunPanel({
                       {providerLabel(runSummary.provider)}
                     </span>
                   )}
+                  {isOfflineRun(runSummary.provider, storageBackend) && <OfflineBadge />}
                   <code title={runSummary.run_id} style={{ marginLeft: "auto", fontFamily: fontFamily.mono, fontSize: 11, color: text.secondary, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {runSummary.run_id}
                   </code>

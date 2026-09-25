@@ -6,12 +6,10 @@ lighter-weight local store. Completed run snapshots (summary + node traces)
 persist here; live SSE buses stay in memory until a run finishes.
 
 Backends (first match wins):
-- **Vercel Blob (recommended on Vercel):** when ``BLOB_READ_WRITE_TOKEN`` is
-  set. REST PUT/GET/LIST of JSON objects (not S3).
-- **Supabase Storage:** when ``SUPABASE_URL`` and
+- **Supabase Storage (production):** when ``SUPABASE_URL`` and
   ``SUPABASE_SERVICE_ROLE_KEY`` are set (studio-consolidation Phase 5, see
   docs/planning/features/studio-consolidation-plan.md and
-  ``supabase_store.py``). JSON objects in a bucket, same shape as Blob.
+  ``supabase_store.py``). JSON objects in a bucket.
 - **S3-compatible object store:** when ``OBJECT_STORE_BUCKET``,
   ``OBJECT_STORE_ACCESS_KEY_ID``, and ``OBJECT_STORE_SECRET_ACCESS_KEY`` are
   set. Works with AWS S3, Cloudflare R2, MinIO, and Azure Blob S3 API.
@@ -32,7 +30,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Protocol
 
-from . import object_store, supabase_store, vercel_blob
+from . import object_store, supabase_store
 from .bindings import node_bindings
 from .graph_inputs import input_variables
 from .models import (
@@ -240,16 +238,10 @@ def resolve_db_path() -> Path:
     return _DEFAULT_DB_PATH
 
 
-def use_vercel_blob() -> bool:
-    """True when Vercel Blob read-write token is set."""
-    return bool(os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip())
-
-
 def use_supabase() -> bool:
     """True when Supabase project URL + service-role key are set
     (studio-consolidation Phase 5 — see
-    docs/planning/features/studio-consolidation-plan.md). Checked after
-    Vercel Blob (Vercel stays the recommended-on-Vercel default) and before
+    docs/planning/features/studio-consolidation-plan.md). Checked before
     the generic S3-compatible object store.
     """
     url = os.environ.get("SUPABASE_URL", "").strip()
@@ -274,8 +266,6 @@ def use_turso() -> bool:
 
 def storage_backend() -> str:
     """Active persistence backend label (for diagnostics)."""
-    if use_vercel_blob():
-        return "vercel_blob"
     if use_supabase():
         return "supabase"
     if use_object_store():
@@ -290,8 +280,7 @@ class StorageMisconfiguredError(RuntimeError):
 
 
 STORAGE_MISCONFIGURED_DETAIL = (
-    "Vercel requires durable storage. Set BLOB_READ_WRITE_TOKEN, "
-    "SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, "
+    "Vercel requires durable storage. Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, "
     "OBJECT_STORE_BUCKET + OBJECT_STORE_ACCESS_KEY_ID + "
     "OBJECT_STORE_SECRET_ACCESS_KEY, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN."
 )
@@ -304,7 +293,7 @@ def is_vercel_runtime() -> bool:
 
 def is_durable_storage_configured() -> bool:
     """True when a shared store is configured (not isolate-local SQLite)."""
-    return use_vercel_blob() or use_supabase() or use_object_store() or use_turso()
+    return use_supabase() or use_object_store() or use_turso()
 
 
 def storage_is_healthy() -> bool:
@@ -332,8 +321,6 @@ def _assert_storage_ready_for_sqlite() -> None:
 
 
 def _json_object_backend():
-    if use_vercel_blob():
-        return vercel_blob
     if use_supabase():
         return supabase_store
     if use_object_store():
@@ -357,7 +344,7 @@ def _ensure_run_schema(conn: _DbConnection) -> None:
     # P0 graph foundation, Slice D (GraphRunIdentity fields on RunSummary):
     # added post-hoc, same migration pattern as route_decisions_json above
     # — nullable so existing rows don't need backfilling. The
-    # vercel_blob.py/object_store.py/supabase_store.py backends need no
+    # object_store.py/supabase_store.py backends need no
     # equivalent migration: they round-trip the whole RunSummary via
     # model_dump()/model_validate(), so new optional fields are already
     # handled there for free — only this hand-unpacked SQL path needed it.
@@ -456,7 +443,7 @@ def list_graph_ids() -> list[str]:
     return [row[0] for row in rows]
 
 
-# Graph catalog (object-store/Blob backends). One ``graph_catalog.json``
+# Graph catalog (remote object backends). One ``graph_catalog.json``
 # document holding a GraphCatalogEntry per graph, so cross-graph readers
 # (analytics names, resource "used by", subgraph parents) cost one read
 # instead of one per graph — list_graphs() read every graph blob, the same
@@ -514,8 +501,7 @@ def _write_graph_catalog(remote, entries: dict[str, GraphCatalogEntry]) -> None:
 def rebuild_graph_catalog(backend=None) -> int:
     """Rebuilds the catalog from every graph blob (one read per graph) —
     for repair, never per request. Returns the entry count; no-op on
-    SQLite/Turso, which have no catalog. `backend` overrides the configured
-    one (copy_blob_to_supabase repairs Supabase while Blob is configured)."""
+    SQLite/Turso, which have no catalog. `backend` overrides the configured one."""
     remote = backend or _json_object_backend()
     if remote is None:
         return 0
@@ -719,7 +705,7 @@ def get_run(run_id: str) -> RunSummary | None:
     return _row_to_run_summary(row)
 
 
-# Object-store/Blob run listing. Run blobs live flat at ``runs/{run_id}.json``
+# Remote object run listing. Run blobs live flat at ``runs/{run_id}.json``
 # (so get_run needs only the run id); ``run_index/{graph_id}/{run_id}.json``
 # holds a summary-only copy so per-graph listing reads just that graph's
 # runs. Both listings take the newest `limit` keys from list metadata and
@@ -830,7 +816,7 @@ def list_runs_with_traces(
     return pairs
 
 
-# Analytics daily usage (object-store/Blob backends): one
+# Analytics daily usage (remote object backends): one
 # ``analytics_daily/{YYYY-MM-DD}.json`` per day holding a usage entry per run
 # (keyed by run id, so a paused run re-persisted on resume replaces its entry
 # instead of double-counting). The dashboard reads one object per day in its
@@ -933,7 +919,7 @@ def delete_graph(graph_id: str) -> bool:
     remote = _json_object_backend()
     if remote is not None:
         # Matches _graph_key("graphs/{id}.json") in object_store.py /
-        # vercel_blob.py — not exposed as a shared helper, so inlined here.
+        # supabase_store.py — not exposed as a shared helper, so inlined here.
         deleted = remote.delete_json(f"{_GRAPH_PREFIX}{graph_id}.json")
         if deleted:
             _update_graph_catalog(remote, graph_id, None)
@@ -953,7 +939,7 @@ def delete_graph(graph_id: str) -> bool:
 # profiles are all small, JSON-shaped, non-relational documents — same
 # shape as `graph` — so one generic store serves all five kinds rather
 # than duplicating the graph/run pattern five times across four backends.
-# Object-store/Blob key convention: ``resources/{kind}/{id}.json``.
+# Remote object key convention: ``resources/{kind}/{id}.json``.
 # ---------------------------------------------------------------------------
 
 _RESOURCE_PREFIX = "resources/"
