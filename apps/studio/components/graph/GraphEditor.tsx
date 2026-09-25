@@ -13,7 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpen, FlaskConical, Focus, HelpCircle, ListChecks, MoreHorizontal, Play, Plus, Search, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
+import { Activity, BookOpen, FlaskConical, Focus, HelpCircle, MoreHorizontal, Play, Plus, Search, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -50,12 +50,12 @@ import {
   edgeStrokeForKind,
   fingerprintIssueMaps,
   tabForDiagnostic,
-  validationSummary,
 } from "@/lib/diagnostics";
 import {
   cloneCanvasSnapshot,
   coachStep,
   dismissCoach,
+  graphStructure,
   isCoachDismissed,
   isCoachVisible,
   isEditableKeyboardTarget,
@@ -97,12 +97,12 @@ import {
   RUN_NOT_FOUND_HINT,
   watchRunCompletion,
 } from "@/lib/watchRun";
+import { cacheRun, getCachedRun, listCachedRuns, mergeRunHistory } from "@/lib/runCache";
 import { useUndoStack } from "@/hooks/useUndoStack";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import type { WorkbenchPanelId } from "@/components/workbench/panels";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
-import { WorkflowSummary } from "./WorkflowSummary";
 import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
@@ -139,7 +139,6 @@ import { IconButton } from "./ui/IconButton";
 import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
 import type { EdgeRunState } from "./edges/LabeledEdge";
 import { findFreePosition, type LayoutSpacing } from "@/layout/dagreLayout";
-import { cn } from "@/lib/utils";
 import { shell } from "@/lib/graph-theme";
 import { parseGraphUrlState, serializeGraphUrlState } from "@/lib/graphUrlState";
 import { WORKBENCH_PANELS } from "@/components/workbench/panels";
@@ -185,9 +184,22 @@ function isDesktopViewport(): boolean {
 }
 
 // The node/edge inspector (and, when nothing is selected, the workflow
-// summary) shares its HUD slot with these four panels (see
-// showSelectionDock below), gating the dock's own render.
-const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>(["run", "releases", "routingLab", "knowledge", "policies", "health"]);
+// summary) shares its HUD slot with these panels (see showSelectionDock
+// below), gating the dock's own render. "chat" is included even though it
+// renders outside this dock slot (mounted app-wide in studio-shell.tsx as a
+// `floating` WorkbenchDrawer, fixed at `right-4 top-20`) — without it, the
+// docked-reserve workflow-summary/inspector column stayed rendered
+// underneath the fixed-position chat panel, and since both sit flush
+// against the viewport's right edge, their content visibly overlapped.
+const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
+  "run",
+  "releases",
+  "routingLab",
+  "knowledge",
+  "policies",
+  "health",
+  "chat",
+]);
 
 // Compact/mobile selection dock positioning. The dock used to anchor at a
 // hardcoded `top-24` (96px) regardless of the HUD's actual rendered
@@ -318,19 +330,6 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  // Mobile selection dock fix: the "nothing selected" workflow summary used
-  // to force-render as a full-viewport sheet on every compact page load
-  // (no dismiss short of tapping a backdrop it mostly covered, and no close
-  // button at all in that state). It now defaults to a small collapsed
-  // strip; this tracks whether the user tapped it open.
-  const [mobileSummaryExpanded, setMobileSummaryExpanded] = useState(false);
-  // Selecting a node/edge (e.g. tapping one directly on canvas, not via
-  // this dock's own close/backdrop handlers) should always show that
-  // selection's inspector next, not a stale expanded-summary state from
-  // before.
-  useEffect(() => {
-    if (selectedNodeId || selectedEdgeId) setMobileSummaryExpanded(false);
-  }, [selectedNodeId, selectedEdgeId]);
   // Phase 10 Slice D ("Focus mode" -- docs/planning/features/
   // studio-shell-ux-gap-analysis.md). Off by default and restrained per
   // studio-ux-revision-plan.md's "must not make the graph unreadable when
@@ -455,7 +454,6 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     null,
   );
   const { pushSnapshot, undo, redo, clearHistory } = useUndoStack();
-  const validationLabel = useMemo(() => validationSummary(diagnostics).label, [diagnostics]);
 
   const closeStream = useCallback(() => {
     closeStreamRef.current?.();
@@ -517,7 +515,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     setRunHistoryLoading(true);
     try {
       const runs = await client.runs.list({ graphId });
-      setRunHistory(runs);
+      setRunHistory(graphId ? mergeRunHistory(runs, listCachedRuns(graphId)) : runs);
     } finally {
       setRunHistoryLoading(false);
     }
@@ -1233,6 +1231,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const handleSelectHistoricalRun = useCallback(
     async (runId: string) => {
       lastInspectAttemptRef.current = runId;
+      const cached = getCachedRun(runId);
+      if (cached) {
+        applyRunInspection(cached.summary, cached.traces);
+        setInspectLoadError(false);
+        return;
+      }
       try {
         const [summary, traces] = await Promise.all([client.runs.get(runId), client.runs.traces(runId)]);
         applyRunInspection(summary, traces);
@@ -1297,6 +1301,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }) => {
       const { input, provider, model, apiKey, nodeOutputs } = opts;
       setProviderBlockMessage(null);
+      setInspectLoadError(false);
       setCompiling(true);
       try {
         const needsServerKey = provider === "groq" || provider === "google" || provider === "azure";
@@ -1330,14 +1335,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
 
+        const streamedEvents: PlatformEvent[] = [];
         const applyTerminalSummary = async (latest: RunSummary) => {
           setRunSummary(latest);
           setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
+          const cacheable = { ...latest, events: latest.events?.length ? latest.events : streamedEvents };
           try {
             const traces = await client.runs.traces(latest.run_id);
             setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
+            cacheRun(cacheable, traces);
           } catch (err: unknown) {
-            const fallback = tracesFromEvents(latest.events ?? []);
+            const fallback = tracesFromEvents(cacheable.events);
+            cacheRun(cacheable, fallback);
             if (fallback.length > 0) {
               setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
             } else {
@@ -1366,6 +1375,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           initial: summary,
           wait: waitForRun,
           onEvent: (event) => {
+            streamedEvents.push(event);
             setEvents((evts) => [...evts, event]);
             // Mirror (not duplicate) into the app-wide console's Run events
             // tab — RunPanel's own "Event log" section still reads from
@@ -1960,8 +1970,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const hasSelection = Boolean(selectedNode || selectedEdge);
   const compactDockTop = (hudBottom ?? 96) + COMPACT_DOCK_TOP_GAP_PX;
   // Keep fit-to-view clear of the floating header (and, on compact, the
-  // collapsed selection strip under it and the bottom action bar).
-  const fitInsetTop = (hudBottom ?? 76) + COMPACT_DOCK_TOP_GAP_PX + (workbench.isCompact ? 56 : 0);
+  // bottom action bar).
+  const fitInsetTop = (hudBottom ?? 76) + COMPACT_DOCK_TOP_GAP_PX;
   const fitInsetBottom = workbench.isCompact ? COMPACT_DOCK_BOTTOM_RESERVE_PX : 32;
   const fitInsets = useMemo(() => ({ top: fitInsetTop, bottom: fitInsetBottom }), [fitInsetTop, fitInsetBottom]);
   const toGraphEdge = (edge: Edge): GraphEdge => ({
@@ -2075,28 +2085,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       onDelete={deleteSelection}
     />
   ) : null;
-  // Phase 10 Slice B: the same dock slot the inspector occupies now always
-  // shows something -- WorkflowSummary when nothing is selected, per
-  // studio-ux-revision-plan.md Section 6 -- rather than sitting empty.
-  const showSelectionDock = !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel);
-  const selectionDockContent =
-    selectedNode || selectedEdge ? (
-      inspectorContent
-    ) : (
-      <WorkflowSummary
-        nodes={nodes}
-        edges={edges}
-        diagnostics={diagnostics}
-        runHistory={runHistory}
-        onAddNode={(type) => addNode(type)}
-        onOpenPalette={() => workbench.open("palette")}
-        onRunFixture={() => workbench.open("run")}
-        onSelectRun={(runId) => {
-          workbench.open("run");
-          void handleSelectHistoricalRun(runId);
-        }}
-      />
-    );
+  // The dock only holds the inspector; the workflow summary it used to show
+  // when nothing was selected now lives in the header (structure chip,
+  // Run ▾ recent runs), so the canvas keeps its full width by default.
+  const showSelectionDock = hasSelection && !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel);
+  const selectionDockContent = inspectorContent;
+  const structure = graphStructure(nodes, edges);
 
   return (
     <ResourceNamesProvider value={resourceNames}>
@@ -2154,6 +2148,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         focusMode={focusMode}
         onToggleFocusMode={() => setFocusMode((value) => !value)}
         onOpenChat={() => workbench.open("chat")}
+        structure={structure}
+        recentRuns={runHistory.slice(0, 3)}
+        onSelectRun={(runId) => {
+          workbench.open("run");
+          void handleSelectHistoricalRun(runId);
+        }}
         layout={{
           orientation: graphOrientation,
           onOrientationChange: (value) => {
@@ -2479,7 +2479,6 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onClose={() => setTrayMenuAnchor(null)}
           actions={[
             { label: "Focus mode", icon: <Focus size={14} />, checked: focusMode, onClick: () => setFocusMode((value) => !value) },
-            { label: "Workflow summary", icon: <ListChecks size={14} />, onClick: () => setMobileSummaryExpanded(true) },
             {
               label: "Releases",
               icon: <Tag size={14} />,
@@ -2599,32 +2598,25 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           {selectionDockContent}
         </div>
       )}
-      {showSelectionDock && workbench.isCompact && (hasSelection || mobileSummaryExpanded) && (
+      {showSelectionDock && workbench.isCompact && (
         <>
           {/* Full-viewport backdrop -- without this the dock behind it (the
               graph canvas, the graph switcher's own drawer) stayed visible
               and tappable around the dock's edges, which read as a broken
               overlay rather than a deliberate one. Tapping it deselects
-              (matching onPaneClick's canvas-tap-to-deselect behavior) and
-              collapses the workflow summary back to its strip. */}
+              (matching onPaneClick's canvas-tap-to-deselect behavior). */}
           <div
             className="fixed inset-0 z-20 bg-black/45"
             onClick={() => {
               setPendingConnection(null);
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
-              setMobileSummaryExpanded(false);
             }}
           />
           <div
             className="glass-panel ghost-border fixed inset-x-4 z-20 flex flex-col overflow-y-auto rounded-2xl border"
             style={{ top: compactDockTop, maxHeight: `calc(100vh - ${compactDockTop}px - ${COMPACT_DOCK_BOTTOM_RESERVE_PX}px)` }}
           >
-            {/* Always rendered now -- it used to be gated on `hasSelection`,
-                which meant the workflow-summary case (the default state on
-                every compact page load) had no way to dismiss the sheet at
-                all short of the backdrop tap above, which the sheet itself
-                mostly covered on shorter phones. */}
             <div className="flex justify-end p-2 pb-0">
               <IconButton
                 size="touch"
@@ -2633,32 +2625,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 onClick={() => {
                   setSelectedNodeId(null);
                   setSelectedEdgeId(null);
-                  setMobileSummaryExpanded(false);
                 }}
               />
             </div>
             <div className="pb-[env(safe-area-inset-bottom)]">{selectionDockContent}</div>
           </div>
         </>
-      )}
-      {showSelectionDock && workbench.isCompact && !hasSelection && !mobileSummaryExpanded && (
-        // Collapsed default state: a small tappable strip instead of the
-        // full workflow-summary sheet, so nothing covers the canvas until
-        // the user asks for it. Doubles as a live-glance status readout.
-        <button
-          type="button"
-          className="glass-panel ghost-border fixed inset-x-4 z-20 flex items-center justify-between rounded-2xl border px-4 py-3 text-left"
-          style={{ top: compactDockTop }}
-          onClick={() => setMobileSummaryExpanded(true)}
-          aria-label="Show workflow summary"
-        >
-          <span className="text-sm font-medium">
-            {nodes.length} node{nodes.length === 1 ? "" : "s"} · {edges.length} edge{edges.length === 1 ? "" : "s"}
-          </span>
-          <span className={cn("text-xs", validationLabel === "Ready" ? "text-emerald-400" : "text-amber-400")}>
-            {validationLabel}
-          </span>
-        </button>
       )}
       <ManageLayersDialog open={manageLayersOpen} onOpenChange={setManageLayersOpen} layers={layers} onApply={applyLayerEdit} />
       <ExtractSubgraphDialog

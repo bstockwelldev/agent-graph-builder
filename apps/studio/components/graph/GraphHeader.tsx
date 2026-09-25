@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, Download, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
-import type { Diagnostic, GraphHealth, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
+import type { Diagnostic, GraphHealth, GraphOrientation, RunSummary } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphStructure } from "@/lib/graphAuthoring";
 import { HEALTH_BAND } from "@/lib/graphHealth";
 import { GRAPH_VIEWS, type GraphView } from "@/lib/graphLayers";
 import { validationSummary } from "@/lib/diagnostics";
@@ -85,6 +86,9 @@ export function GraphHeader({
   onManageLayers,
   usedBy = [],
   onOpenGraph,
+  structure,
+  recentRuns = [],
+  onSelectRun,
 }: {
   hudRef?: Ref<HTMLDivElement>;
   compact: boolean;
@@ -118,6 +122,11 @@ export function GraphHeader({
   /** Wave 7c: saved graphs whose subgraph nodes run this one. */
   usedBy?: { graph_id: string; name: string }[];
   onOpenGraph?: (graphId: string) => void;
+  /** Node/edge counts plus entry and terminal nodes, shown as a chip. */
+  structure?: GraphStructure;
+  /** Newest first; listed under "Recent runs" in the Run ▾ menu. */
+  recentRuns?: RunSummary[];
+  onSelectRun?: (runId: string) => void;
 }) {
   const [menu, setMenu] = useState<{ id: MenuId; x: number; y: number } | null>(null);
   const runMenuRef = useRef<HTMLButtonElement>(null);
@@ -146,6 +155,14 @@ export function GraphHeader({
     { label: "Event log", onClick: () => onOpenRunSection("observe-events") },
     { label: "Run history", onClick: () => onOpenRunSection("observe-history") },
     { label: "Diagnostics", onClick: () => onOpenRunSection("run-diagnostics"), separatorBefore: true },
+    ...recentRuns.map((run, index) => ({
+      label: formatRunLabel(run),
+      title: run.run_id,
+      icon: runStatusIcon(run.status),
+      separatorBefore: index === 0,
+      groupLabel: index === 0 ? "Recent runs" : undefined,
+      onClick: () => onSelectRun?.(run.run_id),
+    })),
   ];
 
   const layoutActions: NodeContextMenuAction[] = [
@@ -184,9 +201,20 @@ export function GraphHeader({
   ];
 
   const overflowActions: NodeContextMenuAction[] = [
+    ...(compact && structure
+      ? [
+          {
+            label: structureLabel(structure),
+            title: structureTooltip(structure),
+            icon: <Network size={14} />,
+            disabled: true,
+            onClick: () => undefined,
+          },
+        ]
+      : []),
     ...(compact
       ? [
-          { label: "Layout: auto-arrange", onClick: layout.onRelayout },
+          { label: "Layout: auto-arrange", separatorBefore: Boolean(structure), onClick: layout.onRelayout },
           { label: "Focus mode", checked: focusMode, onClick: onToggleFocusMode },
         ]
       : []),
@@ -272,6 +300,19 @@ export function GraphHeader({
 
       {/* Lifecycle */}
       <div style={groupStyle}>
+        {structure && !compact && (
+          <HoverTooltip content={structureTooltip(structure)}>
+            <span
+              tabIndex={0}
+              className="agb-focus-ring"
+              aria-label={`${structureLabel(structure)}. ${structureTooltip(structure)}`}
+              style={structureChipStyle}
+            >
+              <Network size={14} aria-hidden="true" />
+              <span>{structureLabel(structure)}</span>
+            </span>
+          </HoverTooltip>
+        )}
         <HoverTooltip
           content={validation === "ok" ? "No validation issues — click to re-validate" : `${summary.label} — click to review`}
         >
@@ -400,6 +441,35 @@ export function GraphHeader({
 
 const MENU_WIDTH = 240;
 
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+export function structureLabel(structure: GraphStructure): string {
+  return `${plural(structure.nodes, "node")} · ${plural(structure.edges, "edge")}`;
+}
+
+function listOrNone(names: string[]): string {
+  return names.length === 0 ? "none" : names.join(", ");
+}
+
+function structureTooltip(structure: GraphStructure): string {
+  return `Entry: ${listOrNone(structure.entrypoints)} · Terminal: ${listOrNone(structure.terminals)}`;
+}
+
+function formatRunLabel(run: RunSummary): string {
+  if (!run.started_at) return `${run.status} · ${run.run_id}`;
+  const when = new Date(run.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `${run.status} · ${when}`;
+}
+
+function runStatusIcon(status: RunSummary["status"]): ReactNode {
+  if (status === "succeeded") return <CheckCircle2 size={14} color={statusColor.succeeded} />;
+  if (status === "failed") return <XCircle size={14} color={color.error[500]} />;
+  if (status === "paused") return <PauseCircle size={14} color={color.warning[500]} />;
+  return <CircleDashed size={14} color={statusColor.running} />;
+}
+
 const headerStyle: CSSProperties = {
   position: "absolute",
   left: spacing[3],
@@ -439,6 +509,19 @@ const saveStateStyle: CSSProperties = {
   padding: `0 ${spacing[1]}px`,
   whiteSpace: "nowrap",
   color: text.muted,
+  ...typeScale.caption,
+};
+
+const structureChipStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  height: 32,
+  padding: `0 ${spacing[2]}px`,
+  borderRadius: 999,
+  color: text.muted,
+  whiteSpace: "nowrap",
+  cursor: "default",
   ...typeScale.caption,
 };
 

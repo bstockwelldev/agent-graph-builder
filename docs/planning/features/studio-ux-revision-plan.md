@@ -111,6 +111,8 @@ When nothing is selected, show a workflow summary:
 - Recent runs.
 - Quick actions: Add agent, Add router, Run test fixture.
 
+> **Update (2026-09-25):** the summary no longer takes the dock. Its content moved into the graph header: a structure chip (`N nodes · M edges`, with entrypoints and terminals in its tooltip; on compact it lives in the `⋯` menu), recent runs under the Run ▾ menu, and the validation, palette and fixture actions the header already had. The dock only opens for a selected node or edge.
+
 ## 7. Canvas Interaction Requirements
 
 The canvas should be an intelligent authoring surface:

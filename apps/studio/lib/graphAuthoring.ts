@@ -215,3 +215,18 @@ export function isCoachDismissed(graphId: string | null): boolean {
 export function dismissCoach(graphId: string): void {
   window.localStorage.setItem(coachDismissStorageKey(graphId), "1");
 }
+
+export type GraphStructure = { nodes: number; edges: number; entrypoints: string[]; terminals: string[] };
+
+/** Counts plus entrypoints (no incoming edge) and terminals (no outgoing edge), by label. */
+export function graphStructure(nodes: Node<GraphNodeData>[], edges: Edge[]): GraphStructure {
+  const targetIds = new Set(edges.map((edge) => edge.target));
+  const sourceIds = new Set(edges.map((edge) => edge.source));
+  const name = (node: Node<GraphNodeData>) => node.data.label || node.id;
+  return {
+    nodes: nodes.length,
+    edges: edges.length,
+    entrypoints: nodes.filter((node) => !targetIds.has(node.id)).map(name),
+    terminals: nodes.filter((node) => !sourceIds.has(node.id)).map(name),
+  };
+}
