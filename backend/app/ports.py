@@ -121,6 +121,20 @@ _DEFAULT_PORT_CATALOG: dict[NodeType, dict[str, list[GraphPort]]] = {
 }
 
 
+# Node types whose executor never consumes the incoming edge's payload as
+# typed data: `tool` reads its argument from the `inputVariable` state
+# variable (the edge only orders execution), and `output` returns whatever
+# arrived unchanged. Checking a kind contract on their inferred default
+# input produced warnings (e.g. "message -> structured-json") that no node
+# setting could resolve. Author-declared `input_ports` are still checked.
+_KIND_AGNOSTIC_DEFAULT_INPUTS = frozenset({NodeType.TOOL, NodeType.OUTPUT})
+
+
+def accepts_any_kind(node: GraphNode) -> bool:
+    """True when `node` uses its default input port and that port accepts any kind."""
+    return not node.input_ports and node.type in _KIND_AGNOSTIC_DEFAULT_INPUTS
+
+
 def input_ports_for(node: GraphNode) -> list[GraphPort]:
     """The node's full declared input-port list: explicit `input_ports` if
     set, else the catalog default. Distinct from `default_input_port`, which

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api-client", () => ({
   client: {
+    system: { health: vi.fn(async () => ({ ok: true, storage_backend: "sqlite" })) },
     providers: {
       credentials: vi.fn(async () => ({ label: "API key", env_var: "X", configured: false })),
       models: vi.fn(async () => ({ models: [], message: "" })),
@@ -37,6 +38,11 @@ function renderPanel(overrides: Partial<Parameters<typeof RunPanel>[0]> = {}) {
 
 // studio-graph-workbench-redesign-plan.md, Wave 2.5 (STO-606): "one field per input variable".
 describe("RunPanel (Run console v2)", () => {
+  it("marks stub runs Offline when the server has no shared store", async () => {
+    renderPanel();
+    expect(await screen.findByText("Offline")).toBeTruthy();
+  });
+
   it("renders one labeled field per input variable", () => {
     renderPanel();
     expect(screen.getByLabelText("topic")).toBeTruthy();

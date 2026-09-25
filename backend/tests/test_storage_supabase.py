@@ -1,7 +1,7 @@
 """Supabase Storage backend selection and mocked persistence
 (studio-consolidation Phase 5 — see
 docs/planning/features/studio-consolidation-plan.md). Mirrors
-test_storage_vercel_blob.py's mocked-HTTP convention.
+a mocked-HTTP convention.
 """
 
 from __future__ import annotations
@@ -99,17 +99,7 @@ def test_use_supabase_requires_both_env_vars(monkeypatch) -> None:
     assert storage.use_supabase() is True
 
 
-def test_storage_backend_prefers_blob_over_supabase(monkeypatch) -> None:
-    monkeypatch.setenv("SUPABASE_URL", _TEST_URL)
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", _TEST_KEY)
-    assert storage.storage_backend() == "supabase"
-
-    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_teststore_token")
-    assert storage.storage_backend() == "vercel_blob"
-
-
 def test_storage_backend_supabase_beats_object_store_and_turso(monkeypatch) -> None:
-    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
     monkeypatch.setenv("TURSO_DATABASE_URL", "libsql://example.turso.io")
     monkeypatch.setenv("TURSO_AUTH_TOKEN", "token")
     monkeypatch.setenv("OBJECT_STORE_BUCKET", "agent-graphs")
@@ -306,7 +296,6 @@ def test_key_kind_reports_shape_and_length_never_the_value(monkeypatch) -> None:
 
 def test_health_reports_supabase_key_kind(monkeypatch) -> None:
     _enable_supabase(monkeypatch)
-    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
     payload = storage.storage_health()
     assert payload["storage_backend"] == "supabase"
     assert payload["supabase_key"] == "unrecognized(19 chars)"

@@ -34,6 +34,7 @@ import {
   providerCredentialsSchema,
   providerModelCatalogSchema,
   providerReadySchema,
+  serverHealthSchema,
   publishReleaseResponseSchema,
   publishResourceVersionResponseSchema,
   releaseDiffSchema,
@@ -378,6 +379,10 @@ export function buildNamespaces(transport: Transport) {
           undefined,
           nodeExecutionSchema.array(),
         ),
+    },
+
+    system: {
+      health: () => transport.request("/api/health", undefined, serverHealthSchema),
     },
 
     providers: {

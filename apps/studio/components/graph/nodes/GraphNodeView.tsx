@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { CompileIssue } from "@/lib/diagnostics";
-import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphNode, NodeType } from "@bstockwelldev/agent-graph-sdk";
 import {
   color,
   fontFamily,
@@ -58,6 +58,8 @@ export interface GraphNodeData extends Record<string, unknown> {
   userLabel?: string;
   /** The node's `extensions` bag, round-tripped as-is by buildGraphDefinition. */
   extensions?: Record<string, unknown>;
+  /** Author-declared ports (no editor yet), round-tripped as-is so a save never drops them. */
+  ports?: Pick<GraphNode, "input_ports" | "output_ports">;
   config: Record<string, unknown>;
   // "paused" added for the `human_gate` node type (studio-consolidation
   // Phase 2).

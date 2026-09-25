@@ -104,3 +104,27 @@ def test_get_run_summary_falls_back_to_storage(demo_graph, tmp_path, monkeypatch
     loaded = runtime.get_run_summary("run_test123")
     assert loaded is not None
     assert loaded.result == "done"
+
+
+@pytest.mark.asyncio
+async def test_run_still_finishes_when_snapshot_save_fails(demo_graph, monkeypatch, caplog):
+    """A storage outage (e.g. Supabase down) must not fail a run that already
+    finished: it keeps its in-memory summary, logs the error, and its event
+    stream closes."""
+
+    def _boom(summary, traces):
+        raise RuntimeError("Supabase Storage unavailable")
+
+    monkeypatch.setattr(storage, "save_run_snapshot", _boom)
+    compile_result = runtime.compile_workflow(demo_graph)
+    run_id = await run_graph_and_wait(
+        compile_result.compiled_workflow_id,
+        "How does a database index work?",
+    )
+
+    summary = runtime.get_run_summary(run_id)
+    assert summary is not None
+    assert summary.status == "succeeded"
+    assert summary.completed_at is not None
+    assert "failed to persist run snapshot" in caplog.text
+    assert runtime.RUN_BUSES[run_id]._closed

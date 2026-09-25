@@ -247,7 +247,6 @@ async def test_demo_graph_run_failure_captures_telemetry_error(
 def test_health_reports_telemetry_misconfiguration_without_503(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
     monkeypatch.delenv("OBJECT_STORE_BUCKET", raising=False)
     monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
     monkeypatch.delenv("VERCEL", raising=False)

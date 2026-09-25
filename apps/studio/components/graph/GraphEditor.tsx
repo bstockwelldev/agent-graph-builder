@@ -55,10 +55,13 @@ import {
   cloneCanvasSnapshot,
   coachStep,
   dismissCoach,
+  edgeContract,
   graphStructure,
   isCoachDismissed,
   isCoachVisible,
   isEditableKeyboardTarget,
+  nodePorts,
+  type EdgeContract,
 } from "@/lib/graphAuthoring";
 import {
   boundTitleFor,
@@ -262,6 +265,7 @@ function syncIdCounter(graph: GraphDefinition) {
 
 function toFlowNode(n: GraphNode): Node<GraphNodeData> {
   const userLabel = typeof n.extensions?.label === "string" ? n.extensions.label : undefined;
+  const ports = nodePorts(n);
   return {
     id: n.id,
     type: n.type,
@@ -271,6 +275,7 @@ function toFlowNode(n: GraphNode): Node<GraphNodeData> {
       label: nodeLabel(n.type, n.config, userLabel),
       userLabel,
       extensions: n.extensions ?? undefined,
+      ...(ports ? { ports } : {}),
       config: n.config,
       status: "idle",
       compileIssue: null,
@@ -288,7 +293,7 @@ function toFlowEdge(e: GraphEdge): Edge {
     source: e.source,
     target: e.target,
     style: { stroke, strokeWidth },
-    data: { kind: e.kind, condition: e.condition ?? null },
+    data: { kind: e.kind, condition: e.condition ?? null, contract: edgeContract(e) },
   };
 }
 
@@ -662,6 +667,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           position: { x: n.position.x, y: n.position.y },
           config: n.data.config,
           ...(n.data.extensions ? { extensions: n.data.extensions } : {}),
+          ...n.data.ports,
         })),
         edges: edges.map((e) => ({
           id: e.id,
@@ -669,6 +675,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           target: e.target,
           kind: (e.data?.kind as EdgeKind) ?? "sequence",
           condition: (e.data?.condition as string | null) ?? null,
+          ...(e.data?.contract as EdgeContract | undefined),
         })),
         // Wave 7b: members deleted since grouping are dropped on the way out.
         ...(() => {

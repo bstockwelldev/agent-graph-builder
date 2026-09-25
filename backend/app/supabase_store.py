@@ -1,7 +1,7 @@
 """Supabase Storage JSON persistence for graphs and run snapshots
 (studio-consolidation Phase 5 — see
 docs/planning/features/studio-consolidation-plan.md). A peer of
-`vercel_blob.py`/`object_store.py`, not a new abstraction: same
+`object_store.py`, not a new abstraction: same
 `put_json`/`get_json`/`delete_json`/`list_keys` contract, so it slots into
 `storage.py`'s existing `_json_object_backend()` dispatch with one added
 branch, and the same `save_graph`/`get_graph`/`list_graphs`/
@@ -11,7 +11,7 @@ already calls generically (run listing is generic in `storage.py`).
 Uses Supabase's native Storage REST API (one JSON object per key in a
 bucket), not S3 compatibility mode or a Postgres table — the smallest
 faithful "durable JSON store keyed by path" port, matching the shape AGB
-already has proven twice over (Vercel Blob, S3-compatible object store).
+already has proven with the S3-compatible object store.
 Authenticated with the service-role key, which — same as MUI's own
 `lib/supabase/server.ts` comment — stays server-only; the anon key is for
 `apps/studio`'s browser-side auth client, not this module.
@@ -210,7 +210,7 @@ def list_graphs() -> list[GraphDefinition]:
 
 def _run_blob(summary: RunSummary, traces: list[NodeTrace]) -> dict[str, Any]:
     # by_alias=True keeps route_decisions camelCase here too, matching the
-    # SQLite/Turso/Blob paths (studio-consolidation Phase 1 hygiene fix).
+    # SQLite/Turso paths (studio-consolidation Phase 1 hygiene fix).
     return {
         "summary": summary.model_dump(mode="json", by_alias=True),
         "traces": [trace.model_dump(mode="json") for trace in traces],

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { client } from "@/lib/api-client";
 import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
 import { showModelCatalog } from "@/lib/modelCatalog";
+import { OFFLINE_EXPLANATION } from "@/lib/serverHealth";
+import { color } from "@/lib/graph-theme";
 import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
 import { Combobox, type ComboboxOption } from "./ui/Combobox";
 import { Field } from "./ui/Field";
@@ -139,13 +141,39 @@ export function ProviderDot({ provider, size = 8 }: { provider: string; size?: n
 
 const PROVIDER_ORDER: ChatProvider[] = ["stub", "ollama", "groq", "google", "azure", "openai_compat"];
 const PROVIDER_LABEL: Record<string, string> = {
-  stub: "Stub (offline)",
+  stub: "Stub",
   ollama: "Ollama (local)",
   groq: "Groq",
   google: "Google Gemini",
   azure: "Azure OpenAI",
   openai_compat: "OpenAI-compatible",
 };
+
+/** Shown beside a stub run when no shared store is configured (see `isOfflineRun`). */
+export function OfflineBadge() {
+  return (
+    <span
+      title={OFFLINE_EXPLANATION}
+      aria-label={OFFLINE_EXPLANATION}
+      role="note"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        height: 18,
+        padding: "0 6px",
+        borderRadius: 999,
+        border: `1px solid ${color.warning[500]}`,
+        color: color.warning[500],
+        fontSize: 11,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
+    >
+      Offline
+    </span>
+  );
+}
 
 export function providerLabel(provider: string): string {
   return PROVIDER_LABEL[provider] ?? provider;

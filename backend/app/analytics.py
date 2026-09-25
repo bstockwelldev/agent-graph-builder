@@ -226,7 +226,7 @@ def _scan_daily_usage(backend=None) -> dict[str, dict[str, dict[str, Any]]]:
 def rebuild_daily_usage(backend=None) -> int:
     """Rebuilds every daily usage file from the run blobs (one read per run)
     -- for repair, never per request. Returns the number of days written.
-    `backend` overrides the configured one (copy_blob_to_supabase)."""
+    `backend` overrides the configured one."""
     usage = _scan_daily_usage(backend)
     storage.write_daily_usage(usage, backend=backend)
     return len(usage)

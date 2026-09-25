@@ -34,7 +34,6 @@ def test_connect_creates_parent_directory(monkeypatch, tmp_path) -> None:
 def test_vercel_without_durable_storage_fails_closed(monkeypatch) -> None:
     """Vercel without durable storage must not serve API routes with ephemeral SQLite."""
     monkeypatch.delenv("GRAPH_DB_PATH", raising=False)
-    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
     monkeypatch.delenv("OBJECT_STORE_BUCKET", raising=False)
     monkeypatch.delenv("OBJECT_STORE_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("OBJECT_STORE_SECRET_ACCESS_KEY", raising=False)

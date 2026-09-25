@@ -42,6 +42,7 @@ const UNTYPED_ON_BACKEND = new Set([
   "providerReadySchema",
   "releaseIndexEntrySchema",
   "resourceVersionIndexEntrySchema",
+  "serverHealthSchema",
   "toolDefinitionSchema",
 ]);
 

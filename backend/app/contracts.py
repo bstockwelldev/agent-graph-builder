@@ -26,6 +26,7 @@ from .models import (
     PortKind,
 )
 from .ports import (
+    accepts_any_kind,
     default_input_port,
     default_output_port,
     find_input_port,
@@ -85,16 +86,20 @@ def _validate_edges(graph: GraphDefinition) -> list[Diagnostic]:
         # design doc, "Current state and migration constraints": "A graph
         # with no explicit ports is normalized using node-type defaults and
         # only warned when an inferred contract is too broad to verify."
-        # The default port catalog itself has real kind mismatches baked in
-        # (e.g. `tool`'s structured-json input fed by a router's message
-        # output) that every existing graph, including the demo graph,
-        # already relies on — enforcing those as blocking would make
+        # The default port catalog itself has kind mismatches baked in
+        # (e.g. `code_exec`'s structured-json input fed by an LLM's message
+        # output) that existing graphs already rely on — enforcing those
+        # as blocking would make
         # today's graphs permanently uncompilable. Kind incompatibility is
         # only ever blocking when BOTH sides are author-declared ports
         # (opted into the typed contract system); an inferred default on
         # either side downgrades it to a warning instead.
         both_explicit = bool(source_node.output_ports) and bool(target_node.input_ports)
-        kind_error = _kind_incompatibility(source_port, target_port, edge.transform)
+        kind_error = (
+            None
+            if accepts_any_kind(target_node)
+            else _kind_incompatibility(source_port, target_port, edge.transform)
+        )
         if kind_error:
             diagnostics.append(
                 Diagnostic(
