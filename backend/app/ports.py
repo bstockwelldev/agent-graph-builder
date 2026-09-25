@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from .models import GraphDefinition, GraphNode, GraphPort, NodeType, PortContract, PortKind
+from .transforms import TransformError, apply_transform
 
 _ROUTER_LIKE_TYPES = frozenset({NodeType.ROUTER, NodeType.BRANCH})
 
@@ -217,7 +218,14 @@ def resolve_node_input(
             source_port = default_output_port(source_node) if source_node else None
             port_id = source_port.id if source_port else "output"
         if port_id in source_outputs:
-            return source_outputs[port_id]
+            value = source_outputs[port_id]
+            if edge.transform is None:
+                return value
+            try:
+                return apply_transform(edge.transform, value)
+            except TransformError as exc:
+                where = f"edge {edge.id} transform {edge.transform.type}"
+                raise TransformError(f"{where}: {exc}") from exc
     return ""
 
 

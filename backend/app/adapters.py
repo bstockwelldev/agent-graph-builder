@@ -51,7 +51,7 @@ _LANGGRAPH_CAPABILITY_MATRIX = CapabilityMatrix(
         CapabilityEntry(
             feature="deterministic_transforms",
             supported=True,
-            notes="Applied by generated adapter wrappers.",
+            notes="Applied per edge in ports.resolve_node_input; also the transform node.",
         ),
         CapabilityEntry(
             feature="current_12_executors", supported=True, notes="Uses existing executor registry."

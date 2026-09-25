@@ -905,9 +905,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           const kind = (patch.kind ?? (edge.data?.kind as EdgeKind)) ?? "sequence";
           const condition = patch.condition !== undefined ? patch.condition : (edge.data?.condition as string | null);
           const { stroke, strokeWidth } = edgeStrokeForKind(kind);
+          let contract = edge.data?.contract as EdgeContract | undefined;
+          if (patch.transform !== undefined) {
+            const next: EdgeContract = { ...contract };
+            if (patch.transform) next.transform = patch.transform;
+            else delete next.transform;
+            contract = Object.keys(next).length > 0 ? next : undefined;
+          }
           return {
             ...edge,
-            data: { ...edge.data, kind, condition },
+            data: { ...edge.data, kind, condition, contract },
             style: { stroke, strokeWidth },
           };
         }),
@@ -2096,6 +2103,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         target: selectedEdge.target,
         kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
         condition: (selectedEdge.data?.condition as string | null) ?? null,
+        transform: (selectedEdge.data?.contract as EdgeContract | undefined)?.transform ?? null,
       }}
       issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
       onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}

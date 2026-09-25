@@ -14,6 +14,7 @@ import {
   Play,
   Settings2,
   Shield,
+  Shuffle,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -22,7 +23,6 @@ import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import type {
   BindableResourceKind,
   ChatProvider,
-  EdgeKind,
   GraphDefinition,
   GraphEdge,
   GraphLayer,
@@ -65,18 +65,13 @@ import { Toggle } from "./ui/Toggle";
 import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { RawConfigEditor } from "./ui/RawConfigEditor";
+import { TransformFields } from "./TransformFields";
 import { NodeHistoryTab } from "./NodeHistoryTab";
 import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
 import { NODE_TYPE_ICONS } from "./nodeTypeIcons";
 import { SubgraphConfig } from "./SubgraphConfig";
 import { childRunHref } from "@/lib/subgraphs";
-
-export function patchFlowEdgeData(edge: GraphEdge, patch: Partial<GraphEdge>): GraphEdge {
-  const kind = (patch.kind ?? edge.kind) as EdgeKind;
-  const condition = patch.condition !== undefined ? patch.condition : edge.condition ?? null;
-  return { ...edge, kind, condition };
-}
 
 /** Config fields each node type's Configure form renders -- the fields
  * inline diagnostics can attach to (Wave 2.5). Anything else stays in the
@@ -96,6 +91,9 @@ const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   human_gate: ["content", "genuiCheckpointSurfaceJson"],
   subgraph: ["graphId", "version", "inputMapping"],
 };
+
+/** Contract diagnostics a transform on this edge resolves (backend contracts.py). */
+const TRANSFORM_ISSUE_CODES = new Set(["CONTRACT_KIND_INFERRED_MISMATCH", "EDGE_CONTRACT_KIND_INCOMPATIBLE", "EDGE_TRANSFORM_INVALID"]);
 
 const EDGE_KIND_OPTIONS = (["sequence", "conditional", "default"] as const).map((value) => ({
   value,
@@ -1036,7 +1034,11 @@ export function EdgeInspector({
   reducedMotion?: boolean;
 }) {
   const [tab, setTab] = useState("configure");
+  const [addingTransform, setAddingTransform] = useState(false);
   const kindTaxonomy = EDGE_KIND_TAXONOMY[edge.kind];
+  const transformIssues = issues.filter((issue) => TRANSFORM_ISSUE_CODES.has(issue.code));
+  const routingIssues = issues.filter((issue) => !TRANSFORM_ISSUE_CODES.has(issue.code));
+  const showTransform = Boolean(edge.transform) || transformIssues.length > 0 || addingTransform;
   return (
     <PanelFrame
       aria-label="Edge details"
@@ -1069,24 +1071,41 @@ export function EdgeInspector({
       }
     >
       {tab === "configure" ? (
-        <Group title="Routing">
-          <Field label="When to follow" hint={kindTaxonomy.details}>
-            <SegmentedControl aria-label="Edge kind" value={edge.kind} options={EDGE_KIND_OPTIONS} onChange={(kind) => onChange({ kind })} />
-          </Field>
-          {edge.kind === "conditional" && (
-            <Field label="Match text" hint="Followed when the previous LLM output contains this text (not the prompt template).">
-              {(id) => <TextInput id={id} value={edge.condition ?? ""} placeholder="e.g. technical" onChange={(e) => onChange({ condition: e.target.value })} />}
+        <>
+          <Group title="Routing">
+            <Field label="When to follow" hint={kindTaxonomy.details}>
+              <SegmentedControl aria-label="Edge kind" value={edge.kind} options={EDGE_KIND_OPTIONS} onChange={(kind) => onChange({ kind })} />
             </Field>
+            {edge.kind === "conditional" && (
+              <Field label="Match text" hint="Followed when the previous LLM output contains this text (not the prompt template).">
+                {(id) => <TextInput id={id} value={edge.condition ?? ""} placeholder="e.g. technical" onChange={(e) => onChange({ condition: e.target.value })} />}
+              </Field>
+            )}
+            <FieldIssues issues={routingIssues} />
+          </Group>
+          {showTransform ? (
+            <Group title="Transform" icon={<Shuffle size={13} />}>
+              <TransformFields
+                allowNone
+                value={edge.transform ?? null}
+                onChange={(transform) => {
+                  if (!transform) setAddingTransform(false);
+                  onChange({ transform });
+                }}
+              />
+              <FieldIssues issues={transformIssues} />
+            </Group>
+          ) : (
+            <Button variant="secondary" onClick={() => setAddingTransform(true)}>
+              <Shuffle size={14} aria-hidden="true" /> Add transform
+            </Button>
           )}
-          <FieldIssues issues={issues} />
-        </Group>
+        </>
       ) : (
-        // Scoped to kind/condition only -- patchFlowEdgeData only applies
-        // those two from a patch (studio-config-editor-and-console-plan.md §6).
         <Group title="Raw" icon={<Braces size={13} />}>
           <RawConfigEditor
             label="Raw edge config"
-            value={{ kind: edge.kind, condition: edge.condition ?? null }}
+            value={{ kind: edge.kind, condition: edge.condition ?? null, transform: edge.transform ?? null }}
             onApply={(next) => onChange(next)}
             parse={parseEdgeRawConfig}
             format={formatEdgeRawConfig}

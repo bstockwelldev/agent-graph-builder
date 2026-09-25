@@ -53,14 +53,14 @@ describe("parseEdgeRawConfig / formatEdgeRawConfig", () => {
   it("accepts a valid edge kind/condition pair", () => {
     expect(parseEdgeRawConfig('{"kind": "conditional", "condition": "yes"}')).toEqual({
       ok: true,
-      value: { kind: "conditional", condition: "yes" },
+      value: { kind: "conditional", condition: "yes", transform: null },
     });
   });
 
   it("defaults a missing condition to null", () => {
     expect(parseEdgeRawConfig('{"kind": "sequence"}')).toEqual({
       ok: true,
-      value: { kind: "sequence", condition: null },
+      value: { kind: "sequence", condition: null, transform: null },
     });
   });
 
@@ -78,7 +78,22 @@ describe("parseEdgeRawConfig / formatEdgeRawConfig", () => {
 
   it("round-trips through formatEdgeRawConfig", () => {
     const formatted = formatEdgeRawConfig({ kind: "default", condition: null });
-    expect(parseEdgeRawConfig(formatted)).toEqual({ ok: true, value: { kind: "default", condition: null } });
+    expect(parseEdgeRawConfig(formatted)).toEqual({ ok: true, value: { kind: "default", condition: null, transform: null } });
+  });
+
+  it("includes the transform, dropping unset fields", () => {
+    const formatted = formatEdgeRawConfig({ kind: "sequence", transform: { type: "select", pointer: "/a", field: null, template: null, target_type: null } });
+    expect(JSON.parse(formatted)).toEqual({ kind: "sequence", condition: null, transform: { type: "select", pointer: "/a" } });
+    expect(parseEdgeRawConfig(formatted)).toEqual({
+      ok: true,
+      value: { kind: "sequence", condition: null, transform: { type: "select", pointer: "/a" } },
+    });
+  });
+
+  it("rejects an invalid transform with its path", () => {
+    const result = parseEdgeRawConfig('{"kind": "sequence", "transform": {"type": "reshape"}}');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/^transform\.type:/);
   });
 });
 
@@ -110,6 +125,6 @@ describe("JSON / YAML views", () => {
 
   it("feeds YAML through the existing validators", () => {
     const converted = toCanonicalJson("kind: conditional\ncondition: technical", "yaml");
-    expect(converted.ok && parseEdgeRawConfig(converted.json)).toEqual({ ok: true, value: { kind: "conditional", condition: "technical" } });
+    expect(converted.ok && parseEdgeRawConfig(converted.json)).toEqual({ ok: true, value: { kind: "conditional", condition: "technical", transform: null } });
   });
 });

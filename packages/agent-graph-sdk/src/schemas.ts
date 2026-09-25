@@ -69,14 +69,14 @@ export const graphPortSchema = z.object({
   contract: portContractSchema,
 });
 
-// Schema-only in Slice A — per-type fields (pointer/field/template/
-// target_type) are added as Slice B needs them for transform application.
+// Deterministic transform (backend app/transforms.py). Nullish, not
+// optional: the API serializes unset fields as null.
 export const edgeTransformSchema = z.object({
   type: z.enum(["select", "wrap", "format_message", "coerce"]),
-  pointer: z.string().optional(),
-  field: z.string().optional(),
-  template: z.string().optional(),
-  target_type: z.enum(["string", "number", "boolean"]).optional(),
+  pointer: z.string().nullish(),
+  field: z.string().nullish(),
+  template: z.string().nullish(),
+  target_type: z.enum(["string", "number", "boolean"]).nullish(),
 });
 
 export const graphNodeSchema = z.object({

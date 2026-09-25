@@ -189,7 +189,7 @@ def _kind_incompatibility(
             return None
         return (
             f"target port {target_port.id!r} expects 'message' from a {source_kind.value!r} "
-            "source; add a format_message transform"
+            "source; add a format_message transform (select the edge → Transform → Format message)"
         )
 
     if source_kind in _STRUCTURED_KINDS or target_kind in _STRUCTURED_KINDS:
@@ -199,7 +199,7 @@ def _kind_incompatibility(
             return None
         return (
             f"{source_kind.value!r} -> {target_kind.value!r} requires an explicit transform "
-            "or a compatible JSON Schema on both ports"
+            "or a compatible JSON Schema on both ports (select the edge → Transform)"
         )
 
     return f"port kind {source_kind.value!r} is not compatible with {target_kind.value!r}"
