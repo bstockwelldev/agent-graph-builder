@@ -13,11 +13,14 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Callable
 from typing import Any, Protocol
+
+from .models import EdgeTransform, GraphDefinition
 
 
 class TransformSpec(Protocol):
-    type: str
+    type: str | None
     pointer: str | None
     field: str | None
     template: str | None
@@ -28,7 +31,54 @@ class TransformError(ValueError):
     """A transform couldn't be applied to the value it received."""
 
 
+# The one field each transform type needs (shared by contract validation,
+# the Transforms library model and the transform node config).
+REQUIRED_FIELD = {"select": "pointer", "wrap": "field", "format_message": "template", "coerce": "target_type"}
+
+
+def transform_field_error(spec: TransformSpec) -> str | None:
+    """Why `spec` is incomplete, or None. References are checked separately."""
+    if spec.type is None:
+        return None
+    required = REQUIRED_FIELD.get(spec.type)
+    if required and not getattr(spec, required):
+        return f"{spec.type} transform requires {required!r}"
+    return None
+
+
+TRANSFORM_FIELDS = ("type", "pointer", "field", "template", "target_type")
+
+
+def materialize_transforms(
+    graph: GraphDefinition, lookup: Callable[[str], dict[str, Any] | None]
+) -> tuple[GraphDefinition, list[tuple[str, str]]]:
+    """Copies every Transforms-library reference (`transform_id`) inline so
+    validation and execution see a concrete transform. Returns the graph
+    and the `(edge_id, transform_id)` references that didn't resolve (those
+    edges keep only their reference and fail if executed)."""
+    missing: list[tuple[str, str]] = []
+    edges = []
+    for edge in graph.edges:
+        ref = edge.transform.transform_id if edge.transform else None
+        if not ref:
+            edges.append(edge)
+            continue
+        definition = lookup(ref)
+        if definition is None:
+            missing.append((edge.id, ref))
+            edges.append(edge)
+            continue
+        inline = {key: definition.get(key) for key in TRANSFORM_FIELDS}
+        edges.append(edge.model_copy(update={"transform": EdgeTransform(**inline, transform_id=ref)}))
+    if not any(edge.transform and edge.transform.transform_id for edge in graph.edges):
+        return graph, missing
+    return graph.model_copy(update={"edges": edges}), missing
+
+
 def apply_transform(spec: TransformSpec, value: Any) -> Any:
+    if spec.type is None:
+        ref = getattr(spec, "transform_id", None)
+        raise TransformError(f"library transform {ref!r} not found")
     if spec.type == "select":
         return _select(value, spec.pointer or "")
     if spec.type == "wrap":

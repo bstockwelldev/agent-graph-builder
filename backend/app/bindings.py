@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .builtin_tools import BUILTIN_TOOL_IDS
-from .models import GraphCatalogEntry, GraphNode
+from .models import GraphCatalogEntry, GraphDefinition, GraphEdge, GraphNode
 
 # node type -> ((config field, registry kind), ...)
 BINDING_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -52,6 +52,15 @@ def node_bindings(node: GraphNode) -> list[Binding]:
             continue
         bindings.append(Binding(field=field, kind=kind, resource_id=value))
     return bindings
+
+
+def edge_bindings(graph: GraphDefinition) -> list[tuple[GraphEdge, Binding]]:
+    """Edges whose transform references a Transforms library entry."""
+    return [
+        (edge, Binding(field="transform", kind="transforms", resource_id=edge.transform.transform_id))
+        for edge in graph.edges
+        if edge.transform is not None and edge.transform.transform_id
+    ]
 
 
 def resource_usages(

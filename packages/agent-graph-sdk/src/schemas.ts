@@ -69,14 +69,20 @@ export const graphPortSchema = z.object({
   contract: portContractSchema,
 });
 
-// Deterministic transform (backend app/transforms.py). Nullish, not
-// optional: the API serializes unset fields as null.
+export const transformTypeSchema = z.enum(["select", "wrap", "format_message", "coerce"]);
+export const transformTargetTypeSchema = z.enum(["string", "number", "boolean"]);
+
+// Deterministic transform (backend app/transforms.py): inline (`type` plus
+// its field) or a Transforms library reference (`transform_id`). Nullish,
+// not optional: the API serializes unset fields as null.
+// The backend rejects a transform with neither (EdgeTransform validator).
 export const edgeTransformSchema = z.object({
-  type: z.enum(["select", "wrap", "format_message", "coerce"]),
+  type: transformTypeSchema.nullish(),
   pointer: z.string().nullish(),
   field: z.string().nullish(),
   template: z.string().nullish(),
-  target_type: z.enum(["string", "number", "boolean"]).nullish(),
+  target_type: transformTargetTypeSchema.nullish(),
+  transform_id: z.string().nullish(),
 });
 
 export const graphNodeSchema = z.object({
@@ -490,6 +496,18 @@ export const agentProfileSchema = z.object({
   default_flow_id: z.string().nullish(),
   system_instructions: z.string().nullish(),
   optional_elements: z.array(z.string()),
+});
+
+/** A Transforms library entry (`/api/transforms`). */
+export const transformDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  type: transformTypeSchema,
+  pointer: z.string().nullish(),
+  field: z.string().nullish(),
+  template: z.string().nullish(),
+  target_type: transformTargetTypeSchema.nullish(),
 });
 
 export const llmProfileSchema = z.object({

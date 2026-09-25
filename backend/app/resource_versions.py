@@ -38,7 +38,7 @@ from .fingerprint import fingerprint_payload
 from .models import PublishResourceVersionResponse, ResourceVersion
 
 VERSIONABLE_RESOURCE_KINDS = frozenset(
-    {"prompts", "tools", "mcp_servers", "agents", "llm_profiles"}
+    {"prompts", "tools", "mcp_servers", "agents", "llm_profiles", "transforms"}
 )
 
 

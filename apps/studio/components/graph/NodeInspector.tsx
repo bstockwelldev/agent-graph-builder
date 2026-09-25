@@ -1085,15 +1085,22 @@ export function EdgeInspector({
           </Group>
           {showTransform ? (
             <Group title="Transform" icon={<Shuffle size={13} />}>
-              <TransformFields
-                allowNone
-                value={edge.transform ?? null}
-                onChange={(transform) => {
-                  if (!transform) setAddingTransform(false);
-                  onChange({ transform });
-                }}
-              />
-              <FieldIssues issues={transformIssues} />
+              <ResourceBindingField
+                kind="transforms"
+                label="Transform"
+                value={edge.transform?.transform_id ?? undefined}
+                onChange={(transformId) => onChange({ transform: transformId ? { transform_id: transformId } : null })}
+                issues={transformIssues}
+              >
+                <TransformFields
+                  allowNone
+                  value={edge.transform?.transform_id ? null : (edge.transform ?? null)}
+                  onChange={(transform) => {
+                    if (!transform) setAddingTransform(false);
+                    onChange({ transform });
+                  }}
+                />
+              </ResourceBindingField>
             </Group>
           ) : (
             <Button variant="secondary" onClick={() => setAddingTransform(true)}>

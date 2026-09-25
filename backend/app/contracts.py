@@ -25,6 +25,7 @@ from .models import (
     NodeType,
     PortKind,
 )
+from .transforms import transform_field_error
 from .ports import (
     accepts_any_kind,
     default_input_port,
@@ -206,15 +207,7 @@ def _kind_incompatibility(
 
 
 def _validate_transform(transform: EdgeTransform) -> str | None:
-    if transform.type == "select" and not transform.pointer:
-        return "select transform requires 'pointer'"
-    if transform.type == "wrap" and not transform.field:
-        return "wrap transform requires 'field'"
-    if transform.type == "coerce" and not transform.target_type:
-        return "coerce transform requires 'target_type'"
-    if transform.type == "format_message" and not transform.template:
-        return "format_message transform requires 'template'"
-    return None
+    return transform_field_error(transform)
 
 
 def _validate_schema(

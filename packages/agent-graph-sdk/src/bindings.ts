@@ -8,7 +8,7 @@
  * A binding is a live reference: draft runs read the resource's current
  * content, and a published release freezes it in `resource_snapshots`.
  */
-export type BindableResourceKind = "prompts" | "llm_profiles" | "tools";
+export type BindableResourceKind = "prompts" | "llm_profiles" | "tools" | "transforms";
 
 export const NODE_BINDING_FIELDS: Readonly<Record<string, readonly (readonly [string, BindableResourceKind])[]>> = {
   prompt: [["promptId", "prompts"]],
@@ -28,6 +28,7 @@ export const RESOURCE_KIND_PATH: Readonly<Record<BindableResourceKind, string>> 
   prompts: "prompts",
   llm_profiles: "llm-profiles",
   tools: "tools",
+  transforms: "transforms",
 };
 
 /** Tool ids that are code, not stored resources (backend/app/bindings.py `CODE_TOOL_IDS`). */

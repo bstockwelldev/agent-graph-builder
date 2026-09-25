@@ -35,6 +35,7 @@ import type {
   knowledgeSummarySchema,
   knowledgeUploadResponseSchema,
   llmProfileSchema,
+  transformDefinitionSchema,
   resourceUsageSchema,
   mcpServerConfigSchema,
   nodeExecutionSchema,
@@ -188,6 +189,7 @@ export type ToolDefinition = z.infer<typeof toolDefinitionSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type LlmProfile = z.infer<typeof llmProfileSchema>;
+export type TransformDefinition = z.infer<typeof transformDefinitionSchema>;
 export type ResourceUsage = z.infer<typeof resourceUsageSchema>;
 
 // P1 rollout plan, parallel track ("Versioned reusable entity registry").

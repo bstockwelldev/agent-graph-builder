@@ -3,7 +3,7 @@ import { Field } from "./ui/Field";
 import { SegmentedControl } from "./ui/SegmentedControl";
 import { TextArea, TextInput } from "./ui/fields";
 
-export type TransformType = EdgeTransform["type"];
+export type TransformType = NonNullable<EdgeTransform["type"]>;
 type TargetType = NonNullable<EdgeTransform["target_type"]>;
 
 const TYPE_OPTIONS: { value: TransformType | "none"; label: string; title: string }[] = [
@@ -22,7 +22,7 @@ const TARGET_OPTIONS: { value: TargetType; label: string }[] = [
 
 /** A fresh transform of `type`, carrying over the matching field when switching back. */
 export function defaultTransform(type: TransformType, previous?: EdgeTransform | null): EdgeTransform {
-  if (type === "select") return { type, pointer: previous?.pointer ?? "/" };
+  if (type === "select") return { type, pointer: previous?.pointer ?? "" };
   if (type === "wrap") return { type, field: previous?.field ?? "value" };
   if (type === "format_message") return { type, template: previous?.template ?? "{value}" };
   return { type, target_type: previous?.target_type ?? "string" };

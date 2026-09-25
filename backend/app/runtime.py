@@ -36,6 +36,7 @@ from .models import (
 )
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .ports import default_input_port, default_output_port, project_node_output, resolve_node_input
+from .transforms import materialize_transforms
 from .providers.base import get_chat_model, resolve_chat_provider
 from .releases import resolve_resource_snapshots
 from .telemetry.provider import get_server_telemetry
@@ -564,6 +565,7 @@ def _prepare_run(
         return get_chat_model(effective_model, provider=resolved_provider.value, api_key=api_key)
 
     seeded_node_outputs = _project_fixture_node_outputs(graph, fixture_node_outputs)
+    graph = _with_library_transforms(graph, release_resource_snapshots)
 
     ctx = ExecContext(
         run_id=run_id,
@@ -587,6 +589,21 @@ def _prepare_run(
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
+
+
+def _with_library_transforms(
+    graph: GraphDefinition, release_resource_snapshots: dict[str, dict[str, Any]] | None
+) -> GraphDefinition:
+    """Copies Transforms-library references inline for execution — from the
+    release's pinned snapshots on a release run (never live storage), else
+    live storage. An unresolved one fails its edge with a clear error."""
+
+    def lookup(ref: str) -> dict[str, Any] | None:
+        if release_resource_snapshots is not None:
+            return release_resource_snapshots.get(f"transforms:{ref}")
+        return storage.get_resource("transforms", ref)
+
+    return materialize_transforms(graph, lookup)[0]
 
 
 def start_run(
@@ -681,6 +698,7 @@ def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | No
         return None
 
     run_input = RUN_STORE[run_id].input if run_id in RUN_STORE else {}
+    graph = _with_library_transforms(graph, None)
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
     _start_telemetry_trace(run_id, graph.id)

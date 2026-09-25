@@ -50,9 +50,9 @@ import { demoGraph, FIXED_TIME, makeEffectivePolicy, makePolicyCatalog, releaseI
 type Json = Record<string, unknown>;
 type RunRecord = { summary: RunSummary; traces: NodeTrace[]; events: PlatformEvent[]; snapshot: RunGraphSnapshot };
 
-export const RESOURCE_KINDS = ["prompts", "tools", "mcp-servers", "agents", "llm-profiles", "datasets", "chat-sessions"] as const;
+export const RESOURCE_KINDS = ["prompts", "tools", "mcp-servers", "agents", "llm-profiles", "transforms", "datasets", "chat-sessions"] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
-const VERSIONED: ReadonlySet<ResourceKind> = new Set(["prompts", "tools", "mcp-servers", "agents", "llm-profiles"]);
+const VERSIONED: ReadonlySet<ResourceKind> = new Set(["prompts", "tools", "mcp-servers", "agents", "llm-profiles", "transforms"]);
 
 /** Server-side defaults the backend's resource models apply on create. */
 const RESOURCE_DEFAULTS: Record<ResourceKind, () => Json> = {
@@ -61,6 +61,7 @@ const RESOURCE_DEFAULTS: Record<ResourceKind, () => Json> = {
   "mcp-servers": () => ({ transport: "http", enabled: true }),
   agents: () => ({ optional_elements: [] }),
   "llm-profiles": () => ({}),
+  transforms: () => ({}),
   datasets: () => ({ fixtures: [], source: "manual", source_run_ids: [], created_at: now(), updated_at: now() }),
   "chat-sessions": () => ({ messages: [], created_at: now(), updated_at: now() }),
 };

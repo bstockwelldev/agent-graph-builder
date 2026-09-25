@@ -1,16 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api-client", () => ({ client: { prompts: {}, tools: {}, agents: {}, mcpServers: {}, llmProfiles: {} } }));
+vi.mock("@/lib/api-client", () => ({ client: { prompts: {}, tools: {}, agents: {}, mcpServers: {}, llmProfiles: {}, transforms: {} } }));
 
-import { RESOURCE_KINDS, agentKind, llmProfileKind, mcpKind, normalizeParametersJson, promptKind, toolKind } from "./resource-kinds";
+import { RESOURCE_KINDS, agentKind, llmProfileKind, mcpKind, normalizeParametersJson, promptKind, toolKind, transformKind } from "./resource-kinds";
 
 // studio-graph-workbench-redesign-plan.md, Wave 4b (STO-605): the configs
 // carry each page's former validation, moved verbatim.
 describe("resource kinds", () => {
   it("covers every CRUD registry once, with human nouns for dialog copy", () => {
-    expect(RESOURCE_KINDS.map((kind) => kind.id)).toEqual(["agents", "prompts", "tools", "mcp", "llmProfiles"]);
+    expect(RESOURCE_KINDS.map((kind) => kind.id)).toEqual(["agents", "prompts", "tools", "mcp", "llmProfiles", "transforms"]);
     expect(mcpKind.noun).toBe("MCP server");
     expect(llmProfileKind.noun).toBe("LLM profile");
+  });
+
+  it("keeps only the field a transform's type uses, and requires it", () => {
+    expect(transformKind.normalize({ id: "t", name: "T", type: "select", pointer: " " })).toBeNull();
+    expect(transformKind.normalize({ id: " t ", name: " T ", type: "select", pointer: " /answer ", template: "{value}" })).toEqual({
+      id: "t",
+      name: "T",
+      description: null,
+      type: "select",
+      pointer: "/answer",
+    });
+    expect(transformKind.normalize({ id: "t", name: "T", type: "format_message", template: " Topic: {value} " })?.template).toBe(" Topic: {value} ");
   });
 
   it("requires each kind's mandatory fields and trims", () => {

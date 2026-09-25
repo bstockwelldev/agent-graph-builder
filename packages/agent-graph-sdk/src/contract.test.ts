@@ -44,6 +44,7 @@ const UNTYPED_ON_BACKEND = new Set([
   "resourceVersionIndexEntrySchema",
   "serverHealthSchema",
   "toolDefinitionSchema",
+  "transformDefinitionSchema",
 ]);
 
 function componentFor(exportName: string): string {

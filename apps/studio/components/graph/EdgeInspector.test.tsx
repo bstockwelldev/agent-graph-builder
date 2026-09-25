@@ -2,7 +2,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Diagnostic, GraphEdge } from "@bstockwelldev/agent-graph-sdk";
 
-vi.mock("@/lib/api-client", () => ({ client: {} }));
+vi.mock("@/lib/api-client", () => ({
+  client: { transforms: { list: vi.fn(async () => [{ id: "fact_line", name: "Fact line", type: "format_message", template: "Fact: {value}" }]) } },
+}));
 
 import { EdgeInspector } from "./NodeInspector";
 
@@ -54,5 +56,13 @@ describe("EdgeInspector transform", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(onChange).toHaveBeenCalledWith({ kind: "sequence", condition: null, transform: { type: "wrap", field: "topic" } });
+  });
+
+  it("shows a library-bound transform by name, and switching to inline clears it", async () => {
+    const onChange = renderEdge({ ...EDGE, transform: { transform_id: "fact_line" } });
+    expect(screen.getByRole("radio", { name: /Library/ }).getAttribute("aria-checked")).toBe("true");
+    expect(await screen.findByText(/Fact line/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: /Inline/ }));
+    expect(onChange).toHaveBeenCalledWith({ transform: null });
   });
 });
