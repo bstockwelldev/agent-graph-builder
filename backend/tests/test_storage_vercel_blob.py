@@ -448,3 +448,47 @@ def test_vercel_blob_older_catalog_version_is_rebuilt(monkeypatch) -> None:
 
     assert summary.node_count == 1
     assert json.loads(fake.objects["graph_catalog.json"])["version"] == 2
+
+
+def _llm_run(run_id: str, graph_id: str, started_at: str) -> tuple[RunSummary, list[NodeTrace]]:
+    trace = NodeTrace(
+        node_id="llm_1",
+        node_type=NodeType.LLM,
+        status="succeeded",
+        input={"provider": "openai", "model": "gpt-4o", "userPrompt": "x" * 400},
+        output="y" * 80,
+        started_at=started_at,
+        completed_at=started_at,
+    )
+    return _run(run_id, graph_id, started_at), [trace]
+
+
+def test_vercel_blob_analytics_reads_each_run_blob_once(monkeypatch) -> None:
+    from app.analytics import get_analytics_dashboard
+    from app.node_analytics import get_graph_analytics
+
+    fake = _enable_blob(monkeypatch)
+    storage.save_graph(_catalog_graph("graph_a"))
+    for index in range(4):
+        storage.save_run_snapshot(
+            *_llm_run(f"run_{index}", "graph_a", f"2026-01-0{index + 1}T00:00:00Z")
+        )
+    fake.blob_reads.clear()
+
+    dashboard = get_analytics_dashboard(run_limit=3)
+
+    run_reads = [path for path in fake.blob_reads if path.startswith("runs/")]
+    assert sorted(run_reads) == ["runs/run_1.json", "runs/run_2.json", "runs/run_3.json"]
+    assert fake.blob_reads.count("graph_catalog.json") == 1
+    assert len(fake.blob_reads) == 4
+    assert dashboard.totals.invocations == 3
+    # chars/4 heuristic: 400 prompt chars + 80 output chars per run.
+    assert dashboard.totals.input_tokens == 300
+    assert dashboard.totals.output_tokens == 60
+
+    fake.blob_reads.clear()
+    graph = get_graph_analytics("graph_a", run_window=2)
+
+    assert sorted(fake.blob_reads) == ["runs/run_2.json", "runs/run_3.json"]
+    assert graph.run_window == 2
+    assert graph.totals.input_tokens == 200
