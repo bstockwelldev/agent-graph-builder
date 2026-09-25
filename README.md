@@ -1,366 +1,257 @@
 # Agent Graph Builder
 
-Visual graph authoring platform with a **playground** web UI and **`@bstockwelldev/agent-graph-sdk`** TypeScript package. The playground is a thin vertical slice proving the central thesis of the Provider-Neutral,
-Graph-Native Agent Workstream Platform EDD (`agent_orchestration_edd.md`):
+Build an agent workflow as a graph, run it, and inspect every node's input and
+output. Agent Graph Builder is a Next.js **Studio** (`apps/studio`), a
+FastAPI + [LangGraph](https://github.com/langchain-ai/langgraph) execution API
+(`backend/`), and a typed TypeScript SDK published as
+[`@bstockwelldev/agent-graph-sdk`](packages/agent-graph-sdk/README.md) (1.0.0 on npm).
 
-> A user can visually assemble a small graph, execute it, and inspect the
-> execution path and outputs without writing agent orchestration code.
+## Try it
 
-This is **not** the platform in miniature. It implements exactly six node
-types (Input, Prompt, LLM, Tool, Router, Output) and three edge kinds
-(Sequence, Conditional, Default), with one canonical demo workflow: classify
-a question, then route to a deterministic tool lookup or a free-form LLM
-answer.
+**Live:** https://agent-graph-builder-app.vercel.app
 
-## What this proves
+No sign-up or API key needed. The Run panel defaults to the **Stub (offline)**
+provider, a deterministic stand-in model that needs no key.
 
-1. **Graph authoring works visually** — React Flow canvas, node palette,
-   per-type config forms, edge kind/condition editing.
-2. **Execution follows the graph, not hard-coded orchestration** — the
-   backend compiles the canonical graph JSON into a real
-   [LangGraph](https://github.com/langchain-ai/langgraph) `StateGraph`
-   (`backend/app/runtime.py`); there is no `if/else` chain describing "the"
-   workflow anywhere in the runtime.
-3. **Agent/model nodes are configured independently of the graph** — the LLM
-   node calls a provider-neutral `ChatModel` protocol
-   (`backend/app/providers/base.py`); adapters include **Stub** (offline),
-   **Groq**, **Google Gemini**, **Azure OpenAI**, **Ollama** (local), and **OpenAI-compatible
-   HTTP** (OpenAI, OpenRouter, LM Studio, etc.). Swapping providers means
-   adding an adapter, not touching the compiler or node executors.
-4. **Execution is observable at the node level** — every node emits
-   `node.started` / `node.completed` / `node.failed` events over SSE, and the
-   UI's node-trace panel shows the exact input/output payload for any node
-   you click, live or after the run.
+1. Open **Classify & Route (demo)** from the Graphs page.
+2. Press **Run** in the bottom bar, then **Run** in the panel. The sample
+   question ("How does a database index work?") is already filled in.
+3. Click any node on the canvas, then its **Run** tab, to see the exact input
+   and output from that node in the last run. The router shows which edge it picked.
 
-## Stack
+The demo classifies a question as `technical` or `other` and then routes it.
+Technical questions go to a deterministic tool lookup. Everything else goes to
+a free-form LLM answer. Ask something non-technical to see the other branch run.
 
-- **Backend**: Python + FastAPI + LangGraph, `uv` for dependency management.
-- **Playground** (`apps/playground`): Vite + React + TypeScript + `@xyflow/react` (React Flow).
-- **SDK** (`packages/agent-graph-sdk`): `@bstockwelldev/agent-graph-sdk` — shared types, API client, graph schema helpers.
-- **Model provider**: Stub, Groq, Google Gemini, Azure OpenAI, Ollama, or OpenAI-compatible
-  HTTP; selected per run; factory in `backend/app/providers/base.py`.
-- **Persistence**: file SQLite locally; S3-compatible object store (recommended)
-  or optional Turso for production durability. Live SSE streams are in-memory
-  only for active runs.
+## What the Studio does
 
-## Running it
+- **Author graphs visually:** React Flow canvas, a node palette, per-type config
+  forms, typed ports with compatible-target hints, and live validation that
+  marks problems on nodes and edges. A raw JSON/YAML editor covers everything
+  the forms don't.
+- **Run and debug:** runs stream node events live. The Studio also has a run
+  waterfall, run history, and a console drawer, and clicking a diagnostic
+  jumps to the node or edge it's about.
+- **Release and replay:** publish immutable releases, diff a release against
+  another release or the unsaved canvas, and replay a past run. You can replay
+  it frozen, or as a counterfactual (force a different route, or swap an LLM
+  node's provider or model).
+- **Supporting surfaces:** a per-graph knowledge base (RAG), versioned reusable
+  resources (prompts, tools, LLM profiles, policies), fixture-based simulation,
+  a chat scratchpad, and usage/spend analytics.
 
-### Option A: Docker (recommended)
+### Node vocabulary
 
-Prerequisites: Docker Desktop. Ollama is optional — the UI defaults to
-**Stub (offline)** so the demo runs without a local model. Switch to **Ollama
-(local LLM)** in the Run panel when you have [Ollama](https://ollama.com)
-running on the host with a model pulled (defaults to `qwen2.5:3b`).
-Ollama itself is **not** containerized on purpose — it's kept on the host so
-the containers reuse whatever models you've already pulled instead of
-re-downloading them into a fresh container volume; the backend container
-reaches it at `http://host.docker.internal:11434`.
+The backend defines 13 `NodeType`s (`backend/app/models.py`), and the palette
+can add all of them:
+
+| Node | What it does |
+| --- | --- |
+| `input` | Defines a run variable (default `question`) and is the graph's entry point |
+| `prompt` | Renders a text template from graph state |
+| `llm` | Calls a chat model through the provider-neutral `ChatModel` protocol |
+| `tool` | Runs a tool (built-in `lookup_topic`, or MCP) |
+| `router` | Picks exactly one outgoing edge |
+| `branch` | Substring gate with its own conditional and default out-edges |
+| `tool_loop` | Multi-step tool-calling agent, capped at a configured number of steps |
+| `guardrail` | Input-safety checks (length, URLs, injection phrases); fails the run on a violation |
+| `rubric` | Static prompt-quality findings; can block the run |
+| `human_gate` | Pauses the run for approval; resume or reject with `POST /api/runs/{id}/resume` |
+| `subgraph` | Runs another saved graph as a nested run with its own trace |
+| `code_exec` | Declares a code-execution contract (validated and passed through; no sandbox yet) |
+| `output` | Returns the run result |
+
+There are three edge kinds: `sequence` (always), `conditional` (match upstream
+text), and `default` (the router's fallback).
+
+### Model providers
+
+Providers are chosen per run in the Run panel, or with `provider` on
+`POST /api/runs`. The adapters live in `backend/app/providers/`.
+
+| Provider | Use it for | Needs |
+| --- | --- | --- |
+| **Stub** | Demos, CI, offline development | Nothing (Studio default) |
+| **Groq** | Hosted open-weight models | `GROQ_API_KEY` |
+| **Google Gemini** | Gemini via the Generative Language API | `GOOGLE_GENAI_API_KEY` or `GOOGLE_API_KEY` |
+| **Azure OpenAI** | An Azure deployment | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT_NAME` |
+| **Ollama** | Local models | Ollama running on the host (default model `qwen2.5:3b`) |
+| **OpenAI-compatible** | OpenAI, OpenRouter, LM Studio, vLLM | `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`, `OPENAI_COMPAT_DEFAULT_MODEL` |
+
+Stub classifies with the same keywords as the demo's tool node. Other LLM nodes
+get a deterministic `[stub answer] …` string. The variable names are listed in
+[`backend/env.template`](backend/env.template).
+
+## How it works: the seams
+
+The Studio is not a hard-coded pipeline with a canvas on top. Three seams keep
+authoring, execution, and model choice independent:
+
+1. **Execution follows the graph.** `compile_workflow` in
+   `backend/app/runtime.py` compiles the canonical graph JSON into a real
+   LangGraph `StateGraph`: one `add_node`/`add_edge` call per node and edge
+   in the document. There is no `if/else` chain describing "the" workflow.
+   Add a node in the editor and the runtime takes a different path.
+   `backend/app/adapters.py` wraps this as a `RuntimeAdapter` with an explicit
+   capability matrix, so LangGraph is the first compile target, not the only
+   possible one.
+2. **Models are behind a protocol.** LLM nodes call the `ChatModel` protocol
+   (`backend/app/providers/base.py`), a single async `generate(...)` method.
+   Adding a provider means adding an adapter. The compiler and node
+   executors don't change.
+3. **Execution is observable per node.** Every node emits events from a
+   typed protocol (`backend/app/events.py`): `node.started`,
+   `node.completed`, `node.failed`, `node.paused`, and `edge.selected`,
+   between `run.started` and `run.completed`/`run.failed`/`run.paused`.
+   Events stream over SSE (resumable with `Last-Event-ID`) and are
+   snapshotted with each run's node traces. The Studio's trace view, the
+   waterfall, and replay all read from this protocol.
+
+## Run it locally
+
+### Bare metal
+
+Prerequisites: Node 20+, pnpm 10 (`corepack enable` picks up the pinned
+version), Python 3.11+, and [`uv`](https://docs.astral.sh/uv/).
+
+Backend (terminal 1):
+
+```bash
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+Studio (terminal 2, from the repo root):
+
+```bash
+pnpm install
+pnpm run build:sdk
+pnpm dev
+```
+
+Open http://localhost:3000. The Studio proxies `/api/*` to
+`http://127.0.0.1:8000` (override with `API_PROXY_TARGET`). The demo graph is
+seeded on first backend start, and graphs persist to `backend/graphs.db`
+(SQLite; override with `GRAPH_DB_PATH`).
+
+### Docker
 
 ```bash
 docker compose up --build
 ```
 
-**One-command dev stack (repo):**
+This starts the Studio on http://localhost:3000 and the API on
+http://localhost:8000, both with hot reload from bind-mounted source. Saved
+graphs live in the `graph_db` volume. `docker compose down` keeps it, and
+`down -v` drops it. Ollama isn't containerized on purpose: the backend reaches
+the host's Ollama at `http://host.docker.internal:11434`, so it reuses models
+you've already pulled.
 
-```powershell
-# Foreground (logs in terminal)
-.\scripts\dev.ps1 up
+`scripts/dev.ps1 up` (PowerShell) and `scripts/dev.sh up` (bash) wrap the same
+compose commands, with `-d`, `down`, and `down -v`.
 
-# Background
-.\scripts\dev.ps1 up -d
+### Keys
 
-# Stop
-.\scripts\dev.ps1 down
+Put provider keys in `backend/.env.local` (gitignored), or point
+`SHARED_ENV_FILE` at a dotenv file. Keys already in the environment are never
+overwritten. Without any keys, everything runs on Stub.
 
-# Stop and remove saved-graph volume
-.\scripts\dev.ps1 down -v
-```
-
-Git Bash / WSL / macOS / Linux: `./scripts/dev.sh up`, `./scripts/dev.sh up -d`, `./scripts/dev.sh down`.
-
-**Global CLI (optional, from any terminal after one-time install):**
-
-Install from **agent-context-factory** (canonical; POC installer forwards there):
-
-```powershell
-# From <dev-root>/agent-context-factory
-powershell -File scripts/install-dev-cli.ps1 -RepoRoot <dev-root>/agent-graph-builder
-
-# Or deprecated forwarder from this repo:
-.\scripts\install-dev-cli.ps1
-```
-
-```powershell
-dev ls                          # list registered stacks
-dev up graph -d                 # start playground + API (detached)
-dev down graph                  # stop
-dev ps graph                    # docker compose status
-dev open graph                  # open http://localhost:5173
-dev check graph --tier fast     # backend pytest (dry-run: --dry-run)
-
-graph                           # shortcut: dev up graph -d
-graph down                      # shortcut: dev down graph
-```
-
-Docs: `agent-context-factory/docs/onboarding/workflows.md` (§12 Local dev CLI).
-
-After `git pull`: factory CLI updates on the next `dev` command (or run `dev sync` / `dev install`). `dev up graph` re-merges `scripts/dev-registry.entry.json` into your local registry.
-
-Registry: `~/.ai/dev-registry.json` (v2 schema; migrates from legacy `spin-registry.json` on install).
-Set `$env:BSTOCKWELL_DEV_ROOT` to your polyrepo root if repo auto-detect fails.
-
-Legacy names (`spin-this-up`, `spin-graph-builder`, `spin-up.ps1`) still work but are deprecated.
-
-- Backend: http://localhost:8000 (FastAPI + LangGraph, live-reloads on edits
-  to `backend/app/`)
-- Playground: http://localhost:5173 (Vite dev server, live-reloads on edits to
-  `apps/playground/src/`)
-- Saved graphs persist in a named volume (`graph_db`) instead of a bare file,
-  so `docker compose down` (without `-v`) keeps them across restarts.
-
-Both services bind-mount their source directories, so the containers behave
-exactly like the bare-metal dev servers below — same hot reload, same code —
-just process-isolated. Stop with `docker compose down` (add `-v` to also
-drop the saved-graphs volume).
-
-If your Ollama instance is slow or under load from something else on the
-host, LLM node calls can legitimately take a while; the provider adapter
-uses a generous (180s) timeout rather than treating a slow local model as a
-hard failure (`backend/app/providers/ollama.py`).
-
-### Option B: bare metal
-
-Prerequisites: Python 3.11+, `uv`, Node 18+. Ollama is only required when
-you select **Ollama (local LLM)** in the Run panel (defaults to `qwen2.5:3b`;
-override per-node in the LLM node's config).
+## Tests
 
 ```bash
-# Backend
-cd backend
-uv sync
-uv run uvicorn app.main:app --reload --port 8000
-
-# Playground (separate terminal, from repo root)
-npm install
-npm run build:sdk
-npm run dev:playground
-```
-
-### Either way
-
-Open http://localhost:5173 — the canonical demo graph loads automatically
-(seeded on first backend startup). Use the **Graph Library** in the left
-sidebar to switch between saved graphs or create a new one (**Blank** starts
-with input → output; **From demo** copies the classify-and-route workflow).
-The Run panel defaults to **Stub (offline)** — click **Run** without Ollama,
-inspect the live event log and node traces, then try **Ollama (local LLM)**
-for real model output. Edit the graph name in the header (saved on
-Compile/Run), edit nodes, or change edge conditions and re-run.
-
-### Graph library
-
-| Action | UI | API |
-|---|---|---|
-| List graphs | Left sidebar | `GET /api/graphs` |
-| Open graph | Click a graph in the library | `GET /api/graphs/{id}` |
-| Create graph | **New graph** form (blank or from demo) | `POST /api/graphs` `{ "name", "template": "blank" \| "demo" }` |
-| Save edits | **Compile** or **Run** (also updates `updated_at`) | `PUT /api/graphs/{id}` |
-
-Graph definitions persist in SQLite; switching graphs reloads from the server
-(unsaved canvas edits are discarded unless you Compile/Run first).
-
-### Compile-time validation (canvas UX)
-
-The editor validates the **current canvas** as you edit (debounced, no save) via
-`POST /api/graphs/validate`. Blocking issues appear on nodes and edges, in the
-header validation chip, and in the Run panel diagnostics list — click an issue
-to select the node or edge. **Compile** and **Run** still save first, then
-compile against SQLite.
-
-| Action | UI | API |
-|---|---|---|
-| Live validate while editing | Header chip + canvas marks | `POST /api/graphs/validate` `{ graph JSON }` |
-| Save + compile | **Compile** | `PUT /api/graphs/{id}` then `POST /api/graphs/{id}/compile` |
-
-### Run history
-
-Completed runs are snapshotted to SQLite (summary + per-node traces). Live SSE
-event streams stay in memory until a run finishes.
-
-| Action | UI | API |
-|---|---|---|
-| List runs for graph | **Run history** in the right panel | `GET /api/graphs/{id}/runs` |
-| Inspect a past run | Click a history entry | `GET /api/runs/{id}` + `GET /api/runs/{id}/nodes` |
-| Live run | **Run** (streams events) | `POST /api/runs` + SSE `GET /api/runs/{id}/events` |
-
-After a backend restart, past runs remain in the history list; only in-flight
-SSE streams are lost.
-
-### Model providers
-
-| Provider | When to use | How to select |
-|---|---|---|
-| **Stub** | Offline demos, CI, fast routing proof | UI default; or `provider: "stub"`; or `CHAT_PROVIDER=stub` |
-| **Groq** | Hosted Llama via Groq | UI **Groq**; or `provider: "groq"`; uses `GROQ_API_KEY` |
-| **Google Gemini** | Gemini models via Generative Language API | UI **Google Gemini**; or `provider: "google"`; uses `GOOGLE_GENAI_API_KEY` or `GOOGLE_API_KEY` |
-| **Azure OpenAI** | Hosted chat via Azure deployment id | UI **Azure OpenAI**; or `provider: "azure"`; uses `AZURE_OPENAI_*` env vars |
-| **Ollama** | Real local LLM via Ollama | UI **Ollama (local LLM)**; or `provider: "ollama"`; or `CHAT_PROVIDER=ollama` (API default when omitted) |
-| **OpenAI-compatible** | OpenAI, OpenRouter, LM Studio, vLLM, etc. | UI **OpenAI-compatible (HTTP)**; or `provider: "openai_compat"` |
-
-Stub classifies using the same lookup keywords as the demo tool node; non-classifier LLM nodes return a short deterministic `[stub answer] …` string.
-
-When an LLM node still has the demo default model (`qwen2.5:3b`), cloud providers automatically use their default model (or `AI_MODEL` when set) — matching tabletop-studio defaults (`llama-3.3-70b-versatile`, `gemini-2.5-flash`, Azure deployment name).
-
-For **Ollama**, **Groq**, and **Azure**, the Run panel loads up to five chat-capable models from a cached catalog (`GET /api/providers/{provider}/models?graph_id=`). Graph LLM node models are ranked first so demos can switch models at run time without editing every LLM node.
-
-### Shared env with tabletop-studio
-
-On backend startup the POC loads AI keys from a sibling repo dotenv file when present (never committed):
-
-| Resolution | Path |
-|---|---|
-| `SHARED_ENV_FILE` | Explicit file path |
-| `BSTOCKWELL_DEV_ROOT` | `<dev-root>/tabletop-studio/.env.local` |
-
-Set `$env:BSTOCKWELL_DEV_ROOT` to your polyrepo root (the parent of `tabletop-studio` and this repo). Keys already in the process environment are **not** overwritten. See [`backend/env.template`](backend/env.template) and tabletop-studio [`env.template`](../tabletop-studio/env.template) for variable names (`GROQ_API_KEY`, `GOOGLE_GENAI_API_KEY`, `GOOGLE_API_KEY`, `AZURE_OPENAI_*`, `AI_MODEL`, `AI_PROVIDER`).
-
-```powershell
-# From agent-graph-builder (uses tabletop-studio/.env.local automatically)
-$env:BSTOCKWELL_DEV_ROOT = "<dev-root>"
-cd backend
-uv run uvicorn app.main:app --reload --port 8000
-```
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OPENAI_COMPAT_BASE_URL` | `https://api.openai.com/v1` | Chat completions base URL |
-| `OPENAI_COMPAT_API_KEY` | *(empty)* | Bearer token; omit for local servers that skip auth |
-| `OPENAI_COMPAT_DEFAULT_MODEL` | `gpt-4o-mini` | Used when an LLM node's config has no `model` |
-| `AZURE_OPENAI_API_KEY` | *(empty)* | Azure OpenAI resource key |
-| `AZURE_OPENAI_ENDPOINT` | *(empty)* | Resource endpoint (e.g. `https://<resource>.openai.azure.com`) |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | *(empty)* | Default deployment id for chat + catalog fallback |
-| `AZURE_OPENAI_API_VERSION` | `2024-02-15-preview` | API version query param for Azure requests |
-
-Examples:
-
-```bash
-# OpenAI
-set OPENAI_COMPAT_API_KEY=sk-...
-set OPENAI_COMPAT_DEFAULT_MODEL=gpt-4o-mini
-
-# LM Studio (local)
-set OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1
-set OPENAI_COMPAT_DEFAULT_MODEL=your-loaded-model
-```
-
-Set each LLM node's **Model** field to the provider-specific model id (e.g.
-`gpt-4o-mini` or `qwen2.5:3b`); the run-level provider selector chooses which
-adapter handles the call. For Ollama/Groq/Azure, the Run panel **Model** select
-overrides the node config for that run (`POST /api/runs` accepts optional `model`).
-
-### Model catalog API
-
-| Action | UI | API |
-|---|---|---|
-| List chat models (≤5, ranked) | Run panel **Model** select | `GET /api/providers/{provider}/models?graph_id=` |
-| Provider readiness | Run blocked with message | `GET /api/providers/{provider}/ready` |
-
-Live catalogs are fetched from Ollama `/api/tags`, Groq `/v1/models`, and Azure `/openai/models` (with 60s in-process cache). Stub, Google, and OpenAI-compatible providers return a static fallback of the provider default only.
-
-### Verification
-
-**Automated (no Ollama):**
-
-```bash
+# Backend (uses the Stub provider; no keys or Ollama needed)
 cd backend
 uv sync --extra dev
 uv run pytest
 ```
 
-Runs compile checks, router forks, graph-library, and durable run snapshot tests
-using the stub provider (no Ollama).
+Backend tests currently write their fixture graphs into the dev database
+(`backend/graphs.db`). Delete that file afterwards if you want a library that
+contains only the demo.
 
-**Manual backend smoke (requires Ollama):**
+```bash
+# SDK build + SDK and Studio tests (from the repo root)
+pnpm test
+```
+
+Backend smoke run of the demo graph, printing the full event stream:
 
 ```bash
 cd backend
-uv run python smoke_test.py
-```
-
-Compiles and executes the demo graph twice — once with a technical question,
-once without — printing the full event stream. Uses `CHAT_PROVIDER` (default
-`ollama`); set `CHAT_PROVIDER=stub` for an offline run:
-
-```bash
 CHAT_PROVIDER=stub uv run python smoke_test.py
 ```
 
-## CI and publishing
+CI (`.github/workflows/ci.yml`) runs backend pytest, Studio
+lint/typecheck/test/build, and SDK package checks on every push and PR. The
+SDK is released manually with the **Release SDK** workflow. See
+[`AGENTS.md`](AGENTS.md) for the changeset and OpenAPI-contract steps.
 
-GitHub Actions runs `uv run pytest` in `backend/` on push and pull requests
-(see `.github/workflows/ci.yml`). No secrets are required — tests use the
-Stub provider.
+## Deploy (Vercel)
 
-**Planning specs:** Locked next-set feature plans live in
-[`docs/planning/`](docs/planning/) (shell resilience → canvas orientation →
-from-scratch authoring). **Product roadmap:** [`docs/planning/roadmap.md`](docs/planning/roadmap.md).
-
-To push this repo to GitHub, add a remote and push:
-
-```bash
-git remote add origin https://github.com/bstockwelldev/agent-graph-builder.git
-git push -u origin master
-```
-
-### Vercel (production)
-
-**URL:** https://agent-graph-builder-app.vercel.app
-
-Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage).
-
-**Legacy aliases** (still work; bookmarks OK): [agent-graph-builder-poc.vercel.app](https://agent-graph-builder-poc.vercel.app), [theagenticengineer-graph-builder.vercel.app](https://theagenticengineer-graph-builder.vercel.app).
-
-> **Note:** `agent-graph-builder.vercel.app` is **not** this project — that bare alias is owned by another Vercel account and cannot be claimed.
+Production is https://agent-graph-builder-app.vercel.app. `vercel.json`
+deploys the Studio and the FastAPI backend as two services, with `/api/*`
+routed to the backend. Health check: `GET /api/health` returns
+`{"ok":true,"storage_backend":"supabase", ...}`.
 
 ```bash
 vercel deploy --prod
 ```
 
-**Environment variables (Vercel dashboard — do not commit secrets):**
+Set these in the Vercel dashboard. Never commit them.
 
 | Variable | Required | Purpose |
-| -------- | -------- | ------- |
-| `GROQ_API_KEY` | Optional | Live LLM runs (default `CHAT_PROVIDER=stub` in `vercel.json`) |
-| `SUPABASE_URL` | Yes (prod) | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | With Supabase URL | Service-role key (server-only) |
+| --- | --- | --- |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Yes (prod) | Durable storage in Supabase Storage |
 | `SUPABASE_STORAGE_BUCKET` | Optional | Private bucket; default `agent-graph-builder` |
-| `OBJECT_STORE_BUCKET` | S3-compatible alternative | Bucket name (Cloudflare R2, AWS S3, MinIO, Azure Blob S3 API) |
-| `OBJECT_STORE_ENDPOINT` | Optional | Custom S3 endpoint. Empty = AWS. R2: `https://<accountid>.r2.cloudflarestorage.com` |
-| `OBJECT_STORE_ACCESS_KEY_ID` | With bucket | Object-store access key |
-| `OBJECT_STORE_SECRET_ACCESS_KEY` | With bucket | Object-store secret |
-| `OBJECT_STORE_REGION` | Optional | Default `us-east-1`; use `auto` for R2 |
-| `TURSO_DATABASE_URL` | Optional alternative | Turso libsql URL (`libsql://…`) — ignored when Supabase or object store is set |
-| `TURSO_AUTH_TOKEN` | With Turso URL | Turso database token |
+| `OBJECT_STORE_BUCKET`, `OBJECT_STORE_ACCESS_KEY_ID`, `OBJECT_STORE_SECRET_ACCESS_KEY` | Alternative | S3-compatible store (R2, S3, MinIO, Azure S3 API) |
+| `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_REGION` | Optional | Custom endpoint / region (`auto` for R2) |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Alternative | Turso libsql |
+| `GROQ_API_KEY` | Optional | Live LLM runs (`CHAT_PROVIDER=stub` is the deployed default) |
 
-Backend selection (first match wins): Supabase → `OBJECT_STORE_*` → `TURSO_*` → file SQLite. With none set, `vercel.json`'s `GRAPH_DB_PATH=/tmp/graphs.db` is per-isolate, and the API returns 503 on Vercel rather than lose data. Stub-provider runs without a shared store show as **Offline** in the Run panel and are also kept in the browser.
+Storage selection, first match wins: Supabase, then `OBJECT_STORE_*`, then
+`TURSO_*`, then file SQLite. On Vercel with no shared store, the API returns
+503 rather than write to a per-isolate `/tmp` database that would lose data.
 
-## Deliberate simplifications vs. the full EDD
+Legacy aliases still resolve: `agent-graph-builder-poc.vercel.app` and
+`theagenticengineer-graph-builder.vercel.app`. The bare
+`agent-graph-builder.vercel.app` belongs to a different account.
 
-Everything here is a scoped-down stand-in for a real platform concept, kept
-swappable behind the same seams the EDD specifies:
+## What shipped, and what's still simplified
 
-| POC choice | EDD target | Swap point |
-|---|---|---|
-| SQLite locally; Supabase Storage (or S3-compatible / Turso) in production | Supabase PostgreSQL + immutable run store | `storage.py` |
-| In-memory live runs + SSE buses | Durable checkpoints + replay | `runtime.py` (`RUN_STORE`, `RUN_BUSES`) |
-| No auth, no multi-tenancy, no Next.js BFF | Supabase Auth + RLS + org/project hierarchy + BFF | frontend talks directly to FastAPI |
-| Stub, Groq, Google, Azure, Ollama, OpenAI-compatible adapters | Ollama (dev) + Azure OpenAI (prod), adapter-selected | `providers/` |
-| 6 node types, 3 edge kinds, no loops | Full node taxonomy incl. memory/RAG/approval/parallel, 8 edge kinds | `models.py` |
-| No entity versioning/immutability | Versioned agents/prompts/tools/models with lifecycle states | `models.py` (`GraphNode.config` is inline, not a `definitionRef`) |
-| No replay, no approvals, no MCP | Sections 22-25 of the EDD | out of scope per POC spec |
+This started as a thin proof of concept for the Provider-Neutral, Graph-Native
+Agent Workstream Platform EDD (`agent_orchestration_edd.md`). Much of the EDD
+has shipped since. The rest is still simplified on purpose, behind the same
+seams, so each piece can be swapped without touching the others.
 
-None of these are accidents — they're the "don't build the platform in
-miniature" boundary from the POC spec. The seams (`ChatModel` protocol,
-`ExecutionRuntime`-shaped compile/execute split, internal event protocol)
-are the same ones the EDD calls out as the durable architecture; only their
-backing implementations are simplified.
+**Shipped:**
+
+| EDD concept | Where it lives |
+| --- | --- |
+| Full node taxonomy: guardrails, rubric, human approval, tool loop, subgraphs, RAG | `models.py`, `nodes.py`, `knowledge.py`, `subgraphs.py` |
+| Typed ports and contract/policy validation | `ports.py`, `contracts.py`, `policies.py` |
+| Immutable, fingerprinted releases and semantic diffs | `releases.py`, `fingerprint.py` |
+| Version-pinned run identity (`RunGraphSnapshot`) | `models.py`, `runtime.py` |
+| Replay and counterfactual replay | `replay.py` |
+| Versioned reusable entities (prompts, tools, LLM profiles) | `resource_versions.py` |
+| Runtime adapter boundary with a capability matrix | `adapters.py` |
+| Durable storage for graphs, releases, and completed runs | `storage.py`, `supabase_store.py`, `object_store.py` |
+| Six provider adapters behind one protocol | `providers/` |
+| MCP tools, telemetry (Langfuse, opt-in), usage analytics | `mcp/`, `telemetry/`, `analytics.py` |
+
+**Still simplified:**
+
+| Today | EDD target | Swap point |
+| --- | --- | --- |
+| `human_gate` pause checkpoints are in memory (`RUN_PAUSES`). A paused run's summary persists, but it can't be resumed after a process restart. | Durable checkpoints | `runtime.py` → a `storage.py` backend |
+| Live runs and SSE event buses are in memory (`RUN_STORE`, `RUN_BUSES`). Completed runs persist, but in-flight streams are lost on restart, and on serverless a live stream exists only in the instance that started the run. | Durable run store with cross-instance streaming | `runtime.py`, `events.py` |
+| No multi-tenancy. There's optional Studio sign-in, but no orgs or projects, no per-tenant isolation, and no RLS. Every graph is visible to every user of a deployment. | Supabase Auth + RLS + org/project hierarchy | `storage.py`, Studio middleware |
+| Storage is a JSON document store (Supabase Storage, S3, Turso, or SQLite), not relational tables. | Supabase PostgreSQL | `storage.py` |
+| `code_exec` declares a contract but has no sandbox executor. | Sandboxed execution | `nodes.py` |
+| No per-node retry policy. | Retries with backoff, visible in the waterfall | `runtime.py`, `nodes.py` |
+
+## More
+
+- SDK: [`packages/agent-graph-sdk/README.md`](packages/agent-graph-sdk/README.md)
+- Roadmap and feature specs: [`docs/planning/roadmap.md`](docs/planning/roadmap.md), [`docs/planning/features/`](docs/planning/features/)
+- Contributor and agent notes: [`AGENTS.md`](AGENTS.md), [`apps/studio/AGENTS.md`](apps/studio/AGENTS.md)
