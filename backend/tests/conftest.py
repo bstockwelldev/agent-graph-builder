@@ -3,9 +3,28 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
+
+# Point file SQLite at a per-session tmp DB and drop any durable-store env so
+# fixture graphs never land in the dev ``backend/graphs.db``. ``storage`` reads
+# these at call time; setting them at conftest import precedes the per-test
+# env snapshot below, so every test inherits them.
+for _key in (
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_STORAGE_BUCKET",
+    "TURSO_DATABASE_URL",
+    "TURSO_AUTH_TOKEN",
+    "VERCEL",
+):
+    os.environ.pop(_key, None)
+os.environ["GRAPH_DB_PATH"] = str(
+    Path(tempfile.mkdtemp(prefix="agb-tests-")) / "graphs.db"
+)
 
 _OBJECT_STORE_ENV = (
     "OBJECT_STORE_BUCKET",
