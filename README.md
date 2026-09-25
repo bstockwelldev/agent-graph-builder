@@ -182,6 +182,26 @@ cd backend
 CHAT_PROVIDER=stub uv run python smoke_test.py
 ```
 
+## CI and publishing
+
+GitHub Actions runs `uv run pytest` in `backend/` on push and pull requests
+(see `.github/workflows/ci.yml`). No secrets are required — tests use the
+Stub provider.
+
+**Planning specs:** Locked next-set feature plans live in
+[`docs/planning/`](docs/planning/) (shell resilience → canvas orientation →
+from-scratch authoring). **Product roadmap:** [`docs/planning/roadmap.md`](docs/planning/roadmap.md).
+
+To push this repo to GitHub, add a remote and push:
+
+```bash
+git remote add origin https://github.com/bstockwelldev/agent-graph-builder.git
+git push -u origin master
+```
+
+### Vercel (production)
+
+Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage). The production hostname is kept by the operator, not documented here.
 CI (`.github/workflows/ci.yml`) runs backend pytest, Studio
 lint/typecheck/test/build, and SDK package checks on every push and PR. The
 SDK is released manually with the **Release SDK** workflow. See

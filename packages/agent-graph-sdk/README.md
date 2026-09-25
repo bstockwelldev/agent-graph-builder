@@ -20,7 +20,7 @@ The package is ESM-only and runs anywhere with `fetch`: browsers, Node 18+, Deno
 ```ts
 import { createAgentGraphClient } from "@bstockwelldev/agent-graph-sdk";
 
-const client = createAgentGraphClient({ baseUrl: "https://agent-graph-builder-app.vercel.app" });
+const client = createAgentGraphClient({ baseUrl: "https://your-agb-host.example" });
 
 const graphs = await client.graphs.list();
 const run = await client.runs.start({ graphId: graphs[0].id, input: { question: "How does TCP work?" } });
