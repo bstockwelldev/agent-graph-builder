@@ -327,3 +327,36 @@ def test_error_body_is_logged_on_failure(monkeypatch, caplog) -> None:
         except httpx.HTTPStatusError:
             pass
     assert "Invalid Compact JWS" in caplog.text
+
+
+def test_missing_object_reported_as_400_is_treated_as_absent(monkeypatch) -> None:
+    """Supabase answers a missing object with 400 + body statusCode "404"
+    (prod: the startup demo-graph check errored instead of seeding)."""
+    _enable_supabase(monkeypatch)
+
+    def missing(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400, json={"statusCode": "404", "error": "not_found", "message": "Object not found"}
+        )
+
+    monkeypatch.setattr(
+        supabase_store, "_http_client", lambda: httpx.Client(transport=httpx.MockTransport(missing))
+    )
+    assert supabase_store.get_json("graphs/nope.json") is None
+    assert supabase_store.delete_json("graphs/nope.json") is False
+
+
+def test_other_400_still_raises(monkeypatch) -> None:
+    _enable_supabase(monkeypatch)
+
+    def bad(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"statusCode": "400", "error": "Invalid JWT"})
+
+    monkeypatch.setattr(
+        supabase_store, "_http_client", lambda: httpx.Client(transport=httpx.MockTransport(bad))
+    )
+    try:
+        supabase_store.get_json("graphs/x.json")
+    except httpx.HTTPStatusError:
+        return
+    raise AssertionError("expected HTTPStatusError")

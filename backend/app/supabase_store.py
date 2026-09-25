@@ -87,6 +87,21 @@ def _raise_for_status(response: httpx.Response) -> None:
     response.raise_for_status()
 
 
+def _is_missing(response: httpx.Response) -> bool:
+    """True when the object doesn't exist. Supabase Storage reports a missing
+    object as HTTP 400 with ``{"statusCode": "404", "error": "not_found"}`` in
+    the body (not a real 404), so both shapes count."""
+    if response.status_code == 404:
+        return True
+    if response.status_code != 400:
+        return False
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and str(body.get("statusCode")) == "404"
+
+
 def _object_url(key: str) -> str:
     return f"{_base_url()}/storage/v1/object/{_bucket()}/{key}"
 
@@ -114,7 +129,7 @@ def put_json(key: str, payload: dict[str, Any]) -> None:
 def get_json(key: str) -> dict[str, Any] | None:
     with _http_client() as client:
         response = client.get(_object_url(key), headers=_headers())
-    if response.status_code == 404:
+    if _is_missing(response):
         return None
     _raise_for_status(response)
     return json.loads(response.content)
@@ -125,7 +140,7 @@ def delete_json(key: str) -> bool:
         return False
     with _http_client() as client:
         response = client.delete(_object_url(key), headers=_headers())
-    if response.status_code == 404:
+    if _is_missing(response):
         return False
     _raise_for_status(response)
     return True
