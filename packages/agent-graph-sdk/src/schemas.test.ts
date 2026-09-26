@@ -132,6 +132,17 @@ describe("graphNodeSchema / graphEdgeSchema (Slice A port/contract fields)", () 
     expect(graphEdgeSchema.safeParse(edge).success).toBe(true);
   });
 
+  it("parses a declared port as the API serializes it (unset fields are null)", () => {
+    const node = {
+      id: "n1",
+      type: "llm",
+      position: { x: 0, y: 0 },
+      config: {},
+      input_ports: [{ id: "input", name: "input", direction: "input", contract: { kind: "message", schema: null, required: true, classification: null } }],
+    };
+    expect(graphNodeSchema.safeParse(node).success).toBe(true);
+  });
+
   it("parses a transform as the API serializes it (unset fields are null)", () => {
     const edge = {
       id: "e1",

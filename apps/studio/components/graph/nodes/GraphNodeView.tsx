@@ -154,7 +154,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   const boundTitle = nodeData.userLabel ? null : boundTitleFor(type, nodeData.config, resourceNames);
   const declaredInputs = { type, input_ports: nodeData.ports?.input_ports };
   const inputs = acceptsAnyKind(declaredInputs) ? "any" : portSummary(inputPortsFor(declaredInputs));
-  const outputs = portSummary(outputPortsFor({ type, config: nodeData.config }));
+  const outputs = portSummary(outputPortsFor({ type, config: nodeData.config, output_ports: nodeData.ports?.output_ports }));
 
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<number | null>(null);
@@ -193,8 +193,10 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   if (connection.inProgress && connection.fromNode.id !== id) {
     const sourceData = connection.fromNode.data as GraphNodeData | undefined;
     const sourceType = sourceData?.nodeType;
-    const sourcePort = sourceType ? outputPortsFor({ type: sourceType, config: sourceData?.config })[0] : undefined;
-    const targetPort = inputPortsFor({ type })[0];
+    const sourcePort = sourceType
+      ? outputPortsFor({ type: sourceType, config: sourceData?.config, output_ports: sourceData?.ports?.output_ports })[0]
+      : undefined;
+    const targetPort = inputPortsFor(declaredInputs)[0];
     if (sourcePort && targetPort) {
       dragCompatibility = acceptsAnyKind(declaredInputs)
         ? "compatible"
