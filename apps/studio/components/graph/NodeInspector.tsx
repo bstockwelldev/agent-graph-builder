@@ -19,13 +19,25 @@ import {
   XCircle,
 } from "lucide-react";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
-import { inputKindLabel, inputPortsFor, outputPortsFor } from "@/content/node-ports";
+import {
+  declareFromInferred,
+  declaredPorts,
+  inputKindLabel,
+  inputPortsFor,
+  outputPortsFor,
+  PORT_KINDS,
+  updatePortContract,
+  withDeclaredPorts,
+  type NodePorts,
+  type PortDirection,
+} from "@/content/node-ports";
 import type {
   BindableResourceKind,
   ChatProvider,
   EdgeTransform,
   GraphDefinition,
   GraphEdge,
+  GraphPort,
   GraphLayer,
   GraphNode,
   Diagnostic,
@@ -33,6 +45,7 @@ import type {
   NodeType,
   PolicyException,
   ToolDefinition,
+  PortKind,
 } from "@bstockwelldev/agent-graph-sdk";
 import {
   border,
@@ -156,6 +169,8 @@ export function NodeInspector({
   incomingEdges = [],
   selectedTrace = null,
   onConfigChange,
+  onPortsChange,
+  incomingKinds = [],
   onEdgeChange,
   onDelete,
   onDuplicate,
@@ -189,6 +204,10 @@ export function NodeInspector({
   /** This node's most recent execution, for the Run tab and header status. */
   selectedTrace?: NodeTrace | null;
   onConfigChange: (config: Record<string, unknown>) => void;
+  /** I/O tab: declare (type) or reset this node's ports. Omitted = read-only. */
+  onPortsChange?: (ports: NodePorts | undefined) => void;
+  /** What arrives on this node's input: each incoming edge's source output kind. */
+  incomingKinds?: readonly PortKind[];
   onEdgeChange?: (edgeId: string, patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
   onDuplicate?: () => void;
@@ -389,7 +408,16 @@ export function NodeInspector({
           onOpenResource={onOpenResource}
         />
       )}
-      {activeTab === "io" && <IoTab node={node} issues={issues} incomingEdges={incomingEdges} outgoingEdges={outgoingEdges} />}
+      {activeTab === "io" && (
+        <IoTab
+          node={node}
+          issues={issues}
+          incomingEdges={incomingEdges}
+          outgoingEdges={outgoingEdges}
+          incomingKinds={incomingKinds}
+          onPortsChange={onPortsChange}
+        />
+      )}
       {activeTab === "policy" && (
         <PolicyTab graphId={graphId} nodeId={node.id} issues={issues} onPolicyExceptionCreated={onPolicyExceptionCreated} />
       )}
@@ -758,12 +786,17 @@ function IoTab({
   issues,
   incomingEdges,
   outgoingEdges,
+  incomingKinds,
+  onPortsChange,
 }: {
   node: GraphNode;
   issues: Diagnostic[];
   incomingEdges: GraphEdge[];
   outgoingEdges: GraphEdge[];
+  incomingKinds: readonly PortKind[];
+  onPortsChange?: (ports: NodePorts | undefined) => void;
 }) {
+  const mixedIncoming = [...new Set(incomingKinds)];
   const inputPorts = inputPortsFor(node);
   const outputPorts = outputPortsFor(node);
   // Mirrors backend/app/ports.py's default_input_port/default_output_port:
@@ -771,40 +804,129 @@ function IoTab({
   // listed port (router/branch's default output port is "passthrough").
   const defaultInputPortId = inputPorts[0]?.id;
   const defaultOutputPortId = outputPorts[0]?.id;
+  const current: NodePorts = { input_ports: node.input_ports, output_ports: node.output_ports };
+
+  const setDeclared = (direction: PortDirection, list: GraphPort[] | null) =>
+    onPortsChange?.(withDeclaredPorts(current, direction, list));
+
+  const section = (direction: PortDirection, ports: GraphPort[], edges: GraphEdge[], defaultId: string | undefined) => {
+    const declared = declaredPorts(node, direction);
+    const edgePortOf = (edge: GraphEdge) => (direction === "input" ? edge.target_port : edge.source_port) ?? defaultId;
+    return (
+      <>
+        {onPortsChange && (
+          <Field
+            label="Contract"
+            hint={
+              declared
+                ? "Declared: these kinds and schemas are checked on every connection, and a mismatch with another declared port blocks compile."
+                : "Inferred from the node type: mismatches only warn. Declare to type these ports explicitly."
+            }
+          >
+            <SegmentedControl
+              aria-label={`${direction === "input" ? "Input" : "Output"} contract`}
+              value={declared ? "declared" : "inferred"}
+              options={[
+                { value: "inferred", label: "Inferred" },
+                { value: "declared", label: "Declared" },
+              ]}
+              onChange={(mode) => setDeclared(direction, mode === "declared" ? declareFromInferred(node, direction, incomingKinds) : null)}
+            />
+          </Field>
+        )}
+        {direction === "input" && declared && mixedIncoming.length > 1 && (
+          <Muted style={{ marginBottom: spacing[2], color: color.warning[500] }}>
+            Incoming edges carry different kinds ({mixedIncoming.map(portKindLabel).join(", ")}). A declared kind blocks the edges that
+            don&apos;t match — add a transform on those edges, or keep this input inferred.
+          </Muted>
+        )}
+        {ports.map((port) => (
+          <PortRow
+            key={port.id}
+            port={port}
+            kindLabel={direction === "input" ? inputKindLabel(node, port) : port.contract.kind}
+            connectedEdges={edges.filter((edge) => edgePortOf(edge) === port.id)}
+            edgeLabel={(edge) => (direction === "input" ? `from ${edge.source}` : `to ${edge.target}`)}
+            issues={issues.filter((issue) => issue.port_id === port.id)}
+            editor={
+              declared ? (
+                <PortContractEditor
+                  port={port}
+                  direction={direction}
+                  onChange={(patch) => setDeclared(direction, updatePortContract(declared, port.id, patch))}
+                />
+              ) : null
+            }
+          />
+        ))}
+      </>
+    );
+  };
 
   return (
     <div>
       <Group title="Inputs" icon={<ArrowLeftRight size={13} />}>
-        {inputPorts.length === 0 ? (
-          <Muted>None — this is an entry node.</Muted>
-        ) : (
-          inputPorts.map((port) => (
-            <PortRow
-              key={port.id}
-              port={port}
-              kindLabel={inputKindLabel(node, port)}
-              connectedEdges={incomingEdges.filter((edge) => (edge.target_port ?? defaultInputPortId) === port.id)}
-              edgeLabel={(edge) => `from ${edge.source}`}
-              issues={issues.filter((issue) => issue.port_id === port.id)}
-            />
-          ))
-        )}
+        {inputPorts.length === 0 ? <Muted>None — this is an entry node.</Muted> : section("input", inputPorts, incomingEdges, defaultInputPortId)}
       </Group>
       <Group title="Outputs" icon={<CornerDownRight size={13} />}>
-        {outputPorts.length === 0 ? (
-          <Muted>None — this is a terminal node.</Muted>
-        ) : (
-          outputPorts.map((port) => (
-            <PortRow
-              key={port.id}
-              port={port}
-              connectedEdges={outgoingEdges.filter((edge) => (edge.source_port ?? defaultOutputPortId) === port.id)}
-              edgeLabel={(edge) => `to ${edge.target}`}
-              issues={issues.filter((issue) => issue.port_id === port.id)}
-            />
-          ))
-        )}
+        {outputPorts.length === 0 ? <Muted>None — this is a terminal node.</Muted> : section("output", outputPorts, outgoingEdges, defaultOutputPortId)}
       </Group>
+    </div>
+  );
+}
+
+const PORT_KIND_OPTIONS = PORT_KINDS.map((kind) => ({ value: kind, label: portKindLabel(kind) }));
+
+/** Kind, required-ness (inputs) and optional JSON Schema for one declared port. */
+function PortContractEditor({
+  port,
+  direction,
+  onChange,
+}: {
+  port: GraphPort;
+  direction: PortDirection;
+  onChange: (patch: Partial<GraphPort["contract"]>) => void;
+}) {
+  const [editingSchema, setEditingSchema] = useState(Boolean(port.contract.schema));
+  return (
+    <div style={{ marginTop: spacing[2] }}>
+      <Field label="Kind">
+        {(id) => (
+          <Combobox
+            id={id}
+            aria-label={`${port.name} kind`}
+            value={port.contract.kind}
+            options={PORT_KIND_OPTIONS}
+            onChange={(kind) => kind && onChange({ kind: kind as PortKind })}
+          />
+        )}
+      </Field>
+      {direction === "input" && (
+        <Toggle
+          label="Required"
+          description="Compile warns when nothing is connected to this input."
+          checked={port.contract.required !== false}
+          onChange={(required) => onChange({ required })}
+        />
+      )}
+      {editingSchema ? (
+        <Field label="JSON Schema" hint="type, required, properties, items and enum are checked against connected ports; other keywords warn. Apply {} to remove.">
+          <RawConfigEditor
+            label={`${port.name} schema`}
+            value={port.contract.schema ?? {}}
+            height={140}
+            onApply={(schema) => {
+              const empty = Object.keys(schema).length === 0;
+              onChange({ schema: empty ? null : schema });
+              if (empty) setEditingSchema(false);
+            }}
+          />
+        </Field>
+      ) : (
+        <Button variant="secondary" onClick={() => setEditingSchema(true)}>
+          Add JSON Schema
+        </Button>
+      )}
     </div>
   );
 }
@@ -815,12 +937,14 @@ function PortRow({
   connectedEdges,
   edgeLabel,
   issues,
+  editor = null,
 }: {
   port: { id: string; name: string; contract: { kind: string } };
   kindLabel?: string;
   connectedEdges: GraphEdge[];
   edgeLabel: (edge: GraphEdge) => string;
   issues: Diagnostic[];
+  editor?: ReactNode;
 }) {
   return (
     <div style={{ padding: `${spacing[2]}px 0`, borderTop: `1px solid ${border.subtle}` }}>
@@ -834,10 +958,10 @@ function PortRow({
         {connectedEdges.length === 0 ? "Not connected" : connectedEdges.map(edgeLabel).join(", ")}
       </Muted>
       <FieldIssues issues={issues} />
+      {editor}
     </div>
   );
 }
-
 function PolicyTab({
   graphId,
   nodeId,
@@ -1081,11 +1205,16 @@ const preStyle: CSSProperties = {
 export function EdgeInspector({
   edge,
   issues = [],
+  sourcePorts = [],
+  targetPorts = [],
   onChange,
   onDelete,
 }: {
   edge: GraphEdge;
   issues?: Diagnostic[];
+  /** The source node's output ports and the target's input ports (declared, else inferred). */
+  sourcePorts?: GraphPort[];
+  targetPorts?: GraphPort[];
   onChange: (patch: Partial<GraphEdge>) => void;
   onDelete: () => void;
   fullWidth?: boolean;
@@ -1141,6 +1270,30 @@ export function EdgeInspector({
             )}
             <FieldIssues issues={routingIssues} />
           </Group>
+          {(sourcePorts.length > 1 || targetPorts.length > 1 || edge.source_port || edge.target_port) && (
+            <Group title="Ports" icon={<ArrowLeftRight size={13} />}>
+              {sourcePorts.length > 1 && (
+                <Field label="From output" hint="Which output of the source this edge carries. The first one is the default.">
+                  <SegmentedControl
+                    aria-label="Source port"
+                    value={edge.source_port ?? sourcePorts[0].id}
+                    options={sourcePorts.map((port) => ({ value: port.id, label: port.name, title: portKindLabel(port.contract.kind) }))}
+                    onChange={(port) => onChange({ source_port: port === sourcePorts[0].id ? null : port })}
+                  />
+                </Field>
+              )}
+              {targetPorts.length > 1 && (
+                <Field label="Into input" hint="Which input of the target this edge feeds. The first one is the default.">
+                  <SegmentedControl
+                    aria-label="Target port"
+                    value={edge.target_port ?? targetPorts[0].id}
+                    options={targetPorts.map((port) => ({ value: port.id, label: port.name, title: portKindLabel(port.contract.kind) }))}
+                    onChange={(port) => onChange({ target_port: port === targetPorts[0].id ? null : port })}
+                  />
+                </Field>
+              )}
+            </Group>
+          )}
           {showTransform ? (
             <Group title="Transform" icon={<Shuffle size={13} />}>
               <ResourceBindingField
@@ -1171,7 +1324,13 @@ export function EdgeInspector({
         <Group title="Raw" icon={<Braces size={13} />}>
           <RawConfigEditor
             label="Raw edge config"
-            value={{ kind: edge.kind, condition: edge.condition ?? null, transform: edge.transform ?? null }}
+            value={{
+              kind: edge.kind,
+              condition: edge.condition ?? null,
+              source_port: edge.source_port ?? null,
+              target_port: edge.target_port ?? null,
+              transform: edge.transform ?? null,
+            }}
             onApply={(next) => onChange(next)}
             parse={parseEdgeRawConfig}
             format={formatEdgeRawConfig}

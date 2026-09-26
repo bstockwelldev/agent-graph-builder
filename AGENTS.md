@@ -4,7 +4,7 @@ Lean router for autonomous work in **this repository only**.
 
 ## Purpose
 
-Visual graph authoring studio (Next.js, `apps/studio`) + FastAPI/LangGraph execution API + `@bstockwelldev/agent-graph-sdk` (1.0.0 on npm). 13 `NodeType`s (`backend/app/models.py`), six provider adapters behind `ChatModel`, releases, replay, streamed node-level events. There is no `apps/playground` anymore — ignore older docs that mention it.
+Visual graph authoring studio (Next.js, `apps/studio`) + FastAPI/LangGraph execution API + `@bstockwelldev/agent-graph-sdk` (1.0.0 on npm). 14 `NodeType`s (`backend/app/models.py`), six provider adapters behind `ChatModel`, releases, replay, streamed node-level events. There is no `apps/playground` anymore — ignore older docs that mention it.
 
 ## Where to work
 

@@ -53,14 +53,14 @@ describe("parseEdgeRawConfig / formatEdgeRawConfig", () => {
   it("accepts a valid edge kind/condition pair", () => {
     expect(parseEdgeRawConfig('{"kind": "conditional", "condition": "yes"}')).toEqual({
       ok: true,
-      value: { kind: "conditional", condition: "yes", transform: null },
+      value: { kind: "conditional", condition: "yes", source_port: null, target_port: null, transform: null },
     });
   });
 
   it("defaults a missing condition to null", () => {
     expect(parseEdgeRawConfig('{"kind": "sequence"}')).toEqual({
       ok: true,
-      value: { kind: "sequence", condition: null, transform: null },
+      value: { kind: "sequence", condition: null, source_port: null, target_port: null, transform: null },
     });
   });
 
@@ -78,16 +78,27 @@ describe("parseEdgeRawConfig / formatEdgeRawConfig", () => {
 
   it("round-trips through formatEdgeRawConfig", () => {
     const formatted = formatEdgeRawConfig({ kind: "default", condition: null });
-    expect(parseEdgeRawConfig(formatted)).toEqual({ ok: true, value: { kind: "default", condition: null, transform: null } });
+    expect(parseEdgeRawConfig(formatted)).toEqual({ ok: true, value: { kind: "default", condition: null, source_port: null, target_port: null, transform: null } });
   });
 
   it("includes the transform, dropping unset fields", () => {
     const formatted = formatEdgeRawConfig({ kind: "sequence", transform: { type: "select", pointer: "/a", field: null, template: null, target_type: null } });
-    expect(JSON.parse(formatted)).toEqual({ kind: "sequence", condition: null, transform: { type: "select", pointer: "/a" } });
+    expect(JSON.parse(formatted)).toEqual({ kind: "sequence", condition: null, source_port: null, target_port: null, transform: { type: "select", pointer: "/a" } });
     expect(parseEdgeRawConfig(formatted)).toEqual({
       ok: true,
-      value: { kind: "sequence", condition: null, transform: { type: "select", pointer: "/a" } },
+      value: { kind: "sequence", condition: null, source_port: null, target_port: null, transform: { type: "select", pointer: "/a" } },
     });
+  });
+
+  it("carries source/target ports and rejects blank ones", () => {
+    const formatted = formatEdgeRawConfig({ kind: "sequence", source_port: "decision" });
+    expect(parseEdgeRawConfig(formatted)).toEqual({
+      ok: true,
+      value: { kind: "sequence", condition: null, source_port: "decision", target_port: null, transform: null },
+    });
+    const blank = parseEdgeRawConfig('{"kind": "sequence", "target_port": " "}');
+    expect(blank.ok).toBe(false);
+    if (!blank.ok) expect(blank.error).toMatch(/target_port/);
   });
 
   it("rejects an invalid transform with its path", () => {
@@ -125,6 +136,6 @@ describe("JSON / YAML views", () => {
 
   it("feeds YAML through the existing validators", () => {
     const converted = toCanonicalJson("kind: conditional\ncondition: technical", "yaml");
-    expect(converted.ok && parseEdgeRawConfig(converted.json)).toEqual({ ok: true, value: { kind: "conditional", condition: "technical", transform: null } });
+    expect(converted.ok && parseEdgeRawConfig(converted.json)).toEqual({ ok: true, value: { kind: "conditional", condition: "technical", source_port: null, target_port: null, transform: null } });
   });
 });

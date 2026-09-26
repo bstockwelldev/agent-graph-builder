@@ -73,7 +73,7 @@ A warning appears only when the user can do something about it, and whatever it 
 
 ### P2 — Port authoring and display
 
-- An "Advanced → Ports" section in the node inspector to declare ports and schemas (the explicit contract opt-in).
+- ~~An "Advanced → Ports" section in the node inspector to declare ports and schemas (the explicit contract opt-in).~~ Done 2026-09-26 in the I/O tab: per direction, **Inferred | Declared**; declared ports keep their catalog ids (the runtime binds by id) with an editable kind, required flag and JSON Schema (JSON/YAML). A kind-agnostic input is seeded from what actually arrives, so declaring doesn't create a mismatch; mixed incoming kinds are called out, with a transform as the fix. Edges with a multi-port end get a port picker (e.g. a router's `decision` output). Also fixed: the SDK rejected any graph with declared ports (null contract fields).
 - ~~Node cards show `in: any` for kind-agnostic inputs instead of `in: structured json`.~~ Done 2026-09-25: cards, the I/O tab and connect-drag feedback treat tool/output/transform default inputs as `any` (`content/node-ports.ts` `acceptsAnyKind`).
 
 ### Non-goals

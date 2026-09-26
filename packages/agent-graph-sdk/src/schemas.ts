@@ -57,11 +57,12 @@ export const portKindSchema = z.enum([
 
 export const dataClassificationSchema = z.enum(["public", "internal", "confidential", "restricted"]);
 
+// Nullish, not optional: the API serializes unset fields as null.
 export const portContractSchema = z.object({
   kind: portKindSchema,
-  schema: z.record(z.string(), z.unknown()).optional(),
-  required: z.boolean().optional(),
-  classification: dataClassificationSchema.optional(),
+  schema: z.record(z.string(), z.unknown()).nullish(),
+  required: z.boolean().nullish(),
+  classification: dataClassificationSchema.nullish(),
 });
 
 export const graphPortSchema = z.object({

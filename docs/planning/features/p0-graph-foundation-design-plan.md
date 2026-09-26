@@ -210,6 +210,15 @@ One engine (`backend/app/transforms.py`), three surfaces:
 - **Try it.** `POST /api/transforms/preview` (`client.transforms.preview`) runs a transform (inline or `{transform_id}`) on a sample value through the same engine and returns `{ok, output, error}`. It is always a 200, and nothing is saved. The edge Transform section and the transform node form both offer it.
 - **Ports.** A transform node's input accepts any kind. Its output is `message` for `format_message` and coerce-to-string, and `structured-json` otherwise.
 
+#### Port authoring (implemented 2026-09-26)
+
+The explicit-contract opt-in lives in the node inspector's I/O tab: each direction is **Inferred** (catalog defaults; mismatches only warn) or **Declared** (`input_ports`/`output_ports` written to the graph; a mismatch against another declared port blocks).
+
+- Declaring types the node's existing catalog ports. It keeps their ids and names, because the runtime resolves inputs and projects outputs by id (`resolve_node_input`, `project_node_output`). Adding ports is deliberately unsupported, since no executor would read them.
+- Per port you can set the kind, `required` (inputs), and an optional JSON Schema (checked by `_validate_schema`). `classification` is not exposed: nothing enforces it yet.
+- A kind-agnostic input (`tool`, `output`, `transform`) is seeded from its connected sources' kind when they agree. When they disagree, the tab says so, and a transform on the odd edge is the fix.
+- An edge whose source (or target) has several ports gets a port picker, e.g. a router's `decision` output.
+
 ## Releases and fingerprinting
 
 ### Lifecycle

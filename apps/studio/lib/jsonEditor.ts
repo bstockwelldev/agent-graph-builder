@@ -39,8 +39,7 @@ export function formatConfigJson(value: Record<string, unknown>): string {
 
 // --- Edge raw config -----------------------------------------------------
 // The fields an edge edit actually applies (GraphEditor's patchEdgeById):
-// kind, condition and transform. Ports are left out — nothing edits them
-// yet, so exposing them here would look accepted while doing nothing.
+// kind, condition, source/target port and transform.
 
 const EDGE_KINDS = ["sequence", "conditional", "default"] as const;
 export type EdgeKindValue = (typeof EDGE_KINDS)[number];
@@ -48,6 +47,8 @@ export type EdgeKindValue = (typeof EDGE_KINDS)[number];
 export interface EdgeRawConfig {
   kind: EdgeKindValue;
   condition: string | null;
+  source_port: string | null;
+  target_port: string | null;
   transform: EdgeTransform | null;
 }
 
@@ -59,19 +60,40 @@ export function compactTransform(transform: EdgeTransform | null | undefined): E
   return Object.fromEntries(Object.entries(transform).filter(([, v]) => v !== null && v !== undefined)) as EdgeTransform;
 }
 
-export function formatEdgeRawConfig(edge: { kind: string; condition?: string | null; transform?: EdgeTransform | null }): string {
-  return JSON.stringify({ kind: edge.kind, condition: edge.condition ?? null, transform: compactTransform(edge.transform) }, null, 2);
+export function formatEdgeRawConfig(edge: {
+  kind: string;
+  condition?: string | null;
+  source_port?: string | null;
+  target_port?: string | null;
+  transform?: EdgeTransform | null;
+}): string {
+  return JSON.stringify(
+    {
+      kind: edge.kind,
+      condition: edge.condition ?? null,
+      source_port: edge.source_port ?? null,
+      target_port: edge.target_port ?? null,
+      transform: compactTransform(edge.transform),
+    },
+    null,
+    2,
+  );
 }
 
 export function parseEdgeRawConfig(text: string): EdgeConfigParseResult {
   const base = parseConfigJson(text);
   if (!base.ok) return base;
-  const { kind, condition, transform } = base.value;
+  const { kind, condition, transform, source_port, target_port } = base.value;
   if (typeof kind !== "string" || !(EDGE_KINDS as readonly string[]).includes(kind)) {
     return { ok: false, error: `"kind" must be one of: ${EDGE_KINDS.join(", ")}.` };
   }
   if (condition !== null && condition !== undefined && typeof condition !== "string") {
     return { ok: false, error: '"condition" must be a string or null.' };
+  }
+  for (const [key, value] of Object.entries({ source_port, target_port })) {
+    if (value !== null && value !== undefined && (typeof value !== "string" || !value.trim())) {
+      return { ok: false, error: `"${key}" must be a port id or null.` };
+    }
   }
   let parsedTransform: EdgeTransform | null = null;
   if (transform !== null && transform !== undefined) {
@@ -84,7 +106,13 @@ export function parseEdgeRawConfig(text: string): EdgeConfigParseResult {
   }
   return {
     ok: true,
-    value: { kind: kind as EdgeKindValue, condition: (condition as string | null) ?? null, transform: parsedTransform },
+    value: {
+      kind: kind as EdgeKindValue,
+      condition: (condition as string | null) ?? null,
+      source_port: (source_port as string | null) ?? null,
+      target_port: (target_port as string | null) ?? null,
+      transform: parsedTransform,
+    },
   };
 }
 
