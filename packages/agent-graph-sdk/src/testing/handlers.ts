@@ -321,6 +321,10 @@ function knowledgeSummary(store: MockStore, graphId: string) {
     chunkCount: documents.reduce((sum, doc) => sum + Math.max(1, Math.ceil(doc.char_count / 500)), 0),
     embeddingProvider: documents.length ? "stub" : null,
     embeddingModelId: documents.length ? "stub-embedding" : null,
+    embeddingDimensions: documents.length ? 384 : null,
+    activeEmbeddingProvider: "stub",
+    activeEmbeddingModelId: "stub-embedding",
+    embeddingUnavailableReason: null,
   };
 }
 

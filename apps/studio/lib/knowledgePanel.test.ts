@@ -1,7 +1,7 @@
 import type { KnowledgeLineageEntry } from "@bstockwelldev/agent-graph-sdk";
 import { describe, expect, it } from "vitest";
 
-import { summarizeLineageByDocument } from "./knowledgePanel";
+import { describeEmbedding, summarizeLineageByDocument } from "./knowledgePanel";
 
 function entry(overrides: Partial<KnowledgeLineageEntry>): KnowledgeLineageEntry {
   return {
@@ -47,5 +47,64 @@ describe("summarizeLineageByDocument", () => {
       entry({ id: "b", document_id: "new", document_name: "new.md", created_at: "2026-02-01T00:00:00Z" }),
     ]);
     expect(usage.map((row) => row.documentId)).toEqual(["new", "old"]);
+  });
+});
+
+describe("describeEmbedding", () => {
+  const base = { graphId: "g", documents: [], chunkCount: 0, embeddingProvider: null, embeddingModelId: null };
+
+  it("names the provider a first upload will use", () => {
+    expect(
+      describeEmbedding({ ...base, activeEmbeddingProvider: "supabase", activeEmbeddingModelId: "gte-small" }),
+    ).toEqual({ tone: "ok", text: "Uploads will embed with Supabase Edge Function · gte-small" });
+  });
+
+  it("explains that the public demo turns embeddings off", () => {
+    expect(
+      describeEmbedding({
+        ...base,
+        activeEmbeddingProvider: null,
+        activeEmbeddingModelId: null,
+        embeddingUnavailableReason: "public_demo_mode",
+      })?.text,
+    ).toBe("Embeddings are off on this public demo, so uploads are disabled.");
+  });
+
+  it("warns when no provider is configured", () => {
+    expect(describeEmbedding({ ...base, activeEmbeddingProvider: null, activeEmbeddingModelId: null })?.tone).toBe(
+      "warning",
+    );
+  });
+
+  it("shows the indexed provider, model and dimensions", () => {
+    expect(
+      describeEmbedding({
+        ...base,
+        embeddingProvider: "supabase",
+        embeddingModelId: "gte-small",
+        embeddingDimensions: 384,
+        activeEmbeddingProvider: "supabase",
+        activeEmbeddingModelId: "gte-small",
+      }),
+    ).toEqual({ tone: "ok", text: "Embeddings: Supabase Edge Function · gte-small · 384-dim" });
+  });
+
+  it("warns when the indexed provider is no longer configured", () => {
+    const status = describeEmbedding({
+      ...base,
+      embeddingProvider: "openai",
+      embeddingModelId: "text-embedding-3-small",
+      activeEmbeddingProvider: null,
+      activeEmbeddingModelId: null,
+    });
+    expect(status?.tone).toBe("warning");
+    expect(status?.text).toContain("OpenAI · text-embedding-3-small");
+  });
+
+  it("falls back to the indexed provider on backends without active fields", () => {
+    expect(describeEmbedding({ ...base, embeddingProvider: "openai", embeddingModelId: "m" })?.text).toBe(
+      "Embeddings: OpenAI · m",
+    );
+    expect(describeEmbedding(base)).toBeNull();
   });
 });

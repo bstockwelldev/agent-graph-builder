@@ -157,6 +157,23 @@ Put provider keys in `backend/.env.local` (gitignored), or point
 `SHARED_ENV_FILE` at a dotenv file. Keys already in the environment are never
 overwritten. Without any keys, everything runs on Stub.
 
+### Knowledge-base embeddings
+
+Uploaded knowledge documents are embedded by the first configured provider:
+
+| Provider | Model | Needs |
+| --- | --- | --- |
+| **Supabase** (default) | `gte-small`, 384-dim, run by the `agb-embed` Edge Function (`supabase/functions/agb-embed`); no third-party key | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (`SUPABASE_EMBEDDINGS_URL` instead of `SUPABASE_URL` locally, so storage stays on SQLite) |
+| **OpenAI** | `text-embedding-3-small` (`OPENAI_EMBEDDING_MODEL`) | `OPENAI_API_KEY` |
+| **Google** | `gemini-embedding-001` (`GOOGLE_EMBEDDING_MODEL`) | a Gemini key |
+
+`EMBEDDING_PROVIDER=supabase|openai|google` forces one. A graph stays on the
+provider it was first indexed with, because vectors from different models
+can't be compared. The Knowledge panel shows the provider, model and vector
+size in use. Deploy the function with
+`supabase functions deploy agb-embed` (JWT verification on; it only accepts
+the service-role key). Groq has no embedding models, so it isn't an option.
+
 ## Tests
 
 ```bash

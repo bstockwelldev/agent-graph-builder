@@ -786,6 +786,15 @@ const knowledgeSummaryFields = {
   chunkCount: z.number(),
   embeddingProvider: z.string().nullable(),
   embeddingModelId: z.string().nullable(),
+  // Vector size of the indexed chunks (e.g. 384 for Supabase gte-small).
+  embeddingDimensions: z.number().nullish(),
+  // What uploads/retrieval use right now: the indexed provider while it's
+  // still configured, else the default for a first upload; null when none
+  // is. Nullish so the client still accepts backends older than these fields.
+  activeEmbeddingProvider: z.string().nullish(),
+  activeEmbeddingModelId: z.string().nullish(),
+  // Why the active fields are null: "public_demo_mode" or "not_configured".
+  embeddingUnavailableReason: z.string().nullish(),
 };
 
 // GET /api/graphs/{id}/knowledge
