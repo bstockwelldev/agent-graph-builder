@@ -195,3 +195,38 @@ async def test_transform_node_bound_to_library_is_pinned_by_release() -> None:
     assert [(u["node_id"], u["node_type"], u["field"]) for u in usages] == [
         ("shape_1", "transform", "transformId")
     ]
+
+
+# --- preview ("Try it") -------------------------------------------------------
+
+
+def test_preview_applies_an_inline_transform() -> None:
+    body = {"transform": {"type": "select", "pointer": "/topic"}, "value": {"topic": "indexes"}}
+    assert client.post("/api/transforms/preview", json=body).json() == {
+        "ok": True,
+        "output": "indexes",
+        "error": None,
+    }
+
+
+def test_preview_reports_the_error_a_run_would_fail_with() -> None:
+    body = {"transform": {"type": "coerce", "target_type": "number"}, "value": "abc"}
+    response = client.post("/api/transforms/preview", json=body)
+    assert response.status_code == 200
+    assert response.json() == {"ok": False, "output": None, "error": "'abc' is not a number"}
+    incomplete = {"transform": {"type": "wrap"}, "value": 1}
+    assert client.post("/api/transforms/preview", json=incomplete).json()["error"] == (
+        "wrap transform requires 'field'"
+    )
+
+
+def test_preview_resolves_a_library_reference() -> None:
+    storage.save_resource("transforms", "fact_line", FACT_LINE)
+    body = {"transform": {"transform_id": "fact_line"}, "value": "indexes speed up reads"}
+    assert client.post("/api/transforms/preview", json=body).json()["output"] == (
+        "Fact: indexes speed up reads"
+    )
+    missing = {"transform": {"transform_id": "gone"}, "value": 1}
+    assert client.post("/api/transforms/preview", json=missing).json()["error"] == (
+        "library transform 'gone' not found"
+    )

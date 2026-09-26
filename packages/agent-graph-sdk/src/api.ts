@@ -24,6 +24,7 @@ import {
   knowledgeUploadResponseSchema,
   llmProfileSchema,
   transformDefinitionSchema,
+  transformPreviewResponseSchema,
   mcpServerConfigSchema,
   nodeExecutionSchema,
   nodeImpactSchema,
@@ -55,6 +56,7 @@ import { path, query, type Transport } from "./transport.js";
 import type {
   ChatContext,
   ChatProvider,
+  EdgeTransform,
   Fixture,
   GraphDefinition,
   PlatformEvent,
@@ -404,7 +406,13 @@ export function buildNamespaces(transport: Transport) {
     agents: { ...resourceNamespace(transport, "agents", agentProfileSchema), versions: versionNamespace(transport, "agents") },
     llmProfiles: { ...resourceNamespace(transport, "llm-profiles", llmProfileSchema), versions: versionNamespace(transport, "llm-profiles") },
     /** Reusable deterministic transforms, bound by id from edges and transform nodes. */
-    transforms: { ...resourceNamespace(transport, "transforms", transformDefinitionSchema), versions: versionNamespace(transport, "transforms") },
+    transforms: {
+      ...resourceNamespace(transport, "transforms", transformDefinitionSchema),
+      versions: versionNamespace(transport, "transforms"),
+      /** Applies a transform (inline, or `{ transform_id }`) to a sample value without running a graph. */
+      preview: (transform: EdgeTransform, value: unknown) =>
+        transport.request("/api/transforms/preview", json({ transform, value }), transformPreviewResponseSchema),
+    },
     /** Saved Routing Lab fixture datasets. */
     datasets: {
       ...resourceNamespace(transport, "datasets", fixtureDatasetSchema),

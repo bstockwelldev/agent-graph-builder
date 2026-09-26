@@ -207,6 +207,7 @@ One engine (`backend/app/transforms.py`), three surfaces:
 - **Semantics.** `select` takes an RFC 6901 JSON Pointer (text input is parsed as JSON first). `wrap` returns `{field: value}`. `format_message` renders `{value}` and `{value.path.0}`, with `{{`/`}}` for literal braces; it is deliberately not `str.format` (no attribute access), and non-strings render as JSON. `coerce` converts to `string`, `number` (finite only) or `boolean` (`true/false/yes/no/1/0`).
 - **Failure.** Anything that can't apply raises `TransformError`. That fails the target node (edge) or the transform node with `edge <id> transform <type>: <reason>`; nothing is guessed.
 - **Library references** are copied inline by `materialize_transforms`: in the compiler (so contract checks see the real type; a missing one is an `UNRESOLVED_RESOURCE_BINDING`) and at run start. Release runs read only the pinned `transforms:<id>` snapshots.
+- **Try it.** `POST /api/transforms/preview` (`client.transforms.preview`) runs a transform (inline or `{transform_id}`) on a sample value through the same engine and returns `{ok, output, error}`. It is always a 200, and nothing is saved. The edge Transform section and the transform node form both offer it.
 - **Ports.** A transform node's input accepts any kind. Its output is `message` for `format_message` and coerce-to-string, and `structured-json` otherwise.
 
 ## Releases and fingerprinting

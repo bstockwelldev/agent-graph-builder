@@ -107,6 +107,27 @@ def node_transform_spec(config: dict[str, Any]) -> EdgeTransform:
     )
 
 
+def preview_transform(
+    transform: EdgeTransform, value: Any, lookup: Callable[[str], dict[str, Any] | None]
+) -> tuple[bool, Any, str | None]:
+    """Runs `transform` on `value` exactly as a run would, resolving a
+    library reference through `lookup`. Returns `(ok, output, error)`."""
+    spec: TransformSpec = transform
+    if transform.transform_id:
+        definition = lookup(transform.transform_id)
+        if definition is None:
+            return False, None, f"library transform {transform.transform_id!r} not found"
+        inline = {key: definition.get(key) for key in TRANSFORM_FIELDS}
+        spec = EdgeTransform(**inline, transform_id=transform.transform_id)
+    incomplete = transform_field_error(spec)
+    if incomplete:
+        return False, None, incomplete
+    try:
+        return True, apply_transform(spec, value), None
+    except TransformError as exc:
+        return False, None, str(exc)
+
+
 def apply_transform(spec: TransformSpec, value: Any) -> Any:
     if spec.type is None:
         ref = getattr(spec, "transform_id", None)
