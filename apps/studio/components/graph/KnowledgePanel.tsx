@@ -4,7 +4,7 @@ import type { KnowledgeLineageEntry, KnowledgeSummary } from "@bstockwelldev/age
 
 import { client } from "@/lib/api-client";
 import { color, fontFamily, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
-import { errorDetail, summarizeLineageByDocument } from "@/lib/knowledgePanel";
+import { describeEmbedding, errorDetail, summarizeLineageByDocument } from "@/lib/knowledgePanel";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { SkeletonBlock } from "./ui/Skeleton";
@@ -126,6 +126,7 @@ export function KnowledgePanel({
   const usage = summarizeLineageByDocument(lineage);
   const recent = [...lineage].reverse().slice(0, RECENT_RETRIEVALS_SHOWN);
   const busy = uploading || deletingId !== null;
+  const embedding = describeEmbedding(summary);
 
   return (
     <div style={containerStyle(layout)}>
@@ -135,6 +136,20 @@ export function KnowledgePanel({
             Upload <code style={monoStyle}>.txt</code> or <code style={monoStyle}>.md</code> files (up to 400 KB each).
             Every <code style={monoStyle}>llm</code> node in this graph retrieves from them automatically.
           </div>
+          {embedding && (
+            <div
+              data-testid="knowledge-embedding"
+              style={{
+                ...typeScale.caption,
+                lineHeight: "16px",
+                marginBottom: spacing[2],
+                color: embedding.tone === "warning" ? color.warning[500] : undefined,
+                opacity: embedding.tone === "warning" ? 1 : 0.85,
+              }}
+            >
+              {embedding.text}
+            </div>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -167,14 +182,6 @@ export function KnowledgePanel({
               <>
                 <div style={{ ...typeScale.caption, opacity: 0.7, marginBottom: spacing[2] }}>
                   {documents.length} document{documents.length === 1 ? "" : "s"} · {summary?.chunkCount ?? 0} chunks
-                  {summary?.embeddingModelId ? (
-                    <>
-                      {" · "}
-                      <span style={monoStyle}>
-                        {summary.embeddingProvider}/{summary.embeddingModelId}
-                      </span>
-                    </>
-                  ) : null}
                 </div>
                 {documents.map((doc) => (
                   <div key={doc.id} style={rowStyle}>
