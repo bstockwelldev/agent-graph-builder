@@ -6,9 +6,9 @@ import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
 import { SectionHeader } from "./ui/SectionHeader";
 
-// All 12 types (studio-consolidation Phase 4d) — AGB's playground only ever
-// authored the original 6; the other 6 were fully executable server-side
-// since Phase 2 but had no UI path to create them until now.
+// All 13 types, subgraph included (studio-consolidation Phase 4d) — AGB's
+// former playground only ever authored the original 6; the rest were fully
+// executable server-side but had no UI path to create them until then.
 export const NODE_TYPES: NodeType[] = [
   "input",
   "prompt",

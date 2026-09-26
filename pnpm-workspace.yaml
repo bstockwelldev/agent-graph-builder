@@ -2,13 +2,14 @@ packages:
   - "apps/*"
   - "packages/*"
 
-# apps/playground (React 18) and apps/studio (React 19) intentionally coexist
-# during the studio-consolidation program. lucide-react peer-depends only on
-# "react", not "@types/react", so pnpm has no per-variant signal for its
-# ambient JSX types and falls back to a single ambiguous hoisted symlink
-# (node_modules/.pnpm/node_modules/@types/react) shared by both React majors
+# Added while apps/playground (React 18, since removed) coexisted with
+# apps/studio (React 19) during the studio-consolidation program; kept as a
+# guard in case two React majors land in the workspace again. lucide-react
+# peer-depends only on "react", not "@types/react", so pnpm has no
+# per-variant signal for its ambient JSX types and falls back to a single
+# ambiguous hoisted symlink (node_modules/.pnpm/node_modules/@types/react)
 # — whichever version that symlink points to "wins" for every consumer,
-# breaking the other. Declaring the missing peer here lets pnpm resolve
+# breaking the others. Declaring the missing peer here lets pnpm resolve
 # @types/react per lucide-react variant, matching how it already scopes
 # "react" itself.
 packageExtensions:
