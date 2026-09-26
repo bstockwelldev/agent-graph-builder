@@ -37,6 +37,7 @@ from .embedding_model import (
     missing_embedding_provider_message,
     resolve_embedding_model,
 )
+from .env_config import public_demo_mode_enabled
 from .events import now_iso
 from .models import KnowledgeLineageEntry
 
@@ -319,6 +320,8 @@ async def upload_knowledge_document(
     used (400 bad input, 409 embedding-model mismatch, 502 provider
     returned the wrong shape, 503 no embedding provider configured).
     """
+    if public_demo_mode_enabled():
+        raise KnowledgeUploadError(403, "Knowledge uploads are disabled on this public demo.")
     resolution = resolve_embedding_model()
     if resolution is None:
         raise KnowledgeUploadError(503, missing_embedding_provider_message())

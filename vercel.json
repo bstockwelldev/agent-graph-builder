@@ -23,6 +23,7 @@
   ],
   "env": {
     "GRAPH_DB_PATH": "/tmp/graphs.db",
-    "CHAT_PROVIDER": "stub"
+    "CHAT_PROVIDER": "stub",
+    "PUBLIC_DEMO_MODE": "1"
   }
 }

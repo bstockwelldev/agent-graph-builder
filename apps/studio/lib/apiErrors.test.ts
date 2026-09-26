@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AgentGraphApiError, AgentGraphNetworkError } from "@bstockwelldev/agent-graph-sdk";
 
-import { blockingDiagnostics, errorDetail } from "./apiErrors";
+import { blockingDiagnostics, errorDetail, isReadOnlyGraphError } from "./apiErrors";
 
 // SDK 1/7 (STO-614): user-facing error text from typed SDK errors.
 
@@ -38,5 +38,17 @@ describe("errorDetail", () => {
     expect(errorDetail(network)).toBe("GET /api/graphs failed: fetch failed");
     expect(errorDetail("boom")).toBe("boom");
     expect(blockingDiagnostics(new Error("x"))).toEqual([]);
+  });
+});
+
+describe("isReadOnlyGraphError", () => {
+  it("matches the seeded demo's 403", () => {
+    expect(isReadOnlyGraphError(apiError(403, { detail: { code: "graph_read_only", message: "read-only" } }))).toBe(true);
+  });
+
+  it("ignores other failures", () => {
+    expect(isReadOnlyGraphError(apiError(403, { detail: { code: "live_provider_requires_api_key" } }))).toBe(false);
+    expect(isReadOnlyGraphError(apiError(404, { detail: "graph not found" }))).toBe(false);
+    expect(isReadOnlyGraphError(new Error("boom"))).toBe(false);
   });
 });

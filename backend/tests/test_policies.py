@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.compiler import validate_graph
 from app.demo_graph import build_demo_graph
+from tests.helpers import editable_demo_graph
 from app.main import app
 from app.models import (
     DataClassification,
@@ -264,8 +265,8 @@ def test_delete_policy_exception_returns_false_when_missing() -> None:
 def test_policy_exception_routes_round_trip() -> None:
     from app import storage
 
-    storage.save_graph(build_demo_graph())
-    graph_id = build_demo_graph().id
+    storage.save_graph(editable_demo_graph())
+    graph_id = editable_demo_graph().id
 
     create_response = client.post(
         f"/api/graphs/{graph_id}/policy-exceptions",

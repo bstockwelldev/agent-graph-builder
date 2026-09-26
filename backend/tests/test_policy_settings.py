@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app import storage
 from app.compiler import validate_graph
 from app.demo_graph import build_demo_graph
+from tests.helpers import editable_demo_graph
 from app.main import app
 from app.models import (
     DataClassification,
@@ -276,8 +277,8 @@ def test_empty_rule_entries_are_dropped() -> None:
 
 
 def test_settings_routes_round_trip() -> None:
-    storage.save_graph(build_demo_graph())
-    graph_id = build_demo_graph().id
+    storage.save_graph(editable_demo_graph())
+    graph_id = editable_demo_graph().id
 
     catalog = client.get("/api/policies/catalog").json()
     assert {rule["code"] for rule in catalog} >= {
@@ -320,8 +321,8 @@ def test_settings_routes_round_trip() -> None:
 
 
 def test_exception_update_and_list_all_routes() -> None:
-    storage.save_graph(build_demo_graph())
-    graph_id = build_demo_graph().id
+    storage.save_graph(editable_demo_graph())
+    graph_id = editable_demo_graph().id
     created = client.post(
         f"/api/graphs/{graph_id}/policy-exceptions",
         json={
@@ -331,7 +332,7 @@ def test_exception_update_and_list_all_routes() -> None:
         },
     ).json()
 
-    graph = _unpinned_demo()
+    graph = _unpinned_demo().model_copy(update={"id": graph_id})
     save_policy_settings(
         graph_scope(graph.id),
         _settings(**{LLM_MODEL_NOT_PINNED: PolicyRuleSetting(enforcement="block")}),

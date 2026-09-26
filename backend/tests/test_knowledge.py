@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app import knowledge, storage
 from app.compiler import compile_graph
-from app.demo_graph import build_demo_graph
+from tests.helpers import editable_demo_graph
 from app.embedding_model import EmbeddingProviderError, ResolvedEmbeddingModel
 from app.knowledge import (
     KnowledgeChunk,
@@ -244,7 +244,7 @@ def test_get_knowledge_404_for_unknown_graph() -> None:
 
 def test_upload_returns_503_without_embedding_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_embedding_env(monkeypatch)
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     storage.save_graph(demo)
     response = client.post(
         f"/api/graphs/{demo.id}/knowledge",
@@ -260,7 +260,7 @@ def test_upload_rejects_oversized_file(monkeypatch: pytest.MonkeyPatch) -> None:
             provider="openai", model_id="text-embedding-3-small", api_key="sk-test"
         ),
     )
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     storage.save_graph(demo)
     too_big = b"x" * (knowledge.MAX_UPLOAD_BYTES + 1)
     response = client.post(
@@ -277,7 +277,7 @@ def test_upload_rejects_unsupported_file_type(monkeypatch: pytest.MonkeyPatch) -
             provider="openai", model_id="text-embedding-3-small", api_key="sk-test"
         ),
     )
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     storage.save_graph(demo)
     response = client.post(
         f"/api/graphs/{demo.id}/knowledge",
@@ -303,7 +303,7 @@ def test_upload_maps_provider_error_to_502_with_detail(monkeypatch: pytest.Monke
     # Regression: an EmbeddingProviderError (e.g. OpenAI 429 quota) used to
     # escape upload_knowledge_document as an unhandled bare 500.
     _configure_openai_embeddings(monkeypatch)
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     storage.save_graph(demo)
     storage.delete_resource("knowledge", demo.id)
 
@@ -323,7 +323,7 @@ def test_upload_maps_provider_error_to_502_with_detail(monkeypatch: pytest.Monke
 
 def test_upload_maps_network_error_to_generic_502(monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_openai_embeddings(monkeypatch)
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     storage.save_graph(demo)
     storage.delete_resource("knowledge", demo.id)
 
@@ -343,7 +343,7 @@ def test_upload_maps_network_error_to_generic_502(monkeypatch: pytest.MonkeyPatc
 def test_upload_success_then_conflict_on_model_mismatch_then_delete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     storage.save_graph(demo)
     storage.delete_resource("knowledge", demo.id)
 
@@ -559,7 +559,7 @@ async def test_list_knowledge_lineage_filters_by_document_id(
 def test_knowledge_lineage_endpoint_round_trip(
     monkeypatch: pytest.MonkeyPatch, _isolated_db: None
 ) -> None:
-    demo = build_demo_graph()
+    demo = editable_demo_graph()
     graph_id = f"{demo.id}_lineage_route"
     demo = demo.model_copy(update={"id": graph_id})
     storage.save_graph(demo)

@@ -142,6 +142,13 @@ def resolve_openai_compat_api_key() -> str:
     return first_env("OPENAI_COMPAT_API_KEY")
 
 
+def public_demo_mode_enabled() -> bool:
+    """``PUBLIC_DEMO_MODE`` marks an anonymous public deploy (no login, no
+    sessions): server-side provider keys must not be spendable by visitors,
+    so live providers run only with a key the caller sends."""
+    return os.environ.get("PUBLIC_DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 # --- Runtime config: telemetry provider selection (studio-consolidation
 # Phase 5 — see docs/planning/features/studio-consolidation-plan.md).
 # Ported from micro-ui-agent-builder's `lib/server/runtime-config.ts`,

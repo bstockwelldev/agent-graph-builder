@@ -38,7 +38,7 @@ def test_groups_round_trip_through_the_api() -> None:
             id="grp_1", label="Answer", color="violet", node_ids=["prompt_answer", "llm_answer"]
         ),
         GraphGroup(id="grp_2", label="Lookup", node_ids=["tool_lookup"], collapsed=True),
-    )
+    ).model_copy(update={"id": "demo_copy"})
     saved = client.put(f"/api/graphs/{graph.id}", json=graph.model_dump(mode="json"))
     assert saved.status_code == 200, saved.text
     loaded = client.get(f"/api/graphs/{graph.id}").json()

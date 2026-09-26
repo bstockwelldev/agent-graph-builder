@@ -39,7 +39,7 @@ def _layered():
 
 
 def test_layers_round_trip() -> None:
-    graph = _layered()
+    graph = _layered().model_copy(update={"id": "demo_copy"})
     assert (
         client.put(f"/api/graphs/{graph.id}", json=graph.model_dump(mode="json")).status_code == 200
     )

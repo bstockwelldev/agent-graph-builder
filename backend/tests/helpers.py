@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from app import runtime
+from app.demo_graph import build_demo_graph
+from app.models import GraphDefinition
+
+
+def editable_demo_graph() -> GraphDefinition:
+    """The demo under its own id -- the seeded demo itself is read-only."""
+    return build_demo_graph().model_copy(update={"id": "demo_copy"})
 
 
 async def run_graph_and_wait(

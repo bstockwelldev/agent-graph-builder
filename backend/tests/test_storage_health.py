@@ -88,6 +88,7 @@ def test_health_reports_unhealthy_on_vercel_sqlite(monkeypatch: pytest.MonkeyPat
         "storage_backend": "sqlite",
         "message": storage.STORAGE_MISCONFIGURED_DETAIL,
         "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
+        "public_demo_mode": False,
     }
 
 
@@ -107,6 +108,7 @@ def test_health_reports_healthy_on_vercel_with_supabase(monkeypatch: pytest.Monk
         "storage_backend": "supabase",
         "supabase_key": supabase_store.key_kind(),
         "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
+        "public_demo_mode": False,
     }
 
 
@@ -122,6 +124,7 @@ def test_health_reports_healthy_local_sqlite(monkeypatch: pytest.MonkeyPatch) ->
         "ok": True,
         "storage_backend": "sqlite",
         "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
+        "public_demo_mode": False,
     }
 
 

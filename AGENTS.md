@@ -46,7 +46,7 @@ Production deploy (operator): `vercel deploy --prod` from repo root after merge.
 
 | Variable | Purpose |
 | -------- | ------- |
-| `GROQ_API_KEY` | Live LLM provider (optional; `CHAT_PROVIDER=stub` until set) |
+| `GROQ_API_KEY` | Live LLM provider (optional; `CHAT_PROVIDER=stub` until set). Visitors can't use it: `vercel.json` sets `PUBLIC_DEMO_MODE=1` (README → Public demo mode) |
 | `SUPABASE_URL` | **Prod storage** — Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-only; required with `SUPABASE_URL`) |
 | `SUPABASE_STORAGE_BUCKET` | Optional. Private bucket, default `agent-graph-builder` |

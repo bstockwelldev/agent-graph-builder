@@ -1,7 +1,15 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { GraphNodeData } from "@/components/graph/nodes/GraphNodeView";
 import { EDGE_KIND_TAXONOMY } from "../content/taxonomy";
-import type { EdgeKind, GraphEdge, GraphGroup, GraphLayer, GraphNode, GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
+import type {
+  EdgeKind,
+  GraphDefinition,
+  GraphEdge,
+  GraphGroup,
+  GraphLayer,
+  GraphNode,
+  GraphOrientation,
+} from "@bstockwelldev/agent-graph-sdk";
 
 export type CanvasSnapshot = {
   nodes: Node<GraphNodeData>[];
@@ -250,4 +258,14 @@ export function edgeContract(e: GraphEdge): EdgeContract | undefined {
     ...(e.target_port ? { target_port: e.target_port } : {}),
     ...(e.transform ? { transform: e.transform } : {}),
   };
+}
+
+/** A copy of `graph` under a fresh id (same `graph_<12 hex>` shape the
+ * backend mints) -- where edits to a read-only demo are saved. */
+export function copyGraphDefinition(graph: GraphDefinition, randomHex: () => string = randomGraphIdSuffix): GraphDefinition {
+  return { ...graph, id: `graph_${randomHex()}`, name: `${graph.name} (copy)` };
+}
+
+function randomGraphIdSuffix(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }

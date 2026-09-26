@@ -222,12 +222,13 @@ Set these in the Vercel dashboard. Never commit them.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
+| `PUBLIC_DEMO_MODE` | Set in `vercel.json` | `1` = anonymous public deploy: see **Public demo mode** below |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Yes (prod) | Durable storage in Supabase Storage |
 | `SUPABASE_STORAGE_BUCKET` | Optional | Private bucket; default `agent-graph-builder` |
 | `OBJECT_STORE_BUCKET`, `OBJECT_STORE_ACCESS_KEY_ID`, `OBJECT_STORE_SECRET_ACCESS_KEY` | Alternative | S3-compatible store (R2, S3, MinIO, Azure S3 API) |
 | `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_REGION` | Optional | Custom endpoint / region (`auto` for R2) |
 | `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Alternative | Turso libsql |
-| `GROQ_API_KEY` | Optional | Live LLM runs (`CHAT_PROVIDER=stub` is the deployed default) |
+| `GROQ_API_KEY` | Optional | Live LLM runs (`CHAT_PROVIDER=stub` is the deployed default); unused by visitors while `PUBLIC_DEMO_MODE=1` |
 
 Storage selection, first match wins: Supabase, then `OBJECT_STORE_*`, then
 `TURSO_*`, then file SQLite. On Vercel with no shared store, the API returns
@@ -236,6 +237,16 @@ Storage selection, first match wins: Supabase, then `OBJECT_STORE_*`, then
 Legacy aliases still resolve: `agent-graph-builder-poc.vercel.app` and
 `theagenticengineer-graph-builder.vercel.app`. The bare
 `agent-graph-builder.vercel.app` belongs to a different account.
+
+**Public demo mode.** The prod Studio needs no login and the backend has no sessions, so `vercel.json` sets `PUBLIC_DEMO_MODE=1`. With it on:
+
+- Only **Stub** runs on the server. Groq, Google, Azure, OpenAI-compatible and Ollama runs need an API key sent with the request (the Run panel's key field). Without one, `POST /api/runs`, release runs and chat messages return 403 `live_provider_requires_api_key`. `/api/providers/{p}/ready` reports not ready and `/credentials` reports `configured: false`, so a server key is never offered.
+- Knowledge uploads return 403, and retrieval is skipped, because embeddings would run on the server's key.
+- `GET /api/health` includes `"public_demo_mode": true`. Check it after each deploy.
+
+To use the server's own keys on a private deploy, remove `PUBLIC_DEMO_MODE` from `vercel.json` (or set it to `0` there).
+
+**The seeded demo is read-only** (every deploy, not only public mode). `demo_classify_and_route` can't be deleted, and `PUT` returns 403 `graph_read_only` unless the body matches the canonical demo apart from layout. Layout-only saves return 200 but aren't stored. The demo's graph policies, policy exceptions and knowledge are locked too. In the Studio, Run on an unedited demo runs it as-is; Save or Run after a real edit saves a copy (`graph_<id>`, "… (copy)") and opens it. On each cold start the backend re-seeds the demo if it's missing or differs from `backend/app/demo_graph.py`.
 
 ## What shipped, and what's still simplified
 
