@@ -72,7 +72,6 @@ type FlowCanvasProps = {
   onRetryLoad?: () => void;
   graphLoading?: boolean;
   noGraphSelected?: boolean;
-  authoringEnabled: boolean;
   nodeTypes: NodeTypes;
   reducedMotion: boolean;
   graphOrientation: GraphOrientation;
@@ -134,7 +133,6 @@ function FlowCanvasInner({
   onRetryLoad,
   graphLoading = false,
   noGraphSelected = false,
-  authoringEnabled,
   nodeTypes,
   reducedMotion,
   graphOrientation,
@@ -402,10 +400,10 @@ function FlowCanvasInner({
         // wider than ~2x the pane (an 8-node chain), so "fit" left the ends
         // of the graph off-screen under the docked panels.
         minZoom={0.15}
-        snapToGrid={authoringEnabled}
+        snapToGrid
         snapGrid={[24, 24]}
         defaultEdgeOptions={{ interactionWidth: 24 }}
-        nodesConnectable={authoringEnabled}
+        nodesConnectable
         nodeTypes={nodeTypes}
         edgeTypes={EDGE_TYPES}
         onNodeClick={(_, node) => onNodeClick(node.id)}

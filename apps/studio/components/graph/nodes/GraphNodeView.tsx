@@ -298,7 +298,6 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
           type="target"
           position={targetPosition}
           title={inputs ? `Input (${inputs})` : "Input"}
-          aria-label={`Connect into ${title}`}
           style={{ ...targetHandleStyle, pointerEvents: "auto" }}
         />
       )}
@@ -367,7 +366,6 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
           type="source"
           position={sourcePosition}
           title={outputs ? `Output (${outputs})` : "Output"}
-          aria-label={`Connect from ${title}`}
           style={{ ...handleStyle, pointerEvents: "auto" }}
         />
       )}

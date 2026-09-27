@@ -52,7 +52,7 @@ export function NodeImpactTab({
   if (!impact || impact.node_id !== nodeId) return <SkeletonBlock lines={4} gap={spacing[2]} />;
 
   return (
-    <div aria-label="Node impact">
+    <div role="group" aria-label="Node impact">
       <div style={{ ...typeScale.caption, fontWeight: 600, marginBottom: spacing[2], lineHeight: "18px" }}>
         {impact.downstream.length === 0
           ? "Nothing downstream — changing this node only affects itself."

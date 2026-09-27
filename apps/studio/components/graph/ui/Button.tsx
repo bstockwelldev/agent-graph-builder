@@ -16,7 +16,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  */
 const VARIANT_STYLE: Record<ButtonVariant, Pick<CSSProperties, "background" | "borderColor" | "color">> = {
   primary: {
-    background: color.primary[700],
+    background: color.primary.solid,
     borderColor: color.primary[600],
     color: text.primary,
   },

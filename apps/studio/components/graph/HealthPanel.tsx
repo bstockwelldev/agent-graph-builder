@@ -42,7 +42,7 @@ export function HealthPanel({
         ) : (
           <>
             <div style={{ display: "flex", alignItems: "baseline", gap: spacing[2], marginBottom: spacing[1] }}>
-              <span aria-label={`Health score ${health.score} of 100`} style={{ fontSize: 40, lineHeight: "44px", fontWeight: 700, color: band!.color, fontFamily: fontFamily.ui }}>
+              <span role="img" aria-label={`Health score ${health.score} of 100`} style={{ fontSize: 40, lineHeight: "44px", fontWeight: 700, color: band!.color, fontFamily: fontFamily.ui }}>
                 {health.score}
               </span>
               <span style={{ ...typeScale.caption, color: text.secondary }}>/ 100</span>

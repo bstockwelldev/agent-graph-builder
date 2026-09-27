@@ -41,7 +41,7 @@ export function Field({
         </label>
         {hint && (
           <HoverTooltip content={hint} placement="top" describe>
-            <span tabIndex={0} aria-label="More info" className="agb-focus-ring" style={{ display: "inline-flex", color: text.secondary, borderRadius: 999 }}>
+            <span role="img" tabIndex={0} aria-label="More info" className="agb-focus-ring" style={{ display: "inline-flex", color: text.secondary, borderRadius: 999 }}>
               <Info size={13} aria-hidden="true" />
             </span>
           </HoverTooltip>

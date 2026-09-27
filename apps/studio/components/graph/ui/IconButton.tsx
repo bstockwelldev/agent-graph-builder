@@ -38,7 +38,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   const dimension = size === "touch" ? shell.touchTarget.min : 32;
   const toneStyle: CSSProperties =
     tone === "primary"
-      ? { background: color.primary[700], borderColor: color.primary[600], color: text.primary }
+      ? { background: color.primary.solid, borderColor: color.primary[600], color: text.primary }
       : tone === "destructive"
         ? { background: "transparent", borderColor: "transparent", color: color.error[500] }
         : pressed
