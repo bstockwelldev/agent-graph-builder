@@ -1,5 +1,20 @@
 # Changelog — @bstockwelldev/agent-graph-sdk
 
+## 1.1.0
+
+### Minor Changes
+
+- 89003c2: Knowledge summaries now include `embeddingDimensions`, `activeEmbeddingProvider`, `activeEmbeddingModelId` and `embeddingUnavailableReason`, which say which embedding provider and model uploads and retrieval use right now (Supabase `gte-small` is the new default provider). All four are optional, so the client still accepts responses from older backends.
+- 102a8d5: Add `client.system.health()` (`GET /api/health`) returning `{ ok, storage_backend, message? }`, so clients can tell whether runs are stored in a shared backend.
+- bb7c177: New `transform` node type (select / wrap / format_message / coerce, or bound to a Transforms library entry via `transformId`): `nodeTypeSchema`, `defaultConfig`, node summaries/labels, and the `transform → transformId → transforms` binding.
+- 75ba87e: `client.transforms.preview(transform, value)` (`POST /api/transforms/preview`): applies an inline or library transform to a sample value and returns `{ ok, output, error }` without running a graph.
+- 92ce25b: Transforms library: `client.transforms` (CRUD, usages and versions for `/api/transforms`), `transformDefinitionSchema`, and `transform_id` on edge transforms (a library reference; `type` is now optional when it's set). `transforms` joins `BindableResourceKind`.
+
+### Patch Changes
+
+- 109e25b: `edgeTransformSchema` fields are now nullish: the API serializes unset transform fields as `null`, which previously failed to parse any graph containing an edge transform.
+- 82b2bb9: `portContractSchema` fields (`schema`, `required`, `classification`) are now nullish: the API serializes unset fields as `null`, which previously failed to parse any graph with declared ports.
+
 ## 1.0.0
 
 ### Major Changes
@@ -30,6 +45,7 @@ Everything listed as deprecated below was removed in 1.0 (see Major Changes).
 #### Added
 
 - **Graph summaries:** `client.graphs.summaries` (`list`/`listPage`/`iterate`) over `GET /api/graph-summaries`, which returns each graph's `id`, `name`, counts, `input_variables` and `subgraph_ids` without nodes or edges. The server reads one catalog, not every graph, so prefer it over `graphs.list()` for lists and pickers.
+
   - `GraphSummary` type and `graphSummarySchema`.
   - `useGraphSummaries` hook and `agentGraphKeys.graphSummaries()`, which `agentGraphInvalidation(...).graphs()` also refreshes.
   - `summarizeGraph(graph)` in `/graph`, and a mock route in `/testing`.
