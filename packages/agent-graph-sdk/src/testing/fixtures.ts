@@ -38,20 +38,20 @@ export function demoGraph(): GraphDefinition {
     entry_node_id: "input_1",
     orientation: "auto",
     nodes: [
-      node("input_1", "input", 40, 200, { variableName: "question" }),
-      node("prompt_classify", "prompt", 300, 200, {
+      node("input_1", "input", 24, 110, { variableName: "question" }),
+      node("prompt_classify", "prompt", 360, 110, {
         template:
           "Classify the following user question as exactly one word: either 'technical' or 'other'. Respond with only that single word.\n\nQuestion: {question}",
       }),
-      node("llm_classify", "llm", 560, 200, {
+      node("llm_classify", "llm", 696, 110, {
         model: "qwen2.5:3b",
         systemPrompt: "You are a strict classifier. Respond with exactly one word: technical or other.",
       }),
-      node("router_1", "router", 820, 200),
-      node("tool_lookup", "tool", 1080, 60, { toolName: "lookup_topic", inputVariable: "question" }),
-      node("prompt_answer", "prompt", 1080, 340, { template: "Answer the user's question helpfully and concisely.\n\nQuestion: {question}" }),
-      node("llm_answer", "llm", 1340, 340, { model: "qwen2.5:3b", systemPrompt: "You are a helpful assistant." }),
-      node("output_1", "output", 1600, 200),
+      node("router_1", "router", 1032, 110),
+      node("tool_lookup", "tool", 1704, 196, { toolName: "lookup_topic", inputVariable: "question" }),
+      node("prompt_answer", "prompt", 1368, 24, { template: "Answer the user's question helpfully and concisely.\n\nQuestion: {question}" }),
+      node("llm_answer", "llm", 1704, 24, { model: "qwen2.5:3b", systemPrompt: "You are a helpful assistant." }),
+      node("output_1", "output", 2040, 110),
     ],
     edges: [
       { id: "e_input_prompt", source: "input_1", target: "prompt_classify", kind: "sequence" },
