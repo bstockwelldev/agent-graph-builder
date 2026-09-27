@@ -215,7 +215,10 @@ One engine (`backend/app/transforms.py`), three surfaces:
 The explicit-contract opt-in lives in the node inspector's I/O tab: each direction is **Inferred** (catalog defaults; mismatches only warn) or **Declared** (`input_ports`/`output_ports` written to the graph; a mismatch against another declared port blocks).
 
 - Declaring types the node's existing catalog ports. It keeps their ids and names, because the runtime resolves inputs and projects outputs by id (`resolve_node_input`, `project_node_output`). Adding ports is deliberately unsupported, since no executor would read them.
-- Per port you can set the kind, `required` (inputs), and an optional JSON Schema (checked by `_validate_schema`). `classification` is not exposed: nothing enforces it yet.
+- Per port you can set the kind, `required` (inputs), a classification, and an optional JSON Schema (checked by `_validate_schema`).
+- **Classification** (added 2026-09-27) means different things by direction. Both are enforced by the security policies in `backend/app/policies.py`:
+  - On an **output** port it labels the data emitted. It flows downstream (`edge_classifications`, iterated to a fixed point, so loops converge). Every edge carries the higher of its source port's declared level and whatever flows into the source node. Only a `guardrail` can declassify: a classification declared on its output replaces what flows in. A lower level declared on any other node is ignored, so an intermediate node can't launder data. `POLICY_SENSITIVE_DATA_INTO_TOOL` uses the propagated level, not just a direct edge.
+  - On an **input** port it is the **clearance**, the highest level that input may receive. `POLICY_CLASSIFICATION_ABOVE_CLEARANCE` (security, default `block`) flags an edge carrying data above it. An input with no clearance accepts anything.
 - A kind-agnostic input (`tool`, `output`, `transform`) is seeded from its connected sources' kind when they agree. When they disagree, the tab says so, and a transform on the odd edge is the fix.
 - An edge whose source (or target) has several ports gets a port picker, e.g. a router's `decision` output.
 

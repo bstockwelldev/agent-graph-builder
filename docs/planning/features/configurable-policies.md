@@ -20,6 +20,7 @@ Closes the named gap on roadmap P2 "Cross-cutting policy overlays". Before this,
   | Rule | Category | Default | Parameter |
   | --- | --- | --- | --- |
   | Sensitive data into a tool | security | block | `min_classification` |
+  | Classified data above an input's clearance | security | block | — |
   | LLM model not pinned | reliability | warn | — |
   | Too many model nodes | cost | warn | `max_model_nodes` |
   | Release governance metadata | governance | warn | — (publish-only) |

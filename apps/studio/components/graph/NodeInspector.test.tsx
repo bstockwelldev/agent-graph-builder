@@ -117,4 +117,32 @@ describe("NodeInspector (v2)", () => {
       input_ports: [{ id: "input", name: "input", direction: "input", contract: { kind: "message", required: false } }],
     });
   });
+
+  it("sets an output port's classification and clears it back to unclassified", () => {
+    const onPortsChange = vi.fn();
+    const output_ports = [{ id: "output", name: "output", direction: "output" as const, contract: { kind: "message" as const } }];
+    const inspector = (ports: typeof output_ports) => (
+      <NodeInspector
+        node={{ id: "input_1", type: "input", position: { x: 0, y: 0 }, config: {}, output_ports: ports }}
+        onConfigChange={vi.fn()}
+        onPortsChange={onPortsChange}
+        onDelete={vi.fn()}
+        userLabel=""
+        derivedLabel="Input"
+        onLabelChange={vi.fn()}
+        templateVariables={[]}
+      />
+    );
+    const { rerender } = render(inspector(output_ports));
+    fireEvent.click(screen.getByRole("tab", { name: /I\/O/ }));
+    fireEvent.click(screen.getByRole("combobox", { name: "output classification" }));
+    fireEvent.mouseDown(screen.getByRole("option", { name: /^Confidential/ }));
+    const classified = onPortsChange.mock.calls.at(-1)![0].output_ports;
+    expect(classified[0].contract).toEqual({ kind: "message", classification: "confidential" });
+
+    rerender(inspector(classified));
+    fireEvent.click(screen.getByRole("combobox", { name: "output classification" }));
+    fireEvent.mouseDown(screen.getByRole("option", { name: /^Unclassified/ }));
+    expect(onPortsChange.mock.calls.at(-1)![0].output_ports[0].contract).toEqual({ kind: "message", classification: null });
+  });
 });

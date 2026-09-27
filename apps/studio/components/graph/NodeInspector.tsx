@@ -34,6 +34,7 @@ import {
 import type {
   BindableResourceKind,
   ChatProvider,
+  DataClassification,
   EdgeTransform,
   GraphDefinition,
   GraphEdge,
@@ -877,7 +878,20 @@ function IoTab({
 
 const PORT_KIND_OPTIONS = PORT_KINDS.map((kind) => ({ value: kind, label: portKindLabel(kind) }));
 
-/** Kind, required-ness (inputs) and optional JSON Schema for one declared port. */
+const CLASSIFICATIONS: readonly DataClassification[] = ["public", "internal", "confidential", "restricted"];
+const UNCLASSIFIED = "none";
+const classificationOptions = (direction: PortDirection): ComboboxOption[] => [
+  { value: UNCLASSIFIED, label: direction === "input" ? "Any" : "Unclassified" },
+  ...CLASSIFICATIONS.map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) })),
+];
+
+/**
+ * Kind, required-ness (inputs), classification and optional JSON Schema for
+ * one declared port. On an output the classification labels the data it
+ * emits (it flows downstream until a guardrail declares a lower one); on an
+ * input it is the clearance — the highest classification it may receive.
+ * Both are enforced by the security policies (backend/app/policies.py).
+ */
 function PortContractEditor({
   port,
   direction,
@@ -909,6 +923,26 @@ function PortContractEditor({
           onChange={(required) => onChange({ required })}
         />
       )}
+      <Field
+        label={direction === "input" ? "Clearance" : "Classification"}
+        hint={
+          direction === "input"
+            ? "Data classified above this is blocked by policy."
+            : "Flows to every downstream node; only a guardrail can declare a lower one."
+        }
+      >
+        {(id) => (
+          <Combobox
+            id={id}
+            aria-label={`${port.name} ${direction === "input" ? "clearance" : "classification"}`}
+            value={port.contract.classification ?? UNCLASSIFIED}
+            options={classificationOptions(direction)}
+            onChange={(value) =>
+              onChange({ classification: value === UNCLASSIFIED ? null : (value as DataClassification) })
+            }
+          />
+        )}
+      </Field>
       {editingSchema ? (
         <Field label="JSON Schema" hint="type, required, properties, items and enum are checked against connected ports; other keywords warn. Apply {} to remove.">
           <RawConfigEditor
