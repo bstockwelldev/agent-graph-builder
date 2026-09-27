@@ -2,6 +2,13 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // Only used by `test:coverage` (CI reports it; no thresholds).
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      exclude: ["src/**/*.test.*", "src/generated/**"],
+      reporter: ["text-summary", "json-summary"],
+    },
     projects: [
       {
         extends: true,

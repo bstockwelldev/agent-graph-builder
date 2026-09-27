@@ -11,6 +11,13 @@ export default defineConfig({
     environment: "../../packages/agent-graph-sdk/vitest.jsdom-env.ts",
     include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules/**", ".next/**"],
+    // Only used by `test:coverage` (CI reports it; no thresholds).
+    coverage: {
+      provider: "v8",
+      include: ["app/**", "components/**", "content/**", "hooks/**", "layout/**", "lib/**"],
+      exclude: ["**/*.test.*"],
+      reporter: ["text-summary", "json-summary"],
+    },
   },
   resolve: {
     alias: {
