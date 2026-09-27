@@ -61,13 +61,24 @@ describe("KnowledgePanel", () => {
     expect(clientMock.knowledge.get).toHaveBeenCalledWith("g1");
   });
 
+  it("names the embedding provider a first upload will use", async () => {
+    clientMock.knowledge.get.mockResolvedValue({
+      ...empty,
+      activeEmbeddingProvider: "supabase",
+      activeEmbeddingModelId: "gte-small",
+    });
+    clientMock.knowledge.lineage.mockResolvedValue([]);
+    render(<KnowledgePanel graphId="g1" />);
+    expect(await screen.findByText("Uploads will embed with Supabase Edge Function · gte-small")).toBeTruthy();
+  });
+
   it("lists documents with embedding info and per-document usage", async () => {
     clientMock.knowledge.get.mockResolvedValue(populated);
     clientMock.knowledge.lineage.mockResolvedValue([lineageRow]);
     render(<KnowledgePanel graphId="g1" />);
 
     expect(await screen.findByText(/1 document · 3 chunks/)).toBeTruthy();
-    expect(screen.getByText("openai/text-embedding-3-small")).toBeTruthy();
+    expect(screen.getByTestId("knowledge-embedding").textContent).toBe("Embeddings: OpenAI · text-embedding-3-small");
     expect(await screen.findByText(/1 retrieval across 1 run/)).toBeTruthy();
     expect(screen.getByText(/llm_1/)).toBeTruthy();
   });

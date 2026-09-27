@@ -81,6 +81,7 @@ Remote: `origin` → `bstockwelldev/agent-graph-builder`.
 - Copy provider keys to `backend/.env.local` (gitignored) or set `SHARED_ENV_FILE`.
 - `load_app_env()` merges local `.env.local` then optional `$BSTOCKWELL_DEV_ROOT/tabletop-studio/.env.local` for unset vars only.
 - Never commit `.env`, `.env.local`, or API keys.
+- Knowledge embeddings default to Supabase `gte-small` via the `agb-embed` Edge Function (`supabase/functions/agb-embed/`, deployed to `supabase-tabletop-studio-db`). Locally set `SUPABASE_EMBEDDINGS_URL` + `SUPABASE_SERVICE_ROLE_KEY`; setting `SUPABASE_URL` also moves graph storage to the prod bucket. The function takes at most 8 inputs per request (Edge CPU limit), and `embedding_model.py` batches to match.
 
 ## Planning paths
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 import re
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -30,12 +30,14 @@ from pydantic import BaseModel
 
 from . import storage
 from .embedding_model import (
+    EmbeddingProvider,
     EmbeddingProviderError,
     ResolvedEmbeddingModel,
     embed_query,
     embed_texts,
     missing_embedding_provider_message,
     resolve_embedding_model,
+    resolve_embedding_model_for,
 )
 from .env_config import public_demo_mode_enabled
 from .events import now_iso
@@ -68,7 +70,7 @@ class KnowledgeChunk(BaseModel):
 
 class KnowledgeEntry(BaseModel):
     id: str  # graph_id — the resource key, matching every other stored resource kind
-    embedding_provider: Literal["openai", "google"]
+    embedding_provider: EmbeddingProvider
     embedding_model_id: str
     documents: list[KnowledgeDocument] = []
     chunks: list[KnowledgeChunk] = []
@@ -182,12 +184,21 @@ UNSET = object()
 
 
 def _embedding_model_for_entry(entry: KnowledgeEntry) -> ResolvedEmbeddingModel | None:
+    """The resolution that can embed queries/documents comparable with
+    `entry`'s vectors: the default provider when it matches, else the
+    entry's own provider if its credentials are still configured. A graph
+    indexed with OpenAI keeps working after Supabase becomes the default."""
     current = resolve_embedding_model()
-    if current is None:
-        return None
-    if current.provider != entry.embedding_provider or current.model_id != entry.embedding_model_id:
-        return None
-    return current
+    if (
+        current is not None
+        and current.provider == entry.embedding_provider
+        and current.model_id == entry.embedding_model_id
+    ):
+        return current
+    pinned = resolve_embedding_model_for(entry.embedding_provider)
+    if pinned is not None and pinned.model_id == entry.embedding_model_id:
+        return pinned
+    return None
 
 
 def _record_lineage(graph_id: str, run_id: str, node_id: str, hits: list[dict[str, Any]]) -> None:
@@ -285,18 +296,40 @@ class KnowledgeUploadError(Exception):
 
 
 def summarize_entry(entry: KnowledgeEntry | None) -> dict[str, Any]:
+    """`embeddingProvider`/`embeddingModelId`: what this graph's documents
+    were indexed with (null when it has none). `activeEmbedding*`: what
+    uploads and retrieval use right now — the indexed provider when it's
+    still configured, else the default for a first upload (null when no
+    provider is configured, or the indexed one's credentials are gone)."""
+    active = resolve_embedding_model() if entry is None else _embedding_model_for_entry(entry)
+    active_fields = {
+        "activeEmbeddingProvider": active.provider if active else None,
+        "activeEmbeddingModelId": active.model_id if active else None,
+        # Why `active` is null, so the Studio can say so accurately.
+        "embeddingUnavailableReason": (
+            None
+            if active
+            else "public_demo_mode"
+            if public_demo_mode_enabled()
+            else "not_configured"
+        ),
+    }
     if entry is None:
         return {
             "documents": [],
             "chunkCount": 0,
             "embeddingProvider": None,
             "embeddingModelId": None,
+            "embeddingDimensions": None,
+            **active_fields,
         }
     return {
         "documents": [doc.model_dump() for doc in entry.documents],
         "chunkCount": len(entry.chunks),
         "embeddingProvider": entry.embedding_provider,
         "embeddingModelId": entry.embedding_model_id,
+        "embeddingDimensions": len(entry.chunks[0].vector) if entry.chunks else None,
+        **active_fields,
     }
 
 
@@ -322,10 +355,6 @@ async def upload_knowledge_document(
     """
     if public_demo_mode_enabled():
         raise KnowledgeUploadError(403, "Knowledge uploads are disabled on this public demo.")
-    resolution = resolve_embedding_model()
-    if resolution is None:
-        raise KnowledgeUploadError(503, missing_embedding_provider_message())
-
     if len(content) > MAX_UPLOAD_BYTES:
         raise KnowledgeUploadError(400, f"File too large (max {MAX_UPLOAD_BYTES} bytes)")
 
@@ -347,16 +376,20 @@ async def upload_knowledge_document(
 
     entry = get_knowledge_entry(graph_id)
     if entry is not None and (entry.chunks or entry.documents):
-        provider_changed = entry.embedding_provider != resolution.provider
-        model_changed = entry.embedding_model_id != resolution.model_id
-        if provider_changed or model_changed:
+        # Stay on the provider/model this graph was indexed with, even if
+        # the default has changed since: mixed vectors aren't comparable.
+        resolution = _embedding_model_for_entry(entry)
+        if resolution is None:
             raise KnowledgeUploadError(
                 409,
-                "This graph's knowledge was indexed with a different embedding provider/model. "
-                "Remove all documents and re-upload, or restore the same API keys and embedding "
-                "model env vars.",
+                f"This graph's knowledge was indexed with {entry.embedding_provider}/"
+                f"{entry.embedding_model_id}, which isn't configured now. Remove all documents "
+                "and re-upload, or restore that provider's API key and embedding model env vars.",
             )
     else:
+        resolution = resolve_embedding_model()
+        if resolution is None:
+            raise KnowledgeUploadError(503, missing_embedding_provider_message())
         entry = KnowledgeEntry(
             id=graph_id,
             embedding_provider=resolution.provider,

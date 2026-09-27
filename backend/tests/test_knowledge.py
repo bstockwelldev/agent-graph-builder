@@ -8,7 +8,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app import knowledge, storage
+from app import embedding_model, knowledge, storage
 from app.compiler import compile_graph
 from tests.helpers import editable_demo_graph
 from app.embedding_model import EmbeddingProviderError, ResolvedEmbeddingModel
@@ -39,6 +39,11 @@ def _clear_embedding_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GOOGLE_GENAI_API_KEY",
         "GOOGLE_API_KEY",
         "GOOGLE_EMBEDDING_MODEL",
+        "SUPABASE_URL",
+        "SUPABASE_EMBEDDINGS_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "EMBEDDING_PROVIDER",
+        "PUBLIC_DEMO_MODE",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -133,6 +138,97 @@ def test_resolve_embedding_model_falls_back_to_google(monkeypatch: pytest.Monkey
 def test_resolve_embedding_model_none_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_embedding_env(monkeypatch)
     assert knowledge.resolve_embedding_model() is None
+
+
+def test_resolve_embedding_model_prefers_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co/")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    resolution = knowledge.resolve_embedding_model()
+    assert resolution is not None
+    assert resolution.provider == "supabase"
+    assert resolution.model_id == "gte-small"
+    assert resolution.endpoint == "https://proj.supabase.co/functions/v1/agb-embed"
+
+
+def test_supabase_embeddings_url_override_needs_no_storage_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("SUPABASE_EMBEDDINGS_URL", "https://proj.supabase.co/functions/v1/x")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    resolution = knowledge.resolve_embedding_model()
+    assert resolution is not None
+    assert resolution.endpoint == "https://proj.supabase.co/functions/v1/x"
+
+
+def test_supabase_needs_service_role_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+    assert knowledge.resolve_embedding_model() is None
+
+
+def test_embedding_provider_env_forces_a_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
+    resolution = knowledge.resolve_embedding_model()
+    assert resolution is not None
+    assert resolution.provider == "openai"
+
+
+async def test_supabase_embeddings_batch_by_eight_and_keep_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sizes: list[int] = []
+
+    async def _fake_batch(client, resolution, texts):
+        sizes.append(len(texts))
+        return [[float(text.split()[1])] for text in texts]
+
+    monkeypatch.setattr(embedding_model, "_embed_supabase_batch", _fake_batch)
+    resolution = ResolvedEmbeddingModel(
+        provider="supabase", model_id="gte-small", api_key="k", endpoint="https://x"
+    )
+    texts = [f"chunk {i}" for i in range(20)]
+    vectors = await embedding_model.embed_texts(resolution, texts)
+    assert sorted(sizes) == [4, 8, 8]
+    assert vectors == [[float(i)] for i in range(20)]
+
+
+class _FakeClient:
+    def __init__(self, statuses: list[int]) -> None:
+        self.statuses = statuses
+        self.calls: list[dict] = []
+
+    async def post(self, url, headers, json):
+        self.calls.append({"url": url, "headers": headers, "json": json})
+        status = self.statuses.pop(0)
+        body = {"embeddings": [[0.5] * 384 for _ in json["input"]]} if status == 200 else {}
+        return httpx.Response(status, json=body)
+
+
+async def test_supabase_batch_retries_once_on_worker_limit() -> None:
+    resolution = ResolvedEmbeddingModel(
+        provider="supabase", model_id="gte-small", api_key="svc", endpoint="https://x/fn"
+    )
+    client = _FakeClient([546, 200])
+    vectors = await embedding_model._embed_supabase_batch(client, resolution, ["a", "b"])
+    assert len(vectors) == 2 and len(vectors[0]) == 384
+    assert len(client.calls) == 2
+    assert client.calls[0]["headers"] == {"Authorization": "Bearer svc"}
+    assert client.calls[0]["json"] == {"input": ["a", "b"]}
+
+
+async def test_supabase_batch_raises_after_second_failure() -> None:
+    resolution = ResolvedEmbeddingModel(
+        provider="supabase", model_id="gte-small", api_key="svc", endpoint="https://x/fn"
+    )
+    with pytest.raises(EmbeddingProviderError, match="546"):
+        await embedding_model._embed_supabase_batch(_FakeClient([546, 546]), resolution, ["a"])
 
 
 # --- augment_system_with_knowledge (unit, no upload pipeline) -----------
@@ -346,6 +442,9 @@ def test_upload_success_then_conflict_on_model_mismatch_then_delete(
     demo = editable_demo_graph()
     storage.save_graph(demo)
     storage.delete_resource("knowledge", demo.id)
+    # No real credentials: the entry's own provider can't be re-resolved,
+    # so a different default provider is a genuine conflict.
+    _clear_embedding_env(monkeypatch)
 
     resolution_a = ResolvedEmbeddingModel(
         provider="openai", model_id="text-embedding-3-small", api_key="sk-test"
@@ -589,3 +688,74 @@ def test_knowledge_lineage_endpoint_round_trip(
 def test_knowledge_lineage_endpoint_404_for_unknown_graph() -> None:
     response = client.get("/api/graphs/does-not-exist/knowledge/lineage")
     assert response.status_code == 404
+
+
+def test_upload_stays_on_indexed_provider_after_default_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demo = editable_demo_graph()
+    storage.save_graph(demo)
+    storage.delete_resource("knowledge", demo.id)
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr("app.knowledge.embed_texts", _fake_embed_texts)
+
+    first = client.post(
+        f"/api/graphs/{demo.id}/knowledge",
+        files={"file": ("notes.txt", b"Kubernetes orchestrates containers.", "text/plain")},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["embeddingProvider"] == "openai"
+
+    # Supabase becomes the default, but this graph was indexed with OpenAI
+    # and OpenAI is still configured: keep using it rather than 409.
+    monkeypatch.setenv("SUPABASE_EMBEDDINGS_URL", "https://proj.supabase.co/functions/v1/agb-embed")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    second = client.post(
+        f"/api/graphs/{demo.id}/knowledge",
+        files={"file": ("more.txt", b"More notes.", "text/plain")},
+    )
+    assert second.status_code == 200, second.text
+    body = second.json()
+    assert body["embeddingProvider"] == "openai"
+    assert body["activeEmbeddingProvider"] == "openai"
+    storage.delete_resource("knowledge", demo.id)
+
+
+def test_summary_reports_active_provider_before_any_upload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demo = editable_demo_graph()
+    storage.save_graph(demo)
+    storage.delete_resource("knowledge", demo.id)
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("SUPABASE_EMBEDDINGS_URL", "https://proj.supabase.co/functions/v1/agb-embed")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    body = client.get(f"/api/graphs/{demo.id}/knowledge").json()
+    assert body["embeddingProvider"] is None
+    assert body["embeddingDimensions"] is None
+    assert body["activeEmbeddingProvider"] == "supabase"
+    assert body["activeEmbeddingModelId"] == "gte-small"
+
+    _clear_embedding_env(monkeypatch)
+    body = client.get(f"/api/graphs/{demo.id}/knowledge").json()
+    assert body["activeEmbeddingProvider"] is None
+
+
+def test_summary_reports_public_demo_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    demo = editable_demo_graph()
+    storage.save_graph(demo)
+    storage.delete_resource("knowledge", demo.id)
+    _clear_embedding_env(monkeypatch)
+    monkeypatch.setenv("SUPABASE_EMBEDDINGS_URL", "https://proj.supabase.co/functions/v1/agb-embed")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    monkeypatch.setenv("PUBLIC_DEMO_MODE", "1")
+    body = client.get(f"/api/graphs/{demo.id}/knowledge").json()
+    assert body["activeEmbeddingProvider"] is None
+    assert body["embeddingUnavailableReason"] == "public_demo_mode"
+    assert knowledge.resolve_embedding_model_for("supabase") is None
+
+    monkeypatch.delenv("PUBLIC_DEMO_MODE")
+    body = client.get(f"/api/graphs/{demo.id}/knowledge").json()
+    assert body["activeEmbeddingProvider"] == "supabase"
+    assert body["embeddingUnavailableReason"] is None
