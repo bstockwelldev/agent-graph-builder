@@ -112,6 +112,11 @@ describe("GraphHeader", () => {
     expect(screen.getByRole("status").textContent).toContain("Unsaved");
   });
 
+  it("keeps the save state readable to screen readers when compact (dot only on screen)", () => {
+    renderHeader({ dirty: true, compact: true });
+    expect(screen.getByRole("status").textContent).toContain("Unsaved");
+  });
+
   const structure = { nodes: 8, edges: 8, entrypoints: ["input: question"], terminals: ["output"] };
 
   it("shows graph structure as a chip with entry and terminal nodes", () => {

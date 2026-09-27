@@ -66,7 +66,7 @@ describe.each([
   it("renders the page copy and each item's card", async () => {
     renderPage(kind);
     expect(screen.getByRole("heading", { name: title })).toBeTruthy();
-    const cardEl = await screen.findByRole("button", { name: card });
+    const cardEl = (await screen.findByRole("button", { name: card })).closest("li")!;
     expect(within(cardEl).getByText(text, { exact: false })).toBeTruthy();
     expect(screen.getByRole("button", { name: `New ${kind.noun}` })).toBeTruthy();
   });

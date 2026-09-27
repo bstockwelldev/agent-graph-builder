@@ -324,7 +324,7 @@ export function ReleasesPanel({
             ) : draftDiff.error ? (
               <div style={errorTextStyle}>{draftDiff.error}</div>
             ) : draftDiff.diff ? (
-              <div aria-label="Draft vs release diff">
+              <div role="group" aria-label="Draft vs release diff">
                 <div style={{ ...typeScale.caption, marginBottom: spacing[2] }}>
                   <span style={monoStyle}>{shortId(draftDiff.releaseId)}</span>
                   {" → "}

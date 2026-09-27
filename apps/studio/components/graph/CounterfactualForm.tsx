@@ -126,7 +126,7 @@ export function CounterfactualResultView({ result }: { result: CounterfactualRes
   const rows = compareNodes(result.original_traces, result.traces, result.node_modes, result.changed_nodes);
   const changedCount = rows.filter((row) => row.changed).length;
   return (
-    <div aria-label="Counterfactual result">
+    <div role="group" aria-label="Counterfactual result">
       <div style={{ ...typeScale.caption, opacity: 0.75, marginBottom: spacing[2] }}>
         {changedCount === 0 ? "No node output changed." : `${changedCount} node${changedCount === 1 ? "" : "s"} changed`} · replay of{" "}
         <span style={monoStyle}>{result.original_run_id}</span>

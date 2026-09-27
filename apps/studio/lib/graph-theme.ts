@@ -18,7 +18,15 @@
 // ---- Color ramps -----------------------------------------------------
 
 export const color = {
-  primary: { 500: "#8fbaff", 600: "#6ea8fe", 700: "#4a7cd1", 800: "#3a67ba" },
+  primary: {
+    500: "#8fbaff",
+    600: "#6ea8fe",
+    700: "#4a7cd1",
+    800: "#3a67ba",
+    /** Fill for buttons that carry `text.primary` labels: 5.1:1, where 700
+     * is only 3.4:1 (WCAG AA needs 4.5:1; e2e/specs/a11y.spec.ts checks it). */
+    solid: "#335fb0",
+  },
   success: { 500: "#3cb873", 600: "#2f9e5c", 700: "#227d47" },
   warning: { 500: "#e8bc4a", 600: "#d8a92c", 700: "#b98c1e" },
   error: { 500: "#e2645a", 600: "#d1453b", 700: "#a8352c" },

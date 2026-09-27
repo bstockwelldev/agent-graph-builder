@@ -206,7 +206,7 @@ export default function PoliciesPage() {
                         <Badge className={cn("border-0", STATE_BADGE[state].className)}>{STATE_BADGE[state].label}</Badge>
                       </div>
                       <p className="text-muted-foreground text-xs">
-                        <Link href={`/graphs/${exception.graph_id}`} className="text-primary hover:underline">
+                        <Link href={`/graphs/${exception.graph_id}`} className="text-primary underline underline-offset-2 hover:no-underline">
                           {graphNames[exception.graph_id] ?? exception.graph_id}
                         </Link>
                         {exception.node_id ? (

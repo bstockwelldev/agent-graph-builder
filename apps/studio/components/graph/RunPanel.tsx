@@ -671,7 +671,7 @@ export function RunPanel({
         disabled={busy}
         className="agb-focus-ring"
         aria-keyshortcuts="Meta+Enter Control+Enter"
-        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: radius.lg, border: `1px solid ${color.primary[600]}`, background: color.primary[700], color: text.primary, fontSize: 14, fontWeight: 650, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.7 : 1 }}
+        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: radius.lg, border: `1px solid ${color.primary[600]}`, background: color.primary.solid, color: text.primary, fontSize: 14, fontWeight: 650, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.7 : 1 }}
       >
         {running || compiling ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
         {running ? "Running…" : compiling ? "Preparing…" : "Run"}
@@ -989,7 +989,7 @@ export function RunPanel({
                 )}
                 <div style={{ borderTop: `1px solid ${border.subtle}`, marginTop: spacing[2], paddingTop: 2 }}>
                   {running && (
-                    <div style={{ marginTop: spacing[2] }} aria-busy="true" aria-label="Generating result">
+                    <div role="status" style={{ marginTop: spacing[2] }} aria-busy="true" aria-label="Generating result">
                       <SkeletonBlock lines={3} gap={spacing[1]} />
                     </div>
                   )}

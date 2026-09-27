@@ -115,7 +115,7 @@ export function RunCard({
         {summary?.provider ? <span>env: {summary.provider}</span> : null}
         <span className="font-mono">{runRef.run_id}</span>
         {steps.length > 0 ? (
-          <span className="ml-auto flex items-center gap-1" aria-label={`${done} of ${steps.length} nodes done`}>
+          <span role="img" className="ml-auto flex items-center gap-1" aria-label={`${done} of ${steps.length} nodes done`}>
             {steps.map((step) => (
               <span
                 key={step.nodeId}
@@ -143,7 +143,7 @@ export function RunCard({
         </dl>
       ) : null}
       {steps.length > 0 ? (
-        <div className="space-y-1" aria-label="Run steps">
+        <div role="group" className="space-y-1" aria-label="Run steps">
           {steps.map((step) => (
             <ToolStep
               key={step.nodeId}

@@ -146,7 +146,7 @@ function BoundPreview({
 }) {
   if (kind !== "prompts") {
     return detail ? (
-      <div aria-label="Bound resource preview" style={{ fontSize: 12, lineHeight: "18px", color: text.secondary, fontFamily: fontFamily.mono, marginBottom: spacing[2] }}>
+      <div role="group" aria-label="Bound resource preview" style={{ fontSize: 12, lineHeight: "18px", color: text.secondary, fontFamily: fontFamily.mono, marginBottom: spacing[2] }}>
         {detail}
       </div>
     ) : null;

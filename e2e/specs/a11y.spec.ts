@@ -1,26 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { expect, openGraph, test, type GraphJson } from "../fixtures";
+import { API_URL, expect, openGraph, test, type GraphJson } from "../fixtures";
 
 /**
  * WCAG 2.1 A/AA scan of the main surfaces. Serious or critical violations
  * fail the test, except the known ones below. Each known entry is a real
  * issue to fix; delete it from the list when it's fixed (the test notes any
- * entry that no longer occurs).
+ * entry that no longer occurs). Keep it empty: a new entry needs a reason.
  */
-const KNOWN: Record<string, string[]> = {
-  // Canvas handles carry aria-label on a div without a role (GraphNodeView).
-  // The Run buttons' label color is below 4.5:1 on the accent fill.
-  editor: ["aria-prohibited-attr", "color-contrast"],
-  "run panel": ["aria-prohibited-attr", "color-contrast"],
-  "node inspector": ["aria-prohibited-attr", "color-contrast"],
-  "releases panel": ["aria-prohibited-attr", "color-contrast"],
-  // Resource cards are role="button" and contain edit/delete buttons (resource-page).
-  transforms: ["nested-interactive"],
-  // Graph links inside exception rows are distinguished by color only.
-  policies: ["link-in-text-block"],
-};
+const KNOWN: Record<string, string[]> = {};
 
 const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
   ["graph library", async (page) => void (await page.goto("/"))],
@@ -28,8 +17,28 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
   ["run panel", (page, graph) => openGraph(page, graph, "?panel=run")],
   ["node inspector", (page, graph) => openGraph(page, graph, "?node=llm_answer")],
   ["releases panel", (page, graph) => openGraph(page, graph, "?panel=releases")],
-  ["transforms", async (page) => void (await page.goto("/transforms"))],
-  ["policies", async (page) => void (await page.goto("/policies"))],
+  // Seed a card / an exception row first so the scan covers them, not an empty state.
+  [
+    "transforms",
+    async (page) => {
+      await page.request.post(`${API_URL}/api/transforms`, {
+        data: { id: `a11y_${Date.now()}`, name: `A11y transform ${Date.now()}`, type: "format_message", template: "{value}" },
+      });
+      await page.goto("/transforms");
+      await page.getByRole("button", { name: /^Edit transform A11y transform/ }).first().waitFor();
+    },
+  ],
+  [
+    "policies",
+    async (page, graph) => {
+      const expires = new Date(Date.now() + 86_400_000).toISOString();
+      await page.request.post(`${API_URL}/api/graphs/${graph.id}/policy-exceptions`, {
+        data: { policy_code: "POLICY_LLM_MODEL_NOT_PINNED", reason: "a11y scan", expires_at: expires },
+      });
+      await page.goto("/policies");
+      await page.getByRole("link", { name: graph.id }).or(page.getByRole("link", { name: graph.name })).first().waitFor();
+    },
+  ],
 ];
 
 for (const [name, open] of PAGES) {

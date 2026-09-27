@@ -293,7 +293,7 @@ export function GraphHeader({
               className={saving ? "agb-pulse" : undefined}
               style={{ width: 8, height: 8, borderRadius: 999, background: saveDotColor, flexShrink: 0 }}
             />
-            {!compact && saveStateLabel}
+            {compact ? <span style={visuallyHidden}>{saveStateLabel}</span> : saveStateLabel}
           </span>
         </HoverTooltip>
         <IconButton
@@ -550,3 +550,16 @@ function validateChipStyle(state: "ok" | "warning" | "error"): CSSProperties {
     fontWeight: 600,
   };
 }
+
+/** Screen-reader-only text: the compact (phone) header shows the save state as a dot alone. */
+const visuallyHidden: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};

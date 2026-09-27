@@ -74,33 +74,31 @@ export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
               const label = kind.itemLabel(item);
               return (
                 <li key={item.id}>
-                  <Card
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Edit ${kind.noun} ${label}`}
-                    className={cn(studioResourceCardInteractiveClass)}
-                    onClick={() => editor.openEdit(item)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        editor.openEdit(item);
-                      }
-                    }}
-                  >
+                  {/* Stretched-button card: the whole card is one "Edit" target for pointer and
+                      keyboard, without nesting the edit/delete buttons inside another button. */}
+                  <Card className={cn(studioResourceCardInteractiveClass, "relative")}>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${kind.noun} ${label}`}
+                      className="focus-visible:ring-primary/60 absolute inset-0 rounded-[inherit] focus-visible:ring-2 focus-visible:outline-none"
+                      onClick={() => editor.openEdit(item)}
+                    />
                     <CardHeader>
                       {kind.renderCardHeader(item)}
                       <p className="text-muted-foreground pt-1 text-[11px]">{studioCardEditHint}</p>
                     </CardHeader>
                     <CardContent className={kind.renderCardBody ? "space-y-3" : undefined}>
-                      <div
-                        className="flex flex-wrap items-center gap-1"
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
-                      >
+                      <div className="relative flex flex-wrap items-center gap-1">
                         <StudioCardEditIconButton label={label} disabled={saving} onClick={() => editor.openEdit(item)} />
                         <StudioCardDeleteIconButton label={label} disabled={saving} onClick={() => editor.requestDelete(item)} />
                       </div>
-                      {kind.renderCardBody?.(item)}
+                      {kind.renderCardBody ? (
+                        // Above the stretched button so a scrollable body still scrolls
+                        // and its text can be selected; a click still opens the editor.
+                        <div className="relative" onClick={() => editor.openEdit(item)}>
+                          {kind.renderCardBody(item)}
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                 </li>

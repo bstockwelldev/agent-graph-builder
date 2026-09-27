@@ -2244,7 +2244,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           GraphSwitcherCombobox in the HUD below, since picking a different
           graph doesn't need a whole reserved column, just a popover. */}
       <WorkbenchDrawer panelId="palette" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
-        <NodePalette onAdd={addNode} authoringEnabled />
+        <NodePalette onAdd={addNode} />
       </WorkbenchDrawer>
 
       {/* Canvas column — everything that used to float directly on the
@@ -2371,7 +2371,6 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               connectPointerRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
             }
           }}
-          authoringEnabled
           nodeTypes={nodeTypes}
           reducedMotion={workbench.reducedMotion}
           graphOrientation={graphOrientation}

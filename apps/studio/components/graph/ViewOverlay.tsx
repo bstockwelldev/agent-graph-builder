@@ -58,7 +58,7 @@ export function ViewOverlay({
   return (
     <div role="toolbar" aria-label="Heatmap" style={barStyle}>
       <SegmentedControl aria-label="Heatmap metric" options={HEAT_METRICS} value={metric} onChange={onMetricChange} />
-      <div aria-label="Heat legend" style={{ display: "flex", alignItems: "center", gap: 6, ...typeScale.caption, color: text.secondary }}>
+      <div role="group" aria-label="Heat legend" style={{ display: "flex", alignItems: "center", gap: 6, ...typeScale.caption, color: text.secondary }}>
         low
         <span
           aria-hidden="true"

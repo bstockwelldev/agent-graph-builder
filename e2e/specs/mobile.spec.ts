@@ -21,4 +21,6 @@ test("on a phone the graph runs from the drawer and nodes can be added", async (
   await page.getByRole("button", { name: "Add", exact: true }).click(); // bottom tab bar
   await page.getByRole("dialog", { name: "Add node" }).getByRole("button", { name: /^Transform/ }).click();
   await expect(page.locator(".react-flow__node")).toHaveCount(graph.nodes.length + 1);
+  // The phone header shows only a dot; the state is still announced.
+  await expect(page.getByRole("status").first()).toHaveText("Unsaved");
 });

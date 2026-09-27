@@ -42,7 +42,7 @@ Grounded in the current codebase: [`frontend/src/App.tsx`](../../../frontend/src
 | AC1 | A render error in Run panel, canvas, or an inspector shows a localized fallback with **Retry**; graph nodes/edges remain in React state after retry. |
 | AC2 | A root-level boundary catches uncaught errors outside child boundaries and offers reload without silently discarding unsaved edits (warn if dirty). |
 | AC3 | Viewports **&lt; ~1100px** collapse left and right rails into drawers/tabs; canvas receives remaining width and **can be taller than wide**. |
-| AC4 | Viewports below phone breakpoint expose **Run** + inspection flows; palette drag/connect authoring is disabled or hidden with clear copy. |
+| AC4 | Viewports below phone breakpoint expose **Run** + inspection flows; palette drag/connect authoring is disabled or hidden with clear copy. *(Superseded: phones get full authoring through the bottom tab bar's **Add**; the unused "disabled on small screens" palette copy was removed 2026-09-27. `e2e/specs/mobile.spec.ts` covers it.)* |
 | AC5 | Taxonomy tooltips (node types, edge kinds, router rules, provider/model) open via **focus/click** and expose title + short description; basic `title` or `aria-describedby` on chrome buttons. |
 | AC6 | Focus order visits header → active rail/drawer trigger → canvas → open drawer content → Run actions; live region announces validation summary changes. |
 | AC7 | Interactive targets meet **44×44px** minimum; motion respects `prefers-reduced-motion`. |
