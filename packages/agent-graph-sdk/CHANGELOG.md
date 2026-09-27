@@ -1,5 +1,12 @@
 # Changelog — @bstockwelldev/agent-graph-sdk
 
+## 1.1.1
+
+### Patch Changes
+
+- 8c2b2d8: `demoGraph()` (from `/testing`) has the backend demo graph's new node positions: the layout the Studio draws, so opening the demo no longer shows it as unsaved.
+- fff3e44: `fingerprintGraph` and `fingerprintGraphSemantics` now include declared node ports and edge contracts (`source_port`, `target_port`, `transform`). Before this, declaring a port or adding an edge transform in the Studio didn't mark the graph unsaved. Contracts are normalized first, so the API's `null`-filled copy of a contract fingerprints the same as the authored one.
+
 ## 1.1.0
 
 ### Minor Changes

@@ -4,7 +4,7 @@ Build an agent workflow as a graph, run it, and inspect every node's input and
 output. Agent Graph Builder is a Next.js **Studio** (`apps/studio`), a
 FastAPI + [LangGraph](https://github.com/langchain-ai/langgraph) execution API
 (`backend/`), and a typed TypeScript SDK published as
-[`@bstockwelldev/agent-graph-sdk`](packages/agent-graph-sdk/README.md) (1.1.0 on npm).
+[`@bstockwelldev/agent-graph-sdk`](packages/agent-graph-sdk/README.md) (1.1.1 on npm).
 
 ## Try it
 

@@ -1,6 +1,6 @@
 {
   "name": "@bstockwelldev/agent-graph-sdk",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "TypeScript SDK for Agent Graph Builder: typed API client, run streaming, graph helpers, React hooks and an MSW test kit",
   "license": "MIT",
   "repository": {
