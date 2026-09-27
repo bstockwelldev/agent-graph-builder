@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "e2e"
 
 # Added while apps/playground (React 18, since removed) coexisted with
 # apps/studio (React 19) during the studio-consolidation program; kept as a

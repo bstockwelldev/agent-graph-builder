@@ -31,8 +31,8 @@
             "id": "input_1",
             "type": "input",
             "position": {
-              "x": 40.0,
-              "y": 200.0
+              "x": 24.0,
+              "y": 110.0
             },
             "config": {
               "variableName": "question"
@@ -42,8 +42,8 @@
             "id": "prompt_classify",
             "type": "prompt",
             "position": {
-              "x": 300.0,
-              "y": 200.0
+              "x": 360.0,
+              "y": 110.0
             },
             "config": {
               "template": "Classify the following user question as exactly one word: either 'technical' or 'other'. Respond with only that single word.\n\nQuestion: {question}"
@@ -53,8 +53,8 @@
             "id": "llm_classify",
             "type": "llm",
             "position": {
-              "x": 560.0,
-              "y": 200.0
+              "x": 696.0,
+              "y": 110.0
             },
             "config": {
               "model": "qwen2.5:3b",
@@ -65,8 +65,8 @@
             "id": "router_1",
             "type": "router",
             "position": {
-              "x": 820.0,
-              "y": 200.0
+              "x": 1032.0,
+              "y": 110.0
             },
             "config": {}
           },
@@ -74,8 +74,8 @@
             "id": "tool_lookup",
             "type": "tool",
             "position": {
-              "x": 1080.0,
-              "y": 60.0
+              "x": 1704.0,
+              "y": 196.0
             },
             "config": {
               "toolName": "lookup_topic",
@@ -86,8 +86,8 @@
             "id": "prompt_answer",
             "type": "prompt",
             "position": {
-              "x": 1080.0,
-              "y": 340.0
+              "x": 1368.0,
+              "y": 24.0
             },
             "config": {
               "template": "Answer the user's question helpfully and concisely.\n\nQuestion: {question}"
@@ -97,8 +97,8 @@
             "id": "llm_answer",
             "type": "llm",
             "position": {
-              "x": 1340.0,
-              "y": 340.0
+              "x": 1704.0,
+              "y": 24.0
             },
             "config": {
               "model": "qwen2.5:3b",
@@ -109,8 +109,8 @@
             "id": "output_1",
             "type": "output",
             "position": {
-              "x": 1600.0,
-              "y": 200.0
+              "x": 2040.0,
+              "y": 110.0
             },
             "config": {}
           }

@@ -13,6 +13,7 @@
     "build:sdk": "pnpm --filter @bstockwelldev/agent-graph-sdk run build",
     "dev": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
     "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-studio run test",
+    "e2e": "pnpm --filter @bstockwelldev/agent-graph-e2e run test",
     "changeset": "changeset",
     "version-packages": "changeset version"
   },

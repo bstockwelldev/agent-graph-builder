@@ -13,3 +13,7 @@ dist/
 .env*
 .next/
 next-env.d.ts
+
+# Playwright (e2e/)
+test-results/
+playwright-report/

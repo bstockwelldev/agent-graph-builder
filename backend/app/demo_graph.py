@@ -22,13 +22,13 @@ def build_demo_graph() -> GraphDefinition:
         GraphNode(
             id="input_1",
             type=NodeType.INPUT,
-            position=NodePosition(x=40, y=200),
+            position=NodePosition(x=24, y=110),
             config={"variableName": "question"},
         ),
         GraphNode(
             id="prompt_classify",
             type=NodeType.PROMPT,
-            position=NodePosition(x=300, y=200),
+            position=NodePosition(x=360, y=110),
             config={
                 "template": (
                     "Classify the following user question as exactly one word: "
@@ -40,7 +40,7 @@ def build_demo_graph() -> GraphDefinition:
         GraphNode(
             id="llm_classify",
             type=NodeType.LLM,
-            position=NodePosition(x=560, y=200),
+            position=NodePosition(x=696, y=110),
             config={
                 "model": "qwen2.5:3b",
                 "systemPrompt": (
@@ -52,19 +52,19 @@ def build_demo_graph() -> GraphDefinition:
         GraphNode(
             id="router_1",
             type=NodeType.ROUTER,
-            position=NodePosition(x=820, y=200),
+            position=NodePosition(x=1032, y=110),
             config={},
         ),
         GraphNode(
             id="tool_lookup",
             type=NodeType.TOOL,
-            position=NodePosition(x=1080, y=60),
+            position=NodePosition(x=1704, y=196),
             config={"toolName": "lookup_topic", "inputVariable": "question"},
         ),
         GraphNode(
             id="prompt_answer",
             type=NodeType.PROMPT,
-            position=NodePosition(x=1080, y=340),
+            position=NodePosition(x=1368, y=24),
             config={
                 "template": (
                     "Answer the user's question helpfully and concisely.\n\nQuestion: {question}"
@@ -74,13 +74,13 @@ def build_demo_graph() -> GraphDefinition:
         GraphNode(
             id="llm_answer",
             type=NodeType.LLM,
-            position=NodePosition(x=1340, y=340),
+            position=NodePosition(x=1704, y=24),
             config={"model": "qwen2.5:3b", "systemPrompt": "You are a helpful assistant."},
         ),
         GraphNode(
             id="output_1",
             type=NodeType.OUTPUT,
-            position=NodePosition(x=1600, y=200),
+            position=NodePosition(x=2040, y=110),
             config={},
         ),
     ]

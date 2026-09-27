@@ -1,0 +1,16 @@
+{
+  "name": "@bstockwelldev/agent-graph-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Playwright end-to-end tests: the built studio against a live FastAPI backend on the stub provider",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.3"
+  }
+}

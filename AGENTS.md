@@ -13,6 +13,7 @@ Visual graph authoring studio (Next.js, `apps/studio`) + FastAPI/LangGraph execu
 | Studio (Next.js) | `apps/studio/` | Canvas, run panel, SSE event log (styling rules: `apps/studio/AGENTS.md`) |
 | SDK (shared types/client) | `packages/agent-graph-sdk/` | Graph schema, API client, fingerprints |
 | Backend (FastAPI) | `backend/app/` | Compile, run, providers, storage |
+| E2E (Playwright) | `e2e/` | Built studio + live API on the stub provider |
 | Planning | `docs/planning/` | Roadmap, feature specs, incidents |
 
 ## Commands
@@ -25,6 +26,8 @@ pnpm dev                                        # studio on :3000, proxies /api 
 ```
 
 Studio-only gates (CI runs these): `pnpm --filter @bstockwelldev/agent-graph-studio run lint` / `run typecheck`.
+
+End-to-end (`e2e/`, Playwright): `pnpm run e2e`. It builds the studio, then starts the API on :8000 (stub provider, temp SQLite) and `next start` on :3100. Use `E2E_SKIP_BUILD=1` to reuse a build. Locally it reuses servers already on those ports. Specs use roles/aria-labels, and `.react-flow__node[data-id=…]` for canvas nodes. Each test creates its own graph through the API (`fixtures.ts`). Never use fixed sleeps: wait with `expect`, or `waitForCanvasToSettle` before pointer work on the canvas.
 
 From `backend/`:
 
@@ -65,6 +68,7 @@ Backend selection: `SUPABASE_*` → else `OBJECT_STORE_*` (bucket + both keys) �
 ```
 apps/studio/              # Next.js studio: React Flow editor + run UX
 packages/agent-graph-sdk/ # Types, client, graph fingerprints
+e2e/                      # Playwright specs, fixtures, config
 backend/app/              # FastAPI routes, runtime, providers
 docs/planning/            # Roadmap + locked feature specs
 .github/workflows/ci.yml  # pytest + npm build on master
@@ -72,7 +76,7 @@ docs/planning/            # Roadmap + locked feature specs
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) on push to `master`/`main` and on every PR: `backend` (`uv sync --extra dev` + `uv run pytest`), `studio` (`pnpm install --frozen-lockfile`, build SDK, studio lint + typecheck, `pnpm run test`, `pnpm run build`), and `sdk-package` (build, typecheck, `pnpm run check`, `pnpm run docs` in `packages/agent-graph-sdk`).
+GitHub Actions (`.github/workflows/ci.yml`) on push to `master`/`main` and on every PR: `backend` (`uv sync --extra dev` + `uv run pytest`), `studio` (`pnpm install --frozen-lockfile`, build SDK, studio lint + typecheck, `pnpm run test`, `pnpm run build`), `e2e` (Playwright; report and traces uploaded on failure), and `sdk-package` (build, typecheck, `pnpm run check`, `pnpm run docs` in `packages/agent-graph-sdk`).
 
 Remote: `origin` → `bstockwelldev/agent-graph-builder`.
 
