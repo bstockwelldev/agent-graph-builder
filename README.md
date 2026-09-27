@@ -193,6 +193,21 @@ contains only the demo.
 pnpm test
 ```
 
+End-to-end tests ([`e2e/`](e2e/), Playwright). They run the built Studio
+against a live backend on the Stub provider, using a throwaway SQLite
+database, so no keys are needed:
+
+```bash
+pnpm --filter @bstockwelldev/agent-graph-e2e exec playwright install chromium   # once
+pnpm run e2e                      # builds the Studio, starts API :8000 + Studio :3100
+E2E_SKIP_BUILD=1 pnpm run e2e     # reuse an existing apps/studio/.next build
+```
+
+Locally, servers already listening on :8000 / :3100 are reused, so you can
+keep them running while you iterate. Start the API with `CHAT_PROVIDER=stub`
+when you do. On failure, `pnpm --filter @bstockwelldev/agent-graph-e2e run report`
+opens the HTML report with traces.
+
 Backend smoke run of the demo graph, printing the full event stream:
 
 ```bash
@@ -221,7 +236,8 @@ git push -u origin master
 
 Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage). The production hostname is kept by the operator, not documented here.
 CI (`.github/workflows/ci.yml`) runs backend pytest, Studio
-lint/typecheck/test/build, and SDK package checks on every push and PR. The
+lint/typecheck/test/build, SDK package checks, and the Playwright e2e suite
+on every push and PR. The
 SDK is released manually with the **Release SDK** workflow. See
 [`AGENTS.md`](AGENTS.md) for the changeset and OpenAPI-contract steps.
 
