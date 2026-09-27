@@ -191,11 +191,18 @@ contains only the demo.
 ```bash
 # SDK build + SDK and Studio tests (from the repo root)
 pnpm test
+pnpm run test:coverage            # same, with V8 coverage (text summary + coverage/ JSON)
+cd backend && uv run pytest --cov=app   # backend coverage
 ```
+
+CI reports coverage for the backend, SDK and Studio in each job's summary.
+It's report-only: there are no thresholds.
 
 End-to-end tests ([`e2e/`](e2e/), Playwright). They run the built Studio
 against a live backend on the Stub provider, using a throwaway SQLite
-database, so no keys are needed:
+database, so no keys are needed. A second backend on :8001 runs with
+`PUBLIC_DEMO_MODE=1` for the demo-mode specs, and an axe scan checks the
+main pages for new serious accessibility violations:
 
 ```bash
 pnpm --filter @bstockwelldev/agent-graph-e2e exec playwright install chromium   # once
@@ -204,8 +211,8 @@ E2E_SKIP_BUILD=1 pnpm run e2e     # reuse an existing apps/studio/.next build
 ```
 
 Locally, servers already listening on :8000 / :3100 are reused, so you can
-keep them running while you iterate. Start the API with `CHAT_PROVIDER=stub`
-when you do. On failure, `pnpm --filter @bstockwelldev/agent-graph-e2e run report`
+keep them running while you iterate. Start the APIs with `CHAT_PROVIDER=stub`
+(and `PUBLIC_DEMO_MODE=1` on :8001) when you do. On failure, `pnpm --filter @bstockwelldev/agent-graph-e2e run report`
 opens the HTML report with traces.
 
 Backend smoke run of the demo graph, printing the full event stream:

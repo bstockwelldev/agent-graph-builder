@@ -35,6 +35,30 @@ export function getIncomingEdges(graph: GraphDefinition, nodeId: string): GraphE
   return graph.edges.filter((edge) => edge.target === nodeId);
 }
 
+/**
+ * A node's declared ports and an edge's port/transform contract, normalized
+ * for fingerprints: the API echoes unset fields as `null` and defaults
+ * `required` to true, while the studio may omit them, so both forms must
+ * fingerprint the same.
+ */
+function contractFingerprint(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(contractFingerprint);
+  if (value === null || typeof value !== "object") return value;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== null && v !== undefined)
+    .map(([k, v]) => [k, contractFingerprint(v)] as const);
+  return Object.fromEntries(entries);
+}
+
+function portsFingerprint(ports: GraphPort[] | null | undefined): unknown {
+  if (!ports?.length) return null;
+  return contractFingerprint(ports.map((port) => ({ ...port, contract: { ...port.contract, required: port.contract.required ?? true } })));
+}
+
+function edgeContractFingerprint(edge: GraphEdge): unknown {
+  return contractFingerprint({ source_port: edge.source_port, target_port: edge.target_port, transform: edge.transform });
+}
+
 export function fingerprintGraphSemantics(graph: GraphDefinition): string {
   const payload = {
     id: graph.id,
@@ -45,6 +69,7 @@ export function fingerprintGraphSemantics(graph: GraphDefinition): string {
       id: node.id,
       type: node.type,
       config: node.config,
+      ports: [portsFingerprint(node.input_ports), portsFingerprint(node.output_ports)],
     })),
     edges: graph.edges.map((edge) => ({
       id: edge.id,
@@ -52,6 +77,7 @@ export function fingerprintGraphSemantics(graph: GraphDefinition): string {
       target: edge.target,
       kind: edge.kind,
       condition: edge.condition ?? null,
+      contract: edgeContractFingerprint(edge),
     })),
   };
   return JSON.stringify(payload);
@@ -71,6 +97,9 @@ export function fingerprintGraph(graph: GraphDefinition): string {
       // Node names live in extensions.label (Slice 4) -- a rename must mark
       // the graph dirty even though it's excluded from semantic fingerprints.
       extensions: node.extensions ?? null,
+      // Declared ports (I/O tab) and edge contracts change what runs, so they
+      // mark the graph dirty too.
+      ports: [portsFingerprint(node.input_ports), portsFingerprint(node.output_ports)],
     })),
     edges: graph.edges.map((edge) => ({
       id: edge.id,
@@ -78,6 +107,7 @@ export function fingerprintGraph(graph: GraphDefinition): string {
       target: edge.target,
       kind: edge.kind,
       condition: edge.condition ?? null,
+      contract: edgeContractFingerprint(edge),
     })),
     // Wave 7b: groups are display-only but saved, so they mark the graph dirty.
     groups: graph.groups ?? null,

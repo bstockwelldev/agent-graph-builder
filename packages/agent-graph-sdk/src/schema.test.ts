@@ -8,7 +8,7 @@ import {
   NODE_TYPES,
   semanticFingerprint,
 } from "./schema.js";
-import type { GraphDefinition, NodeType } from "./types.js";
+import type { GraphDefinition, GraphPort, NodeType } from "./types.js";
 
 function sampleGraph(positionOffset = 0): GraphDefinition {
   return {
@@ -48,6 +48,43 @@ describe("fingerprintGraphSemantics", () => {
 
     expect(fingerprintGraphSemantics(left)).toBe(fingerprintGraphSemantics(right));
     expect(fingerprintGraph(left)).not.toBe(fingerprintGraph(right));
+  });
+});
+
+describe("fingerprintGraph sees port and edge-contract edits", () => {
+  const port = (contract: GraphPort["contract"]): GraphPort => ({ id: "input", name: "input", direction: "input", contract });
+
+  it("changes when ports are declared or an edge gets a transform or port", () => {
+    const plain = sampleGraph(0);
+    const [first, ...rest] = plain.nodes;
+    const declared = { ...plain, nodes: [{ ...first, input_ports: [port({ kind: "message" })] }, ...rest] };
+    const [edge, ...otherEdges] = plain.edges;
+    const transformed = { ...plain, edges: [{ ...edge, transform: { type: "format_message" as const, template: "{value}" } }, ...otherEdges] };
+    const ported = { ...plain, edges: [{ ...edge, source_port: "decision" }, ...otherEdges] };
+    for (const edited of [declared, transformed, ported]) {
+      expect(fingerprintGraph(edited)).not.toBe(fingerprintGraph(plain));
+      expect(fingerprintGraphSemantics(edited)).not.toBe(fingerprintGraphSemantics(plain));
+    }
+  });
+
+  it("treats the API's null-filled echo of a contract as unchanged", () => {
+    const plain = sampleGraph(0);
+    const [first, ...rest] = plain.nodes;
+    const [edge, ...otherEdges] = plain.edges;
+    const authored = {
+      ...plain,
+      nodes: [{ ...first, input_ports: [port({ kind: "message" })] }, ...rest],
+      edges: [{ ...edge, transform: { type: "wrap" as const, field: "topic" } }, ...otherEdges],
+    };
+    const echoed = {
+      ...plain,
+      nodes: [{ ...first, input_ports: [port({ kind: "message", schema: null, required: true, classification: null })] }, ...rest],
+      edges: [
+        { ...edge, source_port: null, target_port: null, transform: { type: "wrap" as const, field: "topic", pointer: null, template: null, target_type: null, transform_id: null } },
+        ...otherEdges,
+      ],
+    };
+    expect(fingerprintGraph(echoed)).toBe(fingerprintGraph(authored));
   });
 });
 

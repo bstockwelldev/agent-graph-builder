@@ -17,3 +17,6 @@ next-env.d.ts
 # Playwright (e2e/)
 test-results/
 playwright-report/
+coverage/
+.coverage
+backend/coverage.json

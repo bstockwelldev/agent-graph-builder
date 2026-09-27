@@ -13,11 +13,13 @@
     "build:sdk": "pnpm --filter @bstockwelldev/agent-graph-sdk run build",
     "dev": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
     "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-studio run test",
+    "test:coverage": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test:coverage && pnpm --filter @bstockwelldev/agent-graph-studio run test:coverage",
     "e2e": "pnpm --filter @bstockwelldev/agent-graph-e2e run test",
     "changeset": "changeset",
     "version-packages": "changeset version"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1"
+    "@changesets/cli": "^2.31.1",
+    "@vitest/coverage-v8": "3.2.7"
   }
 }
