@@ -99,7 +99,10 @@ describe("ResourcePage extras", () => {
 
   it("creates with the New editor (Overview only)", async () => {
     renderPage(promptKind);
-    fireEvent.click(await screen.findByRole("button", { name: "New prompt" }));
+    // The button renders disabled while the list loads; a click before then is a no-op.
+    const newButton = await screen.findByRole("button", { name: "New prompt" });
+    await vi.waitFor(() => expect((newButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(newButton);
     const dialog = await screen.findByRole("dialog", { name: "New prompt" });
     expect(within(dialog).queryByRole("tab")).toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Greeter" } });
