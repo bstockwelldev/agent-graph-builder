@@ -1,6 +1,8 @@
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 
 export const API_URL = "http://127.0.0.1:8000";
+/** The same API with PUBLIC_DEMO_MODE=1 (see playwright.config.ts). */
+export const DEMO_MODE_API_URL = "http://127.0.0.1:8001";
 
 export type GraphNodeJson = { id: string; type: string; config?: Record<string, unknown>; [key: string]: unknown };
 export type GraphEdgeJson = { id: string; source: string; target: string; transform?: Record<string, unknown> | null; [key: string]: unknown };
@@ -110,9 +112,29 @@ export async function runOnStub(page: Page, graph: GraphJson): Promise<string> {
   return runId;
 }
 
-export const test = base.extend<{ api: Api }>({
+/**
+ * Sends this page's /api calls to the PUBLIC_DEMO_MODE backend. Proxied with
+ * route.fetch + fulfill: Chromium refuses a cross-origin `continue`. Use it
+ * through the `demoModeApi` fixture, which drops the route (and any fetch
+ * still in flight, e.g. a poll) when the test ends.
+ */
+async function routeApiToDemoMode(page: Page): Promise<void> {
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    const target = `${DEMO_MODE_API_URL}${url.pathname}${url.search}`;
+    await route.fulfill({ response: await route.fetch({ url: target }) });
+  });
+}
+
+export const test = base.extend<{ api: Api; demoModeApi: void }>({
   api: async ({ request }, use) => {
     await use(new Api(request));
+  },
+  /** Request this fixture to run the test's page against the PUBLIC_DEMO_MODE backend. */
+  demoModeApi: async ({ page }, use) => {
+    await routeApiToDemoMode(page);
+    await use();
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   },
 });
 

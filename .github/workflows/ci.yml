@@ -16,8 +16,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: uv sync --extra dev
-      - name: Run pytest
-        run: uv run pytest
+      - name: Run pytest (with coverage)
+        run: uv run pytest --cov=app --cov-report=term --cov-report=json:coverage.json
+      - name: Coverage summary
+        if: always()
+        run: node ../scripts/coverage-summary.mjs backend=coverage.json >> "$GITHUB_STEP_SUMMARY"
 
   studio:
     runs-on: ubuntu-latest
@@ -38,8 +41,14 @@ jobs:
         run: pnpm --filter @bstockwelldev/agent-graph-studio run lint
       - name: Typecheck
         run: pnpm --filter @bstockwelldev/agent-graph-studio run typecheck
-      - name: Test
-        run: pnpm run test
+      - name: Test (with coverage)
+        run: pnpm run test:coverage
+      - name: Coverage summary
+        if: always()
+        run: >-
+          node scripts/coverage-summary.mjs
+          sdk=packages/agent-graph-sdk/coverage/coverage-summary.json
+          studio=apps/studio/coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
       - name: Build
         run: pnpm run build
 
