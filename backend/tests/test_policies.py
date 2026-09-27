@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from app.compiler import validate_graph
 from app.demo_graph import build_demo_graph
-from tests.helpers import editable_demo_graph
 from app.main import app
 from app.models import (
     DataClassification,
@@ -25,11 +24,13 @@ from app.models import (
 from app.policies import (
     create_policy_exception,
     delete_policy_exception,
+    edge_classifications,
     evaluate_graph_policies,
     evaluate_release_governance,
     list_graph_policy_exceptions,
 )
 from app.releases import ReleasePublishBlocked, publish_release
+from tests.helpers import editable_demo_graph
 
 client = TestClient(app)
 
@@ -306,3 +307,105 @@ def test_policy_exception_routes_404_for_unknown_graph() -> None:
 
     assert client.get("/api/graphs/does-not-exist/policy-exceptions").status_code == 404
     assert client.delete("/api/graphs/does-not-exist/policy-exceptions/pexc_x").status_code == 404
+
+
+def _chain(*nodes: GraphNode) -> GraphDefinition:
+    return GraphDefinition(
+        id="g_chain",
+        name="g_chain",
+        entry_node_id=nodes[0].id,
+        nodes=list(nodes),
+        edges=[
+            GraphEdge(id=f"e_{a.id}_{b.id}", source=a.id, target=b.id)
+            for a, b in zip(nodes, nodes[1:], strict=False)
+        ],
+    )
+
+
+def _node(node_id: str, node_type: NodeType, **ports: list[GraphPort]) -> GraphNode:
+    return GraphNode(id=node_id, type=node_type, position=NodePosition(x=0, y=0), **ports)
+
+
+def _classified_input(classification: DataClassification) -> GraphNode:
+    return _node("source", NodeType.INPUT, output_ports=[_sensitive_output_port(classification)])
+
+
+def _codes(graph: GraphDefinition) -> list[tuple[str, str | None]]:
+    return [(d.code, d.edge_id) for d in evaluate_graph_policies(graph) if d.blocking]
+
+
+def test_classification_flows_through_intermediate_nodes_into_a_tool() -> None:
+    graph = _chain(
+        _classified_input(DataClassification.CONFIDENTIAL),
+        _node("prompt", NodeType.PROMPT),
+        _node("tool", NodeType.TOOL),
+    )
+    (diagnostic,) = [d for d in evaluate_graph_policies(graph) if d.blocking]
+    assert diagnostic.code == "POLICY_SENSITIVE_DATA_INTO_TOOL"
+    assert diagnostic.edge_id == "e_prompt_tool"
+    assert "declared on 'source'" in diagnostic.message
+
+
+def test_a_guardrail_declaring_a_lower_classification_declassifies() -> None:
+    public_out = GraphPort(
+        id="output",
+        name="output",
+        direction="output",
+        contract=PortContract(kind=PortKind.MESSAGE, classification=DataClassification.PUBLIC),
+    )
+    source = _classified_input(DataClassification.CONFIDENTIAL)
+    assert _codes(_chain(source, _node("guard", NodeType.GUARDRAIL), _node("tool", NodeType.TOOL)))
+    guarded = _chain(
+        source,
+        _node("guard", NodeType.GUARDRAIL, output_ports=[public_out]),
+        _node("tool", NodeType.TOOL),
+    )
+    assert _codes(guarded) == []
+
+
+def test_a_non_guardrail_cannot_declassify_by_declaration() -> None:
+    public_out = _sensitive_output_port(DataClassification.PUBLIC)
+    graph = _chain(
+        _classified_input(DataClassification.RESTRICTED),
+        _node("prompt", NodeType.PROMPT, output_ports=[public_out]),
+        _node("tool", NodeType.TOOL),
+    )
+    assert _codes(graph) == [("POLICY_SENSITIVE_DATA_INTO_TOOL", "e_prompt_tool")]
+
+
+def test_input_clearance_blocks_higher_classified_data() -> None:
+    def llm(clearance: DataClassification) -> GraphNode:
+        port = GraphPort(
+            id="input",
+            name="input",
+            direction="input",
+            contract=PortContract(kind=PortKind.MESSAGE, classification=clearance),
+        )
+        return _node("llm", NodeType.LLM, input_ports=[port])
+
+    source = _classified_input(DataClassification.CONFIDENTIAL)
+    blocked = [
+        d
+        for d in evaluate_graph_policies(_chain(source, llm(DataClassification.INTERNAL)))
+        if d.blocking
+    ]
+    assert [(d.code, d.node_id, d.port_id) for d in blocked] == [
+        ("POLICY_CLASSIFICATION_ABOVE_CLEARANCE", "llm", "input")
+    ]
+    assert "cleared for internal" in blocked[0].message
+    assert _codes(_chain(source, llm(DataClassification.CONFIDENTIAL))) == []
+
+
+def test_classification_propagation_converges_on_a_loop() -> None:
+    graph = _chain(
+        _classified_input(DataClassification.CONFIDENTIAL),
+        _node("a", NodeType.PROMPT),
+        _node("b", NodeType.PROMPT),
+    )
+    graph.edges.append(GraphEdge(id="e_back", source="b", target="a"))
+    carried = edge_classifications(graph)
+    assert {edge: level[0].value for edge, level in carried.items()} == {
+        "e_source_a": "confidential",
+        "e_a_b": "confidential",
+        "e_back": "confidential",
+    }

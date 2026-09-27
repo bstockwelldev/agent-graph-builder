@@ -36,6 +36,9 @@ from .models import (
     Diagnostic,
     EffectivePolicyRule,
     GraphDefinition,
+    GraphEdge,
+    GraphNode,
+    GraphPort,
     NodeType,
     PolicyEnforcement,
     PolicyException,
@@ -46,7 +49,7 @@ from .models import (
     PolicyRuleSetting,
     PolicySettings,
 )
-from .ports import default_output_port, find_output_port
+from .ports import default_input_port, default_output_port, find_input_port, find_output_port
 
 # ---------------------------------------------------------------------------
 # Rule catalog (STO-608). Each rule's thresholds are parameters, and its
@@ -56,6 +59,7 @@ from .ports import default_output_port, find_output_port
 # ---------------------------------------------------------------------------
 
 SENSITIVE_DATA_INTO_TOOL = "POLICY_SENSITIVE_DATA_INTO_TOOL"
+CLASSIFICATION_ABOVE_CLEARANCE = "POLICY_CLASSIFICATION_ABOVE_CLEARANCE"
 LLM_MODEL_NOT_PINNED = "POLICY_LLM_MODEL_NOT_PINNED"
 TOO_MANY_MODEL_NODES = "POLICY_TOO_MANY_MODEL_NODES"
 RELEASE_MISSING_GOVERNANCE_METADATA = "POLICY_RELEASE_MISSING_GOVERNANCE_METADATA"
@@ -68,8 +72,9 @@ POLICY_CATALOG: tuple[PolicyRuleInfo, ...] = (
         category="security",
         title="Sensitive data into a tool",
         description=(
-            "Flags an edge that carries classified data straight into a tool node, which may "
-            "dispatch it to an external MCP server or echo it verbatim."
+            "Flags an edge that carries classified data into a tool node, which may dispatch it "
+            "to an external MCP server or echo it verbatim. Classification declared on an output "
+            "port flows downstream until a guardrail declares a lower one."
         ),
         gate="compile",
         default_enforcement="block",
@@ -83,6 +88,17 @@ POLICY_CATALOG: tuple[PolicyRuleInfo, ...] = (
                 description="Data at or above this classification is flagged.",
             )
         ],
+    ),
+    PolicyRuleInfo(
+        code=CLASSIFICATION_ABOVE_CLEARANCE,
+        category="security",
+        title="Classified data above an input's clearance",
+        description=(
+            "Flags an edge whose data is classified above the clearance declared on the input "
+            "port it feeds. Inputs without a declared clearance accept any classification."
+        ),
+        gate="compile",
+        default_enforcement="block",
     ),
     PolicyRuleInfo(
         code=LLM_MODEL_NOT_PINNED,
@@ -269,30 +285,89 @@ def _enforce(
 # ---------------------------------------------------------------------------
 
 
+_Level = tuple[DataClassification, str]  # (classification, node id that declared it)
+
+
+def _rank(classification: DataClassification) -> int:
+    return _CLASSIFICATION_ORDER.index(classification.value)
+
+
+def _higher(a: _Level | None, b: _Level | None) -> _Level | None:
+    if a is None or b is None:
+        return a or b
+    return b if _rank(b[0]) > _rank(a[0]) else a
+
+
+def _edge_source_port(graph_nodes: dict[str, GraphNode], edge: GraphEdge) -> GraphPort | None:
+    source = graph_nodes.get(edge.source)
+    if source is None:
+        return None
+    if edge.source_port:
+        return find_output_port(source, edge.source_port)
+    return default_output_port(source)
+
+
+def edge_classifications(graph: GraphDefinition) -> dict[str, _Level]:
+    """The classification of the data each edge carries: the higher of what
+    the edge's source port declares and what flows into the source node.
+    A guardrail is the one place data can be declassified: a classification
+    declared on its output port replaces what flows in (with none declared,
+    it passes the incoming level on like any other node). Iterated to a
+    fixed point so loops converge; levels only rise, so it terminates."""
+    nodes = {n.id: n for n in graph.nodes}
+    inherited: dict[str, _Level | None] = {}
+    carried: dict[str, _Level] = {}
+    changed = True
+    while changed:
+        changed = False
+        for edge in graph.edges:
+            source = nodes.get(edge.source)
+            port = _edge_source_port(nodes, edge)
+            if source is None:
+                continue
+            declared = port.contract.classification if port else None
+            own: _Level | None = (declared, source.id) if declared else None
+            flowing = inherited.get(source.id)
+            level = own if source.type == NodeType.GUARDRAIL and own else _higher(own, flowing)
+            if level is None or carried.get(edge.id) == level:
+                continue
+            carried[edge.id] = level
+            raised = _higher(inherited.get(edge.target), level)
+            if raised != inherited.get(edge.target):
+                inherited[edge.target] = raised
+            changed = True
+    return carried
+
+
+def _describe(level: _Level, edge: GraphEdge) -> str:
+    classification, origin = level
+    if origin == edge.source:
+        return f"{classification.value} data from {edge.source!r}"
+    return f"{classification.value} data (declared on {origin!r}) from {edge.source!r}"
+
+
 def _check_sensitive_data_into_tool(
     graph: GraphDefinition, params: dict[str, PolicyParamValue]
 ) -> list[Diagnostic]:
     """Security overlay: data classified at or above `min_classification`
-    feeding directly into a `tool` node -- tool nodes may dispatch to an
-    external MCP server or fall back to a mock-echo that surfaces its input
-    verbatim (nodes.py's compute_tool), either of which can leak it."""
+    feeding into a `tool` node -- tool nodes may dispatch to an external
+    MCP server or fall back to a mock-echo that surfaces its input verbatim
+    (nodes.py's compute_tool), either of which can leak it. Classification
+    propagates downstream (`edge_classifications`), so an intermediate node
+    doesn't launder it."""
     minimum = str(params.get("min_classification", DataClassification.CONFIDENTIAL.value))
     threshold = _CLASSIFICATION_ORDER.index(minimum) if minimum in _CLASSIFICATION_ORDER else 2
     nodes_by_id = {n.id: n for n in graph.nodes}
+    carried = edge_classifications(graph)
     diagnostics: list[Diagnostic] = []
     for edge in graph.edges:
         target_node = nodes_by_id.get(edge.target)
-        source_node = nodes_by_id.get(edge.source)
-        if target_node is None or source_node is None or target_node.type != NodeType.TOOL:
+        level = carried.get(edge.id)
+        if target_node is None or target_node.type != NodeType.TOOL or level is None:
             continue
-        source_port = (
-            find_output_port(source_node, edge.source_port)
-            if edge.source_port
-            else default_output_port(source_node)
-        )
-        classification = source_port.contract.classification if source_port else None
-        if classification is None or _CLASSIFICATION_ORDER.index(classification.value) < threshold:
+        if _rank(level[0]) < threshold:
             continue
+        source_port = _edge_source_port(nodes_by_id, edge)
         diagnostics.append(
             Diagnostic(
                 severity="error",
@@ -300,14 +375,58 @@ def _check_sensitive_data_into_tool(
                 code=SENSITIVE_DATA_INTO_TOOL,
                 node_id=target_node.id,
                 edge_id=edge.id,
-                port_id=source_port.id,
+                port_id=source_port.id if source_port else None,
                 message=(
-                    f"Edge {edge.id!r} carries {classification.value} data "
-                    f"from {source_node.id!r} directly into tool node {target_node.id!r}."
+                    f"Edge {edge.id!r} carries {_describe(level, edge)} "
+                    f"into tool node {target_node.id!r}."
                 ),
                 remediation=(
-                    "Route through a guardrail node first, bind the tool to a trusted MCP "
-                    "server, or grant a time-boxed policy exception if this is intentional."
+                    "Route through a guardrail node that declares a lower output classification, "
+                    "bind the tool to a trusted MCP server, or grant a time-boxed policy "
+                    "exception if this is intentional."
+                ),
+                blocking=True,
+            )
+        )
+    return diagnostics
+
+
+def _check_classification_above_clearance(
+    graph: GraphDefinition, params: dict[str, PolicyParamValue]
+) -> list[Diagnostic]:
+    """Security overlay: an input port's declared classification is its
+    clearance -- the highest classification it may receive."""
+    nodes_by_id = {n.id: n for n in graph.nodes}
+    carried = edge_classifications(graph)
+    diagnostics: list[Diagnostic] = []
+    for edge in graph.edges:
+        target_node = nodes_by_id.get(edge.target)
+        level = carried.get(edge.id)
+        if target_node is None or level is None:
+            continue
+        port = (
+            find_input_port(target_node, edge.target_port)
+            if edge.target_port
+            else default_input_port(target_node)
+        )
+        clearance = port.contract.classification if port else None
+        if port is None or clearance is None or _rank(level[0]) <= _rank(clearance):
+            continue
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                category="policy",
+                code=CLASSIFICATION_ABOVE_CLEARANCE,
+                node_id=target_node.id,
+                edge_id=edge.id,
+                port_id=port.id,
+                message=(
+                    f"Edge {edge.id!r} carries {_describe(level, edge)} into "
+                    f"{target_node.id!r}.{port.id}, which is cleared for {clearance.value}."
+                ),
+                remediation=(
+                    "Route through a guardrail node that declares a lower output classification, "
+                    "raise this input's clearance, or grant a time-boxed policy exception."
                 ),
                 blocking=True,
             )
@@ -366,6 +485,7 @@ _GRAPH_RULES: dict[
     str, Callable[[GraphDefinition, dict[str, PolicyParamValue]], list[Diagnostic]]
 ] = {
     SENSITIVE_DATA_INTO_TOOL: _check_sensitive_data_into_tool,
+    CLASSIFICATION_ABOVE_CLEARANCE: _check_classification_above_clearance,
     LLM_MODEL_NOT_PINNED: _check_llm_model_not_pinned,
     TOO_MANY_MODEL_NODES: _check_model_node_count,
 }
