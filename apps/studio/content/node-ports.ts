@@ -114,3 +114,53 @@ export function computePortDragCompatibility(sourceKind: PortKind, targetKind: P
   if (STRUCTURED_KINDS.has(sourceKind) || STRUCTURED_KINDS.has(targetKind)) return "needs-transform";
   return "incompatible";
 }
+
+// --- Port authoring (I/O tab) ---------------------------------------------
+// Declaring ports types a node's *existing* catalog ports (same ids and
+// names — the runtime resolves and projects by those ids); it never adds or
+// removes ports, which the executors would not read.
+
+export type PortDirection = "input" | "output";
+export type NodePorts = Pick<GraphNode, "input_ports" | "output_ports">;
+type PortNode = Pick<GraphNode, "type"> & NodePorts & { config?: Record<string, unknown> };
+
+export const PORT_KINDS: readonly PortKind[] = ["message", "structured-json", "documents", "decision", "artifact", "tool-result", "approval", "error"];
+
+/** The node's inferred (catalog) ports for one direction, ignoring any declaration. */
+export function inferredPorts(node: Pick<GraphNode, "type"> & { config?: Record<string, unknown> }, direction: PortDirection): GraphPort[] {
+  return direction === "input" ? inputPortsFor({ type: node.type }) : outputPortsFor({ type: node.type, config: node.config });
+}
+
+export function declaredPorts(node: NodePorts, direction: PortDirection): GraphPort[] | null {
+  const ports = direction === "input" ? node.input_ports : node.output_ports;
+  return ports?.length ? ports : null;
+}
+
+/** `ports` with one direction declared (`list`) or reset to inferred (`null`); undefined when nothing is declared. */
+export function withDeclaredPorts(ports: NodePorts | undefined, direction: PortDirection, list: GraphPort[] | null): NodePorts | undefined {
+  const key = direction === "input" ? "input_ports" : "output_ports";
+  const next: NodePorts = { ...ports };
+  if (list?.length) next[key] = list;
+  else delete next[key];
+  return next.input_ports?.length || next.output_ports?.length ? next : undefined;
+}
+
+/**
+ * Starts a declaration from the inferred ports, so the node's behavior is
+ * unchanged until edited. A kind-agnostic input (tool/output/transform)
+ * accepts anything while inferred, so its catalog kind would be a new,
+ * stricter claim: seed it from what actually arrives (`incomingKinds`, the
+ * connected sources' output kinds) when they agree.
+ */
+export function declareFromInferred(node: PortNode, direction: PortDirection, incomingKinds: readonly PortKind[] = []): GraphPort[] {
+  const agreed = new Set(incomingKinds).size === 1 ? incomingKinds[0] : null;
+  const seedInput = direction === "input" && acceptsAnyKind(node) && agreed;
+  return inferredPorts(node, direction).map((port, index) => ({
+    ...port,
+    contract: { ...port.contract, ...(seedInput && index === 0 ? { kind: agreed } : {}) },
+  }));
+}
+
+export function updatePortContract(list: GraphPort[], portId: string, patch: Partial<GraphPort["contract"]>): GraphPort[] {
+  return list.map((port) => (port.id === portId ? { ...port, contract: { ...port.contract, ...patch } } : port));
+}

@@ -30,6 +30,8 @@ import {
   type GraphUsedBy,
   type GraphHealth,
   type GraphNode,
+  type GraphPort,
+  type PortKind,
   type GraphOrientation,
   type NodeTrace,
   type NodeType,
@@ -141,6 +143,7 @@ import {
   type HeatMetric,
 } from "@/lib/graphLayers";
 import { GraphHeader, type RunPanelSectionId } from "./GraphHeader";
+import { inputPortsFor, outputPortsFor } from "@/content/node-ports";
 import { IconButton } from "./ui/IconButton";
 import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
 import type { EdgeRunState } from "./edges/LabeledEdge";
@@ -268,6 +271,16 @@ function syncIdCounter(graph: GraphDefinition) {
     if (match) max = Math.max(max, Number(match[1]));
   }
   idCounter = max;
+}
+
+/** The ports an edge end can bind to (declared, else inferred), for the edge inspector. */
+function edgeEndPorts(nodes: Node<GraphNodeData>[], nodeId: string, direction: "input" | "output"): GraphPort[] {
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) return [];
+  const ports = node.data.ports;
+  return direction === "input"
+    ? inputPortsFor({ type: node.data.nodeType, input_ports: ports?.input_ports })
+    : outputPortsFor({ type: node.data.nodeType, config: node.data.config, output_ports: ports?.output_ports });
 }
 
 function toFlowNode(n: GraphNode): Node<GraphNodeData> {
@@ -929,11 +942,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           const condition = patch.condition !== undefined ? patch.condition : (edge.data?.condition as string | null);
           const { stroke, strokeWidth } = edgeStrokeForKind(kind);
           let contract = edge.data?.contract as EdgeContract | undefined;
-          if (patch.transform !== undefined) {
-            const next: EdgeContract = { ...contract };
-            if (patch.transform) next.transform = patch.transform;
-            else delete next.transform;
-            contract = Object.keys(next).length > 0 ? next : undefined;
+          const contractKeys = (["source_port", "target_port", "transform"] as const).filter((key) => patch[key] !== undefined);
+          if (contractKeys.length > 0) {
+            const next: Record<string, unknown> = { ...contract };
+            for (const key of contractKeys) {
+              if (patch[key]) next[key] = patch[key];
+              else delete next[key];
+            }
+            contract = Object.keys(next).length > 0 ? (next as EdgeContract) : undefined;
           }
           return {
             ...edge,
@@ -2078,6 +2094,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     target: edge.target,
     kind: (edge.data?.kind as EdgeKind) ?? "sequence",
     condition: (edge.data?.condition as string | null) ?? null,
+    ...(edge.data?.contract as EdgeContract | undefined),
   });
   // Selection dock's I/O tab (Phase 10 Slice B) needs both directions for
   // any node type, not just router/branch's own branch editor.
@@ -2116,6 +2133,23 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         type: selectedNode.data.nodeType,
         position: selectedNode.position,
         config: selectedNode.data.config,
+        ...selectedNode.data.ports,
+      }}
+      incomingKinds={selectedIncomingEdges.map((edge) => {
+        const sourcePorts = edgeEndPorts(nodes, edge.source, "output");
+        return (sourcePorts.find((port) => port.id === edge.source_port) ?? sourcePorts[0])?.contract.kind;
+      }).filter((kind): kind is PortKind => Boolean(kind))}
+      onPortsChange={(ports) => {
+        recordMutation();
+        setNodes((nds) =>
+          nds.map((n) => {
+            if (n.id !== selectedNode.id) return n;
+            const data = { ...n.data };
+            if (ports) data.ports = ports;
+            else delete data.ports;
+            return { ...n, data };
+          }),
+        );
       }}
       issues={diagnosticsForNode(diagnostics, selectedNode.id)}
       outgoingEdges={selectedOutgoingEdges}
@@ -2177,8 +2211,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         target: selectedEdge.target,
         kind: (selectedEdge.data?.kind as EdgeKind) ?? "sequence",
         condition: (selectedEdge.data?.condition as string | null) ?? null,
+        ...(selectedEdge.data?.contract as EdgeContract | undefined),
         transform: (selectedEdge.data?.contract as EdgeContract | undefined)?.transform ?? null,
       }}
+      sourcePorts={edgeEndPorts(nodes, selectedEdge.source, "output")}
+      targetPorts={edgeEndPorts(nodes, selectedEdge.target, "input")}
       issues={diagnosticsForEdge(diagnostics, selectedEdge.id)}
       onChange={(patch) => patchEdgeById(selectedEdge.id, patch)}
       onDelete={deleteSelection}

@@ -42,7 +42,7 @@ a free-form LLM answer. Ask something non-technical to see the other branch run.
 
 ### Node vocabulary
 
-The backend defines 13 `NodeType`s (`backend/app/models.py`), and the palette
+The backend defines 14 `NodeType`s (`backend/app/models.py`), and the palette
 can add all of them:
 
 | Node | What it does |
@@ -59,6 +59,7 @@ can add all of them:
 | `human_gate` | Pauses the run for approval; resume or reject with `POST /api/runs/{id}/resume` |
 | `subgraph` | Runs another saved graph as a nested run with its own trace |
 | `code_exec` | Declares a code-execution contract (validated and passed through; no sandbox yet) |
+| `transform` | Deterministic reshape (select / wrap / format message / coerce), inline or from the Transforms library |
 | `output` | Returns the run result |
 
 There are three edge kinds: `sequence` (always), `conditional` (match upstream

@@ -55,7 +55,13 @@ describe("EdgeInspector transform", () => {
       target: { value: '{"kind": "sequence", "condition": null, "transform": {"type": "wrap", "field": "topic"}}' },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    expect(onChange).toHaveBeenCalledWith({ kind: "sequence", condition: null, transform: { type: "wrap", field: "topic" } });
+    expect(onChange).toHaveBeenCalledWith({
+      kind: "sequence",
+      condition: null,
+      source_port: null,
+      target_port: null,
+      transform: { type: "wrap", field: "topic" },
+    });
   });
 
   it("shows a library-bound transform by name, and switching to inline clears it", async () => {
@@ -64,5 +70,23 @@ describe("EdgeInspector transform", () => {
     expect(await screen.findByText(/Fact line/)).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: /Inline/ }));
     expect(onChange).toHaveBeenCalledWith({ transform: null });
+  });
+
+  it("picks a non-default source port for a multi-output source", () => {
+    const sourcePorts = [
+      { id: "passthrough", name: "passthrough", direction: "output" as const, contract: { kind: "message" as const } },
+      { id: "decision", name: "decision", direction: "output" as const, contract: { kind: "decision" as const } },
+    ];
+    const onChange = vi.fn();
+    render(<EdgeInspector edge={EDGE} sourcePorts={sourcePorts} onChange={onChange} onDelete={vi.fn()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "decision" }));
+    expect(onChange).toHaveBeenCalledWith({ source_port: "decision" });
+    fireEvent.click(screen.getByRole("radio", { name: "passthrough" }));
+    expect(onChange).toHaveBeenLastCalledWith({ source_port: null });
+  });
+
+  it("hides the Ports section when both ends have a single port", () => {
+    renderEdge();
+    expect(screen.queryByText("Ports")).toBeNull();
   });
 });

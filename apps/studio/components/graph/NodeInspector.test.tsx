@@ -79,4 +79,42 @@ describe("NodeInspector (v2)", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Select" }));
     expect(onConfigChange).toHaveBeenLastCalledWith({ type: "select", pointer: "" });
   });
+
+  it("declares a node's ports from the I/O tab and edits a kind", () => {
+    const onPortsChange = vi.fn();
+    const { rerender } = render(
+      <NodeInspector
+        node={{ id: "llm_1", type: "llm", position: { x: 0, y: 0 }, config: {} }}
+        onConfigChange={vi.fn()}
+        onPortsChange={onPortsChange}
+        onDelete={vi.fn()}
+        userLabel=""
+        derivedLabel="LLM"
+        onLabelChange={vi.fn()}
+        templateVariables={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /I\/O/ }));
+    fireEvent.click(screen.getByRole("radiogroup", { name: "Input contract" }).querySelector('[aria-checked="false"]')!);
+    const declared = onPortsChange.mock.calls[0][0];
+    expect(declared).toEqual({ input_ports: [{ id: "input", name: "input", direction: "input", contract: { kind: "message" } }] });
+
+    rerender(
+      <NodeInspector
+        node={{ id: "llm_1", type: "llm", position: { x: 0, y: 0 }, config: {}, ...declared }}
+        onConfigChange={vi.fn()}
+        onPortsChange={onPortsChange}
+        onDelete={vi.fn()}
+        userLabel=""
+        derivedLabel="LLM"
+        onLabelChange={vi.fn()}
+        templateVariables={[]}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "input kind" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: /Required/ }));
+    expect(onPortsChange).toHaveBeenLastCalledWith({
+      input_ports: [{ id: "input", name: "input", direction: "input", contract: { kind: "message", required: false } }],
+    });
+  });
 });
