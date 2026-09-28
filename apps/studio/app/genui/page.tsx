@@ -73,9 +73,10 @@ const TYPE_REFERENCE: { name: string; summary: string; fields: string[] }[] = [
   },
 ];
 
-function JsonBlock({ value }: { value: unknown }) {
+function JsonBlock({ value, label }: { value: unknown; label: string }) {
+  // Focusable so keyboard users can scroll it (max-h + overflow-auto).
   return (
-    <pre className="border-border bg-muted/40 text-foreground/90 max-h-56 overflow-auto rounded-lg border p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+    <pre tabIndex={0} role="region" aria-label={label} className="focus-visible:ring-primary/60 focus-visible:ring-2 focus-visible:outline-none border-border bg-muted/40 text-foreground/90 max-h-56 overflow-auto rounded-lg border p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -97,7 +98,7 @@ export default function GenUiPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <GenuiSurfaceView surface={{ root: SAMPLE_DASHBOARD }} />
-            <JsonBlock value={{ root: SAMPLE_DASHBOARD }} />
+            <JsonBlock label="Dashboard surface JSON" value={{ root: SAMPLE_DASHBOARD }} />
           </CardContent>
         </Card>
 
@@ -108,7 +109,7 @@ export default function GenUiPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <GenuiSurfaceView surface={{ root: SAMPLE_FORM }} />
-            <JsonBlock value={{ root: SAMPLE_FORM }} />
+            <JsonBlock label="Form surface JSON" value={{ root: SAMPLE_FORM }} />
           </CardContent>
         </Card>
       </section>

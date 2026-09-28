@@ -181,6 +181,7 @@ export function RoutingLabPanel({
             No live tool or model calls are made; the offline stub provider runs every fixture.
           </div>
           <TextArea
+            aria-label="Dataset fixtures (JSON)"
             rows={8}
             style={{ minHeight: 140, resize: "vertical", fontFamily: fontFamily.mono }}
             value={datasetText}

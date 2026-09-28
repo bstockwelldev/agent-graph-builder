@@ -10,6 +10,9 @@ import type { NextConfig } from "next";
 const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // e2e coverage builds (E2E_COVERAGE=1, see e2e/coverage.ts) ship browser
+  // source maps so V8 coverage maps back to the studio sources.
+  productionBrowserSourceMaps: process.env.E2E_COVERAGE === "1",
   turbopack: {
     // Monorepo lives here; avoids picking a parent-folder lockfile as workspace root.
     root: path.join(__dirname, "..", ".."),

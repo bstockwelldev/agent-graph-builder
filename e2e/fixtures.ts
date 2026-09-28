@@ -1,5 +1,7 @@
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 
+import { addCoverage, coverageEnabled, withSourceMaps } from "./coverage";
+
 export const API_URL = "http://127.0.0.1:8000";
 /** The same API with PUBLIC_DEMO_MODE=1 (see playwright.config.ts). */
 export const DEMO_MODE_API_URL = "http://127.0.0.1:8001";
@@ -127,6 +129,14 @@ async function routeApiToDemoMode(page: Page): Promise<void> {
 }
 
 export const test = base.extend<{ api: Api; demoModeApi: void }>({
+  // E2E_COVERAGE=1: collect V8 JS coverage for every test's page (see coverage.ts).
+  page: async ({ page, browserName }, use) => {
+    if (!coverageEnabled || browserName !== "chromium") return use(page);
+    await page.coverage.startJSCoverage({ resetOnNavigation: false });
+    await use(page);
+    const entries = await page.coverage.stopJSCoverage();
+    await addCoverage(await withSourceMaps(entries, page.request));
+  },
   api: async ({ request }, use) => {
     await use(new Api(request));
   },

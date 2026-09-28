@@ -106,8 +106,23 @@ jobs:
         run: pnpm --filter @bstockwelldev/agent-graph-e2e exec playwright install --with-deps chromium
       - name: Typecheck specs
         run: pnpm --filter @bstockwelldev/agent-graph-e2e run typecheck
-      - name: Run e2e
+      - name: Run e2e (with studio client coverage)
         run: pnpm run e2e
+        env:
+          E2E_COVERAGE: "1"
+      - name: Coverage summary
+        if: always()
+        run: >-
+          test -f e2e/coverage/coverage-summary.json &&
+          node scripts/coverage-summary.mjs "studio (e2e)"=e2e/coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload e2e coverage report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: e2e-coverage
+          path: e2e/coverage/html/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload report and traces
         if: failure()
         uses: actions/upload-artifact@v5

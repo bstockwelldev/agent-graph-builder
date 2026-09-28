@@ -39,6 +39,22 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
       await page.getByRole("link", { name: graph.id }).or(page.getByRole("link", { name: graph.name })).first().waitFor();
     },
   ],
+  // Every other graph-editor panel, and the run panel after a run finishes.
+  ...(["routingLab", "knowledge", "policies", "health", "graphConfig", "chat", "console", "help", "palette"] as const).map(
+    (panel): [string, (page: Page, graph: GraphJson) => Promise<void>] => [`${panel} panel`, (page, graph) => openGraph(page, graph, `?panel=${panel}`)],
+  ),
+  [
+    "finished run",
+    async (page, graph) => {
+      await openGraph(page, graph, "?panel=run");
+      await page.getByRole("button", { name: "Run", exact: true }).click();
+      await page.getByText(/A database index is a data structure/).first().waitFor();
+    },
+  ],
+  // The remaining top-level pages (resource pages share the card markup scanned on /transforms).
+  ...["/agents", "/prompts", "/tools", "/mcp", "/llm-profiles", "/analytics", "/runs", "/resources", "/genui"].map(
+    (path): [string, (page: Page, graph: GraphJson) => Promise<void>] => [`${path} page`, async (page) => void (await page.goto(path))],
+  ),
 ];
 
 for (const [name, open] of PAGES) {

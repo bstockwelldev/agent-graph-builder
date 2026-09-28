@@ -196,6 +196,8 @@ cd backend && uv run pytest --cov=app   # backend coverage
 ```
 
 CI reports coverage for the backend, SDK and Studio in each job's summary.
+The e2e job adds the Studio code the browser run exercises
+(`E2E_COVERAGE=1 pnpm run e2e` locally; the report is in `e2e/coverage/html`).
 It's report-only: there are no thresholds.
 
 End-to-end tests ([`e2e/`](e2e/), Playwright). They run the built Studio
