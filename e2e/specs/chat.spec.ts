@@ -1,0 +1,58 @@
+import { API_URL, expect, openGraph, test } from "../fixtures";
+
+type ChatSession = { id: string; title: string; provider: string; messages: { role: string; content: string }[] };
+
+test("chats about the open graph on Stub, and the session persists", async ({ page, api, request }) => {
+  const graph = await api.createDemoGraph("E2E chat");
+  await openGraph(page, graph, "?panel=chat");
+  await expect(page.getByText("No session open")).toBeVisible();
+
+  await page.getByRole("button", { name: "New session" }).click();
+  await expect(page.getByRole("combobox", { name: "Chat session" })).toHaveText(/Scratchpad/);
+  await expect(page.getByText(`Context: ${graph.name}`)).toBeVisible();
+
+  const question = `What does this graph do? ${Date.now()}`;
+  await page.getByPlaceholder(/Message the model/).fill(question);
+  await page.getByRole("button", { name: "Send" }).click();
+  const log = page.getByRole("log");
+  await expect(log.getByText(question)).toBeVisible();
+
+  // The Stub model answers, and both turns are stored on the session.
+  const stored = async () => {
+    const sessions: ChatSession[] = await (await request.get(`${API_URL}/api/chat-sessions`)).json();
+    return sessions.find((session) => session.messages.some((m) => m.content.includes(question)));
+  };
+  await expect.poll(async () => (await stored())?.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+  const session = (await stored())!;
+  expect(session.provider).toBe("stub");
+  const reply = session.messages[1].content;
+  await expect(log.getByText(reply, { exact: true })).toBeVisible();
+
+  // Reopening the panel and picking the session brings the conversation back.
+  // Default titles are "Scratchpad <date, time to the second>", so parallel
+  // workers can create look-alikes; give ours a unique title first.
+  const title = `E2E chat ${session.id}`;
+  expect((await request.put(`${API_URL}/api/chat-sessions/${session.id}`, { data: { ...session, title } })).ok()).toBe(true);
+  await openGraph(page, graph, "?panel=chat");
+  await page.getByRole("combobox", { name: "Chat session" }).click();
+  await page.getByRole("option", { name: title, exact: true }).click();
+  await expect(page.getByRole("log").getByText(question)).toBeVisible();
+  await expect(page.getByRole("log").getByText(reply, { exact: true })).toBeVisible();
+});
+
+test("runs the open graph from chat and shows its steps", async ({ page, api }) => {
+  const graph = await api.createDemoGraph("E2E chat run");
+  await openGraph(page, graph, "?panel=chat");
+  await page.getByRole("button", { name: "New session" }).click();
+
+  await page.getByRole("button", { name: "Run a graph" }).first().click();
+  const form = page.getByRole("form", { name: "Run a graph" });
+  await expect(form.getByRole("combobox", { name: "Graph" })).toContainText(graph.name);
+  await form.getByLabel("question").fill("How does a database index work?");
+  await form.getByRole("button", { name: "Run draft" }).click();
+
+  const card = page.getByRole("group", { name: `Run of ${graph.name}` });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole("img", { name: /^\d+ of \d+ nodes done$/ })).toHaveAccessibleName(/^(\d+) of \1 nodes done$/);
+  await expect(card).toContainText(/A database index is a data structure/);
+});
