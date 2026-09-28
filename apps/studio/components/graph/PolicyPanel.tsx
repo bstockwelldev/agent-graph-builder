@@ -118,7 +118,7 @@ export function PolicyPanel({
         <CollapsibleSection sectionId="policy-rules" title="Rules" defaultOpen reducedMotion={reducedMotion}>
           <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
             Overrides for this graph. Anything left on Inherit follows the{" "}
-            <Link href="/policies" style={{ color: color.primary[500] }}>
+            <Link href="/policies" style={{ color: color.primary[500], textDecoration: "underline", textUnderlineOffset: 2 }}>
               workspace policies
             </Link>
             .

@@ -13,6 +13,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.56.1",
     "@types/node": "^22.20.4",
+    "monocart-coverage-reports": "^2.13.0",
     "typescript": "^5.9.3"
   }
 }

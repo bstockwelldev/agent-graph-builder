@@ -280,7 +280,7 @@ export function ChatPanel() {
             if (id) void openSession(id);
           }}
         >
-          <SelectTrigger className="flex-1">
+          <SelectTrigger className="flex-1" aria-label="Chat session">
             <SelectValue placeholder={sessionsLoading ? "Loading sessions…" : "Select a session"} />
           </SelectTrigger>
           <SelectContent>

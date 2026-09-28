@@ -32,6 +32,7 @@ const buildStudio = process.env.E2E_SKIP_BUILD ? "" : `${studio} run build && `;
 
 export default defineConfig({
   testDir: "./specs",
+  globalSetup: "./global-setup.ts",
   globalTeardown: "./global-teardown.ts",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
