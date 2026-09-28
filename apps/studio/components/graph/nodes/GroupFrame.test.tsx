@@ -54,4 +54,25 @@ describe("GroupFrame", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     expect(actions.renameGroup).toHaveBeenLastCalledWith("g1", null);
   });
+
+  it("renaming: Ctrl+S commits the name and lets the save shortcut through", () => {
+    const actions = renderFrame({ renaming: true });
+    const input = screen.getByRole("textbox", { name: "Group name" });
+    const onWindowKey = vi.fn();
+    window.addEventListener("keydown", onWindowKey);
+    fireEvent.change(input, { target: { value: "Answer path" } });
+    fireEvent.keyDown(input, { key: "s", ctrlKey: true });
+    window.removeEventListener("keydown", onWindowKey);
+    expect(actions.renameGroup).toHaveBeenLastCalledWith("g1", "Answer path");
+    expect(onWindowKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("renaming: other keys stay inside the field", () => {
+    renderFrame({ renaming: true });
+    const onWindowKey = vi.fn();
+    window.addEventListener("keydown", onWindowKey);
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Group name" }), { key: "Delete" });
+    window.removeEventListener("keydown", onWindowKey);
+    expect(onWindowKey).not.toHaveBeenCalled();
+  });
 });

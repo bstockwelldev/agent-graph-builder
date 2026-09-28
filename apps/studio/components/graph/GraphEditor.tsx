@@ -86,6 +86,7 @@ import {
   groupIdFromFrame,
   groupOfNode,
   groupSelection,
+  flagExpandedMembers,
   hideCollapsedMembers,
   isFrameNodeId,
   nextGroupId,
@@ -1745,7 +1746,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     const frames = buildGroupFrameNodes(displayGroups, base, focusSet).map((frame) =>
       frame.data.groupId === renamingGroupId ? { ...frame, data: { ...frame.data, renaming: true } } : frame,
     );
-    return [...(frames as unknown as Node<GraphNodeData>[]), ...hideCollapsedMembers(base, displayGroups)];
+    return [...(frames as unknown as Node<GraphNodeData>[]), ...flagExpandedMembers(hideCollapsedMembers(base, displayGroups), displayGroups)];
   }, [displayGroups, focusSet, heat, lanes, nodes, renamingGroupId]);
   const canvasEdges = useMemo(() => {
     if (lanes) return edges.filter((edge) => lanes.positions.has(edge.source) && lanes.positions.has(edge.target));
@@ -2068,16 +2069,24 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   // ⌘S / Ctrl+S saves (new with the header's Save button, Slice 2). Runs
   // even from inside inputs -- saving while editing a field is the point.
+  // The save runs after the next render, so an edit the same keystroke
+  // commits (e.g. a group rename field) is included.
+  const [saveRequested, setSaveRequested] = useState(false);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        void handleSave();
+        setSaveRequested(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleSave]);
+  }, []);
+  useEffect(() => {
+    if (!saveRequested) return;
+    setSaveRequested(false);
+    void handleSave();
+  }, [saveRequested, handleSave]);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);

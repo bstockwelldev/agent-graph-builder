@@ -113,6 +113,11 @@ function RenameInput({ label, onCommit }: { label: string; onCommit: (label: str
       className="nodrag agb-focus-ring"
       style={inputStyle}
       onKeyDown={(event) => {
+        // ⌘S / Ctrl+S commits the name and still reaches the editor's save shortcut.
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+          onCommit(event.currentTarget.value);
+          return;
+        }
         event.stopPropagation();
         if (event.key === "Enter") onCommit(event.currentTarget.value);
         if (event.key === "Escape") onCommit(null);

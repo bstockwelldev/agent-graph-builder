@@ -77,6 +77,8 @@ export interface GraphNodeData extends Record<string, unknown> {
   /** Wave 7d Heatmap view: this node's metric tint and value badge.
    * `null` (in heatmap view) means no data -- rendered neutral. */
   heat?: { label: string; color: string } | null;
+  /** Member of an expanded group: the selection toolbar sits below the node so it can't cover the group's header. */
+  inExpandedGroup?: boolean;
 }
 
 const STATUS_ICON: Partial<Record<NodeRunStatus, LucideIcon>> = {
@@ -256,7 +258,7 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
     >
-      <NodeToolbar isVisible={selected} position={Position.Top} offset={10}>
+      <NodeToolbar isVisible={selected} position={nodeData.inExpandedGroup ? Position.Bottom : Position.Top} offset={10}>
         <div role="toolbar" aria-label={`${title} actions`} style={toolbarStyle}>
           <IconButton label="Edit configuration" icon={<Settings2 size={15} />} tooltipPlacement="top" onClick={() => actions.editNode(id)} />
           {type !== "input" && (

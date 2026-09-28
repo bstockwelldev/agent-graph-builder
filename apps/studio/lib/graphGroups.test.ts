@@ -10,6 +10,7 @@ import {
   frameNodeId,
   groupBounds,
   groupSelection,
+  flagExpandedMembers,
   hideCollapsedMembers,
   pruneGroups,
   rerouteEdgesForCollapsedGroups,
@@ -86,5 +87,12 @@ describe("collapsed groups on the canvas", () => {
     expect(frame.data.dimmed).toBe(true);
     expect(frame.zIndex).toBe(-1);
     expect(buildGroupFrameNodes([group("g", ["a", "b"])], nodes, new Set(["a"]))[0].data.dimmed).toBe(false);
+  });
+
+  it("flags members of expanded groups only, so their toolbar clears the frame header", () => {
+    const nodes = [node("a", 0, 0), node("b", 0, 100), node("c", 0, 200)];
+    const flagged = flagExpandedMembers(nodes, [group("open", ["a"]), group("shut", ["b"], true)]);
+    expect(flagged.map((n) => Boolean((n.data as { inExpandedGroup?: boolean }).inExpandedGroup))).toEqual([true, false, false]);
+    expect(flagExpandedMembers(nodes, [])).toBe(nodes);
   });
 });

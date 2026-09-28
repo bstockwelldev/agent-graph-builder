@@ -29,10 +29,8 @@ test("chats about the open graph on Stub, and the session persists", async ({ pa
   await expect(log.getByText(reply, { exact: true })).toBeVisible();
 
   // Reopening the panel and picking the session brings the conversation back.
-  // Default titles are "Scratchpad <date, time to the second>", so parallel
-  // workers can create look-alikes; give ours a unique title first.
-  const title = `E2E chat ${session.id}`;
-  expect((await request.put(`${API_URL}/api/chat-sessions/${session.id}`, { data: { ...session, title } })).ok()).toBe(true);
+  // Titles end in an id suffix, so the picker option is unambiguous.
+  const title = session.title;
   await openGraph(page, graph, "?panel=chat");
   await page.getByRole("combobox", { name: "Chat session" }).click();
   await page.getByRole("option", { name: title, exact: true }).click();

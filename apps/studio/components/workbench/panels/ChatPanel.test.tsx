@@ -121,3 +121,15 @@ describe("ChatPanel graph runs", () => {
     expect(api.client.runs.start).not.toHaveBeenCalled();
   });
 });
+
+describe("ChatPanel sessions", () => {
+  it("new session titles carry an id suffix so same-second sessions stay distinct", async () => {
+    api.client.chatSessions.create.mockImplementation(async (s: unknown) => s);
+    await renderChat();
+    fireEvent.click(screen.getByRole("button", { name: "New session" }));
+    await vi.waitFor(() => expect(api.client.chatSessions.create).toHaveBeenCalledTimes(1));
+    const created = api.client.chatSessions.create.mock.calls[0][0] as { id: string; title: string };
+    expect(created.title).toMatch(/^Scratchpad .+ · [0-9a-f]{4}$/);
+    expect(created.title.endsWith(created.id.slice(-4))).toBe(true);
+  });
+});

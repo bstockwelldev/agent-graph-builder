@@ -117,7 +117,8 @@ export function ChatPanel() {
     const id = `chat_${crypto.randomUUID().slice(0, 8)}`;
     const session: ChatSession = {
       id,
-      title: `Scratchpad ${new Date().toLocaleString()}`,
+      // The id suffix keeps titles distinct when two sessions start in the same second.
+      title: `Scratchpad ${new Date().toLocaleString()} · ${id.slice(-4)}`,
       provider: newProvider,
       model: newModel,
       messages: [],

@@ -187,6 +187,14 @@ export function hideCollapsedMembers<T extends Node>(nodes: T[], groups: GraphGr
   return nodes.map((node) => (hidden.has(node.id) ? { ...node, hidden: true } : node));
 }
 
+/** Members of expanded groups are flagged `inExpandedGroup`, so a selected
+ * member shows its toolbar below the node instead of over the frame header. */
+export function flagExpandedMembers<T extends Node>(nodes: T[], groups: GraphGroup[]): T[] {
+  const members = new Set(groups.filter((group) => !group.collapsed).flatMap((group) => group.node_ids));
+  if (members.size === 0) return nodes;
+  return nodes.map((node) => (members.has(node.id) ? { ...node, data: { ...node.data, inExpandedGroup: true } } : node));
+}
+
 export type RoutedEdgeData = { mergedCount?: number; mergedEdgeIds?: string[] };
 
 /**
