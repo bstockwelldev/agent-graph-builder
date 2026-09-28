@@ -244,7 +244,10 @@ git push -u origin master
 Health check: `GET /api/health` → `{"ok":true,"storage_backend":"supabase"}` (prod uses Supabase Storage). The production hostname is kept by the operator, not documented here.
 CI (`.github/workflows/ci.yml`) runs backend pytest, Studio
 lint/typecheck/test/build, SDK package checks, and the Playwright e2e suite
-on every push and PR. The
+on every push and PR. A nightly **Production smoke** workflow runs `e2e/smoke/` against
+the deployed Studio. It checks health on shared storage in demo mode and a
+Stub run of the seeded demo. Set the repository variable `PROD_SMOKE_URL` to
+enable it. The
 SDK is released manually with the **Release SDK** workflow. See
 [`AGENTS.md`](AGENTS.md) for the changeset and OpenAPI-contract steps.
 

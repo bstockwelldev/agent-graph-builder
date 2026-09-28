@@ -31,11 +31,11 @@ jobs:
       run:
         working-directory: packages/agent-graph-sdk
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      # pnpm comes from package.json's packageManager via Corepack; enabled
+      # before setup-node so its pnpm cache can resolve the store.
+      - run: corepack enable
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
@@ -73,17 +73,17 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.0
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      # pnpm comes from package.json's packageManager via Corepack; enabled
+      # before setup-node so its pnpm cache can resolve the store.
+      - run: corepack enable
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @bstockwelldev/agent-graph-sdk run docs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: agent-graph-sdk-docs
           path: packages/agent-graph-sdk/docs-site

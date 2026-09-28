@@ -76,7 +76,7 @@ docs/planning/            # Roadmap + locked feature specs
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) on push to `master`/`main` and on every PR: `backend` (`uv sync --extra dev` + `uv run pytest --cov`), `studio` (`pnpm install --frozen-lockfile`, build SDK, studio lint + typecheck, `pnpm run test:coverage`, `pnpm run build`), `e2e` (Playwright; report and traces uploaded on failure), and `sdk-package` (build, typecheck, `pnpm run check`, `pnpm run docs` in `packages/agent-graph-sdk`). Coverage tables go to the backend and studio job summaries; they are report-only, with no thresholds.
+GitHub Actions (`.github/workflows/ci.yml`) on push to `master`/`main` and on every PR: `backend` (`uv sync --extra dev` + `uv run pytest --cov`), `studio` (`pnpm install --frozen-lockfile`, build SDK, studio lint + typecheck, `pnpm run test:coverage`, `pnpm run build`), `e2e` (Playwright; report and traces uploaded on failure), and `sdk-package` (build, typecheck, `pnpm run check`, `pnpm run docs` in `packages/agent-graph-sdk`). Coverage tables go to the backend and studio job summaries; they are report-only, with no thresholds. Separately, **Production smoke** (`.github/workflows/prod-smoke.yml`) runs `e2e/smoke/` nightly against the deployed studio: health on shared storage in public demo mode, plus a Stub run of the seeded demo. It reads the URL from the repository variable `PROD_SMOKE_URL` and skips when that is unset. Locally: `SMOKE_BASE_URL=… pnpm --filter @bstockwelldev/agent-graph-e2e run smoke`. CI gets pnpm through Corepack (`packageManager`), not a pnpm action.
 
 Remote: `origin` → `bstockwelldev/agent-graph-builder`.
 
