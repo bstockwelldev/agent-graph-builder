@@ -1,0 +1,46 @@
+name: Production smoke
+
+# Nightly checks against the deployed studio (e2e/smoke/): API health on shared
+# storage in public demo mode, and the seeded demo opens and runs on Stub.
+# Catches deploy/storage regressions CI can't see. The URL is the repository
+# variable PROD_SMOKE_URL (Settings → Secrets and variables → Actions →
+# Variables); hostnames stay out of the repo. Without it the job is skipped.
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: prod-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: ${{ vars.PROD_SMOKE_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - run: corepack enable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter @bstockwelldev/agent-graph-e2e
+      - name: Install Chromium
+        run: pnpm --filter @bstockwelldev/agent-graph-e2e exec playwright install --with-deps chromium
+      - name: Smoke test production
+        env:
+          SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_URL }}
+        run: pnpm --filter @bstockwelldev/agent-graph-e2e run smoke
+      - name: Upload report and traces
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: prod-smoke-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14

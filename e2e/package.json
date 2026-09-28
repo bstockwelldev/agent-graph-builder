@@ -5,6 +5,7 @@
   "description": "Playwright end-to-end tests: the built studio against a live FastAPI backend on the stub provider",
   "scripts": {
     "test": "playwright test",
+    "smoke": "playwright test -c playwright.smoke.config.ts",
     "typecheck": "tsc --noEmit",
     "report": "playwright show-report"
   },
