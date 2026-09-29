@@ -83,8 +83,8 @@ export function CaptureDatasetDialog({
         <DialogHeader>
           <DialogTitle>Save runs as dataset</DialogTitle>
           <DialogDescription>
-            {runs.length} selected run{runs.length === 1 ? "" : "s"} become fixtures you can replay in the
-            Routing Lab.
+            {runs.length === 1 ? "The selected run becomes a fixture" : `${runs.length} selected runs become fixtures`} you can
+            replay in the Routing Lab.
           </DialogDescription>
         </DialogHeader>
 

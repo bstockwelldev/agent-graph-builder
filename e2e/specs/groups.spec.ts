@@ -15,24 +15,24 @@ test("groups nodes, collapses, renames, recolors and ungroups, saving each chang
   await node("llm_answer").click({ button: "right" });
   await page.getByRole("menuitem", { name: /^Group selection \(2\)/ }).click();
 
-  const frame = page.getByRole("group", { name: "Group Group 1" });
-  await expect(frame).toBeVisible();
-  // A new group opens with its name field focused; keep the default name.
-  await expect(page.getByRole("textbox", { name: "Group name" })).toBeFocused();
-  await page.getByRole("textbox", { name: "Group name" }).press("Enter");
-  await expect(page.getByRole("status").first()).toHaveText("Unsaved");
+  // A new group opens with its name field focused; Ctrl+S commits the typed name and saves.
+  const nameField = page.getByRole("textbox", { name: "Group name" });
+  await expect(nameField).toBeFocused();
+  await nameField.fill("Answer draft");
   await save(page);
-  expect(await groupsOf()).toMatchObject([{ label: "Group 1", node_ids: expect.arrayContaining(["prompt_answer", "llm_answer"]) }]);
+  expect(await groupsOf()).toMatchObject([{ label: "Answer draft", node_ids: expect.arrayContaining(["prompt_answer", "llm_answer"]) }]);
+  const frame = page.getByRole("group", { name: "Group Answer draft" });
+  await expect(frame).toBeVisible();
 
-  // Clear the selection so the member node's toolbar doesn't cover the group header.
-  await page.locator(".react-flow__pane").click({ position: { x: 8, y: 8 } });
-  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
+  // A selected member's toolbar sits below the node, clear of the group header.
+  await expect(node("llm_answer")).toHaveClass(/selected/);
+  await expect(page.getByRole("toolbar", { name: /actions$/ }).first()).toBeVisible();
 
   // Collapse to a single card: members leave the canvas; expand brings them back.
-  await page.getByRole("button", { name: "Collapse group Group 1" }).click();
-  await expect(page.getByRole("group", { name: "Group Group 1 (collapsed)" })).toBeVisible();
+  await page.getByRole("button", { name: "Collapse group Answer draft" }).click();
+  await expect(page.getByRole("group", { name: "Group Answer draft (collapsed)" })).toBeVisible();
   await expect(node("prompt_answer")).toBeHidden();
-  await page.getByRole("button", { name: "Expand group Group 1" }).click();
+  await page.getByRole("button", { name: "Expand group Answer draft" }).click();
   await expect(node("prompt_answer")).toBeVisible();
 
   // Rename and recolor from the group's context menu.
