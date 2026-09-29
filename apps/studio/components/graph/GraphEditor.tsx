@@ -2393,7 +2393,6 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           fitInsets={fitInsets}
           liveAnnouncement={liveAnnouncement}
           onLiveAnnouncement={setLiveAnnouncement}
-          onClearLiveAnnouncement={() => setLiveAnnouncement("")}
           loadFailureVisible={Boolean(loadError) && nodes.length === 0}
           onRetryLoad={() => window.location.reload()}
           graphLoading={loading}

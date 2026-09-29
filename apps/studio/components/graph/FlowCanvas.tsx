@@ -91,7 +91,6 @@ type FlowCanvasProps = {
   onPaneContextMenu?: (x: number, y: number, flowX: number, flowY: number) => void;
   liveAnnouncement: string;
   onLiveAnnouncement: (message: string) => void;
-  onClearLiveAnnouncement: () => void;
   /** Diagnostics-as-navigation (studio-ux-gap-remediation-plan.md §1):
    * bump `nonce` to pan/zoom the canvas onto a node or edge (e.g. from a
    * diagnostic click), independent of the normal fit-view-on-load/relayout
@@ -147,7 +146,6 @@ function FlowCanvasInner({
   onPaneContextMenu,
   liveAnnouncement,
   onLiveAnnouncement,
-  onClearLiveAnnouncement,
   focusRequest = null,
   spacing = "standard",
   showMinimap = true,
