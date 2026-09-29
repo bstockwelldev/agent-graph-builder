@@ -41,13 +41,15 @@ export function useResourceList<T extends { id: string }>(resourceClient: Resour
   }, [refetch]);
 
   const save = useCallback(
-    async (resource: T, isNew: boolean) => {
+    async (resource: T, isNew: boolean, afterSave?: (saved: T) => Promise<void>) => {
       setSaving(true);
       setSaveError(null);
       try {
         const saved = isNew
           ? await resourceClient.create(resource)
           : await resourceClient.update(resource);
+        // Parts stored beside the resource (an MCP server's headers).
+        await afterSave?.(saved);
         setItems((prev) => {
           const exists = prev.some((item) => item.id === saved.id);
           return exists

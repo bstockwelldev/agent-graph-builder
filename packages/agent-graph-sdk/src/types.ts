@@ -39,6 +39,9 @@ import type {
   transformPreviewResponseSchema,
   resourceUsageSchema,
   mcpServerConfigSchema,
+  mcpDiscoverySchema,
+  mcpHeaderNamesSchema,
+  mcpRemoteToolSchema,
   nodeExecutionSchema,
   nodeMetricsSchema,
   nodePositionSchema,
@@ -188,6 +191,9 @@ export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 
 export type ToolDefinition = z.infer<typeof toolDefinitionSchema>;
 export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
+export type McpHeaderNames = z.infer<typeof mcpHeaderNamesSchema>;
+export type McpRemoteTool = z.infer<typeof mcpRemoteToolSchema>;
+export type McpDiscovery = z.infer<typeof mcpDiscoverySchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 export type LlmProfile = z.infer<typeof llmProfileSchema>;
 export type TransformDefinition = z.infer<typeof transformDefinitionSchema>;

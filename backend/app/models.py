@@ -646,6 +646,38 @@ class TransformPreviewResponse(BaseModel):
     error: str | None = None
 
 
+class McpHeaderNames(BaseModel):
+    """The names of an MCP server's stored request headers. Values never
+    leave the server (mcp/secrets.py)."""
+
+    names: list[str] = Field(default_factory=list)
+
+
+class McpHeadersUpdate(BaseModel):
+    """Replaces an MCP server's request headers. A `null` value keeps that
+    header's stored value; a name left out is removed."""
+
+    headers: dict[str, str | None] = Field(default_factory=dict)
+
+
+class McpRemoteTool(BaseModel):
+    """One tool an MCP server lists (`tools/list`)."""
+
+    name: str
+    description: str | None = None
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+
+
+class McpDiscovery(BaseModel):
+    """`ok` with the server's tools, or not `ok` with why the connection
+    failed. Always 200 for a known server: a server that can't be reached
+    is a result here, like a transform preview."""
+
+    ok: bool
+    tools: list[McpRemoteTool] = Field(default_factory=list)
+    error: str | None = None
+
+
 # P2, "Cross-cutting policy overlays" (docs/planning/roadmap.md's Strategic
 # Roadmap Addendum): a named, time-boxed waiver for one policy diagnostic
 # code on one graph — optionally scoped to a single node — so a compile or

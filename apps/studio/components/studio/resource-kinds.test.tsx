@@ -62,6 +62,31 @@ describe("resource kinds", () => {
     expect(saved).toMatchObject({ mcp_server_id: "mcp_1", mcp_tool_name: "echo", requires_approval: true });
   });
 
+  it("keeps tools off built-in names and requires a whole MCP binding", () => {
+    expect(toolKind.issues({ id: "calculator", description: "d" })).toEqual(["calculator is a built-in tool; pick another name."]);
+    expect(toolKind.issues({ id: "t", description: "d", _source: "mcp" })).toEqual(["Pick an MCP server."]);
+    expect(toolKind.issues({ id: "t", description: "d", _source: "mcp", mcp_server_id: "srv" })).toEqual(["Pick the server's tool."]);
+    // Switching back to Mock drops the binding, and the form-only key never saves.
+    expect(toolKind.normalize({ id: "t", description: "d", _source: "mock", mcp_server_id: "srv", mcp_tool_name: "x" })).toEqual({
+      id: "t",
+      description: "d",
+      parameters_json: "{}",
+      requires_approval: false,
+      mcp_server_id: null,
+      mcp_tool_name: null,
+    });
+    expect(mcpKind.issues({ id: "s", name: "S", url: "https://x", _headers: [{ name: "X-Key", value: "", stored: false }] })).toEqual([
+      "Add a value for header X-Key.",
+    ]);
+    expect(mcpKind.normalize({ id: "s", name: "S", url: "https://x", _headers: [], _headersEdited: true })).toEqual({
+      id: "s",
+      name: "S",
+      url: "https://x",
+      transport: "http",
+      enabled: true,
+    });
+  });
+
   it("requires an agent's graph and dedupes its allowed tools", () => {
     expect(agentKind.normalize({ id: "a", name: "A", graph_id: " " })).toBeNull();
     expect(agentKind.normalize({ id: "a", name: "A", graph_id: "g1", tool_ids: ["x", "x", "y"], description: " ", llm_profile_id: "" })).toEqual({

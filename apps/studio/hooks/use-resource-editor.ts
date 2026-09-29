@@ -50,7 +50,8 @@ export function useResourceEditor(kind: AnyResourceKind) {
   const save = async () => {
     const normalized = kind.normalize(form);
     if (!normalized) return;
-    await list.save(normalized, !editing);
+    const afterSave = kind.afterSave;
+    await list.save(normalized, !editing, afterSave ? (saved) => afterSave(saved, form) : undefined);
     setEditorOpen(false);
   };
 

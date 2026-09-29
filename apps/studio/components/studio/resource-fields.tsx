@@ -87,6 +87,7 @@ export function AreaField({
   rows,
   mono = false,
   required = false,
+  readOnly = false,
   error,
 }: {
   id: string;
@@ -96,6 +97,7 @@ export function AreaField({
   rows: number;
   mono?: boolean;
   required?: boolean;
+  readOnly?: boolean;
   error?: string | null;
 }) {
   return (
@@ -108,7 +110,8 @@ export function AreaField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={rows}
-        className={cn(mono && "font-mono text-xs")}
+        className={cn(mono && "font-mono text-xs", readOnly && "bg-muted")}
+        readOnly={readOnly}
         aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}

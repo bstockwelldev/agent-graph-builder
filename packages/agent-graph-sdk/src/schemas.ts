@@ -496,6 +496,23 @@ export const mcpServerConfigSchema = z.object({
   enabled: z.boolean(),
 });
 
+/** An MCP server's stored request header names; values are write-only. */
+export const mcpHeaderNamesSchema = z.object({ names: z.array(z.string()) });
+
+/** One tool an MCP server lists (`tools/list`). */
+export const mcpRemoteToolSchema = z.object({
+  name: z.string(),
+  description: z.string().nullish(),
+  input_schema: z.record(z.string(), z.unknown()),
+});
+
+/** `POST /api/mcp-servers/{id}/discover`: the server's tools, or why it couldn't connect. */
+export const mcpDiscoverySchema = z.object({
+  ok: z.boolean(),
+  tools: z.array(mcpRemoteToolSchema),
+  error: z.string().nullish(),
+});
+
 /** A graph packaged to run as an agent: `POST /api/agents/{id}/runs` applies
  * its LLM profile (default provider/model), prepends its instructions to
  * model nodes' system prompts, and enforces its tool allow-list (empty =

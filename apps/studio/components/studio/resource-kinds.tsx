@@ -5,11 +5,9 @@ import Link from "next/link";
 import type {
   AgentProfile,
   LlmProfile,
-  McpServerConfig,
   PromptTemplate,
   ResourceUsage,
   ResourceVersionIndexEntry,
-  ToolDefinition,
   TransformDefinition,
 } from "@bstockwelldev/agent-graph-sdk";
 
@@ -17,11 +15,14 @@ import { Badge } from "@/components/ui/badge";
 import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { client } from "@/lib/api-client";
+import { BUILTIN_TOOL_IDS } from "@/lib/builtinTools";
 import { isChatProvider } from "@/lib/providers";
 import { describeTransform } from "@/lib/transforms";
 import { cn } from "@/lib/utils";
 
 import { AgentFields } from "./agent-fields";
+import { HeadersField, McpDiscoverySection, TransportField, headerIssues, headersUpdate, type McpServerForm } from "./mcp-server-fields";
+import { ToolSourceFields, toolSource, type ToolForm } from "./tool-source-fields";
 import { ProviderModelFields } from "./provider-model-fields";
 import { AreaField, CheckField, FieldLabel, NameIdFields, ReadOnlyId, TextField, idIssue } from "./resource-fields";
 
@@ -92,6 +93,9 @@ export type ResourceKindConfig<T extends ResourceLike> = {
   /** Trims `form` into a savable resource, or null while `issues` is non-empty. */
   normalize: (form: Partial<T>) => T | null;
   renderFields: (props: ResourceFieldsProps<T>) => ReactNode;
+  /** Saves what lives beside the resource once it exists (an MCP server's
+   * write-only headers); a failure shows as the save error. */
+  afterSave?: (saved: T, form: Partial<T>) => Promise<void>;
 };
 
 /** Registry configs are heterogeneous in T; consumers only see this erased shape. */
@@ -183,7 +187,7 @@ export function normalizeParametersJson(raw: string | undefined): string {
   return JSON.stringify(JSON.parse((raw ?? "").trim() || "{}"));
 }
 
-export const toolKind: ResourceKindConfig<ToolDefinition> = {
+export const toolKind: ResourceKindConfig<ToolForm> = {
   id: "tools",
   panelId: "tools",
   routeHref: "/tools",
@@ -215,19 +219,26 @@ export const toolKind: ResourceKindConfig<ToolDefinition> = {
     const id = form.id?.trim() ?? "";
     if (!id) issues.push("Add a tool name.");
     else if (idIssue(id)) issues.push("Tool names use letters, digits, _ . and - only.");
+    else if (BUILTIN_TOOL_IDS.some((tool) => tool.id === id)) issues.push(`${id} is a built-in tool; pick another name.`);
     if (!form.description?.trim()) issues.push("Add a description.");
+    if (toolSource(form) === "mcp") {
+      if (!form.mcp_server_id) issues.push("Pick an MCP server.");
+      else if (!form.mcp_tool_name?.trim()) issues.push("Pick the server's tool.");
+    }
     const params = parametersJsonIssue(form.parameters_json);
     if (params) issues.push(params);
     return issues;
   },
   normalize: (form) => {
     if (toolKind.issues(form).length > 0) return null;
+    const mcp = toolSource(form) === "mcp";
     return {
-      ...(form as ToolDefinition),
       id: form.id!.trim(),
       description: form.description!.trim(),
       parameters_json: normalizeParametersJson(form.parameters_json),
       requires_approval: form.requires_approval ?? false,
+      mcp_server_id: mcp ? form.mcp_server_id! : null,
+      mcp_tool_name: mcp ? form.mcp_tool_name!.trim() : null,
     };
   },
   renderFields: (props) => (
@@ -243,8 +254,14 @@ export const toolKind: ResourceKindConfig<ToolDefinition> = {
           mono
           required
           autoFocus
-          error={props.form.id?.trim() && idIssue(props.form.id) ? "Use letters, digits, _ . and - only." : null}
           hint="What a tool node calls. It can't change after you save."
+          error={
+            props.form.id?.trim() && idIssue(props.form.id)
+              ? "Use letters, digits, _ . and - only."
+              : BUILTIN_TOOL_IDS.some((tool) => tool.id === props.form.id?.trim())
+                ? "That's a built-in tool; pick another name."
+                : null
+          }
         />
       )}
       <AreaField
@@ -255,14 +272,11 @@ export const toolKind: ResourceKindConfig<ToolDefinition> = {
         rows={2}
         required
       />
-      <AreaField
-        id={`${props.idPrefix}-params`}
-        label="Parameters (JSON Schema)"
-        value={props.form.parameters_json ?? "{}"}
-        onChange={(parameters_json) => props.setForm({ parameters_json })}
-        rows={6}
-        mono
-        error={parametersJsonIssue(props.form.parameters_json)}
+      <ToolSourceFields
+        idPrefix={props.idPrefix}
+        form={props.form}
+        setForm={props.setForm}
+        parametersError={parametersJsonIssue(props.form.parameters_json)}
       />
       <CheckField
         id={`${props.idPrefix}-approval`}
@@ -350,8 +364,6 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
 
 // -------------------------------------------------------------------- mcp
 
-const TRANSPORTS: McpServerConfig["transport"][] = ["http", "sse", "stdio"];
-
 function urlIssue(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -361,7 +373,7 @@ function urlIssue(url: string): string | null {
   }
 }
 
-export const mcpKind: ResourceKindConfig<McpServerConfig> = {
+export const mcpKind: ResourceKindConfig<McpServerForm> = {
   id: "mcp",
   panelId: "mcp",
   routeHref: "/mcp",
@@ -371,7 +383,7 @@ export const mcpKind: ResourceKindConfig<McpServerConfig> = {
   pageTitle: "MCP servers",
   pageDescription:
     "Remote tool servers. Only http transport is currently dispatched by tool nodes; sse/stdio validate but don't execute yet.",
-  dialogDescription: "A remote tool server. Only the http transport runs today.",
+  dialogDescription: "A remote tool server. Add its tools to the registry from Test connection, or bind one from a tool's MCP source.",
   emptyText: "No MCP servers configured.",
   listLayout: "grid",
   itemLabel: (server) => server.name,
@@ -391,7 +403,7 @@ export const mcpKind: ResourceKindConfig<McpServerConfig> = {
     const issues = missing(form, [["name", "Add a name."], ["url", "Add the server URL."]]);
     const url = form.url?.trim();
     if (url && urlIssue(url)) issues.push(urlIssue(url)!);
-    return issues;
+    return [...issues, ...headerIssues(form._headers)];
   },
   normalize: (form) => {
     if (mcpKind.issues(form).length > 0) return null;
@@ -410,27 +422,24 @@ export const mcpKind: ResourceKindConfig<McpServerConfig> = {
         placeholder="https://example.com/mcp"
         error={props.form.url?.trim() ? urlIssue(props.form.url.trim()) : null}
       />
-      <div className="space-y-1.5">
-        <FieldLabel htmlFor={`${props.idPrefix}-transport`}>Transport</FieldLabel>
-        <Select
-          value={props.form.transport ?? "http"}
-          onValueChange={(value) => props.setForm({ transport: value as McpServerConfig["transport"] })}
-        >
-          <SelectTrigger id={`${props.idPrefix}-transport`} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TRANSPORTS.map((transport) => (
-              <SelectItem key={transport} value={transport}>
-                {transport}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <TransportField id={`${props.idPrefix}-transport`} value={props.form.transport ?? "http"} onChange={(transport) => props.setForm({ transport })} />
       <CheckField id={`${props.idPrefix}-enabled`} label="Enabled" checked={props.form.enabled ?? true} onChange={(enabled) => props.setForm({ enabled })} />
+      <HeadersField
+        idPrefix={props.idPrefix}
+        serverId={props.editing?.id ?? null}
+        rows={props.form._headers}
+        onLoad={(_headers) => props.setForm({ _headers })}
+        onChange={(_headers) => props.setForm({ _headers, _headersEdited: true })}
+      />
+      {props.editing ? <McpDiscoverySection server={props.editing} /> : null}
     </>
   ),
+  // Headers are write-only secrets stored beside the server (backend
+  // mcp/secrets.py), so they save through their own endpoint.
+  afterSave: async (saved, form) => {
+    if (!form._headersEdited || form._headers === undefined) return;
+    await client.mcpServers.headers.update(saved.id, headersUpdate(form._headers));
+  },
 };
 
 // ----------------------------------------------------------- llm profiles

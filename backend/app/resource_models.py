@@ -39,6 +39,13 @@ class ToolDefinition(BaseModel):
     mcp_server_id: str | None = None
     mcp_tool_name: str | None = None
 
+    @model_validator(mode="after")
+    def _mcp_binding_is_whole(self) -> ToolDefinition:
+        # Half a binding would silently run as the mock echo (nodes.py).
+        if bool(self.mcp_server_id) != bool(self.mcp_tool_name):
+            raise ValueError("an MCP tool needs both mcp_server_id and mcp_tool_name")
+        return self
+
 
 class McpServerConfig(BaseModel):
     id: str

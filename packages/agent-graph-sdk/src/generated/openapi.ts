@@ -1045,6 +1045,54 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp-servers/{server_id}/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Mcp Server Tools
+         * @description Connects to the server with its stored headers and lists its tools:
+         *     the MCP page's "Test connection" and the tool form's remote tool
+         *     picker. Off on the public demo, which shouldn't make requests to
+         *     visitor-chosen URLs on demand.
+         */
+        post: operations["discover_mcp_server_tools"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp-servers/{server_id}/headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mcp Server Headers
+         * @description The server's request header names. Values are write-only.
+         */
+        get: operations["get_mcp_server_headers"];
+        /**
+         * Update Mcp Server Headers
+         * @description Replaces the server's request headers (mcp/secrets.py): `null` keeps
+         *     a stored value, a name left out is removed.
+         */
+        put: operations["update_mcp_server_headers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/policies/catalog": {
         parameters: {
             query?: never;
@@ -2250,6 +2298,54 @@ export type components = {
             run_id: string;
             /** Score */
             score: number;
+        };
+        /**
+         * McpDiscovery
+         * @description `ok` with the server's tools, or not `ok` with why the connection
+         *     failed. Always 200 for a known server: a server that can't be reached
+         *     is a result here, like a transform preview.
+         */
+        McpDiscovery: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Tools */
+            tools?: components["schemas"]["McpRemoteTool"][];
+        };
+        /**
+         * McpHeaderNames
+         * @description The names of an MCP server's stored request headers. Values never
+         *     leave the server (mcp/secrets.py).
+         */
+        McpHeaderNames: {
+            /** Names */
+            names?: string[];
+        };
+        /**
+         * McpHeadersUpdate
+         * @description Replaces an MCP server's request headers. A `null` value keeps that
+         *     header's stored value; a name left out is removed.
+         */
+        McpHeadersUpdate: {
+            /** Headers */
+            headers?: {
+                [key: string]: string | null;
+            };
+        };
+        /**
+         * McpRemoteTool
+         * @description One tool an MCP server lists (`tools/list`).
+         */
+        McpRemoteTool: {
+            /** Description */
+            description?: string | null;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
         };
         /** ModelOverride */
         ModelOverride: {
@@ -5621,6 +5717,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResourceVersion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_mcp_server_tools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpDiscovery"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mcp_server_headers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpHeaderNames"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_mcp_server_headers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpHeadersUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpHeaderNames"];
                 };
             };
             /** @description Validation Error */

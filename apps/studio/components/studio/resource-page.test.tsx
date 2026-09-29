@@ -32,7 +32,11 @@ const clients = vi.hoisted(() => {
     prompts: makeClient([{ id: "p_1", name: "Explain", body: "Explain {question}" }]),
     tools: makeClient([{ id: "tool_demo", description: "Demo tool", parameters_json: "{}", requires_approval: true, mcp_server_id: "m" }]),
     agents: makeClient([{ id: "a_1", name: "Support agent", description: "Helps", graph_id: "g1", tool_ids: [] }]),
-    mcpServers: makeClient([{ id: "m_1", name: "Local MCP", url: "http://x", transport: "sse", enabled: false }]),
+    mcpServers: {
+      ...makeClient([{ id: "m_1", name: "Local MCP", url: "http://x", transport: "sse", enabled: false }]),
+      headers: { get: vi.fn(async () => ({ names: ["Authorization"] })), update: vi.fn(async () => ({ names: [] })) },
+      discover: vi.fn(async () => ({ ok: true, tools: [{ name: "echo", description: "Echo", input_schema: {} }], error: null })),
+    },
     llmProfiles: makeClient([{ id: "l_1", name: "Fast", model: "qwen", model_provider: "ollama" }]),
     providers: { models: vi.fn(async () => ({ models: [{ id: "qwen", label: "Qwen" }], message: "" })) },
   };
