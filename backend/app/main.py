@@ -106,6 +106,8 @@ from .providers.base import (
     get_chat_model,
     require_live_provider_allowed,
 )
+from .public_writes import charge as charge_public_write
+from .public_writes import require_workspace_writable
 from .releases import (
     ReleasePublishBlocked,
     compare_draft_to_release,
@@ -268,7 +270,8 @@ def list_graph_summaries(page: Page) -> list[GraphSummary]:
 
 
 @app.post("/api/graphs")
-def create_graph(request: CreateGraphRequest) -> GraphDefinition:
+def create_graph(request: CreateGraphRequest, http: Request) -> GraphDefinition:
+    charge_public_write(http, "create")
     name = request.name.strip() or "Untitled graph"
     graph = create_graph_definition(name, request.template)
     graph.updated_at = datetime.now(UTC).isoformat()
@@ -285,7 +288,7 @@ def get_graph(graph_id: str) -> GraphDefinition:
 
 
 @app.put("/api/graphs/{graph_id}")
-def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
+def save_graph(graph_id: str, graph: GraphDefinition, http: Request) -> GraphDefinition:
     if graph.id != graph_id:
         raise HTTPException(status_code=400, detail="graph id mismatch between path and body")
     canonical = protected_graph(graph_id)
@@ -295,6 +298,9 @@ def save_graph(graph_id: str, graph: GraphDefinition) -> GraphDefinition:
         if semantic_fingerprint(graph) != semantic_fingerprint(canonical):
             raise _read_only_graph_error()
         return storage.get_graph(graph_id) or canonical
+    if storage.get_graph(graph_id) is None:
+        # A PUT to a new id creates the graph (e.g. saving a copy of the demo).
+        charge_public_write(http, "create")
     graph.updated_at = datetime.now(UTC).isoformat()
     storage.save_graph(graph)
     return graph
@@ -338,11 +344,12 @@ def compile_graph_endpoint(graph_id: str) -> CompileResult:
 
 @app.post("/api/graphs/{graph_id}/releases")
 def publish_release_endpoint(
-    graph_id: str, request: PublishReleaseRequest
+    graph_id: str, request: PublishReleaseRequest, http: Request
 ) -> PublishReleaseResponse:
     graph = storage.get_graph(graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
+    charge_public_write(http, "create")
     try:
         release, created = publish_release(
             graph, release_notes=request.release_notes, author=request.author
@@ -420,7 +427,7 @@ class GraphUsage(BaseModel):
 
 @app.post("/api/graphs/{graph_id}/extract-subgraph")
 def extract_subgraph_endpoint(
-    graph_id: str, body: ExtractSubgraphRequest
+    graph_id: str, body: ExtractSubgraphRequest, http: Request
 ) -> ExtractSubgraphResponse:
     """Wave 7c (STO-612): move a connected selection into a new saved graph
     and return the parent as it would look with a subgraph node in its
@@ -430,6 +437,7 @@ def extract_subgraph_endpoint(
         child, proposed = subgraphs.extract_subgraph(body.draft, body.node_ids, body.name)
     except subgraphs.ExtractError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    charge_public_write(http, "create")
     storage.save_graph(child)
     return ExtractSubgraphResponse(child_graph=child, proposed_parent=proposed)
 
@@ -473,10 +481,11 @@ def compare_releases_endpoint(release_id: str, other_release_id: str) -> Release
 
 
 @app.post("/api/graphs/{graph_id}/simulate")
-async def simulate_graph_endpoint(graph_id: str, fixture: Fixture) -> SimulateResult:
+async def simulate_graph_endpoint(graph_id: str, fixture: Fixture, http: Request) -> SimulateResult:
     graph = storage.get_graph(graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
+    charge_public_write(http, "run")
     try:
         return await simulate_graph(graph, fixture)
     except SimulateBlocked as exc:
@@ -490,11 +499,14 @@ async def simulate_graph_endpoint(graph_id: str, fixture: Fixture) -> SimulateRe
 
 
 @app.post("/api/graph-releases/{release_id}/simulate")
-async def simulate_release_endpoint(release_id: str, fixture: Fixture) -> SimulateResult:
+async def simulate_release_endpoint(
+    release_id: str, fixture: Fixture, http: Request
+) -> SimulateResult:
     graph_id = storage.get_release_graph_id(release_id)
     release = get_release(release_id, graph_id) if graph_id is not None else None
     if release is None:
         raise HTTPException(status_code=404, detail="release not found")
+    charge_public_write(http, "run")
     try:
         return await simulate_graph(
             release.graph,
@@ -589,9 +601,10 @@ async def compare_routing_to_release_endpoint(
 
 @app.post("/api/graphs/{graph_id}/policy-exceptions")
 def create_policy_exception_endpoint(
-    graph_id: str, request: CreatePolicyExceptionRequest
+    graph_id: str, request: CreatePolicyExceptionRequest, http: Request
 ) -> PolicyException:
     _require_writable_graph(graph_id)
+    charge_public_write(http, "create")
     return create_policy_exception(
         graph_id,
         policy_code=request.policy_code,
@@ -646,6 +659,7 @@ def get_workspace_policies_endpoint() -> PolicySettings:
 
 @app.put("/api/policies/workspace")
 def put_workspace_policies_endpoint(settings: PolicySettings) -> PolicySettings:
+    require_workspace_writable()
     try:
         return save_policy_settings(WORKSPACE_SCOPE, settings)
     except PolicySettingsInvalid as exc:
@@ -698,12 +712,15 @@ def compile_release_endpoint(release_id: str) -> CompileResult:
 
 
 @app.post("/api/graph-releases/{release_id}/runs")
-async def start_release_run(release_id: str, request: ReleaseRunRequest) -> RunSummary:
+async def start_release_run(
+    release_id: str, request: ReleaseRunRequest, http: Request
+) -> RunSummary:
     require_live_provider_allowed(request.provider, request.api_key)
     graph_id = storage.get_release_graph_id(release_id)
     release = get_release(release_id, graph_id) if graph_id is not None else None
     if release is None:
         raise HTTPException(status_code=404, detail="release not found")
+    charge_public_write(http, "run")
 
     compile_result = runtime.compile_workflow(release.graph)
     if not compile_result.ok or compile_result.compiled_workflow_id is None:
@@ -845,18 +862,24 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         return payload
 
     @app.post(f"/api/{path}", name=f"create_{kind}", operation_id=f"create_{kind}")
-    def create_resource_route(body: dict[str, Any]) -> dict[str, Any]:
+    def create_resource_route(body: dict[str, Any], http: Request) -> dict[str, Any]:
         validated = _validate(body)
         payload = validated.model_dump(mode="json")
+        if storage.get_resource(kind, payload["id"]) is None:
+            charge_public_write(http, "create")
         storage.save_resource(kind, payload["id"], payload)
         return payload
 
     @app.put(f"/api/{path}/{{resource_id}}", name=f"update_{kind}", operation_id=f"update_{kind}")
-    def update_resource_route(resource_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    def update_resource_route(
+        resource_id: str, body: dict[str, Any], http: Request
+    ) -> dict[str, Any]:
         validated = _validate(body)
         payload = validated.model_dump(mode="json")
         if payload["id"] != resource_id:
             raise HTTPException(status_code=400, detail=f"{kind} id mismatch between path and body")
+        if storage.get_resource(kind, resource_id) is None:
+            charge_public_write(http, "create")
         storage.save_resource(kind, resource_id, payload)
         return payload
 
@@ -915,7 +938,10 @@ class CreateDatasetFromRunsRequest(BaseModel):
 # datasets" (graph-native-control-plane-plan.md). A distinct path from the
 # generic `POST /api/datasets` create above, so neither shadows the other.
 @app.post("/api/datasets/from-runs", name="create_dataset_from_runs")
-def create_dataset_from_runs_route(body: CreateDatasetFromRunsRequest) -> dict[str, Any]:
+def create_dataset_from_runs_route(
+    body: CreateDatasetFromRunsRequest, http: Request
+) -> dict[str, Any]:
+    charge_public_write(http, "create")
     try:
         dataset = build_dataset_from_runs(
             name=body.name,
@@ -938,7 +964,8 @@ def _register_resource_version_routes(kind: str, path: str) -> None:
         name=f"publish_{kind}_version",
         operation_id=f"publish_{kind}_version",
     )
-    def publish_version_route(resource_id: str) -> PublishResourceVersionResponse:
+    def publish_version_route(resource_id: str, http: Request) -> PublishResourceVersionResponse:
+        charge_public_write(http, "create")
         try:
             return publish_resource_version(kind, resource_id)
         except ResourceNotFound as exc:
@@ -1109,11 +1136,12 @@ async def provider_models(provider: str, graph_id: str | None = None) -> dict:
 
 
 @app.post("/api/runs")
-async def start_run(request: RunRequest) -> RunSummary:
+async def start_run(request: RunRequest, http: Request) -> RunSummary:
     require_live_provider_allowed(request.provider, request.api_key)
     graph = storage.get_graph(request.graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
+    charge_public_write(http, "run")
 
     compile_result = runtime.compile_workflow(graph)
     if not compile_result.ok or compile_result.compiled_workflow_id is None:

@@ -1430,6 +1430,29 @@ def save_policy_settings(scope: str, payload: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Public-demo write quotas (STO-626, public_writes.py): one small JSON log
+# per hashed client IP on the shared remote store, so every serverless
+# instance sees the same counts. SQLite/Turso deploys are single-process
+# and keep the log in memory instead (None here).
+_WRITE_QUOTA_PREFIX = "write_quotas/"
+
+
+def write_quotas_shared() -> bool:
+    return _json_object_backend() is not None
+
+
+def get_write_quota(client_key: str) -> dict[str, Any] | None:
+    remote = _json_object_backend()
+    return remote.get_json(f"{_WRITE_QUOTA_PREFIX}{client_key}.json") if remote else None
+
+
+def save_write_quota(client_key: str, payload: dict[str, Any]) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(f"{_WRITE_QUOTA_PREFIX}{client_key}.json", payload)
+
+
+# ---------------------------------------------------------------------------
 # Knowledge retrieval lineage (P2, "Retrieval/document lineage graph" — see
 # docs/planning/roadmap.md's Strategic Roadmap Addendum and knowledge.py).
 # Graph-scoped like policy exceptions above: every route is

@@ -77,7 +77,17 @@ export default defineConfig({
       command: "uv run uvicorn app.main:app --port 8001",
       cwd: path.join(repoRoot, "backend"),
       url: "http://127.0.0.1:8001/api/health",
-      env: { GRAPH_DB_PATH: demoDbPath, CHAT_PROVIDER: "stub", PUBLIC_DEMO_MODE: "1" },
+      env: {
+        GRAPH_DB_PATH: demoDbPath,
+        CHAT_PROVIDER: "stub",
+        PUBLIC_DEMO_MODE: "1",
+        // Every spec shares one IP here; the per-IP write budgets (STO-626)
+        // are covered by backend tests instead.
+        PUBLIC_CREATE_LIMIT_PER_HOUR: "10000",
+        PUBLIC_CREATE_LIMIT_PER_DAY: "10000",
+        PUBLIC_RUN_LIMIT_PER_HOUR: "10000",
+        PUBLIC_RUN_LIMIT_PER_DAY: "10000",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

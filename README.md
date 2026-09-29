@@ -305,6 +305,14 @@ Legacy aliases still resolve: `agent-graph-builder-poc.vercel.app` and
 
 - Only **Stub** runs on the server. Groq, Google, Azure, OpenAI-compatible and Ollama runs need an API key sent with the request (the Run panel's key field). Without one, `POST /api/runs`, release runs and chat messages return 403 `live_provider_requires_api_key`. `/api/providers/{p}/ready` reports not ready and `/credentials` reports `configured: false`, so a server key is never offered.
 - Knowledge uploads return 403, and retrieval is skipped, because embeddings would run on the server's key.
+- Workspace policies are read-only: `PUT /api/policies/workspace` returns 403 `workspace_read_only`, and any stored workspace overrides are ignored, so no visitor can make a rule block everyone's runs. Each graph's own Policies panel still works on graphs visitors create.
+- Each visitor IP has a write budget (`backend/app/public_writes.py`). Creating a stored object costs one unit from the **create** budget: a graph (including a saved copy), a library resource, a release, a resource version, a dataset or a policy exception. Saving something that already exists costs nothing. Runs and simulations use a separate **run** budget. Over budget, the request returns 429 `write_rate_limited` with `Retry-After`. The counts live in the shared store (one small file per hashed IP under `write_quotas/`), so every serverless instance sees them. Defaults, overridable per deploy:
+
+  | Variable | Default |
+  | --- | --- |
+  | `PUBLIC_CREATE_LIMIT_PER_HOUR` / `_PER_DAY` | 30 / 100 |
+  | `PUBLIC_RUN_LIMIT_PER_HOUR` / `_PER_DAY` | 120 / 500 |
+
 - `GET /api/health` includes `"public_demo_mode": true`. Check it after each deploy.
 
 To use the server's own keys on a private deploy, remove `PUBLIC_DEMO_MODE` from `vercel.json` (or set it to `0` there).
