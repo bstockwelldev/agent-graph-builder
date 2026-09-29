@@ -3,6 +3,7 @@
 #   .\scripts\dev.ps1 up              # foreground, rebuild
 #   .\scripts\dev.ps1 up -d           # detached
 #   .\scripts\dev.ps1 up --no-build   # skip image rebuild
+#   .\scripts\dev.ps1 up -FakeEmbeddings  # knowledge uploads without a provider key
 #   .\scripts\dev.ps1 down            # stop stack
 #   .\scripts\dev.ps1 down -v         # stop and remove graph volume
 
@@ -18,7 +19,9 @@ param(
     [Alias("v")]
     [switch]$Volumes,
 
-    [switch]$NoBuild
+    [switch]$NoBuild,
+
+    [switch]$FakeEmbeddings
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,14 +41,17 @@ function Invoke-Compose {
     }
 }
 
+$composeFiles = @()
+if ($FakeEmbeddings) { $composeFiles = @("-f", "docker-compose.yml", "-f", "docker-compose.fake-embeddings.yml") }
+
 if ($Command -eq "down") {
-    $args = @("compose", "down")
+    $args = @("compose") + $composeFiles + @("down")
     if ($Volumes) { $args += "-v" }
     Invoke-Compose $args
     exit 0
 }
 
-$upArgs = @("compose", "up")
+$upArgs = @("compose") + $composeFiles + @("up")
 if (-not $NoBuild) { $upArgs += "--build" }
 if ($Detached) { $upArgs += "-d" }
 
@@ -53,6 +59,7 @@ Write-Host ""
 Write-Host "Agent Graph Builder (studio)" -ForegroundColor Green
 Write-Host "  App:  http://localhost:3000"
 Write-Host "  API:  http://localhost:8000"
+if ($FakeEmbeddings) { Write-Host "  Embeddings: fake (scripts/fake-embeddings.mjs)" }
 Write-Host ""
 
 Invoke-Compose $upArgs

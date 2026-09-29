@@ -1,0 +1,21 @@
+# Opt-in: knowledge uploads without an embedding provider key.
+#   scripts/dev.sh up --fake-embeddings   (or .\scripts\dev.ps1 up -FakeEmbeddings)
+#   docker compose -f docker-compose.yml -f docker-compose.fake-embeddings.yml up
+# The vectors are hashed bags of words, not semantic embeddings (see
+# scripts/fake-embeddings.mjs); re-upload documents after switching to a real
+# provider. SUPABASE_URL stays unset, so graph storage stays on SQLite.
+services:
+  fake-embeddings:
+    image: node:22-alpine
+    command: ["node", "/scripts/fake-embeddings.mjs"]
+    environment:
+      FAKE_EMBEDDINGS_HOST: 0.0.0.0
+    volumes:
+      - ./scripts/fake-embeddings.mjs:/scripts/fake-embeddings.mjs:ro
+
+  backend:
+    environment:
+      SUPABASE_EMBEDDINGS_URL: http://fake-embeddings:8123/embed
+      SUPABASE_SERVICE_ROLE_KEY: fake-embeddings
+    depends_on:
+      - fake-embeddings

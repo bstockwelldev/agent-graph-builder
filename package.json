@@ -12,6 +12,7 @@
     "build": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && pnpm --filter @bstockwelldev/agent-graph-studio run build",
     "build:sdk": "pnpm --filter @bstockwelldev/agent-graph-sdk run build",
     "dev": "pnpm --filter @bstockwelldev/agent-graph-studio run dev",
+    "dev:embeddings": "node scripts/fake-embeddings.mjs",
     "test": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test && pnpm --filter @bstockwelldev/agent-graph-studio run test",
     "test:coverage": "pnpm run build:sdk && pnpm --filter @bstockwelldev/agent-graph-sdk run test:coverage && pnpm --filter @bstockwelldev/agent-graph-studio run test:coverage",
     "e2e": "pnpm --filter @bstockwelldev/agent-graph-e2e run test",

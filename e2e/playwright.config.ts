@@ -19,7 +19,7 @@ import { defineConfig, devices } from "@playwright/test";
  * (the `demoModeApi` fixture in fixtures.ts), since the studio's proxy target is fixed
  * at build time.
  *
- * A fake embedding server on :8123 (fake-embeddings.mjs) stands in for the
+ * A fake embedding server on :8123 (scripts/fake-embeddings.mjs) stands in for the
  * Supabase embed function, so the stub API accepts knowledge uploads.
  *
  * E2E_SKIP_BUILD=1 reuses an existing `apps/studio/.next` build; otherwise the
@@ -54,8 +54,8 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 900 } } }],
   webServer: [
     {
-      command: "node fake-embeddings.mjs",
-      cwd: __dirname,
+      command: "node scripts/fake-embeddings.mjs",
+      cwd: repoRoot,
       url: FAKE_EMBEDDINGS_URL,
       reuseExistingServer: !process.env.CI,
     },
