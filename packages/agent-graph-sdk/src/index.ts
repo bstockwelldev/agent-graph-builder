@@ -30,6 +30,7 @@ export type {
   PublishReleaseRequest,
   ReleaseRunRequest,
   ResumeRunRequest,
+  AgentRunRequest,
   RoutingCompareReleaseRequest,
   RoutingCompareRequest,
   RoutingDatasetRequest,

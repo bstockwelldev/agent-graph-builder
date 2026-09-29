@@ -59,7 +59,7 @@ const RESOURCE_DEFAULTS: Record<ResourceKind, () => Json> = {
   prompts: () => ({}),
   tools: () => ({ description: "", parameters_json: "{}", requires_approval: false }),
   "mcp-servers": () => ({ transport: "http", enabled: true }),
-  agents: () => ({ optional_elements: [] }),
+  agents: () => ({ tool_ids: [] }),
   "llm-profiles": () => ({}),
   transforms: () => ({}),
   datasets: () => ({ fixtures: [], source: "manual", source_run_ids: [], created_at: now(), updated_at: now() }),
@@ -500,6 +500,15 @@ export function mockRoutes(): Record<string, Handler> {
       const result = compile(graph);
       if (!result.ok) return blocked(result.diagnostics, "graph has blocking diagnostics");
       return HttpResponse.json(startRun(store, graph, payload, null).summary);
+    },
+    "POST /api/agents/{agent_id}/runs": async ({ request, params, store }) => {
+      const agent = store.resources.agents.get(params.agent_id) as Json | undefined;
+      if (!agent) return notFound("agent");
+      const graph = store.graphs.get(String(agent.graph_id));
+      if (!graph) return notFound("agent graph");
+      const run = startRun(store, graph, await body(request), null);
+      run.summary.agent_id = params.agent_id;
+      return HttpResponse.json(run.summary);
     },
     "GET /api/runs/{run_id}": ({ params, store }) => {
       const run = store.runs.get(params.run_id);

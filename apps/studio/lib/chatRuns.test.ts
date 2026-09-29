@@ -41,6 +41,19 @@ describe("chat runs", () => {
     expect(parseRunCommand("/run", graphs)).toMatchObject({ ok: false });
   });
 
+  it("parses /run @agent by id or quoted name, resolving the agent's graph", () => {
+    const helper = { id: "agent_helper", name: "Support Helper", graph_id: "demo_classify_and_route", llm_profile_id: null };
+    const orphan = { id: "agent_orphan", name: "Orphan", graph_id: "gone" };
+    const agents = [helper, orphan];
+    expect(parseRunCommand("/run @agent_helper How does TCP work?", graphs, agents)).toEqual({
+      ok: true,
+      target: { graph: demo, agent: helper, release: null, input: { question: "How does TCP work?" }, inferred: false },
+    });
+    expect(parseRunCommand('/run @"support helper" hi', graphs, agents)).toMatchObject({ ok: true, target: { agent: helper, input: { question: "hi" } } });
+    expect(parseRunCommand("/run @nobody hi", graphs, agents)).toEqual({ ok: false, error: 'No agent named "nobody".' });
+    expect(parseRunCommand("/run @agent_orphan hi", graphs, agents)).toMatchObject({ ok: false, error: expect.stringContaining('"gone"') });
+  });
+
   it("matches plain-text run requests only for real graphs, always inferred", () => {
     expect(matchRunIntent("please run the Explain for audience graph", graphs)).toEqual({ graph: twoInputs, release: null, input: {}, inferred: true });
     expect(matchRunIntent("run two_inputs", graphs)?.graph).toBe(twoInputs);

@@ -49,12 +49,36 @@ class McpServerConfig(BaseModel):
 
 
 class AgentProfile(BaseModel):
+    """A graph packaged to run as an agent (resource-forms-consistency-plan,
+    slice 6): the graph it runs, and what it layers on top -- an LLM profile
+    (the run's default provider/model), system instructions prepended to
+    every llm/tool_loop node's system prompt, and a tool allow-list.
+    Applied per run by agents.apply_agent; the graph itself is unchanged."""
+
     id: str
     name: str
     description: str | None = None
-    default_flow_id: str | None = None
+    graph_id: str = Field(min_length=1)
+    llm_profile_id: str | None = None
+    # A library prompt and/or inline text; both are used when set (prompt first).
+    system_prompt_id: str | None = None
     system_instructions: str | None = None
-    optional_elements: list[str] = Field(default_factory=list)
+    # Empty = any tool the graph uses; otherwise every tool node (and
+    # tool_loop's built-in lookup) must be listed.
+    tool_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate(cls, data: Any) -> Any:
+        # Before slice 6: `default_flow_id` was the graph, and
+        # `optional_elements` was never read by anything.
+        if isinstance(data, dict):
+            data = dict(data)
+            legacy_graph = data.pop("default_flow_id", None)
+            if not data.get("graph_id") and legacy_graph:
+                data["graph_id"] = legacy_graph
+            data.pop("optional_elements", None)
+        return data
 
 
 class LlmProfile(BaseModel):
@@ -122,6 +146,9 @@ class ChatRunRef(BaseModel):
     source: Literal["draft", "release"] = "draft"
     release_id: str | None = None
     input: dict[str, Any] = Field(default_factory=dict)
+    # Set when the run was started as an agent (`/run @agent`).
+    agent_id: str | None = None
+    agent_name: str | None = None
 
 
 class ChatMessage(BaseModel):

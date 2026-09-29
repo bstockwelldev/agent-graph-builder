@@ -173,13 +173,14 @@ def test_chat_run_reference_round_trips_and_survives_later_turns() -> None:
         ]
         updated = client.put(f"/api/chat-sessions/{session_id}", json=session)
         assert updated.status_code == 200, updated.text
-        assert updated.json()["messages"][1]["run"] == run_ref
+        stored_ref = updated.json()["messages"][1]["run"]
+        assert stored_ref == {**run_ref, "agent_id": None, "agent_name": None}
 
         reply = client.post(f"/api/chat-sessions/{session_id}/messages", json={"content": "thanks"})
         assert reply.status_code == 200, reply.text
         messages = reply.json()["messages"]
         assert len(messages) == 4
-        assert messages[1]["run"] == run_ref
+        assert messages[1]["run"] == {**run_ref, "agent_id": None, "agent_name": None}
         assert messages[0]["run"] is None and messages[3]["run"] is None
     finally:
         client.delete(f"/api/chat-sessions/{session_id}")

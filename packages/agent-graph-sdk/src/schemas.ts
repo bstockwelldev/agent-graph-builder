@@ -284,6 +284,8 @@ export const runSummarySchema = z.object({
   status: z.enum(["queued", "running", "succeeded", "failed", "paused"]),
   /** The human_gate node a paused run is waiting at. */
   paused_node_id: z.string().nullish(),
+  /** The agent profile the run was started as. */
+  agent_id: z.string().nullish(),
   result: z.unknown(),
   input: z.record(z.string(), z.unknown()).optional(),
   provider: z.string().nullish(),
@@ -494,13 +496,19 @@ export const mcpServerConfigSchema = z.object({
   enabled: z.boolean(),
 });
 
+/** A graph packaged to run as an agent: `POST /api/agents/{id}/runs` applies
+ * its LLM profile (default provider/model), prepends its instructions to
+ * model nodes' system prompts, and enforces its tool allow-list (empty =
+ * any). The API migrates agents stored in the older shape on read. */
 export const agentProfileSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullish(),
-  default_flow_id: z.string().nullish(),
+  graph_id: z.string(),
+  llm_profile_id: z.string().nullish(),
+  system_prompt_id: z.string().nullish(),
   system_instructions: z.string().nullish(),
-  optional_elements: z.array(z.string()),
+  tool_ids: z.array(z.string()),
 });
 
 /** `POST /api/transforms/preview`: the output, or the error a run would fail with. */
@@ -587,6 +595,9 @@ export const chatRunRefSchema = z.object({
   source: z.enum(["draft", "release"]),
   release_id: z.string().nullish(),
   input: z.record(z.string(), z.unknown()),
+  /** Set when started as an agent (`/run @agent`). */
+  agent_id: z.string().nullish(),
+  agent_name: z.string().nullish(),
 });
 
 export const chatMessageSchema = z.object({

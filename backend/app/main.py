@@ -74,6 +74,7 @@ from .models import (
     RoutingComparison,
     RoutingLabReport,
     RunGraphSnapshot,
+    AgentRunRequest,
     RunRequest,
     RunResumeRequest,
     RunRoutingDatasetRequest,
@@ -106,6 +107,7 @@ from .providers.base import (
     get_chat_model,
     require_live_provider_allowed,
 )
+from .agents import AgentNotRunnable, apply_agent, load_agent, normalize_agent_payload
 from .public_writes import charge as charge_public_write
 from .public_writes import require_workspace_writable
 from .releases import (
@@ -841,6 +843,10 @@ _RESOURCE_ROUTE_PATHS: dict[str, str] = {
 }
 
 
+# Stored records in an older shape, returned in the current one.
+_RESOURCE_READ_NORMALIZERS = {"agents": normalize_agent_payload}
+
+
 def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> None:
     def _validate(body: dict[str, Any]) -> BaseModel:
         try:
@@ -850,16 +856,19 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
             # (from model validators), which aren't JSON serializable.
             raise HTTPException(status_code=422, detail=json.loads(exc.json())) from exc
 
+    read = _RESOURCE_READ_NORMALIZERS.get(kind, lambda payload: payload)
+
     @app.get(f"/api/{path}", name=f"list_{kind}", operation_id=f"list_{kind}")
     def list_resources_route(page: Page) -> list[dict[str, Any]]:
-        return paginate(storage.list_resources(kind), page, key=field_key("id"))
+        items = [read(payload) for payload in storage.list_resources(kind)]
+        return paginate(items, page, key=field_key("id"))
 
     @app.get(f"/api/{path}/{{resource_id}}", name=f"get_{kind}", operation_id=f"get_{kind}")
     def get_resource_route(resource_id: str) -> dict[str, Any]:
         payload = storage.get_resource(kind, resource_id)
         if payload is None:
             raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
-        return payload
+        return read(payload)
 
     @app.post(f"/api/{path}", name=f"create_{kind}", operation_id=f"create_{kind}")
     def create_resource_route(body: dict[str, Any], http: Request) -> dict[str, Any]:
@@ -1160,6 +1169,57 @@ async def start_run(request: RunRequest, http: Request) -> RunSummary:
         "model": request.model,
         "api_key": request.api_key,
         "fixture_node_outputs": request.node_outputs or None,
+    }
+    if runtime.is_serverless_runtime():
+        run_id, _bus = await runtime.start_run_inline(**start_kwargs)
+    else:
+        run_id, _bus = runtime.start_run(**start_kwargs)
+    summary = runtime.get_run_summary(run_id)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="run vanished after start")
+    return summary
+
+
+@app.post("/api/agents/{agent_id}/runs")
+async def start_agent_run(agent_id: str, request: AgentRunRequest, http: Request) -> RunSummary:
+    """Runs the agent's graph with the agent applied (agents.py): its LLM
+    profile as the default provider/model, its instructions prepended to
+    model nodes' system prompts, and its tool allow-list enforced."""
+    agent = load_agent(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    graph = storage.get_graph(agent.graph_id)
+    if graph is None:
+        raise HTTPException(status_code=422, detail=f"agent's graph {agent.graph_id!r} not found")
+    try:
+        applied = apply_agent(agent, graph)
+    except AgentNotRunnable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    provider = request.provider or applied.provider
+    model = request.model or applied.model
+    require_live_provider_allowed(provider, request.api_key)
+    charge_public_write(http, "run")
+
+    compile_result = runtime.compile_workflow(applied.graph)
+    diagnostics = [*applied.diagnostics, *compile_result.diagnostics]
+    if applied.diagnostics or not compile_result.ok or compile_result.compiled_workflow_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "agent can't run this graph",
+                "diagnostics": [
+                    d.model_dump() for d in diagnostics if d.blocking or d.severity == "error"
+                ],
+            },
+        )
+
+    start_kwargs = {
+        "compiled_workflow_id": compile_result.compiled_workflow_id,
+        "run_input": request.input,
+        "provider": provider,
+        "model": model,
+        "api_key": request.api_key,
+        "agent_id": agent.id,
     }
     if runtime.is_serverless_runtime():
         run_id, _bus = await runtime.start_run_inline(**start_kwargs)

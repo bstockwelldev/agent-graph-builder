@@ -49,9 +49,17 @@ describe("resource kinds", () => {
     expect(saved).toMatchObject({ mcp_server_id: "mcp_1", mcp_tool_name: "echo", requires_approval: true });
   });
 
-  it("round-trips agents' optional elements through the one-per-line field", () => {
-    expect(
-      agentKind.normalize({ id: "a", name: "A", optional_elements: ["x ", "", " y"], description: " " }),
-    ).toEqual({ id: "a", name: "A", description: null, default_flow_id: null, system_instructions: null, optional_elements: ["x", "y"] });
+  it("requires an agent's graph and dedupes its allowed tools", () => {
+    expect(agentKind.normalize({ id: "a", name: "A", graph_id: " " })).toBeNull();
+    expect(agentKind.normalize({ id: "a", name: "A", graph_id: "g1", tool_ids: ["x", "x", "y"], description: " ", llm_profile_id: "" })).toEqual({
+      id: "a",
+      name: "A",
+      description: null,
+      graph_id: "g1",
+      llm_profile_id: null,
+      system_prompt_id: null,
+      system_instructions: null,
+      tool_ids: ["x", "y"],
+    });
   });
 });

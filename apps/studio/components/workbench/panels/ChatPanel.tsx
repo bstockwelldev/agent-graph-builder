@@ -167,13 +167,22 @@ export function ChatPanel() {
       }
       const provider = activeSession.provider as ChatProvider;
       const model = activeSession.model || undefined;
-      const { run: summary } = releaseId
-        ? await client.releases.run(releaseId, { input: target.input, provider, model })
-        : await client.runs.start({ graphId: target.graph.id, input: target.input, provider, model });
+      const summary = target.agent
+        ? // An agent with an LLM profile picks its own model.
+          await client.agents.run(target.agent.id, {
+            input: target.input,
+            ...(target.agent.llm_profile_id ? {} : { provider, model }),
+          })
+        : (
+            releaseId
+              ? await client.releases.run(releaseId, { input: target.input, provider, model })
+              : await client.runs.start({ graphId: target.graph.id, input: target.input, provider, model })
+          ).run;
       const run: ChatRunRef = {
         run_id: summary.run_id,
         graph_id: target.graph.id,
         graph_name: target.graph.name,
+        ...(target.agent ? { agent_id: target.agent.id, agent_name: target.agent.name } : {}),
         source: releaseId ? "release" : "draft",
         release_id: releaseId,
         input: target.input,
@@ -181,7 +190,14 @@ export function ChatPanel() {
       const now = new Date().toISOString();
       await appendMessages(activeSession, [
         { role: "user", content: command, created_at: now },
-        { role: "assistant", content: `Started ${run.graph_name} (${versionLabel(run)}) as ${run.run_id}.`, created_at: now, run },
+        {
+          role: "assistant",
+          content: target.agent
+            ? `Started agent ${target.agent.name} (${run.graph_name}) as ${run.run_id}.`
+            : `Started ${run.graph_name} (${versionLabel(run)}) as ${run.run_id}.`,
+          created_at: now,
+          run,
+        },
       ]);
       setPendingRun(null);
       setPickerOpen(false);
@@ -228,7 +244,8 @@ export function ChatPanel() {
     if (/^\/run\b/i.test(content) || /^(?:please\s+|can you\s+|could you\s+)?(?:run|execute|start)\s/i.test(content)) {
       try {
         const list = await loadGraphs();
-        const command = parseRunCommand(content, list);
+        const agents = /^\/run\s+@/i.test(content) ? await client.agents.list() : [];
+        const command = parseRunCommand(content, list, agents);
         if (command) {
           if (command.ok) requestRun(command.target, content);
           else setError(command.error);

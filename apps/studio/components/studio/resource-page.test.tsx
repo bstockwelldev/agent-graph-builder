@@ -31,7 +31,7 @@ const clients = vi.hoisted(() => {
   return {
     prompts: makeClient([{ id: "p_1", name: "Explain", body: "Explain {question}" }]),
     tools: makeClient([{ id: "tool_demo", description: "Demo tool", parameters_json: "{}", requires_approval: true, mcp_server_id: "m" }]),
-    agents: makeClient([{ id: "a_1", name: "Support agent", description: "Helps", default_flow_id: "g1", optional_elements: [] }]),
+    agents: makeClient([{ id: "a_1", name: "Support agent", description: "Helps", graph_id: "g1", tool_ids: [] }]),
     mcpServers: makeClient([{ id: "m_1", name: "Local MCP", url: "http://x", transport: "sse", enabled: false }]),
     llmProfiles: makeClient([{ id: "l_1", name: "Fast", model: "qwen", model_provider: "ollama" }]),
   };
@@ -59,7 +59,7 @@ const renderPage = (kind: Parameters<typeof ResourcePage>[0]["kind"]) =>
 describe.each([
   { kind: promptKind, title: "Prompt Lab", card: "Edit prompt Explain", text: "Explain {question}" },
   { kind: toolKind, title: "Tool registry", card: "Edit tool tool_demo", text: "Approval" },
-  { kind: agentKind, title: "Agents", card: "Edit agent Support agent", text: "Helps · default graph: g1" },
+  { kind: agentKind, title: "Agents", card: "Edit agent Support agent", text: "Helps" },
   { kind: mcpKind, title: "MCP servers", card: "Edit MCP server Local MCP", text: "Disabled" },
   { kind: llmProfileKind, title: "LLM profiles", card: "Edit LLM profile Fast", text: "ollama · qwen" },
 ])("ResourcePage($kind.id)", ({ kind, title, card, text }) => {

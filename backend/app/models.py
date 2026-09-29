@@ -346,6 +346,16 @@ class ReleaseRunRequest(BaseModel):
     api_key: str | None = None
 
 
+class AgentRunRequest(BaseModel):
+    """Body for POST /api/agents/{id}/runs: the agent supplies the graph (and
+    its LLM profile the default provider/model); these override it."""
+
+    input: dict[str, Any] = Field(default_factory=dict)
+    provider: Literal["ollama", "stub", "openai_compat", "groq", "google", "azure"] | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
 class RunRequest(BaseModel):
     graph_id: str
     input: dict[str, Any] = Field(default_factory=dict)
@@ -395,6 +405,8 @@ class RunSummary(BaseModel):
     # POST /api/runs/{id}/resume. completed_at is set when paused too (this
     # invocation's event bus has closed), same as succeeded/failed.
     status: Literal["queued", "running", "succeeded", "failed", "paused"]
+    # The agent profile this run was started as (POST /api/agents/{id}/runs).
+    agent_id: str | None = None
     # The human_gate node a paused run is waiting at (None otherwise), so
     # clients can show its checkpoint without scanning traces.
     paused_node_id: str | None = None

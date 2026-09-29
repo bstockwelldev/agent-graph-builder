@@ -354,6 +354,8 @@ def _ensure_run_schema(conn: _DbConnection) -> None:
         "source",
         "runtime_target",
         "compiler_version",
+        # Slice 6 (resource-forms-consistency-plan): the agent a run ran as.
+        "agent_id",
     )
     for column in identity_columns:
         if column not in columns:
@@ -571,6 +573,9 @@ def list_graph_summaries() -> list[GraphSummary]:
 
 def _row_to_run_summary(row: tuple) -> RunSummary:
     graph_release_id = graph_fingerprint = source = runtime_target = compiler_version = None
+    agent_id = None
+    if len(row) == 16:
+        *row, agent_id = row
     if len(row) == 9:
         (
             run_id,
@@ -634,6 +639,7 @@ def _row_to_run_summary(row: tuple) -> RunSummary:
         source=source,  # type: ignore[arg-type]
         runtime_target=runtime_target,  # type: ignore[arg-type]
         compiler_version=compiler_version,
+        agent_id=agent_id,
     )
 
 
@@ -658,8 +664,9 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
             insert into run (
                 run_id, graph_id, status, input_json, provider,
                 result_json, error, started_at, completed_at, route_decisions_json,
-                graph_release_id, graph_fingerprint, source, runtime_target, compiler_version
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                graph_release_id, graph_fingerprint, source, runtime_target, compiler_version,
+                agent_id
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(run_id) do update set
                 status = excluded.status,
                 result_json = excluded.result_json,
@@ -687,6 +694,7 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
                 summary.source,
                 summary.runtime_target,
                 summary.compiler_version,
+                summary.agent_id,
             ),
         )
         conn.execute("delete from run_node_trace where run_id = ?", (summary.run_id,))
@@ -705,7 +713,8 @@ def get_run(run_id: str) -> RunSummary | None:
             """
             select run_id, graph_id, status, input_json, provider,
                    result_json, error, started_at, completed_at, route_decisions_json,
-                   graph_release_id, graph_fingerprint, source, runtime_target, compiler_version
+                   graph_release_id, graph_fingerprint, source, runtime_target, compiler_version,
+                   agent_id
             from run where run_id = ?
             """,
             (run_id,),
@@ -899,7 +908,8 @@ def list_runs_for_graph(graph_id: str, *, limit: int | None = 50) -> list[RunSum
             """
             select run_id, graph_id, status, input_json, provider,
                    result_json, error, started_at, completed_at, route_decisions_json,
-                   graph_release_id, graph_fingerprint, source, runtime_target, compiler_version
+                   graph_release_id, graph_fingerprint, source, runtime_target, compiler_version,
+                   agent_id
             from run
             where graph_id = ?
             order by started_at desc

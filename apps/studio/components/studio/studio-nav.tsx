@@ -29,7 +29,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon; description?: st
  * resource page.
  */
 export const RESOURCE_ITEMS: readonly NavItem[] = [
-  { href: "/agents", label: "Agents", icon: Bot, description: "Reusable agent profiles: model, prompt, and tools together." },
+  { href: "/agents", label: "Agents", icon: Bot, description: "A graph plus a model, instructions, and allowed tools, runnable by name." },
   { href: "/prompts", label: "Prompts", icon: FileText, description: "Versioned prompt templates with variables." },
   { href: "/tools", label: "Tools", icon: Wrench, description: "Tool definitions agents and tool nodes can call." },
   { href: "/mcp", label: "MCP", icon: Server, description: "Model Context Protocol servers that expose tools." },
