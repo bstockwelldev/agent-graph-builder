@@ -39,6 +39,10 @@ const clients = vi.hoisted(() => {
     },
     llmProfiles: makeClient([{ id: "l_1", name: "Fast", model: "qwen", model_provider: "ollama" }]),
     providers: { models: vi.fn(async () => ({ models: [{ id: "qwen", label: "Qwen" }], message: "" })) },
+    graphs: {
+      summaries: { list: vi.fn(async () => [{ id: "g1", name: "Support flow", node_count: 1, edge_count: 0, input_variables: [], subgraph_ids: [] }]) },
+      resources: vi.fn(async () => ({ graph_id: "g1", ids: { prompts: [], tools: ["tool_demo"] } })),
+    },
   };
 });
 vi.mock("@/lib/api-client", () => ({ client: clients }));
@@ -50,6 +54,7 @@ import { ResourcePage } from "./resource-page";
 afterEach(() => {
   cleanup();
   window.history.replaceState(null, "", "/");
+  window.localStorage.clear();
 });
 
 const renderPage = (kind: Parameters<typeof ResourcePage>[0]["kind"]) =>
@@ -122,5 +127,25 @@ describe("ResourcePage extras", () => {
     await vi.waitFor(() =>
       expect(clients.prompts.create).toHaveBeenCalledWith(expect.objectContaining({ id: expect.stringMatching(/^greeter_[0-9a-f]{4}$/), name: "Greeter", body: "Hi {name}" })),
     );
+  });
+
+  // Slice 4: with a graph in scope, a page lists only what that graph uses.
+  it("narrows the list to the graph in scope, and remembers it", async () => {
+    window.history.replaceState(null, "", "/tools?graph=g1");
+    renderPage(toolKind);
+    expect(await screen.findByText(/1 of 1 tools used by Support flow\./)).toBeTruthy();
+    expect(clients.graphs.resources).toHaveBeenCalledWith("g1");
+    expect(window.localStorage.getItem("agb:scope-graph")).toBe("g1");
+    cleanup();
+
+    // Another page picks up the remembered scope, and says when nothing is used.
+    window.history.replaceState(null, "", "/prompts");
+    renderPage(promptKind);
+    expect(await screen.findByText("Support flow uses no prompts.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Edit prompt Explain/ })).toBeNull();
+    expect(new URLSearchParams(window.location.search).get("graph")).toBe("g1");
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(await screen.findByRole("button", { name: /^Edit prompt Explain/ })).toBeTruthy();
+    expect(window.location.search).toBe("");
   });
 });

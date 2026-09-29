@@ -10,6 +10,7 @@ const { clientMock } = vi.hoisted(() => ({
     policies: {
       effective: vi.fn(),
       workspace: { get: vi.fn(), save: vi.fn() },
+      graph: { get: vi.fn(), save: vi.fn() },
       exceptions: { list: vi.fn(), update: vi.fn(), delete: vi.fn() },
     },
     graphs: { summaries: { list: vi.fn() } },
@@ -49,7 +50,11 @@ beforeEach(() => {
   clientMock.graphs.summaries.list.mockResolvedValue([{ id: "g1", name: "Support flow" }]);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/");
+  window.localStorage.clear();
+});
 
 describe("/policies", () => {
   it("groups rules by category and commits a threshold on blur", async () => {
@@ -88,5 +93,24 @@ describe("/policies", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(within(screen.getByRole("list", { name: "Policy exceptions" })).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  // Slice 4: with a graph in scope the page edits that graph's overrides.
+  it("edits a graph's overrides, showing what it inherits", async () => {
+    window.history.replaceState(null, "", "/policies?graph=g1");
+    const graphRule = { ...rule("reliability", "POLICY_LLM_MODEL_NOT_PINNED", "LLM model not pinned"), enforcement: "block", enforcement_source: "graph" };
+    clientMock.policies.effective.mockImplementation(async (request?: { graphId?: string }) =>
+      request?.graphId ? [graphRule] : [{ ...rule("reliability", "POLICY_LLM_MODEL_NOT_PINNED", "LLM model not pinned"), enforcement: "off", enforcement_source: "workspace" }],
+    );
+    clientMock.policies.graph.get.mockResolvedValue({ rules: { POLICY_LLM_MODEL_NOT_PINNED: { enforcement: "block" } }, updated_at: "2026-09-29T00:00:00Z" });
+    clientMock.policies.graph.save.mockResolvedValue({ rules: {}, updated_at: "2026-09-29T01:00:00Z" });
+    clientMock.policies.exceptions.list.mockResolvedValue([exception("pexc_live", 20)]);
+    render(<PoliciesPage />);
+
+    expect(await screen.findByLabelText("Set by: This graph")).toBeTruthy();
+    await waitFor(() => expect(clientMock.policies.exceptions.list).toHaveBeenCalledWith({ graphId: "g1" }));
+    expect(clientMock.policies.graph.get).toHaveBeenCalledWith("g1");
+    expect(clientMock.policies.workspace.get).not.toHaveBeenCalled();
+    expect(screen.getByText("Time-boxed waivers on Support flow.", { exact: false })).toBeTruthy();
   });
 });

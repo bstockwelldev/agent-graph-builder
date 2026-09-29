@@ -18,6 +18,7 @@ import {
   graphReleaseSchema,
   graphSummarySchema,
   graphUsedBySchema,
+  graphResourcesSchema,
   knowledgeDeleteResponseSchema,
   knowledgeLineageEntrySchema,
   knowledgeSummarySchema,
@@ -229,6 +230,8 @@ export function buildNamespaces(transport: Transport) {
         ),
       /** Wave 7c: saved graphs whose subgraph nodes reference `graphId`. */
       usedBy: (graphId: string) => transport.request(path`/api/graphs/${graphId}/used-by`, undefined, graphUsedBySchema),
+      /** Library resources the graph uses (bindings, its tools' MCP servers, agents built on it), keyed by API kind. */
+      resources: (graphId: string) => transport.request(path`/api/graphs/${graphId}/resources`, undefined, graphResourcesSchema),
       /** Runs the draft with no live tool/LLM calls (`fixture.node_outputs` stubs nodes). */
       simulate: (graphId: string, fixture: Fixture) =>
         transport.request(path`/api/graphs/${graphId}/simulate`, json(fixture), simulateResultSchema),
@@ -376,7 +379,8 @@ export function buildNamespaces(transport: Transport) {
 
     analytics: {
       /** Workspace run analytics and spend estimates. */
-      dashboard: () => transport.request("/api/analytics", undefined, analyticsDashboardPayloadSchema),
+      dashboard: (request: { graphId?: string } = {}) =>
+        transport.request(`/api/analytics${query({ graph_id: request.graphId })}`, undefined, analyticsDashboardPayloadSchema),
       /** Per-node rollups over the graph's most recent `window` runs. */
       graph: (graphId: string, request: { window?: number } = {}) =>
         transport.request(`${path`/api/graphs/${graphId}/analytics`}${query({ window: request.window || undefined })}`, undefined, graphAnalyticsSchema),

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ResourceEditorDialog, isResourceEditorTab } from "@/components/studio/resource-editor-dialog";
-import type { AnyResourceKind } from "@/components/studio/resource-kinds";
+import type { AnyResourceKind, ResourceKindId } from "@/components/studio/resource-kinds";
+import { ScopeSelect } from "@/components/studio/scope-select";
 import { StudioConfirmDialog } from "@/components/studio/studio-confirm-dialog";
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
@@ -15,8 +16,42 @@ import {
 } from "@/components/studio/studio-resource-card-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { useGraphScope } from "@/hooks/use-graph-scope";
 import { useResourceEditor } from "@/hooks/use-resource-editor";
+import { client } from "@/lib/api-client";
+import { errorDetail } from "@/lib/apiErrors";
 import { cn } from "@/lib/utils";
+
+/** Each kind's key in `GET /api/graphs/{id}/resources`. */
+const SCOPE_KEY: Record<ResourceKindId, string> = {
+  prompts: "prompts",
+  tools: "tools",
+  agents: "agents",
+  mcp: "mcp-servers",
+  llmProfiles: "llm-profiles",
+  transforms: "transforms",
+};
+
+/** With a graph in scope: the ids of this kind it uses (null while loading). */
+function useScopedIds(kind: AnyResourceKind, graphId: string | null, refreshKey: unknown) {
+  const [state, setState] = useState<{ graphId: string; ids: Set<string> | null; error: string | null } | null>(null);
+  useEffect(() => {
+    if (!graphId) {
+      setState(null);
+      return;
+    }
+    let cancelled = false;
+    setState({ graphId, ids: null, error: null });
+    client.graphs.resources(graphId).then(
+      ({ ids }) => !cancelled && setState({ graphId, ids: new Set(ids[SCOPE_KEY[kind.id]] ?? []), error: null }),
+      (err: unknown) => !cancelled && setState({ graphId, ids: null, error: errorDetail(err) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [graphId, kind.id, refreshKey]);
+  return state?.graphId === graphId ? state : null;
+}
 
 /**
  * The full page for one resource registry (studio-graph-workbench-redesign-
@@ -27,7 +62,12 @@ import { cn } from "@/lib/utils";
  */
 export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
   const editor = useResourceEditor(kind);
-  const { items, loading, error, refetch, saving, saveError, clearSaveError } = editor;
+  const { items: allItems, loading, error, refetch, saving, saveError, clearSaveError } = editor;
+  // Slice 4: with a graph in scope, only what that graph uses.
+  const scope = useGraphScope();
+  const scoped = useScopedIds(kind, scope.graphId, allItems);
+  const items = scoped?.ids ? allItems.filter((item) => scoped.ids!.has(item.id)) : allItems;
+  const noun = kind.panelTitle.toLowerCase();
 
   // Deep link, read from location rather than useSearchParams so the page
   // stays statically renderable (no Suspense boundary needed). Applied once,
@@ -38,16 +78,34 @@ export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
     deepLinkHandledRef.current = true;
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
-    const item = id ? items.find((candidate) => candidate.id === id) : undefined;
+    const item = id ? allItems.find((candidate) => candidate.id === id) : undefined;
     if (!item) return;
     const tab = params.get("tab");
     editor.openEdit(item, isResourceEditorTab(tab) ? tab : "overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the list first loads
-  }, [items, loading]);
+  }, [allItems, loading]);
 
   return (
     <StudioPage>
-      <StudioPageHeader title={kind.pageTitle} description={kind.pageDescription} loading={loading} onRefresh={refetch} />
+      <StudioPageHeader
+        title={kind.pageTitle}
+        description={kind.pageDescription}
+        loading={loading}
+        onRefresh={refetch}
+        actions={<ScopeSelect scope={scope} />}
+      />
+      {scope.graph ? (
+        <p className="text-muted-foreground mb-3 text-sm" role="status">
+          {scoped?.error
+            ? `Couldn't load what ${scope.graph.name} uses: ${scoped.error}`
+            : scoped?.ids
+              ? `${items.length} of ${allItems.length} ${noun} used by ${scope.graph.name}.`
+              : `Loading what ${scope.graph.name} uses…`}{" "}
+          <Button type="button" variant="link" size="xs" className="h-auto p-0" onClick={() => scope.setGraphId(null)}>
+            Show all
+          </Button>
+        </p>
+      ) : null}
       <Button type="button" size="sm" variant="synth" className="mb-4" disabled={loading || saving} onClick={editor.openCreate}>
         New {kind.noun}
       </Button>
@@ -105,7 +163,9 @@ export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
               );
             })}
           </ul>
-          {items.length === 0 ? <p className="text-muted-foreground text-sm">{kind.emptyText}</p> : null}
+          {items.length === 0 ? (
+            <p className="text-muted-foreground text-sm">{scope.graph && scoped?.ids ? `${scope.graph.name} uses no ${noun}.` : kind.emptyText}</p>
+          ) : null}
         </>
       ) : null}
 

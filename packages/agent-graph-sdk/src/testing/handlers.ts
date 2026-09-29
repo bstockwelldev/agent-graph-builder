@@ -1,5 +1,6 @@
 import { http, HttpResponse, type HttpHandler } from "msw";
 
+import { nodeBindings, RESOURCE_KIND_PATH } from "../bindings.js";
 import { summarizeGraph } from "../graph/summary.js";
 import { downstream, upstream } from "../graph/traverse.js";
 import { validateStructure } from "../graph/validate.js";
@@ -501,6 +502,23 @@ export function mockRoutes(): Record<string, Handler> {
       };
       return HttpResponse.json({ child_graph: child, proposed_parent: proposed });
     },
+    "GET /api/graphs/{graph_id}/resources": ({ params, store }) => {
+      const graph = store.graphs.get(params.graph_id);
+      if (!graph) return notFound("graph");
+      const ids: Record<string, Set<string>> = Object.fromEntries(
+        ["prompts", "tools", "mcp-servers", "llm-profiles", "transforms", "agents"].map((kind) => [kind, new Set<string>()]),
+      );
+      for (const node of graph.nodes) {
+        for (const binding of nodeBindings(node.type, node.config)) ids[RESOURCE_KIND_PATH[binding.kind]].add(binding.resourceId);
+      }
+      for (const edge of graph.edges) if (edge.transform?.transform_id) ids.transforms.add(edge.transform.transform_id);
+      for (const toolId of ids.tools) {
+        const server = store.resources.tools.get(toolId)?.mcp_server_id;
+        if (typeof server === "string" && server) ids["mcp-servers"].add(server);
+      }
+      for (const agent of store.resources.agents.values()) if (agent.graph_id === graph.id) ids.agents.add(String(agent.id));
+      return HttpResponse.json({ graph_id: graph.id, ids: Object.fromEntries(Object.entries(ids).map(([kind, set]) => [kind, [...set].sort()])) });
+    },
     "GET /api/graphs/{graph_id}/used-by": ({ params, store }) =>
       HttpResponse.json(
         [...store.graphs.values()]
@@ -716,8 +734,9 @@ export function mockRoutes(): Record<string, Handler> {
     },
 
     // Analytics
-    "GET /api/analytics": ({ store }) => {
-      const runs = [...store.runs.values()].map((run) => run.summary);
+    "GET /api/analytics": ({ request, store }) => {
+      const graphId = new URL(request.url).searchParams.get("graph_id");
+      const runs = [...store.runs.values()].map((run) => run.summary).filter((run) => !graphId || run.graph_id === graphId);
       const totals = { invocations: runs.length, input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_usd: 0, avg_duration_ms: 0 };
       const byGraph = new Map<string, number>();
       for (const run of runs) byGraph.set(run.graph_id, (byGraph.get(run.graph_id) ?? 0) + 1);

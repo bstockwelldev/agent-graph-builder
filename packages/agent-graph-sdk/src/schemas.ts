@@ -906,6 +906,12 @@ export const graphSummarySchema = z.object({
 });
 
 /** Wave 7c: GET /api/graphs/{id}/used-by -- parents referencing this graph. */
+/** `GET /api/graphs/{id}/resources`: library resources the graph uses, by API kind. */
+export const graphResourcesSchema = z.object({
+  graph_id: z.string(),
+  ids: z.record(z.string(), z.array(z.string())),
+});
+
 export const graphUsedBySchema = z.array(
   z.object({ graph_id: z.string(), name: z.string(), node_ids: z.array(z.string()) }),
 );

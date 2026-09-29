@@ -50,6 +50,7 @@ from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
+    GraphResources,
     McpDiscovery,
     McpHeaderNames,
     McpHeadersUpdate,
@@ -450,6 +451,41 @@ def extract_subgraph_endpoint(
     charge_public_write(http, "create")
     storage.save_graph(child)
     return ExtractSubgraphResponse(child_graph=child, proposed_parent=proposed)
+
+
+@app.get("/api/graphs/{graph_id}/resources")
+def graph_resources_endpoint(graph_id: str) -> GraphResources:
+    """Resources this graph uses (slice 4's graph scope): its bindings from
+    the graph catalog, the MCP servers behind its tools, and the agents
+    that run it."""
+    graph = storage.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    ids: dict[str, set[str]] = {path: set() for path in _GRAPH_RESOURCE_PATHS.values()}
+    for binding in storage.graph_catalog_entry(graph).bindings:
+        path = _GRAPH_RESOURCE_PATHS.get(binding.kind)
+        if path:
+            ids[path].add(binding.resource_id)
+    for tool_id in list(ids["tools"]):
+        tool = storage.get_resource("tools", tool_id)
+        if tool and tool.get("mcp_server_id"):
+            ids["mcp-servers"].add(tool["mcp_server_id"])
+    for payload in storage.list_resources("agents"):
+        agent = normalize_agent_payload(payload)
+        if agent.get("graph_id") == graph_id:
+            ids["agents"].add(agent["id"])
+    return GraphResources(graph_id=graph_id, ids={k: sorted(v) for k, v in ids.items()})
+
+
+# Storage kind -> API path, for the kinds a graph can use.
+_GRAPH_RESOURCE_PATHS = {
+    "prompts": "prompts",
+    "tools": "tools",
+    "mcp_servers": "mcp-servers",
+    "llm_profiles": "llm-profiles",
+    "transforms": "transforms",
+    "agents": "agents",
+}
 
 
 @app.get("/api/graphs/{graph_id}/used-by")
@@ -1165,8 +1201,9 @@ def list_all_runs(page: Page) -> list[RunSummary]:
 
 
 @app.get("/api/analytics")
-def get_analytics() -> AnalyticsDashboardPayload:
-    return get_analytics_dashboard()
+def get_analytics(graph_id: str | None = None) -> AnalyticsDashboardPayload:
+    """Workspace dashboard; `graph_id` narrows it to one graph's runs."""
+    return get_analytics_dashboard(graph_id=graph_id)
 
 
 @app.get("/api/graphs/{graph_id}/analytics")

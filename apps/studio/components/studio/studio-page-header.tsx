@@ -11,6 +11,8 @@ type Props = {
   description: ReactNode;
   loading?: boolean;
   onRefresh?: () => void;
+  /** Controls beside Refresh, e.g. the Scope picker. */
+  actions?: ReactNode;
   className?: string;
 };
 
@@ -19,6 +21,7 @@ export function StudioPageHeader({
   description,
   loading = false,
   onRefresh,
+  actions,
   className,
 }: Props) {
   return (
@@ -30,6 +33,7 @@ export function StudioPageHeader({
             {description}
           </p>
         </div>
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
         {onRefresh ? (
           <Button
             type="button"

@@ -646,6 +646,16 @@ class TransformPreviewResponse(BaseModel):
     error: str | None = None
 
 
+class GraphResources(BaseModel):
+    """The library resources a graph uses, by API kind (`prompts`, `tools`,
+    `mcp-servers`, `llm-profiles`, `transforms`, `agents`): what its nodes
+    and edges bind, the MCP servers its tools call, and the agents built on
+    it. Backs the Resources pages' graph scope."""
+
+    graph_id: str
+    ids: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class McpHeaderNames(BaseModel):
     """The names of an MCP server's stored request headers. Values never
     leave the server (mcp/secrets.py)."""

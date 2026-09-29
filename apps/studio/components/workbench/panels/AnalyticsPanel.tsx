@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AnalyticsDashboardPayload, GraphAnalytics } from "@bstockwelldev/agent-graph-sdk";
 
@@ -213,7 +214,11 @@ export function AnalyticsPanel() {
   );
 }
 
-export function GraphAnalyticsView({ context }: { context: StudioGraphContext }) {
+/** What the graph view needs: the canvas's context in the panel, or just a
+ * graph id on the Analytics page (links then open the editor instead). */
+export type GraphAnalyticsContext = Pick<StudioGraphContext, "graphId" | "runId" | "focusNode" | "inspectRun">;
+
+export function GraphAnalyticsView({ context, compact = true }: { context: GraphAnalyticsContext; compact?: boolean }) {
   const [payload, setPayload] = useState<GraphAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { graphId, runId } = context;
@@ -243,7 +248,7 @@ export function GraphAnalyticsView({ context }: { context: StudioGraphContext })
 
   return (
     <>
-      <section className="grid grid-cols-2 gap-3">
+      <section className={cn("grid gap-3", compact ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4")}>
         {(
           [
             ["Runs (recent)", payload.run_window.toLocaleString()],
@@ -283,14 +288,23 @@ export function GraphAnalyticsView({ context }: { context: StudioGraphContext })
                 {payload.nodes.map((node) => (
                   <tr key={node.node_id} className="border-b last:border-0">
                     <td className="py-1 pr-2">
-                      <button
-                        type="button"
-                        className="hover:text-primary text-left font-medium underline-offset-2 hover:underline"
-                        title="Focus this node and open its history"
-                        onClick={() => context.focusNode?.(node.node_id, "history")}
-                      >
-                        {node.node_id}
-                      </button>
+                      {context.focusNode ? (
+                        <button
+                          type="button"
+                          className="hover:text-primary text-left font-medium underline-offset-2 hover:underline"
+                          title="Focus this node and open its history"
+                          onClick={() => context.focusNode?.(node.node_id, "history")}
+                        >
+                          {node.node_id}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/graphs/${encodeURIComponent(graphId)}?node=${encodeURIComponent(node.node_id)}&tab=history`}
+                          className="hover:text-primary font-medium underline-offset-2 hover:underline"
+                        >
+                          {node.node_id}
+                        </Link>
+                      )}
                       <span className="text-muted-foreground"> · {node.node_type}</span>
                     </td>
                     <td className="py-1 pr-2">{node.executions}</td>
@@ -299,7 +313,7 @@ export function GraphAnalyticsView({ context }: { context: StudioGraphContext })
                     </td>
                     <td className="py-1 pr-2">{formatDurationMs(node.p95_duration_ms)}</td>
                     <td className="py-1">
-                      {node.last_run_id ? (
+                      {node.last_run_id && context.inspectRun ? (
                         <button
                           type="button"
                           className="hover:text-primary underline-offset-2 hover:underline"
@@ -308,6 +322,14 @@ export function GraphAnalyticsView({ context }: { context: StudioGraphContext })
                         >
                           run
                         </button>
+                      ) : node.last_run_id ? (
+                        <Link
+                          href={`/graphs/${encodeURIComponent(graphId)}?run=${encodeURIComponent(node.last_run_id)}&panel=run`}
+                          className="hover:text-primary underline-offset-2 hover:underline"
+                          aria-label={`Inspect ${node.node_id}'s last run`}
+                        >
+                          run
+                        </Link>
                       ) : (
                         "—"
                       )}

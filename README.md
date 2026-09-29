@@ -44,7 +44,8 @@ a free-form LLM answer. Ask something non-technical to see the other branch run.
   records `agent_id`, and its graph snapshot records the applied prompts.
 - **Supporting surfaces:** a per-graph knowledge base (RAG), versioned reusable
   resources (prompts, tools, LLM profiles, policies), fixture-based simulation,
-  a chat scratchpad, and usage/spend analytics.
+  a chat scratchpad, and usage/spend analytics. Analytics, Policies and the
+  resource pages share a Scope picker: the whole workspace, or one graph.
 
 ### Node vocabulary
 
