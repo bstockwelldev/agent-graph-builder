@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "pnpm --filter @bstockwelldev/agent-graph-sdk run build && next build --turbopack",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"

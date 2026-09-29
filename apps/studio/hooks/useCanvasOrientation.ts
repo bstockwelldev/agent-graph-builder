@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { computeEffectiveRankDir, layoutLabelForRankDir, type LayoutRankDir } from "../layout/dagreLayout";
 import type { GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 
@@ -18,20 +18,18 @@ export function useCanvasOrientation(
 
   orientationPinRef.current = orientationPin;
 
-  const announceIfChanged = (next: LayoutRankDir) => {
-    if (prevRankRef.current !== null && prevRankRef.current !== next) {
-      setLiveAnnouncement(`Graph layout: ${layoutLabelForRankDir(next)}`);
-    }
-    prevRankRef.current = next;
-  };
-
-  const applyRankDir = (width: number, height: number, pin: GraphOrientation) => {
+  // Only refs and state setters inside, so both are stable for the effects below.
+  const applyRankDir = useCallback((width: number, height: number, pin: GraphOrientation) => {
     paneSizeRef.current = { width, height };
     setPaneSize((current) => (current.width === width && current.height === height ? current : { width, height }));
     const next = computeEffectiveRankDir(width, height, pin);
     setEffectiveRankDir(next);
-    announceIfChanged(next);
-  };
+    if (prevRankRef.current !== null && prevRankRef.current !== next) {
+      setLiveAnnouncement(`Graph layout: ${layoutLabelForRankDir(next)}`);
+    }
+    prevRankRef.current = next;
+  }, []);
+  const clearLiveAnnouncement = useCallback(() => setLiveAnnouncement(""), []);
 
   useEffect(() => {
     const element = paneRef.current;
@@ -50,7 +48,7 @@ export function useCanvasOrientation(
     });
 
     observer.observe(element);
-    applyRankDir(element.clientWidth, element.clientHeight, orientationPin);
+    applyRankDir(element.clientWidth, element.clientHeight, orientationPinRef.current);
 
     return () => {
       observer.disconnect();
@@ -58,18 +56,18 @@ export function useCanvasOrientation(
         window.clearTimeout(debounceRef.current);
       }
     };
-  }, [paneRef]);
+  }, [paneRef, applyRankDir]);
 
   useEffect(() => {
     const { width, height } = paneSizeRef.current;
     if (width === 0 && height === 0) return;
     applyRankDir(width, height, orientationPin);
-  }, [orientationPin]);
+  }, [orientationPin, applyRankDir]);
 
   return {
     effectiveRankDir,
     paneSize,
     liveAnnouncement,
-    clearLiveAnnouncement: () => setLiveAnnouncement(""),
+    clearLiveAnnouncement,
   };
 }
