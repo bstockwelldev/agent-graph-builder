@@ -1,0 +1,177 @@
+# Resource forms, GenUI, and scope consistency plan
+
+**Status:** Proposed 2026-09-29. Inventory from a review of the Resources
+pages (Agents, Prompts, Tools, MCP, LLM profiles, GenUI) plus Analytics and
+Policies, against how the graph canvas actually uses each kind.
+
+Code of record: `apps/studio/components/studio/resource-kinds.tsx` (one
+config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
+(`BINDING_FIELDS`), `components/graph/NodeInspector.tsx`.
+
+## 1. Cross-cutting rules (apply to every kind)
+
+| # | Rule | Today |
+| --- | --- | --- |
+| C1 | **Identity.** New entries get a generated id derived from the name (`slug(name)` + short suffix), shown read-only under the Name field with a "Customize id" link. After create the id is display-only with a copy button. Focus lands on **Name**, not Id. | Id is the first, focused, free-text field on create; disabled (but still an input) on edit. Prompt dialog still warns "Changing id may break existing refs", which edit mode no longer allows. |
+| C2 | **References are pickers, never typed ids.** Anything that names another entity (graph, provider, model, MCP server, remote tool, prompt, profile) is a combobox over the real list, with "Open" to jump to it. | `default_flow_id`, `model`, `model_provider` are free text. |
+| C3 | **Enums are selects.** Every `Literal[...]` field renders as a select or segmented control. | Provider is a text box whose placeholder lists the options. |
+| C4 | **JSON fields validate.** Use the shared raw editor (JSON/YAML, parse error inline, Save disabled while invalid). | Tool parameters JSON is stored as typed even when invalid. |
+| C5 | **One field set per kind, shared with the canvas.** The inspector control that edits a field on a node (e.g. `ProviderModelPicker`) is the one the resource form uses. | The LLM node uses `ProviderModelPicker`; the LLM-profile form uses two text boxes. |
+| C6 | **Required fields are marked** and Save explains what's missing (today Save just stays disabled). | No markers; silent disabled Save. |
+| C7 | **Descriptions match reality.** Nav and page copy only promise fields that exist. | "Agents: model, prompt, and tools together"; "LLM Profiles: provider/model/parameter presets"; "Prompts: versioned templates with variables". None of those fields exist. |
+| C8 | **Every card shows "Used by N graphs"** from `GET /api/{kind}/{id}/usages` (already served), and delete warns with the list. | The Usage tab exists in the dialog; cards don't show it. |
+
+## 2. Per-kind inventory
+
+### Prompts (`PromptTemplate`: id, name, body)
+- **Canvas use:** `prompt.promptId`, `llm/tool_loop.systemPromptId`. The node renders `{var}` placeholders against graph input variables.
+- **Gaps:**
+  - The body is a plain textarea. It should be the canvas's `TemplateEditor`: `{var}` highlighting and autocomplete, an expand editor, and a char count.
+  - No declared variables. Add a derived, read-only "Variables: {question}, …" list parsed from the body, and warn when a binding graph doesn't supply one.
+  - No description field, unlike every other kind.
+- **Spec:**
+  - Name: text, required.
+  - Body: TemplateEditor, required.
+  - Description: optional.
+  - Variables: derived and read-only.
+
+### Tools (`ToolDefinition`: id, description, parameters_json, requires_approval, mcp_server_id, mcp_tool_name)
+- **Canvas use:** `tool.toolName` combobox over builtins plus the registry. `requires_approval` gates Run.
+- **Gaps:**
+  - **The MCP binding fields exist in the model but have no inputs.** The MCP page says "Tools bind via mcp_server_id + mcp_tool_name", yet nothing can set them.
+  - There's no Name, so the card title is the raw id.
+  - The Parameters JSON isn't validated (C4).
+  - Nothing shows that builtins (`web_search`, `calculator`, `lookup_topic`) exist and can't be shadowed.
+- **Spec:**
+  - Name: required, new field.
+  - Description.
+  - **Source**, a segmented control with three options:
+    - Mock: echo, today's default.
+    - MCP: a server picker, then a remote tool picker filled from the server's `tools/list`. Picking a tool fills the parameters schema.
+    - Builtin: read-only.
+  - Parameters: a JSON Schema editor with validation. Read-only when it comes from MCP.
+  - Requires approval.
+
+### MCP servers (`McpServerConfig`: id, name, url, transport, enabled)
+- **Canvas use:** indirect, through tools.
+- **Gaps:**
+  - Transport offers `sse` and `stdio`, but only `http` executes. The page text admits it; the select should disable those two with a "not yet" hint.
+  - There's no auth or headers field, which most real servers need. This would be server-side only, held as a secret and never echoed back.
+  - There's no **Test connection / Discover tools** action. `mcp/client.list_mcp_tools` exists but has no route.
+  - There's no list of the tools this server exposes, or of which registry tools bind to it.
+- **Spec:**
+  - Name.
+  - URL: validated as http(s).
+  - Transport: `http` enabled, the others disabled.
+  - Headers: a key/value editor with masked values. This needs a backend secrets field.
+  - Enabled.
+  - Actions: "Test connection", and "Discover tools", which can one-click create registry tools.
+
+### LLM profiles (`LlmProfile`: id, name, model, model_provider, description)
+- **Canvas use:** `llm/tool_loop.llmProfileId`, which overrides the node's provider/model at run time.
+- **Gaps:**
+  - Provider and model are free text (C2, C3, C5). A typo only fails at run time.
+  - There are no generation parameters (temperature, max tokens), though the nav promises "parameter presets". The node doesn't carry them either, so add them to both, or drop the promise.
+  - There's no default system prompt binding. The node has `systemPromptId`, and a profile is the natural place for a default.
+- **Spec:**
+  - Name.
+  - Provider + Model: the shared `ProviderModelPicker`, required, with the model list from `/api/providers/{p}/models`.
+  - Temperature / Max tokens: optional steppers. Needs backend support in the providers.
+  - System prompt: a prompt picker, optional.
+  - Description.
+
+### Agents (`AgentProfile`: id, name, description, default_flow_id, system_instructions, optional_elements)
+- **Canvas use:** **none.** No run, node, binding or chat path reads an agent profile. It's stored and editable, and nothing else.
+- **Gaps:**
+  - `default_flow_id` is a typed graph id. It should be a graph picker, labelled "Default graph".
+  - "Optional elements (one per line)" has no defined meaning anywhere in the code.
+  - The nav copy promises model, prompt and tools, which don't exist.
+- **Decision needed:** either make Agents real, or hide the kind until it is. Making it real is recommended:
+  - An agent = graph (required picker) + LLM profile (picker) + system prompt (picker) + tool allow-list (multi-select over tools).
+  - Selectable in the Run panel and in Chat (`/run @agent`).
+  - `optional_elements` would be dropped.
+
+### Transforms (already consistent)
+- It's the reference implementation for C3 and C4: a type segmented control, conditional fields and validation.
+- Its tab exists but was cut off in the review screenshots. The tab strip needs an overflow affordance at that width (scroll or "More").
+
+### Datasets (no page)
+- Datasets are stored resources with versions of their own flow. They're created from the Run panel and routing lab, but have **no Resources page**: you can't browse, rename or delete them outside a graph panel.
+- Add a Datasets page: list, fixtures preview, graph provenance, delete, "Open in routing lab".
+
+### GenUI
+- The component library shows two static examples. The runtime is missing the pieces that make a checkpoint useful:
+  1. **Approve / Reject is not wired.**
+     - `POST /api/runs/{id}/resume` supports `approve` and `reason`, and the SDK has `runs.resume`.
+     - But the studio never calls it. A paused run shows "paused" with no way to continue.
+     - GenUI `Button`s only `console.info` their `actionId`.
+     - **Highest-priority gap.**
+  2. **FormField values go nowhere.** Resuming should submit the surface's field values, e.g. `resume({approve, reason, values})`, into the gate's output. That's a backend change to `RunResumeRequest` and `compute_human_gate`.
+  3. **Missing components:**
+     - `Approval`: summary, approve/reject, and a reason.
+     - `Chart`: bar/line/area over inline data or a JSON pointer into run state.
+     - `Table`.
+     - `Diagram`: Mermaid source, rendered client-side.
+     - `KeyValue` / `Diff`, for "approve this change" views.
+     - `Select` and `Checkbox` form fields.
+     - `Markdown` text.
+  4. **Data binding:** components can't reference run data. Add `{"$ref": "/nodes/llm_answer/output"}`-style pointers, resolved at render time from the paused run's state.
+  5. **Authoring:** the node's `genuiCheckpointSurfaceJson` is a raw textarea. Use the raw editor with validation, a live preview, and "Insert example" from the library page.
+  6. **Library page:** each component gets a card (preview, props table, JSON), plus a "Copy JSON" button.
+
+## 3. Scope: workspace vs graph (Analytics, Policies, Resources)
+
+**Today:**
+- Graph-scoped views exist only inside the editor. The Analytics panel has a "This graph / Workspace" toggle; the Policies panel shows graph overrides.
+- The top-level `/analytics` and `/policies` pages are workspace-only.
+
+**Recommendation:** one shared **Scope** control in the page header of Analytics, Policies and every Resources page. It reads *Workspace ▾* and lists graphs, and it's kept in the URL (`?graph=<id>`) and remembered across pages.
+
+- **Analytics:**
+  - Workspace scope stays as it is.
+  - Graph scope reuses the per-node rollups the panel already fetches (`GET /api/graphs/{id}/analytics`):
+    - node table
+    - success rate
+    - p95
+    - daily trend per graph
+    - a release selector, to compare runs by release
+  - Richer visuals, using the same Chart component as GenUI:
+    - a runs/day stacked by status
+    - a latency distribution
+    - a provider/model mix
+    - the top failing nodes, with links into the editor
+- **Policies:**
+  - Graph scope shows effective rules with their source (default / workspace / graph), edits the graph's overrides, and filters exceptions to that graph.
+  - Workspace scope is unchanged, and read-only on the public demo (STO-626).
+- **Resources:** graph scope filters each list to entries that graph uses (via `/usages`), which answers "what does this graph depend on?"
+
+## 4. Proposed slices
+
+1. **Run approvals (GenUI 1–2)** — **shipped 2026-09-29.** Paused runs name their gate (`RunSummary.paused_node_id`); the Run panel's checkpoint card renders the gate message and an interactive GenUI surface (token-styled `components/graph/ui/GenuiSurface.tsx`, also the inspector preview) with a reason and Approve / Reject; surface buttons dispatch `approve`/`reject`, other actionIds approve and are recorded as `values.action`; approved values become the run variable `{<gate_id>[field]}`. Still open: pause state is process-local, so on Vercel a resume can miss the paused instance (durable checkpoints are a follow-up). Original scope:
+   - Approve / Reject with a reason in the Run panel, whenever a run is paused.
+   - GenUI Buttons dispatch their `actionId`s.
+   - Form values are submitted on resume (backend and SDK).
+   - e2e: pause at a `human_gate`, approve, then reject.
+2. **Form foundation (C1–C6):**
+   - Name-first generated ids.
+   - A shared `ProviderModelPicker` in LLM profiles.
+   - A graph picker for the agent's default graph.
+   - JSON validation for tool parameters.
+   - Required markers.
+   - Copy fixes (C7).
+   - The tab strip overflow fix.
+3. **Tools ↔ MCP:**
+   - Tool source (Mock / MCP / Builtin).
+   - An MCP test/discover route and UI.
+   - Disabled transports.
+   - MCP headers (backend secret handling).
+4. **Scope control:** the shared graph selector across Analytics, Policies and Resources, plus graph-scoped Analytics and Policies pages.
+5. **GenUI components (3–6):**
+   - Approval, Chart, Table, Diagram, KeyValue/Diff, Select/Checkbox, Markdown.
+   - `$ref` data binding.
+   - The authoring editor.
+   - Library cards.
+6. **Agents decision:** make agents real (graph + profile + prompt + tools, selectable in Run and Chat) or hide the kind.
+7. **Datasets page:** browse, rename and delete, with "Open in routing lab".
+
+Slices 1 and 2 have no design dependencies and can start immediately. Slice 6 needs a product decision first.

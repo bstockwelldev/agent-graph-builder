@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 // Ported from micro-ui-agent-builder's components/genui-renderer.tsx as-is.
-// Action dispatch stays inert (onClick -> console.info) — this was already
-// flagged as a documented deviation during Phase 1 and isn't fixed here
-// either, per the locked Phase 4e plan.
+// The /genui library page's static preview: actions stay inert here. The
+// live checkpoint (Run panel) and the inspector preview use the graph kit's
+// interactive components/graph/ui/GenuiSurface.tsx instead.
 function GenuiNodeView({ node }: { node: GenuiNode }) {
   switch (node.type) {
     case "Stack": {

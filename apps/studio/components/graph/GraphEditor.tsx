@@ -1409,6 +1409,136 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // those node ids so the backend's existing fixture_node_outputs
   // mechanism short-circuits them instead of invoking their real
   // executors — see handleRunFromNode below.
+  // Streams a started (or resumed) run to its end: live node traces and
+  // events, then the settled summary, traces and history. A run that
+  // pauses at a human_gate settles as "paused"; resuming it follows again.
+  const followRun = useCallback(
+    async (summary: RunSummary) => {
+      const streamedEvents: PlatformEvent[] = [];
+      const applyTerminalSummary = async (latest: RunSummary) => {
+        setRunSummary(latest);
+        setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
+        const cacheable = { ...latest, events: latest.events?.length ? latest.events : streamedEvents };
+        try {
+          const traces = await client.runs.traces(latest.run_id);
+          setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
+          cacheRun(cacheable, traces);
+        } catch (err: unknown) {
+          const fallback = tracesFromEvents(cacheable.events);
+          cacheRun(cacheable, fallback);
+          if (fallback.length > 0) {
+            setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
+          } else {
+            console.error("Failed to load run traces:", err);
+            logConsoleEntry({
+              severity: "error",
+              source: "Run",
+              message: `Failed to load run traces: ${err instanceof Error ? err.message : String(err)}`,
+              graphId: graphId ?? undefined,
+              runId: latest.run_id,
+            });
+          }
+        }
+        await refreshRunHistory();
+      };
+
+      if (isTerminalRunStatus(summary.status)) {
+        if (summary.events && summary.events.length > 0) setEvents(summary.events);
+        await applyTerminalSummary(summary);
+        return;
+      }
+
+      const nodeTypeById = new Map(nodes.map((n) => [n.id, n.data.nodeType]));
+
+      closeStreamRef.current = watchRunCompletion({
+        initial: summary,
+        wait: waitForRun,
+        onEvent: (event) => {
+          streamedEvents.push(event);
+          setEvents((evts) => [...evts, event]);
+          // Mirror (not duplicate) into the app-wide console's Run events
+          // tab — RunPanel's own "Event log" section still reads from
+          // `events` above; this is a second, independent subscriber.
+          const described = describePlatformEvent(event);
+          logConsoleEntry({
+            severity: described.severity,
+            source: "Run",
+            message: described.message,
+            graphId: graphId ?? undefined,
+            nodeId: event.node_id ?? undefined,
+            runId: event.run_id,
+          });
+
+          if (event.event_type === "edge.selected" && event.node_id) {
+            const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
+            const selectedTargetNodeId = String(event.payload.selectedTargetNodeId ?? "");
+            setInspectionRouteDecisions((decisions) => [
+              ...decisions.filter((decision) => decision.nodeId !== event.node_id),
+              { nodeId: event.node_id!, selectedEdgeId, selectedTargetNodeId },
+            ]);
+          }
+
+          if (event.node_id) {
+            if (event.event_type === "node.started") {
+              setNodeTraces((traces) => ({
+                ...traces,
+                [event.node_id!]: {
+                  node_id: event.node_id!,
+                  node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                  status: "running",
+                  input: null,
+                  output: null,
+                  started_at: event.occurred_at,
+                },
+              }));
+            } else if (event.event_type === "node.completed") {
+              setNodeTraces((traces) => ({
+                ...traces,
+                [event.node_id!]: {
+                  ...traces[event.node_id!],
+                  node_id: event.node_id!,
+                  node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                  status: "succeeded",
+                  input: event.payload.input,
+                  output: event.payload.output,
+                  completed_at: event.occurred_at,
+                },
+              }));
+            } else if (event.event_type === "node.failed") {
+              setNodeTraces((traces) => ({
+                ...traces,
+                [event.node_id!]: {
+                  ...traces[event.node_id!],
+                  node_id: event.node_id!,
+                  node_type: nodeTypeById.get(event.node_id!) ?? "input",
+                  status: "failed",
+                  completed_at: event.occurred_at,
+                  error: String(event.payload.error),
+                },
+              }));
+            }
+          }
+
+          if (event.event_type === "run.completed" || event.event_type === "run.failed") {
+            closeStreamRef.current?.();
+            closeStreamRef.current = null;
+            void applyTerminalSummary({
+              ...summary,
+              status: event.event_type === "run.completed" ? "succeeded" : "failed",
+              result: event.payload.result ?? summary.result,
+              error: event.payload.error != null ? String(event.payload.error) : summary.error,
+            });
+          }
+        },
+        onTerminal: (latest) => {
+          closeStreamRef.current = null;
+          void applyTerminalSummary(latest);
+        },
+      });
+    },
+    [graphId, nodes, refreshRunHistory],
+  );
+
   const runGraph = useCallback(
     async (opts: {
       input: Record<string, string>;
@@ -1449,134 +1579,40 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         const { run: summary } = await client.runs.start({ graphId: graph.id, input, provider, model, apiKey, nodeOutputs });
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
-
-        const streamedEvents: PlatformEvent[] = [];
-        const applyTerminalSummary = async (latest: RunSummary) => {
-          setRunSummary(latest);
-          setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
-          const cacheable = { ...latest, events: latest.events?.length ? latest.events : streamedEvents };
-          try {
-            const traces = await client.runs.traces(latest.run_id);
-            setNodeTraces(Object.fromEntries(traces.map((trace) => [trace.node_id, trace])));
-            cacheRun(cacheable, traces);
-          } catch (err: unknown) {
-            const fallback = tracesFromEvents(cacheable.events);
-            cacheRun(cacheable, fallback);
-            if (fallback.length > 0) {
-              setNodeTraces(Object.fromEntries(fallback.map((trace) => [trace.node_id, trace])));
-            } else {
-              console.error("Failed to load run traces:", err);
-              logConsoleEntry({
-                severity: "error",
-                source: "Run",
-                message: `Failed to load run traces: ${err instanceof Error ? err.message : String(err)}`,
-                graphId: graphId ?? undefined,
-                runId: latest.run_id,
-              });
-            }
-          }
-          await refreshRunHistory();
-        };
-
-        if (isTerminalRunStatus(summary.status)) {
-          if (summary.events && summary.events.length > 0) setEvents(summary.events);
-          await applyTerminalSummary(summary);
-          return;
-        }
-
-        const nodeTypeById = new Map(nodes.map((n) => [n.id, n.data.nodeType]));
-
-        closeStreamRef.current = watchRunCompletion({
-          initial: summary,
-          wait: waitForRun,
-          onEvent: (event) => {
-            streamedEvents.push(event);
-            setEvents((evts) => [...evts, event]);
-            // Mirror (not duplicate) into the app-wide console's Run events
-            // tab — RunPanel's own "Event log" section still reads from
-            // `events` above; this is a second, independent subscriber.
-            const described = describePlatformEvent(event);
-            logConsoleEntry({
-              severity: described.severity,
-              source: "Run",
-              message: described.message,
-              graphId: graphId ?? undefined,
-              nodeId: event.node_id ?? undefined,
-              runId: event.run_id,
-            });
-
-            if (event.event_type === "edge.selected" && event.node_id) {
-              const selectedEdgeId = String(event.payload.selectedEdgeId ?? "");
-              const selectedTargetNodeId = String(event.payload.selectedTargetNodeId ?? "");
-              setInspectionRouteDecisions((decisions) => [
-                ...decisions.filter((decision) => decision.nodeId !== event.node_id),
-                { nodeId: event.node_id!, selectedEdgeId, selectedTargetNodeId },
-              ]);
-            }
-
-            if (event.node_id) {
-              if (event.event_type === "node.started") {
-                setNodeTraces((traces) => ({
-                  ...traces,
-                  [event.node_id!]: {
-                    node_id: event.node_id!,
-                    node_type: nodeTypeById.get(event.node_id!) ?? "input",
-                    status: "running",
-                    input: null,
-                    output: null,
-                    started_at: event.occurred_at,
-                  },
-                }));
-              } else if (event.event_type === "node.completed") {
-                setNodeTraces((traces) => ({
-                  ...traces,
-                  [event.node_id!]: {
-                    ...traces[event.node_id!],
-                    node_id: event.node_id!,
-                    node_type: nodeTypeById.get(event.node_id!) ?? "input",
-                    status: "succeeded",
-                    input: event.payload.input,
-                    output: event.payload.output,
-                    completed_at: event.occurred_at,
-                  },
-                }));
-              } else if (event.event_type === "node.failed") {
-                setNodeTraces((traces) => ({
-                  ...traces,
-                  [event.node_id!]: {
-                    ...traces[event.node_id!],
-                    node_id: event.node_id!,
-                    node_type: nodeTypeById.get(event.node_id!) ?? "input",
-                    status: "failed",
-                    completed_at: event.occurred_at,
-                    error: String(event.payload.error),
-                  },
-                }));
-              }
-            }
-
-            if (event.event_type === "run.completed" || event.event_type === "run.failed") {
-              closeStreamRef.current?.();
-              closeStreamRef.current = null;
-              void applyTerminalSummary({
-                ...summary,
-                status: event.event_type === "run.completed" ? "succeeded" : "failed",
-                result: event.payload.result ?? summary.result,
-                error: event.payload.error != null ? String(event.payload.error) : summary.error,
-              });
-            }
-          },
-          onTerminal: (latest) => {
-            closeStreamRef.current = null;
-            void applyTerminalSummary(latest);
-          },
-        });
+        await followRun(summary);
       } finally {
         setCompiling(false);
       }
     },
-    [focusDiagnostics, graphId, nodes, persistForRun, refreshRunHistory],
+    [focusDiagnostics, followRun, nodes, persistForRun],
   );
+
+  // Slice 1 (resource-forms-consistency-plan.md): approve or reject the
+  // human_gate a paused run is waiting at, then follow it to its end.
+  const handleResume = useCallback(
+    async (request: { approve: boolean; reason?: string; values?: Record<string, unknown> }) => {
+      if (!runSummary || runSummary.status !== "paused") return;
+      const resumed = await client.runs.resume(runSummary.run_id, request);
+      setRunSummary(resumed);
+      await followRun(resumed);
+    },
+    [followRun, runSummary],
+  );
+
+  // The paused gate's checkpoint as the approver sees it. Older runs lack
+  // `paused_node_id`, so fall back to the trace that paused.
+  const checkpoint = useMemo(() => {
+    if (runSummary?.status !== "paused") return null;
+    const nodeId = runSummary.paused_node_id ?? Object.values(nodeTraces).find((trace) => trace.status === "paused")?.node_id;
+    const node = nodeId ? nodes.find((n) => n.id === nodeId) : undefined;
+    if (!nodeId) return null;
+    return {
+      nodeId,
+      label: node?.data.label ?? nodeId,
+      content: String(node?.data.config.content ?? ""),
+      surfaceJson: String(node?.data.config.genuiCheckpointSurfaceJson ?? ""),
+    };
+  }, [nodeTraces, nodes, runSummary]);
 
   const handleRun = useCallback(
     (input: Record<string, string>, provider: ChatProvider, model?: string, apiKey?: string) =>
@@ -2700,6 +2736,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onPolicyExceptionCreated={refreshDiagnostics}
       getGraph={buildGraphDefinition}
           runSummary={runSummary}
+          checkpoint={checkpoint}
+          onResume={handleResume}
           runHistory={runHistory}
           runHistoryLoading={runHistoryLoading}
           compiling={compiling}

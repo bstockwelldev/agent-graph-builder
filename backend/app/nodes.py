@@ -609,7 +609,9 @@ async def compute_human_gate(
     if not approved_gates.get(node.id, False):
         raise RunPaused(node.id)
     upstream = get_upstream_output(node, state, ctx.graph)
-    return {"content": node.config.get("content", ""), "approved": True}, upstream, {}
+    decision = state["variables"].get(node.id)
+    decision = decision if isinstance(decision, dict) else {"approved": True}
+    return {"content": node.config.get("content", ""), **decision}, upstream, {}
 
 
 async def compute_subgraph(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:

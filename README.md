@@ -56,7 +56,7 @@ can add all of them:
 | `tool_loop` | Multi-step tool-calling agent, capped at a configured number of steps |
 | `guardrail` | Input-safety checks (length, URLs, injection phrases); fails the run on a violation |
 | `rubric` | Static prompt-quality findings; can block the run |
-| `human_gate` | Pauses the run for approval; resume or reject with `POST /api/runs/{id}/resume` |
+| `human_gate` | Pauses the run for approval. The Run panel shows the checkpoint (message, GenUI surface, reason) with Approve / Reject; the API is `POST /api/runs/{id}/resume` with `approve`, `reason` and `values`. On approve, the surface's form values become the run variable named after the gate, so later templates read `{gate_id[field]}` |
 | `subgraph` | Runs another saved graph as a nested run with its own trace |
 | `code_exec` | Declares a code-execution contract (validated and passed through; no sandbox yet) |
 | `transform` | Deterministic reshape (select / wrap / format message / coerce), inline or from the Transforms library |
@@ -345,7 +345,7 @@ seams, so each piece can be swapped without touching the others.
 
 | Today | EDD target | Swap point |
 | --- | --- | --- |
-| `human_gate` pause checkpoints are in memory (`RUN_PAUSES`). A paused run's summary persists, but it can't be resumed after a process restart. | Durable checkpoints | `runtime.py` → a `storage.py` backend |
+| `human_gate` pause checkpoints are in memory (`RUN_PAUSES`). A paused run's summary persists, but it can't be resumed after a process restart, or on Vercel when the resume lands on a different instance (the Run panel then shows the 404). | Durable checkpoints | `runtime.py` → a `storage.py` backend |
 | Live runs and SSE event buses are in memory (`RUN_STORE`, `RUN_BUSES`). Completed runs persist, but in-flight streams are lost on restart, and on serverless a live stream exists only in the instance that started the run. | Durable run store with cross-instance streaming | `runtime.py`, `events.py` |
 | No multi-tenancy. There's optional Studio sign-in, but no orgs or projects, no per-tenant isolation, and no RLS. Every graph is visible to every user of a deployment. | Supabase Auth + RLS + org/project hierarchy | `storage.py`, Studio middleware |
 | Storage is a JSON document store (Supabase Storage, S3, Turso, or SQLite), not relational tables. | Supabase PostgreSQL | `storage.py` |

@@ -282,6 +282,8 @@ export const runSummarySchema = z.object({
   run_id: z.string(),
   graph_id: z.string(),
   status: z.enum(["queued", "running", "succeeded", "failed", "paused"]),
+  /** The human_gate node a paused run is waiting at. */
+  paused_node_id: z.string().nullish(),
   result: z.unknown(),
   input: z.record(z.string(), z.unknown()).optional(),
   provider: z.string().nullish(),

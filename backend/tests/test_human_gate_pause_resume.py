@@ -6,6 +6,8 @@ in Phase 2 ("the first thing in AGB that makes a run non-atomic").
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -213,3 +215,99 @@ async def test_resume_route_approve_and_reject(monkeypatch) -> None:
     # Second call: nothing left to resume.
     response = client.post(f"/api/runs/{run_id}/resume", json={"approve": True})
     assert response.status_code == 404
+
+
+@pytest.fixture
+def live():
+    """One event loop for the whole test, so a resumed run's background task
+    keeps running between requests (a bare TestClient can drop it)."""
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def _gate_then_prompt_graph(graph_id: str = "graph_gate_values") -> GraphDefinition:
+    """input -> gate_1 -> prompt (reads the approver's form values) -> output."""
+    graph = _single_gate_graph(graph_id)
+    prompt = GraphNode(
+        id="prompt_1",
+        type=NodeType.PROMPT,
+        position=NodePosition(x=0, y=0),
+        config={"template": "Approved {gate_1[amount]} by {gate_1[approver]}: {question}"},
+    )
+    graph.nodes.insert(2, prompt)
+    graph.edges = [
+        GraphEdge(id="e_input_gate", source="input_1", target="gate_1"),
+        GraphEdge(id="e_gate_prompt", source="gate_1", target="prompt_1"),
+        GraphEdge(id="e_prompt_output", source="prompt_1", target="output_1"),
+    ]
+    return graph
+
+
+def _start_paused_run_via_api(live: TestClient, graph: GraphDefinition) -> dict:
+    saved = live.put(f"/api/graphs/{graph.id}", json=graph.model_dump(mode="json"))
+    assert saved.status_code == 200
+    run_request = {"graph_id": graph.id, "input": {"question": "ship it?"}, "provider": "stub"}
+    response = live.post("/api/runs", json=run_request)
+    assert response.status_code == 200, response.text
+    run_id = response.json()["run_id"]
+    for _ in range(200):
+        summary = live.get(f"/api/runs/{run_id}").json()
+        if summary["status"] == "paused":
+            return summary
+        time.sleep(0.02)
+    raise AssertionError(f"run {run_id} never paused: {summary['status']}")
+
+
+def _wait_settled(live: TestClient, run_id: str) -> dict:
+    for _ in range(100):
+        summary = live.get(f"/api/runs/{run_id}").json()
+        if summary["status"] in {"succeeded", "failed"}:
+            return summary
+        time.sleep(0.02)
+    raise AssertionError(f"run {run_id} did not settle")
+
+
+def test_paused_run_names_its_gate_and_approval_values_reach_downstream_nodes(
+    live: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "graphs.db"))
+    summary = _start_paused_run_via_api(live, _gate_then_prompt_graph())
+    assert summary["status"] == "paused"
+    assert summary["paused_node_id"] == "gate_1"
+
+    resumed = live.post(
+        f"/api/runs/{summary['run_id']}/resume",
+        json={"approve": True, "reason": "looks fine", "values": {"amount": 42, "approver": "Sam"}},
+    )
+    assert resumed.status_code == 200, resumed.text
+    # Never "paused" once the resume is accepted, or clients stop following it.
+    assert resumed.json()["status"] in {"running", "succeeded"}
+    assert resumed.json()["paused_node_id"] is None
+    final = _wait_settled(live, summary["run_id"])
+    assert final["status"] == "succeeded", final
+    assert final["paused_node_id"] is None
+    assert final["result"] == "Approved 42 by Sam: ship it?"
+
+    traces = {t["node_id"]: t for t in live.get(f"/api/runs/{summary['run_id']}/nodes").json()}
+    assert traces["gate_1"]["input"] == {
+        "content": "Approve?",
+        "amount": 42,
+        "approver": "Sam",
+        "approved": True,
+        "reason": "looks fine",
+    }
+
+
+def test_rejecting_clears_the_paused_gate(
+    live: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("GRAPH_DB_PATH", str(tmp_path / "graphs.db"))
+    summary = _start_paused_run_via_api(live, _gate_then_prompt_graph("graph_gate_reject"))
+    rejected = live.post(
+        f"/api/runs/{summary['run_id']}/resume", json={"approve": False, "reason": "Too risky"}
+    )
+    assert rejected.status_code == 200, rejected.text
+    body = rejected.json()
+    assert body["status"] == "failed"
+    assert body["error"] == "Too risky"
+    assert body["paused_node_id"] is None

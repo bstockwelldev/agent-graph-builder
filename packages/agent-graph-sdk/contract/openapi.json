@@ -3128,6 +3128,11 @@
               }
             ],
             "title": "Reason"
+          },
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
           }
         },
         "title": "RunResumeRequest",
@@ -3240,6 +3245,17 @@
               }
             ],
             "title": "Parent Run Id"
+          },
+          "paused_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Node Id"
           },
           "provider": {
             "anyOf": [

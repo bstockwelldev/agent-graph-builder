@@ -61,7 +61,6 @@ import {
 } from "@/lib/graph-theme";
 import { client } from "@/lib/api-client";
 import { partitionDiagnosticsByField } from "@/lib/diagnostics";
-import { GenuiSurfaceView } from "@/components/genui/genui-renderer";
 import { tryParseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ResourceBindingField } from "./ResourceBindingField";
@@ -75,6 +74,7 @@ import { IconTabs, type IconTab } from "./ui/IconTabs";
 import { NumberStepper } from "./ui/NumberStepper";
 import { PanelFrame, PanelHeader } from "./ui/PanelFrame";
 import { SegmentedControl } from "./ui/SegmentedControl";
+import { GenuiSurface } from "./ui/GenuiSurface";
 import { TemplateEditor } from "./ui/TemplateEditor";
 import { Toggle } from "./ui/Toggle";
 import { TextArea, TextInput } from "./ui/fields";
@@ -1410,7 +1410,7 @@ function GenuiCheckpointPreview({ raw }: { raw: string }) {
   if (!surfaceValue) return null;
   return (
     <Field label="Live preview">
-      <GenuiSurfaceView surface={surfaceValue} />
+      <GenuiSurface surface={surfaceValue} />
     </Field>
   );
 }

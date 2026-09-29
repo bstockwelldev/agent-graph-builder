@@ -2683,6 +2683,10 @@ export type components = {
             approve?: boolean;
             /** Reason */
             reason?: string | null;
+            /** Values */
+            values?: {
+                [key: string]: unknown;
+            };
         };
         /** RunRoutingDatasetRequest */
         RunRoutingDatasetRequest: {
@@ -2713,6 +2717,8 @@ export type components = {
             parent_node_id?: string | null;
             /** Parent Run Id */
             parent_run_id?: string | null;
+            /** Paused Node Id */
+            paused_node_id?: string | null;
             /** Provider */
             provider?: string | null;
             /** Result */
