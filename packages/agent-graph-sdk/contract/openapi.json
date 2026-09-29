@@ -1776,6 +1776,103 @@
         "title": "KnowledgeLineageEntry",
         "type": "object"
       },
+      "McpDiscovery": {
+        "description": "`ok` with the server's tools, or not `ok` with why the connection\nfailed. Always 200 for a known server: a server that can't be reached\nis a result here, like a transform preview.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/McpRemoteTool"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "McpDiscovery",
+        "type": "object"
+      },
+      "McpHeaderNames": {
+        "description": "The names of an MCP server's stored request headers. Values never\nleave the server (mcp/secrets.py).",
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "title": "McpHeaderNames",
+        "type": "object"
+      },
+      "McpHeadersUpdate": {
+        "description": "Replaces an MCP server's request headers. A `null` value keeps that\nheader's stored value; a name left out is removed.",
+        "properties": {
+          "headers": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Headers",
+            "type": "object"
+          }
+        },
+        "title": "McpHeadersUpdate",
+        "type": "object"
+      },
+      "McpRemoteTool": {
+        "description": "One tool an MCP server lists (`tools/list`).",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "title": "Input Schema",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "McpRemoteTool",
+        "type": "object"
+      },
       "ModelOverride": {
         "properties": {
           "model": {
@@ -7682,6 +7779,134 @@
           }
         },
         "summary": "Get Mcp Servers Version"
+      }
+    },
+    "/api/mcp-servers/{server_id}/discover": {
+      "post": {
+        "description": "Connects to the server with its stored headers and lists its tools:\nthe MCP page's \"Test connection\" and the tool form's remote tool\npicker. Off on the public demo, which shouldn't make requests to\nvisitor-chosen URLs on demand.",
+        "operationId": "discover_mcp_server_tools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "title": "Server Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpDiscovery"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discover Mcp Server Tools"
+      }
+    },
+    "/api/mcp-servers/{server_id}/headers": {
+      "get": {
+        "description": "The server's request header names. Values are write-only.",
+        "operationId": "get_mcp_server_headers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "title": "Server Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpHeaderNames"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Mcp Server Headers"
+      },
+      "put": {
+        "description": "Replaces the server's request headers (mcp/secrets.py): `null` keeps\na stored value, a name left out is removed.",
+        "operationId": "update_mcp_server_headers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "title": "Server Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpHeadersUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpHeaderNames"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Mcp Server Headers"
       }
     },
     "/api/policies/catalog": {

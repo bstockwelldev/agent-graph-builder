@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
@@ -49,6 +50,10 @@ from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
+    McpDiscovery,
+    McpHeaderNames,
+    McpHeadersUpdate,
+    McpRemoteTool,
     CompileResult,
     CounterfactualResult,
     CreateGraphRequest,
@@ -108,6 +113,9 @@ from .providers.base import (
     require_live_provider_allowed,
 )
 from .agents import AgentNotRunnable, apply_agent, load_agent, normalize_agent_payload
+from .bindings import CODE_TOOL_IDS
+from .mcp.client import McpError, list_mcp_tools
+from .mcp.secrets import InvalidHeaders, delete_headers, header_names, load_headers, update_headers
 from .public_writes import charge as charge_public_write
 from .public_writes import require_workspace_writable
 from .releases import (
@@ -120,7 +128,7 @@ from .releases import (
     publish_release,
 )
 from .replay import ReplayBlocked, ReplayNotFound, replay_run
-from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession
+from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession, McpServerConfig
 from .resource_versions import (
     VERSIONABLE_RESOURCE_KINDS,
     ResourceNotFound,
@@ -847,6 +855,20 @@ _RESOURCE_ROUTE_PATHS: dict[str, str] = {
 _RESOURCE_READ_NORMALIZERS = {"agents": normalize_agent_payload}
 
 
+def _check_tool_write(payload: dict[str, Any]) -> None:
+    # nodes.compute_tool dispatches builtins first, so a registry entry with
+    # a builtin's id would never run (resource-forms-consistency-plan, slice 3).
+    if payload["id"] in CODE_TOOL_IDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{payload['id']!r} is a built-in tool; pick another name",
+        )
+
+
+# Kind-specific rules a write must pass beyond the model itself.
+_RESOURCE_WRITE_CHECKS = {"tools": _check_tool_write}
+
+
 def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> None:
     def _validate(body: dict[str, Any]) -> BaseModel:
         try:
@@ -857,6 +879,7 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
             raise HTTPException(status_code=422, detail=json.loads(exc.json())) from exc
 
     read = _RESOURCE_READ_NORMALIZERS.get(kind, lambda payload: payload)
+    check = _RESOURCE_WRITE_CHECKS.get(kind, lambda payload: None)
 
     @app.get(f"/api/{path}", name=f"list_{kind}", operation_id=f"list_{kind}")
     def list_resources_route(page: Page) -> list[dict[str, Any]]:
@@ -874,6 +897,7 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
     def create_resource_route(body: dict[str, Any], http: Request) -> dict[str, Any]:
         validated = _validate(body)
         payload = validated.model_dump(mode="json")
+        check(payload)
         if storage.get_resource(kind, payload["id"]) is None:
             charge_public_write(http, "create")
         storage.save_resource(kind, payload["id"], payload)
@@ -887,6 +911,7 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
         payload = validated.model_dump(mode="json")
         if payload["id"] != resource_id:
             raise HTTPException(status_code=400, detail=f"{kind} id mismatch between path and body")
+        check(payload)
         if storage.get_resource(kind, resource_id) is None:
             charge_public_write(http, "create")
         storage.save_resource(kind, resource_id, payload)
@@ -917,7 +942,69 @@ def _register_resource_routes(kind: str, path: str, model: type[BaseModel]) -> N
     def delete_resource_route(resource_id: str) -> dict[str, bool]:
         if not storage.delete_resource(kind, resource_id):
             raise HTTPException(status_code=404, detail=f"{kind} {resource_id!r} not found")
+        if kind == "mcp_servers":
+            delete_headers(resource_id)
         return {"deleted": True}
+
+
+def _mcp_server(server_id: str) -> McpServerConfig:
+    payload = storage.get_resource("mcp_servers", server_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail=f"MCP server {server_id!r} not found")
+    return McpServerConfig.model_validate(payload)
+
+
+@app.get("/api/mcp-servers/{server_id}/headers", operation_id="get_mcp_server_headers")
+def get_mcp_server_headers(server_id: str) -> McpHeaderNames:
+    """The server's request header names. Values are write-only."""
+    _mcp_server(server_id)
+    return McpHeaderNames(names=header_names(server_id))
+
+
+@app.put("/api/mcp-servers/{server_id}/headers", operation_id="update_mcp_server_headers")
+def update_mcp_server_headers(
+    server_id: str, body: McpHeadersUpdate, http: Request
+) -> McpHeaderNames:
+    """Replaces the server's request headers (mcp/secrets.py): `null` keeps
+    a stored value, a name left out is removed."""
+    _mcp_server(server_id)
+    charge_public_write(http, "create")
+    try:
+        names = update_headers(server_id, body.headers)
+    except InvalidHeaders as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return McpHeaderNames(names=names)
+
+
+@app.post("/api/mcp-servers/{server_id}/discover", operation_id="discover_mcp_server_tools")
+async def discover_mcp_server_tools(server_id: str) -> McpDiscovery:
+    """Connects to the server with its stored headers and lists its tools:
+    the MCP page's "Test connection" and the tool form's remote tool
+    picker. Off on the public demo, which shouldn't make requests to
+    visitor-chosen URLs on demand."""
+    server = _mcp_server(server_id)
+    if public_demo_mode_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "mcp_discovery_disabled",
+                "message": "Connecting to MCP servers is off on the public demo.",
+            },
+        )
+    try:
+        raw = await list_mcp_tools(server, headers=load_headers(server_id))
+    except (httpx.HTTPError, McpError) as exc:
+        return McpDiscovery(ok=False, error=str(exc) or type(exc).__name__)
+    tools = [
+        McpRemoteTool(
+            name=str(tool["name"]),
+            description=tool.get("description") or None,
+            input_schema=tool.get("inputSchema") or {},
+        )
+        for tool in raw
+        if isinstance(tool, dict) and tool.get("name")
+    ]
+    return McpDiscovery(ok=True, tools=tools)
 
 
 @app.post("/api/transforms/preview", operation_id="preview_transform")

@@ -25,6 +25,8 @@ import {
   llmProfileSchema,
   transformDefinitionSchema,
   transformPreviewResponseSchema,
+  mcpDiscoverySchema,
+  mcpHeaderNamesSchema,
   mcpServerConfigSchema,
   nodeExecutionSchema,
   nodeImpactSchema,
@@ -405,7 +407,19 @@ export function buildNamespaces(transport: Transport) {
     // Stored resources. `.versions` is a reusable entity's immutable publish history.
     prompts: { ...resourceNamespace(transport, "prompts", promptTemplateSchema), versions: versionNamespace(transport, "prompts") },
     tools: { ...resourceNamespace(transport, "tools", toolDefinitionSchema), versions: versionNamespace(transport, "tools") },
-    mcpServers: { ...resourceNamespace(transport, "mcp-servers", mcpServerConfigSchema), versions: versionNamespace(transport, "mcp-servers") },
+    mcpServers: {
+      ...resourceNamespace(transport, "mcp-servers", mcpServerConfigSchema),
+      versions: versionNamespace(transport, "mcp-servers"),
+      /** Request headers (e.g. Authorization). Only names come back; values are write-only. */
+      headers: {
+        get: (serverId: string) => transport.request(path`/api/mcp-servers/${serverId}/headers`, undefined, mcpHeaderNamesSchema),
+        /** Replaces the headers: `null` keeps a stored value, a name left out is removed. */
+        update: (serverId: string, headers: Record<string, string | null>) =>
+          transport.request(path`/api/mcp-servers/${serverId}/headers`, { method: "PUT", body: JSON.stringify({ headers }) }, mcpHeaderNamesSchema),
+      },
+      /** Connects with the stored headers and lists the server's tools. */
+      discover: (serverId: string) => transport.request(path`/api/mcp-servers/${serverId}/discover`, json({}), mcpDiscoverySchema),
+    },
     agents: {
       ...resourceNamespace(transport, "agents", agentProfileSchema),
       versions: versionNamespace(transport, "agents"),

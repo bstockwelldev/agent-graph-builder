@@ -20,13 +20,16 @@ import { defineConfig, devices } from "@playwright/test";
  * at build time.
  *
  * A fake embedding server on :8123 (scripts/fake-embeddings.mjs) stands in for the
- * Supabase embed function, so the stub API accepts knowledge uploads.
+ * Supabase embed function, so the stub API accepts knowledge uploads, and a
+ * fake MCP server on :8124 (scripts/fake-mcp.mjs) answers tool discovery and
+ * MCP-bound tool calls.
  *
  * E2E_SKIP_BUILD=1 reuses an existing `apps/studio/.next` build; otherwise the
  * studio (and the SDK it imports) is built first.
  */
 const API_URL = "http://127.0.0.1:8000";
 const FAKE_EMBEDDINGS_URL = "http://127.0.0.1:8123";
+const FAKE_MCP_URL = "http://127.0.0.1:8124";
 const STUDIO_PORT = 3100;
 const repoRoot = path.resolve(__dirname, "..");
 const dbPath = (process.env.E2E_GRAPH_DB_PATH ??= path.join(os.tmpdir(), `agent-graph-e2e-${process.pid}.db`));
@@ -57,6 +60,12 @@ export default defineConfig({
       command: "node scripts/fake-embeddings.mjs",
       cwd: repoRoot,
       url: FAKE_EMBEDDINGS_URL,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: "node scripts/fake-mcp.mjs",
+      cwd: repoRoot,
+      url: FAKE_MCP_URL,
       reuseExistingServer: !process.env.CI,
     },
     {

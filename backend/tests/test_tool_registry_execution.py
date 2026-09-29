@@ -13,6 +13,7 @@ import pytest
 from app import storage
 from app.compiler import compile_graph, validate_graph
 from app.demo_graph import build_demo_graph
+from app.mcp.secrets import delete_headers, update_headers
 from app.models import GraphEdge, GraphNode, NodePosition, NodeType
 from app.runtime import COMPILED_WORKFLOWS, get_run_node_traces, get_run_summary, start_run_inline
 
@@ -159,8 +160,11 @@ async def test_mock_tool_echo_for_unbound_registered_tool() -> None:
 async def test_mcp_bound_tool_dispatches_to_mcp_server(monkeypatch) -> None:
     import json as json_mod
 
+    seen_keys: list[str | None] = []
+
     def handle(request: httpx.Request) -> httpx.Response:
         body = json_mod.loads(request.content)
+        seen_keys.append(request.headers.get("x-api-key"))
         if body["method"] == "tools/call":
             return httpx.Response(
                 200, json={"jsonrpc": "2.0", "id": 1, "result": {"content": "mcp result"}}
@@ -189,6 +193,8 @@ async def test_mcp_bound_tool_dispatches_to_mcp_server(monkeypatch) -> None:
             "mcp_tool_name": "search",
         },
     )
+    # Slice 3: the server's stored headers go on every request of the run.
+    update_headers("srv_1", {"X-Api-Key": "k1"})
     try:
         input_node = GraphNode(
             id="input_1",
@@ -230,9 +236,13 @@ async def test_mcp_bound_tool_dispatches_to_mcp_server(monkeypatch) -> None:
         trace = next(t for t in get_run_node_traces(run_id) if t.node_id == "mcp_1")
         assert trace.input["mcpServerId"] == "srv_1"
         assert trace.input["mcpToolName"] == "search"
+        assert seen_keys and set(seen_keys) == {"k1"}
+        # ...and never into the trace.
+        assert "k1" not in str(trace.input)
     finally:
         storage.delete_resource("tools", "mcp_search")
         storage.delete_resource("mcp_servers", "srv_1")
+        delete_headers("srv_1")
 
 
 @pytest.mark.asyncio

@@ -56,7 +56,7 @@ can add all of them:
 | `input` | Defines a run variable (default `question`) and is the graph's entry point |
 | `prompt` | Renders a text template from graph state |
 | `llm` | Calls a chat model through the provider-neutral `ChatModel` protocol |
-| `tool` | Runs a tool (built-in `lookup_topic`, or MCP) |
+| `tool` | Runs a tool: a built-in (`lookup_topic`, `web_search`, `calculator`), a registry tool (mock echo), or a tool on an MCP server |
 | `router` | Picks exactly one outgoing edge |
 | `branch` | Substring gate with its own conditional and default out-edges |
 | `tool_loop` | Multi-step tool-calling agent, capped at a configured number of steps |
@@ -346,7 +346,7 @@ seams, so each piece can be swapped without touching the others.
 | Runtime adapter boundary with a capability matrix | `adapters.py` |
 | Durable storage for graphs, releases, and completed runs | `storage.py`, `supabase_store.py`, `object_store.py` |
 | Six provider adapters behind one protocol | `providers/` |
-| MCP tools, telemetry (Langfuse, opt-in), usage analytics | `mcp/`, `telemetry/`, `analytics.py` |
+| MCP tools (HTTP transport; write-only request headers, tool discovery), telemetry (Langfuse, opt-in), usage analytics | `mcp/`, `telemetry/`, `analytics.py` |
 
 **Still simplified:**
 

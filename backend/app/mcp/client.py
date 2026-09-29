@@ -40,13 +40,16 @@ async def _rpc(
     params: dict[str, Any] | None = None,
     *,
     notification: bool = False,
+    headers: dict[str, str] | None = None,
 ) -> Any:
     body: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
     if params is not None:
         body["params"] = params
     if not notification:
         body["id"] = 1
-    response = await client.post(url, json=body, headers={"content-type": "application/json"})
+    response = await client.post(
+        url, json=body, headers={**(headers or {}), "content-type": "application/json"}
+    )
     response.raise_for_status()
     if notification or not response.content:
         return None
@@ -57,14 +60,15 @@ async def _rpc(
     return payload.get("result")
 
 
-async def _handshake(client: httpx.AsyncClient, url: str) -> None:
+async def _handshake(client: httpx.AsyncClient, url: str, headers: dict[str, str]) -> None:
     await _rpc(
         client,
         url,
         "initialize",
         {"protocolVersion": _PROTOCOL_VERSION, "capabilities": {}, "clientInfo": _CLIENT_INFO},
+        headers=headers,
     )
-    await _rpc(client, url, "notifications/initialized", notification=True)
+    await _rpc(client, url, "notifications/initialized", notification=True, headers=headers)
 
 
 def _require_http_transport(server: McpServerConfig) -> None:
@@ -74,26 +78,40 @@ def _require_http_transport(server: McpServerConfig) -> None:
         )
 
 
-async def list_mcp_tools(server: McpServerConfig) -> list[dict[str, Any]]:
-    """Returns `server`'s advertised tools (raw MCP tool descriptors)."""
+async def list_mcp_tools(
+    server: McpServerConfig, headers: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
+    """Returns `server`'s advertised tools (raw MCP tool descriptors).
+    `headers` (mcp/secrets.py) go on every request."""
     _require_http_transport(server)
+    sent = headers or {}
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        await _handshake(client, server.url)
-        result = await _rpc(client, server.url, "tools/list")
+        await _handshake(client, server.url, sent)
+        result = await _rpc(client, server.url, "tools/list", headers=sent)
     return (result or {}).get("tools") or []
 
 
-async def call_mcp_tool(server: McpServerConfig, tool_name: str, arguments: dict[str, Any]) -> Any:
+async def call_mcp_tool(
+    server: McpServerConfig,
+    tool_name: str,
+    arguments: dict[str, Any],
+    headers: dict[str, str] | None = None,
+) -> Any:
     """Calls `tool_name` on `server`. Degrades to `{mcp, error}` rather
     than raising on failure, matching MUI's `mcp-bridge.ts` convention of
     returning a tool error payload instead of throwing (so one bad MCP
     server doesn't necessarily fail the whole run)."""
     try:
         _require_http_transport(server)
+        sent = headers or {}
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            await _handshake(client, server.url)
+            await _handshake(client, server.url, sent)
             return await _rpc(
-                client, server.url, "tools/call", {"name": tool_name, "arguments": arguments}
+                client,
+                server.url,
+                "tools/call",
+                {"name": tool_name, "arguments": arguments},
+                headers=sent,
             )
     except (httpx.HTTPError, McpError) as exc:
         return {"mcp": server.id, "error": str(exc)}

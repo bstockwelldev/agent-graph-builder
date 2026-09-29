@@ -77,6 +77,8 @@ export type MockStore = {
   exceptions: Map<string, PolicyException>;
   knowledge: Map<string, { id: string; name: string; mime_type: string; uploaded_at: string; char_count: number }[]>;
   lineage: KnowledgeLineageEntry[];
+  /** MCP server id -> request headers (the API only returns names). */
+  mcpHeaders: Map<string, Record<string, string>>;
   sequence: number;
 };
 
@@ -103,6 +105,7 @@ export function createMockStore(seed: MockSeed = {}): MockStore {
     exceptions: new Map((seed.exceptions ?? []).map((exception) => [exception.id, exception])),
     knowledge: new Map(),
     lineage: [],
+    mcpHeaders: new Map(),
     sequence: 0,
   };
 }
@@ -390,6 +393,30 @@ export function mockRoutes(): Record<string, Handler> {
       } catch (err) {
         return HttpResponse.json({ ok: false, output: null, error: err instanceof Error ? err.message : String(err) });
       }
+    },
+
+    // MCP servers: write-only headers, and tool discovery (the mock lists
+    // no tools; seed a test's own handler to return some).
+    "GET /api/mcp-servers/{server_id}/headers": ({ params, store }) => {
+      if (!store.resources["mcp-servers"].has(params.server_id)) return notFound("MCP server");
+      return HttpResponse.json({ names: Object.keys(store.mcpHeaders.get(params.server_id) ?? {}).sort() });
+    },
+    "PUT /api/mcp-servers/{server_id}/headers": async ({ request, params, store }) => {
+      if (!store.resources["mcp-servers"].has(params.server_id)) return notFound("MCP server");
+      const { headers } = (await body(request)) as { headers: Record<string, string | null> };
+      const stored = store.mcpHeaders.get(params.server_id) ?? {};
+      const next: Record<string, string> = {};
+      for (const [name, value] of Object.entries(headers ?? {})) {
+        const kept = value ?? stored[name];
+        if (kept === undefined) return HttpResponse.json({ detail: `header '${name}' has no stored value; enter one` }, { status: 422 });
+        next[name] = kept;
+      }
+      store.mcpHeaders.set(params.server_id, next);
+      return HttpResponse.json({ names: Object.keys(next).sort() });
+    },
+    "POST /api/mcp-servers/{server_id}/discover": ({ params, store }) => {
+      if (!store.resources["mcp-servers"].has(params.server_id)) return notFound("MCP server");
+      return HttpResponse.json({ ok: true, tools: [], error: null });
     },
 
     // Graphs

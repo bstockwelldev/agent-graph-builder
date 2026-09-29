@@ -29,6 +29,7 @@ from .events import RunEventBus
 from .guardrails import check_guardrail
 from .knowledge import augment_system_with_knowledge
 from .mcp.client import call_mcp_tool
+from .mcp.secrets import load_headers as load_mcp_headers
 from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode
 from .ports import default_input_port, resolve_node_input
 from .providers.base import ChatModel
@@ -311,7 +312,9 @@ async def compute_tool(node: GraphNode, state: dict[str, Any], ctx: ExecContext)
         if not server.enabled:
             raise ValueError(f"MCP server {server.id!r} is disabled")
         arguments = raw_input if isinstance(raw_input, dict) else {input_variable: raw_input}
-        output = await call_mcp_tool(server, tool_def.mcp_tool_name, arguments)
+        output = await call_mcp_tool(
+            server, tool_def.mcp_tool_name, arguments, headers=load_mcp_headers(server.id)
+        )
         input_repr = {
             "toolName": tool_name,
             "mcpServerId": server.id,

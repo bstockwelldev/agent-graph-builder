@@ -63,6 +63,15 @@ describe("the mock API, through the real client", () => {
     expect((await client.transforms.preview({ transform_id: "t1" }, { name: "Ada" })).output).toBe("Hi Ada");
   });
 
+  it("keeps MCP server headers write-only and discovers tools", async () => {
+    await client.mcpServers.create({ id: "srv", name: "Docs", url: "https://mcp.test/rpc", transport: "http", enabled: true });
+    expect(await client.mcpServers.headers.update("srv", { Authorization: "Bearer k" })).toEqual({ names: ["Authorization"] });
+    expect(await client.mcpServers.headers.update("srv", { Authorization: null, "X-Team": "docs" })).toEqual({ names: ["Authorization", "X-Team"] });
+    expect(await client.mcpServers.headers.get("srv")).toEqual({ names: ["Authorization", "X-Team"] });
+    await expect(client.mcpServers.headers.update("srv", { "X-New": null })).rejects.toBeInstanceOf(AgentGraphApiError);
+    expect(await client.mcpServers.discover("srv")).toEqual({ ok: true, tools: [], error: null });
+  });
+
   it("serves graphs, validation and analysis", async () => {
     expect((await client.graphs.list()).map((g) => g.id)).toEqual(["demo_classify_and_route"]);
     const created = await client.graphs.create({ name: "Mine" });

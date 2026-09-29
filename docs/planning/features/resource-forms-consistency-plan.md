@@ -161,11 +161,14 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
    - The resource tab strip scrolls the current tab into view and fades the ends that have more tabs past them.
    - The agent's graph picker shipped with slice 6. Still open: prompt descriptions, the prompt body as a `TemplateEditor`, and "Used by N graphs" on cards (C8).
    - e2e: `e2e/specs/resource-forms.spec.ts`.
-3. **Tools ↔ MCP:**
-   - Tool source (Mock / MCP / Builtin).
-   - An MCP test/discover route and UI.
-   - Disabled transports.
-   - MCP headers (backend secret handling).
+3. **Tools ↔ MCP** — **shipped 2026-09-29.**
+   - MCP request headers (e.g. Authorization) are write-only secrets. They are stored under their own storage kind (`backend/app/mcp/secrets.py`), not in the server resource, so they never reach resource reads, versions, release snapshots or fingerprints. `GET/PUT /api/mcp-servers/{id}/headers` returns names only; `null` keeps a stored value. Runs and discovery send them, and deleting a server deletes them.
+   - `POST /api/mcp-servers/{id}/discover` connects and lists the server's tools (`McpDiscovery`; an unreachable server is `ok: false`, not an error). It is off on the public demo (403 `mcp_discovery_disabled`), which shouldn't fetch visitor-chosen URLs on demand.
+   - MCP page: the transport select disables sse/stdio ("not yet"); a headers editor shows stored names with masked, write-only values; "Test connection" lists tools with one-click "Add to registry" (`serverId.toolName`).
+   - Tool form: a Source control (Mock / MCP server). MCP picks the server, then the server's tool; picking fills the description and a read-only parameters schema. If discovery fails, the tool name can be typed.
+   - Tool writes reject a built-in's id (they'd never run: builtins dispatch first) and half an MCP binding.
+   - Tools still have no separate Name: the tool node calls a tool by its id, so the id stays the name (slice 2).
+   - e2e: `e2e/specs/mcp.spec.ts`, against `scripts/fake-mcp.mjs`.
 4. **Scope control:** the shared graph selector across Analytics, Policies and Resources, plus graph-scoped Analytics and Policies pages.
 5. **GenUI components (3–6):**
    - Approval, Chart, Table, Diagram, KeyValue/Diff, Select/Checkbox, Markdown.
