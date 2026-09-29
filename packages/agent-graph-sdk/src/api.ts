@@ -96,7 +96,8 @@ export type StartRunRequest = {
   nodeOutputs?: Record<string, unknown>;
 };
 export type RunListRequest = { graphId?: string };
-export type ResumeRunRequest = { approve?: boolean; reason?: string };
+/** `values`: the checkpoint's GenUI form field values, readable downstream as `{<gate_id>[field]}` on approve. */
+export type ResumeRunRequest = { approve?: boolean; reason?: string; values?: Record<string, unknown> };
 
 export type PublishReleaseRequest = { notes?: string; author?: string };
 export type ReleaseRunRequest = Omit<StartRunRequest, "graphId" | "nodeOutputs">;
@@ -256,7 +257,7 @@ export function buildNamespaces(transport: Transport) {
         transport.request(path`/api/runs/${runId}/replay`, request ? json(request) : { method: "POST" }, counterfactualResultSchema),
       /** Resolves a `human_gate` checkpoint; `approve: false` fails the run. */
       resume: (runId: string, request: ResumeRunRequest = {}) =>
-        transport.request(path`/api/runs/${runId}/resume`, json({ approve: request.approve ?? true, reason: request.reason }), runSummarySchema),
+        transport.request(path`/api/runs/${runId}/resume`, json({ approve: request.approve ?? true, reason: request.reason, ...(request.values ? { values: request.values } : {}) }), runSummarySchema),
       stream,
       wait,
     },

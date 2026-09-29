@@ -1232,13 +1232,13 @@ async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
     if not request.approve:
         runtime.reject_run(run_id, reason=request.reason)
     elif runtime.is_serverless_runtime():
-        if await runtime.resume_run_inline(run_id) is None:
+        if await runtime.resume_run_inline(run_id, request.values, request.reason) is None:
             raise HTTPException(
                 status_code=409,
                 detail="run's compiled workflow is no longer available; cannot resume",
             )
     else:
-        if runtime.resume_run(run_id) is None:
+        if runtime.resume_run(run_id, request.values, request.reason) is None:
             raise HTTPException(
                 status_code=409,
                 detail="run's compiled workflow is no longer available; cannot resume",

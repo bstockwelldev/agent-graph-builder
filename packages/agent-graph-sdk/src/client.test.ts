@@ -202,6 +202,16 @@ describe("createAgentGraphClient resource CRUD", () => {
     expect(JSON.parse(init.body as string)).toEqual({ approve: false, reason: "not today" });
   });
 
+  it("resumeRun sends checkpoint form values when given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ run_id: "run1", graph_id: "graph1", status: "running", paused_node_id: null }));
+
+    const client = createAgentGraphClient({ baseUrl });
+    await client.runs.resume("run1", { reason: "ok", values: { amount: 42 } });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toEqual({ approve: true, reason: "ok", values: { amount: 42 } });
+  });
+
   it("listAllRuns fetches GET /api/runs", async () => {
     const runs = [{ run_id: "run1", graph_id: "graph1", status: "succeeded" as const }];
     fetchMock.mockResolvedValueOnce(jsonResponse(runs));

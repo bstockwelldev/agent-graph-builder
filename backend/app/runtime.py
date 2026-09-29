@@ -393,8 +393,11 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
     run_id = ctx.run_id
     graph = ctx.graph
     bus = RUN_BUSES[run_id]
-    was_paused = RUN_STORE[run_id].status == "paused"
+    # A resume is in flight while its pause is still recorded (popped on
+    # success/failure below); resume_run may already have marked it running.
+    was_paused = run_id in RUN_PAUSES
     RUN_STORE[run_id].status = "running"
+    RUN_STORE[run_id].paused_node_id = None
     bus.emit(
         "run.resumed" if was_paused else "run.started", {"graphId": graph.id, "input": run_input}
     )
@@ -418,6 +421,7 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
         bus.emit("run.completed", {"result": _jsonable(final_state.get("result"))})
     except RunPaused as exc:
         RUN_STORE[run_id].status = "paused"
+        RUN_STORE[run_id].paused_node_id = exc.node_id
         RUN_PAUSES[run_id] = RunPauseState(
             run_id=run_id,
             graph_id=graph.id,
@@ -683,7 +687,9 @@ async def start_run_inline(
     return ctx.run_id, ctx.bus
 
 
-def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | None:
+def _prepare_resume(
+    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None
+) -> tuple[ExecContext, Any, dict[str, Any]] | None:
     """Builds a fresh ExecContext seeded from a `human_gate` pause snapshot,
     approving that gate. Returns None when there is nothing to resume: an
     unknown run_id, an already-resolved run, or (same accepted
@@ -713,7 +719,13 @@ def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | No
         bus=bus,
         chat_model_factory=chat_model_factory,
         state_snapshot={
-            "variables": {**pause.variables, "__approved_gates__": {pause.paused_node_id: True}},
+            "variables": {
+                **pause.variables,
+                "__approved_gates__": {pause.paused_node_id: True},
+                # The approver's decision and form values, readable downstream
+                # as `{<gate_id>[field]}` (and shown on the gate's trace).
+                pause.paused_node_id: {**(values or {}), "approved": True, "reason": reason},
+            },
             "node_outputs": dict(pause.node_outputs),
             "route_decisions": list(pause.route_decisions),
         },
@@ -726,22 +738,30 @@ def _prepare_resume(run_id: str) -> tuple[ExecContext, Any, dict[str, Any]] | No
     return ctx, compiled_app, run_input
 
 
-def resume_run(run_id: str) -> tuple[str, RunEventBus] | None:
+def resume_run(
+    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None
+) -> tuple[str, RunEventBus] | None:
     """Approves the paused `human_gate` checkpoint and resumes execution in
     the background. Use on long-lived processes; see `resume_run_inline`
     for serverless. Returns None when there is nothing to resume.
     """
-    prepared = _prepare_resume(run_id)
+    prepared = _prepare_resume(run_id, values, reason)
     if prepared is None:
         return None
     ctx, compiled_app, run_input = prepared
+    # Report "running" right away: the task hasn't started yet, and a client
+    # that saw "paused" in the response would stop following the run.
+    RUN_STORE[run_id].status = "running"
+    RUN_STORE[run_id].paused_node_id = None
     asyncio.create_task(_execute(ctx, compiled_app, run_input))
     return ctx.run_id, ctx.bus
 
 
-async def resume_run_inline(run_id: str) -> tuple[str, RunEventBus] | None:
+async def resume_run_inline(
+    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None
+) -> tuple[str, RunEventBus] | None:
     """Serverless variant of `resume_run` — awaits execution in this request."""
-    prepared = _prepare_resume(run_id)
+    prepared = _prepare_resume(run_id, values, reason)
     if prepared is None:
         return None
     ctx, compiled_app, run_input = prepared
@@ -761,6 +781,7 @@ def reject_run(run_id: str, reason: str | None = None) -> bool:
     bus = create_bus(run_id)
     RUN_BUSES[run_id] = bus
     RUN_STORE[run_id].status = "failed"
+    RUN_STORE[run_id].paused_node_id = None
     RUN_STORE[run_id].error = message
     bus.emit("run.failed", {"error": message})
     RUN_STORE[run_id].completed_at = now_iso()

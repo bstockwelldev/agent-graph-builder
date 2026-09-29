@@ -56,6 +56,7 @@ import { CounterfactualForm, CounterfactualResultView } from "./CounterfactualFo
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
 import { OfflineBadge, ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
 import { isOfflineRun, useStorageBackend } from "@/lib/serverHealth";
+import { RunCheckpoint, type Checkpoint, type ResumeDecision } from "./RunCheckpoint";
 import { RunWaterfall } from "./RunWaterfall";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
@@ -261,6 +262,8 @@ export function RunPanel({
   onPolicyExceptionCreated,
   getGraph,
   runSummary,
+  checkpoint = null,
+  onResume,
   runHistory,
   runHistoryLoading = false,
   onSelectRun,
@@ -306,6 +309,10 @@ export function RunPanel({
   /** The canvas graph, for choosing what a counterfactual replay changes (STO-609). */
   getGraph?: () => GraphDefinition;
   runSummary: RunSummary | null;
+  /** The human_gate a paused run waits at (GraphEditor derives it). */
+  checkpoint?: Checkpoint | null;
+  /** Approve or reject that checkpoint, then follow the run. */
+  onResume?: (decision: ResumeDecision) => Promise<void>;
   runHistory: RunSummary[];
   runHistoryLoading?: boolean;
   onSelectRun: (runId: string) => void;
@@ -992,6 +999,9 @@ export function RunPanel({
                     <div role="status" style={{ marginTop: spacing[2] }} aria-busy="true" aria-label="Generating result">
                       <SkeletonBlock lines={3} gap={spacing[1]} />
                     </div>
+                  )}
+                  {runSummary.status === "paused" && checkpoint && onResume && (
+                    <RunCheckpoint key={`${runSummary.run_id}:${checkpoint.nodeId}`} checkpoint={checkpoint} onResume={onResume} />
                   )}
                   {runSummary.status === "succeeded" && <RunResultDisplay result={runSummary.result} />}
                   {runSummary.status === "failed" && runSummary.error && (

@@ -373,6 +373,10 @@ class RunResumeRequest(BaseModel):
 
     approve: bool = True
     reason: str | None = None
+    # Values from the checkpoint's GenUI form fields (FormField id -> value).
+    # On approve they become the run variable named after the gate node, so
+    # downstream templates can read `{gate_id[field]}`.
+    values: dict[str, Any] = Field(default_factory=dict)
 
 
 class RouteDecision(BaseModel):
@@ -391,6 +395,9 @@ class RunSummary(BaseModel):
     # POST /api/runs/{id}/resume. completed_at is set when paused too (this
     # invocation's event bus has closed), same as succeeded/failed.
     status: Literal["queued", "running", "succeeded", "failed", "paused"]
+    # The human_gate node a paused run is waiting at (None otherwise), so
+    # clients can show its checkpoint without scanning traces.
+    paused_node_id: str | None = None
     result: Any | None = None
     input: dict[str, Any] = Field(default_factory=dict)
     provider: str | None = None
