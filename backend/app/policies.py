@@ -30,6 +30,7 @@ from typing import Literal
 from uuid import uuid4
 
 from . import storage
+from .env_config import public_demo_mode_enabled
 from .events import now_iso
 from .models import (
     DataClassification,
@@ -185,6 +186,11 @@ def validate_policy_settings(settings: PolicySettings) -> PolicySettings:
 
 
 def get_policy_settings(scope: str) -> PolicySettings:
+    if scope == WORKSPACE_SCOPE and public_demo_mode_enabled():
+        # STO-626: read-only and ignored on the public deploy, including
+        # anything stored before it was locked, so no visitor's overrides
+        # apply to everyone else's runs.
+        return PolicySettings()
     payload = storage.get_policy_settings(scope)
     return PolicySettings.model_validate(payload) if payload else PolicySettings()
 

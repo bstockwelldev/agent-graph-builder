@@ -35,4 +35,16 @@ test.describe("public demo mode", () => {
     await expect(page.getByText("Succeeded").first()).toBeVisible();
     await expect(page.getByText(/A database index is a data structure/).first()).toBeVisible();
   });
+
+  test("workspace policies are read-only", async ({ page, request, demoModeApi: _ }) => {
+    await page.goto("/policies");
+    const rule = page.getByRole("combobox", { name: "LLM model not pinned enforcement" });
+    await expect(rule).toContainText("Default (Warn)");
+    await rule.click();
+    await page.getByRole("option", { name: /^Block(?! publish)/ }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Workspace policies are read-only on the public demo" })).toBeVisible();
+    // The change was refused and nothing was stored.
+    await expect(rule).toContainText("Default (Warn)");
+    expect((await (await request.get(`${DEMO_MODE_API_URL}/api/policies/workspace`)).json()).rules).toEqual({});
+  });
 });
