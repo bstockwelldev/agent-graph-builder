@@ -49,7 +49,6 @@ import type {
   PortKind,
 } from "@bstockwelldev/agent-graph-sdk";
 import {
-  accentSurface,
   border,
   color,
   fontFamily,
@@ -59,11 +58,9 @@ import {
   status as statusColor,
   surface,
   text,
-  typeScale,
 } from "@/lib/graph-theme";
 import { client } from "@/lib/api-client";
 import { partitionDiagnosticsByField } from "@/lib/diagnostics";
-import { parseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ResourceBindingField } from "./ResourceBindingField";
 import { TaxonomyTooltip } from "./Tooltip";
@@ -76,10 +73,10 @@ import { IconTabs, type IconTab } from "./ui/IconTabs";
 import { NumberStepper } from "./ui/NumberStepper";
 import { PanelFrame, PanelHeader } from "./ui/PanelFrame";
 import { SegmentedControl } from "./ui/SegmentedControl";
-import { GenuiSurface } from "./ui/GenuiSurface";
+import { GenuiSurfaceEditor } from "./GenuiSurfaceEditor";
 import { TemplateEditor } from "./ui/TemplateEditor";
 import { Toggle } from "./ui/Toggle";
-import { TextArea, TextInput } from "./ui/fields";
+import { TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { RawConfigEditor } from "./ui/RawConfigEditor";
 import { TransformFields, type TransformType } from "./TransformFields";
@@ -768,12 +765,7 @@ function ConfigureTab({
           <Field label="Content" hint="Shown to the approver at the checkpoint." issues={fieldIssues("content")}>
             {(id) => <TemplateEditor id={id} aria-label="Checkpoint content" value={str("content")} onChange={(v) => set("content", v)} variables={vars} rows={4} />}
           </Field>
-          <Field label="GenUI surface (JSON)" hint="Optional schema-driven UI shown at the checkpoint." issues={fieldIssues("genuiCheckpointSurfaceJson")}>
-            {(id) => (
-              <TextArea id={id} style={{ height: 110, fontFamily: fontFamily.mono, fontSize: 12 }} value={str("genuiCheckpointSurfaceJson")} placeholder='{"type": "Stack", …}' onChange={(e) => set("genuiCheckpointSurfaceJson", e.target.value)} />
-            )}
-          </Field>
-          <GenuiCheckpointPreview raw={str("genuiCheckpointSurfaceJson")} />
+          <GenuiSurfaceEditor value={str("genuiCheckpointSurfaceJson")} onChange={(v) => set("genuiCheckpointSurfaceJson", v)} issues={fieldIssues("genuiCheckpointSurfaceJson")} />
         </Group>
       )}
     </div>
@@ -1407,19 +1399,3 @@ function RouterEdgeRow({
   );
 }
 
-function GenuiCheckpointPreview({ raw }: { raw: string }) {
-  const parsed = parseGenuiSurface(raw);
-  if (parsed.error) {
-    return (
-      <p role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, margin: `${spacing[2]}px 0` }}>
-        Surface can&apos;t render: {parsed.error}
-      </p>
-    );
-  }
-  if (!parsed.surface) return null;
-  return (
-    <Field label="Live preview">
-      <GenuiSurface surface={parsed.surface} />
-    </Field>
-  );
-}

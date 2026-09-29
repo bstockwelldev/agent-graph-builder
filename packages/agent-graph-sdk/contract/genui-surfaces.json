@@ -1,0 +1,49 @@
+{
+  "description": "GenUI surfaces for a human_gate's genuiCheckpointSurfaceJson. The backend (backend/app/genui.py) and the studio (apps/studio/lib/genui.ts) both test against these, so the two schemas agree on what is a valid surface.",
+  "valid": [
+    { "name": "every component", "surface": { "root": { "type": "Stack", "props": { "gap": 16, "direction": "col" }, "children": [
+      { "type": "Approval", "props": { "title": "Ship?", "summary": { "$ref": "/nodes/llm/output" }, "approveLabel": "Ship", "rejectLabel": "Hold" } },
+      { "type": "Approval" },
+      { "type": "Chart", "props": { "kind": "area", "data": [{ "w": "W1", "r": 1 }], "x": "w", "y": ["r"], "title": "R", "height": 200 } },
+      { "type": "Chart", "props": { "data": { "$ref": "/nodes/t/output" }, "x": "w", "y": "r" } },
+      { "type": "Table", "props": { "rows": [{ "a": 1 }], "columns": ["a", { "key": "b", "label": "B" }], "caption": "T" } },
+      { "type": "KeyValue", "props": { "items": { "a": 1, "b": { "$ref": "/input/q" } }, "title": "KV" } },
+      { "type": "KeyValue", "props": { "items": [{ "label": "a", "value": 1 }] } },
+      { "type": "KeyValue", "props": { "items": { "$ref": "/nodes/t/output" } } },
+      { "type": "Diff", "props": { "before": "a", "after": { "b": 1 }, "title": "D" } },
+      { "type": "Diagram", "props": { "source": "graph TD\nA-->B" } },
+      { "type": "Markdown", "props": { "content": "**hi**" } },
+      { "type": "Text", "props": { "content": { "$ref": "/input/q" } } },
+      { "type": "Card", "props": { "title": "C" }, "children": [{ "type": "Text", "props": { "content": "in card" } }] },
+      { "type": "Card" },
+      { "type": "Stack", "props": { "direction": "row" }, "children": [
+        { "type": "Button", "id": "go", "props": { "label": "Go", "actionId": "approve" } },
+        { "type": "Button", "id": "inert", "props": { "label": "Inert" } }
+      ] },
+      { "type": "FormField", "id": "n", "props": { "label": "N", "inputType": "number", "placeholder": "0" } },
+      { "type": "Select", "id": "s", "props": { "label": "S", "options": ["a", { "value": "b", "label": "B" }, { "value": "c" }] } },
+      { "type": "Checkbox", "id": "c", "props": { "label": "C" } }
+    ] } } },
+    { "name": "legacy surface from before slice 5", "surface": { "root": { "type": "Stack", "children": [
+      { "type": "Text", "props": { "content": "Confirm the lookup before answering." } },
+      { "type": "FormField", "id": "amount", "props": { "label": "Budget", "inputType": "number" } },
+      { "type": "Button", "id": "escalate", "props": { "label": "Escalate", "actionId": "escalate" } }
+    ] } } }
+  ],
+  "invalid": [
+    { "name": "no root", "surface": { "type": "Text", "props": { "content": "x" } } },
+    { "name": "unknown component", "surface": { "root": { "type": "Sparkles" } } },
+    { "name": "Select without options", "surface": { "root": { "type": "Select", "id": "s", "props": { "label": "S", "options": [] } } } },
+    { "name": "Select without an id", "surface": { "root": { "type": "Select", "props": { "label": "S", "options": ["a"] } } } },
+    { "name": "Chart with no y keys", "surface": { "root": { "type": "Chart", "props": { "data": [], "x": "a", "y": [] } } } },
+    { "name": "Chart with more than 8 series", "surface": { "root": { "type": "Chart", "props": { "data": [], "x": "a", "y": ["1", "2", "3", "4", "5", "6", "7", "8", "9"] } } } },
+    { "name": "Chart height out of range", "surface": { "root": { "type": "Chart", "props": { "data": [], "x": "a", "y": "b", "height": 40 } } } },
+    { "name": "relative $ref", "surface": { "root": { "type": "Text", "props": { "content": { "$ref": "nodes/x" } } } } },
+    { "name": "$ref with extra keys", "surface": { "root": { "type": "Markdown", "props": { "content": { "$ref": "/x", "other": 1 } } } } },
+    { "name": "Table rows not a list", "surface": { "root": { "type": "Table", "props": { "rows": "a,b" } } } },
+    { "name": "Stack without children", "surface": { "root": { "type": "Stack" } } },
+    { "name": "Stack gap out of range", "surface": { "root": { "type": "Stack", "props": { "gap": 200 }, "children": [] } } },
+    { "name": "Button without a label", "surface": { "root": { "type": "Button", "id": "b", "props": {} } } },
+    { "name": "nested invalid child", "surface": { "root": { "type": "Card", "children": [{ "type": "Checkbox", "id": "c", "props": {} }] } } }
+  ]
+}

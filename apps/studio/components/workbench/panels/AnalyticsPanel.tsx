@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AnalyticsDashboardPayload, GraphAnalytics } from "@bstockwelldev/agent-graph-sdk";
 
+import { GenuiChart } from "@/components/graph/ui/genui/GenuiChart";
 import { client } from "@/lib/api-client";
 import { formatDurationMs, formatRate, isUnhealthy } from "@/lib/nodeMetrics";
 import { cn } from "@/lib/utils";
@@ -242,6 +243,10 @@ export function GraphAnalyticsView({ context, compact = true }: { context: Graph
 
   if (error) return <p className="text-destructive text-sm">{error}</p>;
   if (!payload) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  const latencyRows = payload.nodes
+    .filter((node) => node.p95_duration_ms !== null)
+    .slice(0, 12)
+    .map((node) => ({ node: node.node_id, "p95 ms": node.p95_duration_ms }));
   if (payload.run_window === 0) {
     return <p className="text-muted-foreground text-sm">No runs yet for this graph. Run it to see per-node metrics.</p>;
   }
@@ -267,6 +272,14 @@ export function GraphAnalyticsView({ context, compact = true }: { context: Graph
           </Card>
         ))}
       </section>
+
+      {!compact && latencyRows.length > 0 ? (
+        <Card>
+          <CardContent className="pt-4">
+            <GenuiChart kind="bar" title="P95 latency by node (ms)" rows={latencyRows} x="node" y={["p95 ms"]} height={200} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

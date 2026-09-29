@@ -30,6 +30,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
+from .genui import surface_error
 from .models import NodeType
 from .transforms import node_transform_spec, transform_field_error
 
@@ -78,8 +79,8 @@ class CodeExecConfig(BaseModel):
 
 class HumanGateConfig(BaseModel):
     """Pause-for-approval checkpoint. ``content`` is required; the optional
-    GenUI checkpoint surface must at least be valid JSON (full schema
-    validation against a GenUI node shape lands with GenUI rendering)."""
+    GenUI checkpoint surface must be valid JSON in the GenUI surface shape
+    (genui.py, mirroring the studio's schema)."""
 
     content: str = Field(min_length=1)
     genuiCheckpointSurfaceJson: str | None = None
@@ -90,9 +91,12 @@ class HumanGateConfig(BaseModel):
         if value is None or not value.strip():
             return value
         try:
-            json.loads(value)
+            parsed = json.loads(value)
         except json.JSONDecodeError as exc:
             raise ValueError(f"must be valid JSON ({exc.msg})") from exc
+        error = surface_error(parsed)
+        if error:
+            raise ValueError(f"isn't a GenUI surface: {error}")
         return value
 
 

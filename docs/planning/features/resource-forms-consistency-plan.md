@@ -183,7 +183,12 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
      - Chart follows the dataviz method: the reference palette's dark steps (validated on `surface.inset` and `surface.card`), thin marks, one axis, a legend for 2+ series, a hover tooltip and a table view. Diagram is a Mermaid flowchart subset laid out with dagre (no Mermaid runtime); Markdown is a safe subset rendered as React elements.
      - Select answers are strings and Checkbox answers booleans, reaching later nodes as `{<gate id>[<input id>]}`.
      - e2e: `approvals.spec.ts` (bound surface).
-   - Part 2: the authoring editor (raw editor with validation, live preview, "Insert example"), library cards (preview, props table, JSON, Copy JSON), backend validation of the surface shape, and charts on graph-scoped Analytics.
+   - **Part 2 shipped 2026-09-29:** authoring, library and validation.
+     - Inspector surface editor (`components/graph/GenuiSurfaceEditor.tsx`): live validation with the error's path, Format, "Insert example" (appends into the surface being edited), and the live preview.
+     - Component catalog (`lib/genuiCatalog.ts`): a props table and a working example per component. `/genui` renders a card per component (preview on sample run data, props, JSON, Copy JSON) plus an approval-checkpoint pattern; the editor's "Insert example" uses the same catalog.
+     - Backend validation: `backend/app/genui.py` mirrors the studio schema, so a bad surface is a `NODE_CONFIG_INVALID` diagnostic at validate/compile time. Both schemas are tested against `packages/agent-graph-sdk/contract/genui-surfaces.json`.
+     - Analytics charts (GenUI's Chart): runs per day on the Analytics page, and P95 latency by node in graph scope. Still open: runs by status, a latency distribution and the provider/model mix, which need per-run status and model in the daily usage files.
+     - e2e: `genui.spec.ts`, and chart checks in `scope.spec.ts`.
 6. **Agents decision:** make agents real (graph + profile + prompt + tools, selectable in Run and Chat) or hide the kind. **Decided: real; shipped 2026-09-29.**
    - `AgentProfile` is `graph_id` (required), `llm_profile_id`, `system_prompt_id`, `system_instructions` and `tool_ids`. Stored agents with `default_flow_id` / `optional_elements` read in the new shape.
    - `POST /api/agents/{id}/runs` (`agents.py` `apply_agent`): the profile gives the default provider/model (the request's still wins); the prompt and instructions are prepended to every llm/tool_loop node's system prompt, in a copy of the graph, so the run snapshot records what ran; a non-empty allow-list refuses graphs that call other tools (`AGENT_TOOL_NOT_ALLOWED`, 422).
