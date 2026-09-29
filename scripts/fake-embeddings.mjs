@@ -1,15 +1,19 @@
 // Stand-in for the `agb-embed` Supabase Edge Function, so knowledge uploads
-// and retrieval work in e2e without a provider key. The API reaches it via
-// SUPABASE_EMBEDDINGS_URL (playwright.config.ts); SUPABASE_URL stays unset,
-// so graph storage is unaffected.
+// and retrieval work without a provider key: in e2e (playwright.config.ts),
+// locally (`pnpm dev:embeddings`) and in Docker (docker-compose.fake-embeddings.yml).
+// The API reaches it through SUPABASE_EMBEDDINGS_URL; SUPABASE_URL stays
+// unset, so graph storage is unaffected.
 //
 // Same contract as the function: POST {input: string[]} -> {embeddings: number[][]}.
 // Vectors are hashed bags of words (384 dims, like gte-small), L2-normalized,
 // so texts sharing words score as similar and the results are deterministic.
+// They are not semantic: re-upload documents after switching to a real provider.
 import { createServer } from "node:http";
 
 const DIMS = 384;
 const PORT = Number(process.env.FAKE_EMBEDDINGS_PORT ?? 8123);
+// 0.0.0.0 in Docker, so the backend container can reach it.
+const HOST = process.env.FAKE_EMBEDDINGS_HOST ?? "127.0.0.1";
 
 function embed(text) {
   const vector = new Array(DIMS).fill(0);
@@ -37,4 +41,4 @@ createServer((request, response) => {
       response.writeHead(400).end();
     }
   });
-}).listen(PORT, "127.0.0.1");
+}).listen(PORT, HOST, () => console.log(`fake embeddings on http://${HOST}:${PORT}/embed`));

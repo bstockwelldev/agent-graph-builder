@@ -175,6 +175,23 @@ size in use. Deploy the function with
 `supabase functions deploy agb-embed` (JWT verification on; it only accepts
 the service-role key). Groq has no embedding models, so it isn't an option.
 
+**No provider key?** A fake embedder lets knowledge uploads and retrieval work
+locally (e2e uses the same one):
+
+```bash
+pnpm dev:embeddings   # scripts/fake-embeddings.mjs on :8123
+# then start the API with:
+SUPABASE_EMBEDDINGS_URL=http://127.0.0.1:8123/embed SUPABASE_SERVICE_ROLE_KEY=fake-embeddings \
+  uv run uvicorn app.main:app --reload --port 8000
+```
+
+With Docker: `scripts/dev.sh up --fake-embeddings` (or
+`.\scripts\dev.ps1 up -FakeEmbeddings`), which adds
+`docker-compose.fake-embeddings.yml`. Its vectors are hashed bags of words,
+not semantic embeddings, and the Knowledge panel still reports them as
+Supabase `gte-small`. Re-upload documents after switching to a real provider.
+Leave `SUPABASE_URL` unset while using it, or graph storage moves to Supabase.
+
 ## Tests
 
 ```bash

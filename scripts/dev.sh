@@ -4,6 +4,7 @@
 #   scripts/dev.sh up
 #   scripts/dev.sh up -d
 #   scripts/dev.sh up --no-build
+#   scripts/dev.sh up --fake-embeddings   # knowledge uploads without a provider key
 #   scripts/dev.sh down
 #   scripts/dev.sh down -v
 set -euo pipefail
@@ -17,14 +18,16 @@ shift || true
 DETACHED=false
 NO_BUILD=false
 VOLUMES=false
+COMPOSE_FILES=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -d) DETACHED=true; shift ;;
     --no-build) NO_BUILD=true; shift ;;
     -v) VOLUMES=true; shift ;;
+    --fake-embeddings) COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.fake-embeddings.yml); shift ;;
     -h|--help)
-      echo "Usage: scripts/dev.sh <up|down> [-d] [--no-build] [-v]"
+      echo "Usage: scripts/dev.sh <up|down> [-d] [--no-build] [-v] [--fake-embeddings]"
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -43,7 +46,7 @@ run_compose() {
 
 case "$COMMAND" in
   down)
-    args=(compose down)
+    args=(compose ${COMPOSE_FILES[@]+"${COMPOSE_FILES[@]}"} down)
     [[ "$VOLUMES" == true ]] && args+=(-v)
     run_compose "${args[@]}"
     exit 0
@@ -56,7 +59,7 @@ case "$COMMAND" in
     ;;
 esac
 
-args=(compose up)
+args=(compose ${COMPOSE_FILES[@]+"${COMPOSE_FILES[@]}"} up)
 [[ "$NO_BUILD" == false ]] && args+=(--build)
 [[ "$DETACHED" == true ]] && args+=(-d)
 
@@ -64,6 +67,7 @@ echo ""
 echo "Agent Graph Builder (studio)"
 echo "  App:  http://localhost:3000"
 echo "  API:  http://localhost:8000"
+[[ ${#COMPOSE_FILES[@]} -gt 0 ]] && echo "  Embeddings: fake (scripts/fake-embeddings.mjs)"
 echo ""
 
 run_compose "${args[@]}"
