@@ -181,7 +181,7 @@ export function KnowledgePanel({
             ) : (
               <>
                 <div style={{ ...typeScale.caption, opacity: 0.7, marginBottom: spacing[2] }}>
-                  {documents.length} document{documents.length === 1 ? "" : "s"} · {summary?.chunkCount ?? 0} chunks
+                  {documents.length} document{documents.length === 1 ? "" : "s"} · {summary?.chunkCount ?? 0} chunk{summary?.chunkCount === 1 ? "" : "s"}
                 </div>
                 {documents.map((doc) => (
                   <div key={doc.id} style={rowStyle}>
