@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EffectivePolicyRule, GraphSummary, PolicyEnforcement, PolicyException, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
 
+import { ScopeSelect } from "@/components/studio/scope-select";
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useGraphScope } from "@/hooks/use-graph-scope";
 import { client } from "@/lib/api-client";
 import { errorDetail } from "@/lib/knowledgePanel";
 import {
@@ -32,9 +34,18 @@ import { cn } from "@/lib/utils";
 // own Policies panel overrides a rule, plus every graph's time-boxed
 // exceptions in one place so expiring waivers get noticed. Changes save
 // immediately; the backend re-evaluates on the next validate/compile/publish.
+// With a graph in scope (slice 4) the page edits that graph's overrides
+// instead, shows where each rule's setting comes from, and lists only that
+// graph's exceptions.
 
 const DEFAULT = "default";
 const CATEGORIES = ["security", "reliability", "cost", "governance"] as const;
+
+const SOURCE_LABEL: Record<EffectivePolicyRule["enforcement_source"], string> = {
+  default: "Default",
+  workspace: "Workspace",
+  graph: "This graph",
+};
 
 const STATE_BADGE: Record<ExceptionState, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-emerald-500/15 text-emerald-400" },
@@ -45,7 +56,11 @@ const STATE_BADGE: Record<ExceptionState, { label: string; className: string }> 
 type ExceptionFilter = "all" | "open" | "expired";
 
 export default function PoliciesPage() {
+  const scope = useGraphScope();
+  const graphId = scope.graphId;
   const [rules, setRules] = useState<EffectivePolicyRule[]>([]);
+  // The workspace's resolution, for "Inherit (…)" labels in graph scope.
+  const [inherited, setInherited] = useState<Record<string, EffectivePolicyRule>>({});
   const [settings, setSettings] = useState<PolicySettings["rules"]>({});
   const [exceptions, setExceptions] = useState<PolicyException[]>([]);
   const [graphNames, setGraphNames] = useState<Record<string, string>>({});
@@ -58,18 +73,21 @@ export default function PoliciesPage() {
   const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!scope.ready) return;
     setLoading(true);
     setError(null);
     try {
-      const [effective, workspace, allExceptions, graphs] = await Promise.all([
-        client.policies.effective(),
-        client.policies.workspace.get(),
-        client.policies.exceptions.list(),
+      const [effective, workspaceEffective, stored, allExceptions, graphs] = await Promise.all([
+        client.policies.effective(graphId ? { graphId } : {}),
+        graphId ? client.policies.effective() : Promise.resolve(null),
+        graphId ? client.policies.graph.get(graphId) : client.policies.workspace.get(),
+        client.policies.exceptions.list(graphId ? { graphId } : {}),
         client.graphs.summaries.list().catch(() => [] as GraphSummary[]),
       ]);
       setRules(effective);
-      setSettings(workspace.rules);
-      setSavedAt(workspace.updated_at ?? null);
+      setInherited(Object.fromEntries((workspaceEffective ?? []).map((rule) => [rule.rule.code, rule])));
+      setSettings(stored.rules);
+      setSavedAt(stored.updated_at ?? null);
       setExceptions(allExceptions);
       setGraphNames(Object.fromEntries(graphs.map((graph) => [graph.id, graph.name])));
     } catch (err) {
@@ -77,7 +95,7 @@ export default function PoliciesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [graphId, scope.ready]);
 
   useEffect(() => {
     void load();
@@ -90,9 +108,9 @@ export default function PoliciesPage() {
       setSaving(true);
       setError(null);
       try {
-        const saved = await client.policies.workspace.save({ rules: next });
+        const saved = graphId ? await client.policies.graph.save(graphId, { rules: next }) : await client.policies.workspace.save({ rules: next });
         setSavedAt(saved.updated_at ?? null);
-        setRules(await client.policies.effective());
+        setRules(await client.policies.effective(graphId ? { graphId } : {}));
       } catch (err) {
         setSettings(previous);
         setError(errorDetail(err));
@@ -100,7 +118,7 @@ export default function PoliciesPage() {
         setSaving(false);
       }
     },
-    [settings],
+    [graphId, settings],
   );
 
   const exceptionAction = useCallback(async (id: string, action: () => Promise<unknown>) => {
@@ -108,16 +126,17 @@ export default function PoliciesPage() {
     setError(null);
     try {
       await action();
-      setExceptions(await client.policies.exceptions.list());
+      setExceptions(await client.policies.exceptions.list(graphId ? { graphId } : {}));
       setPendingRevokeId(null);
     } catch (err) {
       setError(errorDetail(err));
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [graphId]);
 
   const now = Date.now();
+  const graph = scope.graph;
   const titles = useMemo(() => Object.fromEntries(rules.map((rule) => [rule.rule.code, rule.rule.title])), [rules]);
   const visibleExceptions = sortExceptions(exceptions, now).filter((exception) => {
     const state = exceptionStatus(exception, now).state;
@@ -135,9 +154,14 @@ export default function PoliciesPage() {
     <StudioPage>
       <StudioPageHeader
         title="Policies"
-        description="Workspace defaults for the security, reliability, cost and governance checks every graph runs. A graph can override a rule from its own Policies panel."
+        description={
+          graph
+            ? `${graph.name}'s overrides of the workspace rules. A rule left on Inherit follows the workspace, which follows the built-in default.`
+            : "Workspace defaults for the security, reliability, cost and governance checks every graph runs. A graph can override a rule from its own Policies panel, or here with the graph in scope."
+        }
         loading={loading}
         onRefresh={() => void load()}
+        actions={<ScopeSelect scope={scope} />}
       />
       {error ? (
         <p role="alert" className="text-destructive text-sm">
@@ -145,7 +169,13 @@ export default function PoliciesPage() {
         </p>
       ) : null}
       <p className="text-muted-foreground text-xs" role="status">
-        {saving ? "Saving…" : savedAt ? `Saved ${new Date(savedAt).toLocaleString()}` : "Using built-in defaults"}
+        {saving
+          ? "Saving…"
+          : savedAt
+            ? `Saved ${new Date(savedAt).toLocaleString()}`
+            : graph
+              ? "No overrides: this graph follows the workspace"
+              : "Using built-in defaults"}
       </p>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -159,7 +189,14 @@ export default function PoliciesPage() {
               </CardHeader>
               <CardContent className="space-y-5">
                 {categoryRules.map((rule) => (
-                  <RuleRow key={rule.rule.code} rule={rule} settings={settings} disabled={saving} onChange={(next) => void save(next)} />
+                  <RuleRow
+                    key={rule.rule.code}
+                    rule={rule}
+                    inherited={graphId ? (inherited[rule.rule.code] ?? null) : null}
+                    settings={settings}
+                    disabled={saving}
+                    onChange={(next) => void save(next)}
+                  />
                 ))}
               </CardContent>
             </Card>
@@ -171,7 +208,7 @@ export default function PoliciesPage() {
         <CardHeader>
           <CardTitle className="text-base">Exceptions</CardTitle>
           <CardDescription>
-            Time-boxed waivers granted from each graph&apos;s Run panel. {counts.expiring} expiring soon · {counts.active} active · {counts.expired} expired.
+            {graph ? `Time-boxed waivers on ${graph.name}.` : "Time-boxed waivers granted from each graph's Run panel."} {counts.expiring} expiring soon · {counts.active} active · {counts.expired} expired.
           </CardDescription>
           <div role="group" aria-label="Filter exceptions" className="flex gap-1 pt-2">
             {(
@@ -265,11 +302,14 @@ export default function PoliciesPage() {
 
 function RuleRow({
   rule,
+  inherited,
   settings,
   disabled,
   onChange,
 }: {
   rule: EffectivePolicyRule;
+  /** Graph scope: the workspace's resolution this graph inherits. */
+  inherited: EffectivePolicyRule | null;
   settings: PolicySettings["rules"];
   disabled: boolean;
   onChange: (next: PolicySettings["rules"]) => void;
@@ -277,7 +317,9 @@ function RuleRow({
   const code = rule.rule.code;
   const setting = settings[code];
   const selectId = `policy-${code}`;
-  const defaultLabel = `Default (${enforcementLabel(rule.rule.default_enforcement)})`;
+  const defaultLabel = inherited
+    ? `Inherit (${enforcementLabel(inherited.enforcement)})`
+    : `Default (${enforcementLabel(rule.rule.default_enforcement)})`;
   return (
     <div className="space-y-2" data-testid={`policy-rule-${code}`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -285,6 +327,11 @@ function RuleRow({
           {rule.rule.title}
         </Label>
         {rule.rule.gate === "publish" ? <Badge variant="outline">Publish only</Badge> : null}
+        {inherited ? (
+          <Badge variant="secondary" aria-label={`Set by: ${SOURCE_LABEL[rule.enforcement_source]}`}>
+            {SOURCE_LABEL[rule.enforcement_source]}
+          </Badge>
+        ) : null}
       </div>
       <p className="text-muted-foreground text-xs leading-snug">{rule.rule.description}</p>
       <Select
@@ -343,10 +390,10 @@ function RuleRow({
             )}
             {overridden ? (
               <Button type="button" size="sm" variant="link" className="h-7 px-1 text-xs" disabled={disabled} onClick={() => onChange(setRuleParam(settings, code, spec.name, undefined))}>
-                Reset to {String(spec.default)}
+                {inherited ? `Inherit (${String(inherited.params[spec.name] ?? spec.default)})` : `Reset to ${String(spec.default)}`}
               </Button>
             ) : (
-              <span className="text-muted-foreground text-xs">default</span>
+              <span className="text-muted-foreground text-xs">{inherited ? (rule.param_sources[spec.name] ?? "default") : "default"}</span>
             )}
           </div>
         );

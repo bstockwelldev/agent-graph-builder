@@ -125,7 +125,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get Analytics */
+        /**
+         * Get Analytics
+         * @description Workspace dashboard; `graph_id` narrows it to one graph's runs.
+         */
         get: operations["get_analytics_api_analytics_get"];
         put?: never;
         post?: never;
@@ -709,6 +712,28 @@ export type paths = {
         };
         /** Get Release Endpoint */
         get: operations["get_release_endpoint_api_graphs__graph_id__releases__release_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graphs/{graph_id}/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Graph Resources Endpoint
+         * @description Resources this graph uses (slice 4's graph scope): its bindings from
+         *     the graph catalog, the MCP servers behind its tools, and the agents
+         *     that run it.
+         */
+        get: operations["graph_resources_endpoint_api_graphs__graph_id__resources_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2164,6 +2189,21 @@ export type components = {
             semantic_fingerprint: string;
         };
         /**
+         * GraphResources
+         * @description The library resources a graph uses, by API kind (`prompts`, `tools`,
+         *     `mcp-servers`, `llm-profiles`, `transforms`, `agents`): what its nodes
+         *     and edges bind, the MCP servers its tools call, and the agents built on
+         *     it. Backs the Resources pages' graph scope.
+         */
+        GraphResources: {
+            /** Graph Id */
+            graph_id: string;
+            /** Ids */
+            ids?: {
+                [key: string]: string[];
+            };
+        };
+        /**
          * GraphSummary
          * @description A saved graph without its nodes/edges (GET /api/graph-summaries):
          *     enough for lists, pickers and `/run` parsing. Served from the graph
@@ -3284,7 +3324,9 @@ export interface operations {
     };
     get_analytics_api_analytics_get: {
         parameters: {
-            query?: never;
+            query?: {
+                graph_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3298,6 +3340,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsDashboardPayload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4835,6 +4886,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphRelease"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    graph_resources_endpoint_api_graphs__graph_id__resources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                graph_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphResources"];
                 };
             };
             /** @description Validation Error */

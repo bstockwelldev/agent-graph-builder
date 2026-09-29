@@ -72,6 +72,20 @@ describe("the mock API, through the real client", () => {
     expect(await client.mcpServers.discover("srv")).toEqual({ ok: true, tools: [], error: null });
   });
 
+  it("scopes to a graph: the resources it uses, and its runs' analytics", async () => {
+    const graph = fixtures.demoGraph();
+    const tool = graph.nodes.find((node) => node.type === "tool")!;
+    await client.graphs.update({ ...graph, id: "scoped", nodes: graph.nodes.map((node) => (node === tool ? { ...node, config: { ...node.config, toolName: "docs.search" } } : node)) });
+    await client.tools.create({ id: "docs.search", description: "d", parameters_json: "{}", requires_approval: false, mcp_server_id: "srv2", mcp_tool_name: "s" });
+    await client.agents.create({ id: "helper", name: "H", graph_id: "scoped", tool_ids: [] });
+    const { ids } = await client.graphs.resources("scoped");
+    expect(ids).toMatchObject({ tools: ["docs.search"], "mcp-servers": ["srv2"], agents: ["helper"], prompts: [] });
+    expect((await client.analytics.dashboard({ graphId: "nobody" })).totals.invocations).toBe(0);
+    await client.graphs.delete("scoped");
+    await client.agents.delete("helper");
+    await client.tools.delete("docs.search");
+  });
+
   it("serves graphs, validation and analysis", async () => {
     expect((await client.graphs.list()).map((g) => g.id)).toEqual(["demo_classify_and_route"]);
     const created = await client.graphs.create({ name: "Mine" });

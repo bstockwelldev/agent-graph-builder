@@ -362,12 +362,18 @@ def build_dashboard_from_usage(
 
 
 def get_analytics_dashboard(
-    *, days: int = _DEFAULT_MAX_DAILY_DAYS, today: date | None = None
+    *,
+    days: int = _DEFAULT_MAX_DAILY_DAYS,
+    today: date | None = None,
+    graph_id: str | None = None,
 ) -> AnalyticsDashboardPayload:
     """Totals, daily points and top graphs over the last `days` days
     (UTC dates of run start). On the remote backends: one read per day plus
-    the graph catalog, however many runs there are."""
+    the graph catalog, however many runs there are. `graph_id` narrows it to
+    one graph's runs (the Analytics page's graph scope)."""
     window = _window(days, today or datetime.now(UTC).date())
     usages = _usage_in_window(window)
+    if graph_id is not None:
+        usages = [usage for usage in usages if usage.graph_id == graph_id]
     graph_names = {entry.id: entry.name for entry in storage.list_graph_catalog()}
     return build_dashboard_from_usage(usages, graph_names, max_daily_days=days)

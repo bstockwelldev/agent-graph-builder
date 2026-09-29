@@ -1419,6 +1419,30 @@
         "title": "GraphRelease",
         "type": "object"
       },
+      "GraphResources": {
+        "description": "The library resources a graph uses, by API kind (`prompts`, `tools`,\n`mcp-servers`, `llm-profiles`, `transforms`, `agents`): what its nodes\nand edges bind, the MCP servers its tools call, and the agents built on\nit. Backs the Resources pages' graph scope.",
+        "properties": {
+          "graph_id": {
+            "title": "Graph Id",
+            "type": "string"
+          },
+          "ids": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Ids",
+            "type": "object"
+          }
+        },
+        "required": [
+          "graph_id"
+        ],
+        "title": "GraphResources",
+        "type": "object"
+      },
       "GraphSummary": {
         "description": "A saved graph without its nodes/edges (GET /api/graph-summaries):\nenough for lists, pickers and `/run` parsing. Served from the graph\ncatalog -- one object read, not one per graph.",
         "properties": {
@@ -4152,7 +4176,26 @@
     },
     "/api/analytics": {
       "get": {
+        "description": "Workspace dashboard; `graph_id` narrows it to one graph's runs.",
         "operationId": "get_analytics_api_analytics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "graph_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Graph Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4163,6 +4206,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Analytics"
@@ -6510,6 +6563,46 @@
           }
         },
         "summary": "Get Release Endpoint"
+      }
+    },
+    "/api/graphs/{graph_id}/resources": {
+      "get": {
+        "description": "Resources this graph uses (slice 4's graph scope): its bindings from\nthe graph catalog, the MCP servers behind its tools, and the agents\nthat run it.",
+        "operationId": "graph_resources_endpoint_api_graphs__graph_id__resources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "graph_id",
+            "required": true,
+            "schema": {
+              "title": "Graph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResources"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Graph Resources Endpoint"
       }
     },
     "/api/graphs/{graph_id}/routing-lab/compare-release/{release_id}": {

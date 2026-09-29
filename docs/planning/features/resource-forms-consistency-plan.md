@@ -169,7 +169,12 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
    - Tool writes reject a built-in's id (they'd never run: builtins dispatch first) and half an MCP binding.
    - Tools still have no separate Name: the tool node calls a tool by its id, so the id stays the name (slice 2).
    - e2e: `e2e/specs/mcp.spec.ts`, against `scripts/fake-mcp.mjs`.
-4. **Scope control:** the shared graph selector across Analytics, Policies and Resources, plus graph-scoped Analytics and Policies pages.
+4. **Scope control** — **shipped 2026-09-29.** One Scope picker (Workspace, or a graph) in the page header of Analytics, Policies and every Resources page (`hooks/use-graph-scope.ts`, `components/studio/scope-select.tsx`). It lives in `?graph=<id>` and is remembered across pages (localStorage); a remembered graph that no longer exists falls back to the workspace.
+   - Analytics: graph scope shows the graph's success rate, P95, spend and per-node table (the canvas panel's `GraphAnalyticsView`; rows link into the editor) and its daily trend (`GET /api/analytics?graph_id=`). Workspace "By graph" rows switch the scope.
+   - Policies: graph scope edits the graph's overrides (writable on the public demo, where workspace rules are read-only), labels unset rules "Inherit (<workspace value>)", badges each rule with where its setting comes from, and lists only that graph's exceptions.
+   - Resources: graph scope lists only what the graph uses (`GET /api/graphs/{id}/resources`: node and edge bindings, the MCP servers behind its tools, agents built on it), with "Show all".
+   - Not yet: the release selector and charts on graph-scoped Analytics (charts wait on slice 5's Chart component).
+   - e2e: `e2e/specs/scope.spec.ts`.
 5. **GenUI components (3–6):**
    - Approval, Chart, Table, Diagram, KeyValue/Diff, Select/Checkbox, Markdown.
    - `$ref` data binding.
