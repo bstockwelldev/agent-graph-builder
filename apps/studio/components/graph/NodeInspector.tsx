@@ -49,6 +49,7 @@ import type {
   PortKind,
 } from "@bstockwelldev/agent-graph-sdk";
 import {
+  accentSurface,
   border,
   color,
   fontFamily,
@@ -58,10 +59,11 @@ import {
   status as statusColor,
   surface,
   text,
+  typeScale,
 } from "@/lib/graph-theme";
 import { client } from "@/lib/api-client";
 import { partitionDiagnosticsByField } from "@/lib/diagnostics";
-import { tryParseGenuiSurface } from "@/lib/genui";
+import { parseGenuiSurface } from "@/lib/genui";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ResourceBindingField } from "./ResourceBindingField";
 import { TaxonomyTooltip } from "./Tooltip";
@@ -1406,11 +1408,18 @@ function RouterEdgeRow({
 }
 
 function GenuiCheckpointPreview({ raw }: { raw: string }) {
-  const surfaceValue = tryParseGenuiSurface(raw);
-  if (!surfaceValue) return null;
+  const parsed = parseGenuiSurface(raw);
+  if (parsed.error) {
+    return (
+      <p role="alert" style={{ ...typeScale.caption, color: accentSurface.destructive.text, margin: `${spacing[2]}px 0` }}>
+        Surface can&apos;t render: {parsed.error}
+      </p>
+    );
+  }
+  if (!parsed.surface) return null;
   return (
     <Field label="Live preview">
-      <GenuiSurface surface={surfaceValue} />
+      <GenuiSurface surface={parsed.surface} />
     </Field>
   );
 }

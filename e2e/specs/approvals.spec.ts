@@ -72,3 +72,43 @@ test("rejects a paused run with a reason", async ({ page, api }) => {
   const runId = new URL(page.url()).searchParams.get("run")!;
   expect(await api.getRun(runId)).toMatchObject({ status: "failed", error: "Lookup looks wrong" });
 });
+
+// Slice 5: a surface bound to the paused run with $ref, and Select /
+// Checkbox answers that reach the next node.
+test("a bound surface shows the run's data, and its answers reach the next node", async ({ page, api }) => {
+  const surface = {
+    root: {
+      type: "Stack",
+      children: [
+        { type: "Approval", props: { title: "Use this lookup?", summary: { $ref: "/nodes/tool_lookup/output" }, approveLabel: "Use it" } },
+        { type: "KeyValue", props: { title: "Asked", items: { question: { $ref: "/input/question" } } } },
+        { type: "Select", id: "tone", props: { label: "Tone", options: ["brief", "detailed"] } },
+        { type: "Checkbox", id: "cite", props: { label: "Cite sources" } },
+      ],
+    },
+  };
+  const base = withGate(await api.createDemoGraph("E2E bound approval"));
+  const graph: GraphJson = {
+    ...base,
+    nodes: base.nodes.map((node) =>
+      node.id === "gate_review"
+        ? { ...node, config: { ...node.config, genuiCheckpointSurfaceJson: JSON.stringify(surface) } }
+        : node.id === "prompt_after"
+          ? { ...node, config: { template: "Tone {gate_review[tone]}, cite {gate_review[cite]}: {upstream}" } }
+          : node,
+    ),
+  };
+  await api.updateGraph(graph);
+  await openGraph(page, graph, "?panel=run");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  const checkpoint = page.getByRole("region", { name: /^Approval needed at / });
+  const approval = checkpoint.getByRole("group", { name: "Use this lookup?" });
+  await expect(approval).toContainText(/A database index is a data structure/);
+  await expect(checkpoint).toContainText("How does a database index work?");
+
+  await checkpoint.getByLabel("Tone").selectOption("detailed");
+  await checkpoint.getByLabel("Cite sources").check();
+  await approval.getByRole("button", { name: "Use it" }).click();
+
+  await expect(page.getByRole("tabpanel", { name: "Status" })).toContainText(/Tone detailed, cite True: A database index/);
+});

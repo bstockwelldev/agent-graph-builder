@@ -63,7 +63,7 @@ can add all of them:
 | `tool_loop` | Multi-step tool-calling agent, capped at a configured number of steps |
 | `guardrail` | Input-safety checks (length, URLs, injection phrases); fails the run on a violation |
 | `rubric` | Static prompt-quality findings; can block the run |
-| `human_gate` | Pauses the run for approval. The Run panel shows the checkpoint (message, GenUI surface, reason) with Approve / Reject; the API is `POST /api/runs/{id}/resume` with `approve`, `reason` and `values`. On approve, the surface's form values become the run variable named after the gate, so later templates read `{gate_id[field]}` |
+| `human_gate` | Pauses the run for approval. The Run panel shows the checkpoint (message, GenUI surface, reason) with Approve / Reject. The surface can show summaries, charts, tables, diffs, diagrams and inputs, bound to the run's data with `{"$ref": "/nodes/<id>/output"}` (see `/genui`); the API is `POST /api/runs/{id}/resume` with `approve`, `reason` and `values`. On approve, the surface's form values become the run variable named after the gate, so later templates read `{gate_id[field]}` |
 | `subgraph` | Runs another saved graph as a nested run with its own trace |
 | `code_exec` | Declares a code-execution contract (validated and passed through; no sandbox yet) |
 | `transform` | Deterministic reshape (select / wrap / format message / coerce), inline or from the Transforms library |

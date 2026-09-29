@@ -127,6 +127,22 @@ export const canvas = {
   gridMajor: "#243a5c",
 } as const;
 
+/**
+ * GenUI Chart series (resource-forms-consistency-plan.md slice 5): the data-viz
+ * reference palette's dark steps, in fixed order (never cycled). Validated with
+ * the dataviz skill's validate_palette.js against `surface.inset` and
+ * `surface.card`: every check passes (worst adjacent CVD dE 8.4, normal-vision
+ * dE 19.3, all >= 3:1). Marks only -- chart text stays in `text.*` tokens.
+ */
+export const chartSeries = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"] as const;
+
+export const chart = {
+  /** Recessive hairline grid/axes, one step off the surface. */
+  grid: "#2a2e37",
+  /** Area fill wash opacity. */
+  areaOpacity: 0.1,
+} as const;
+
 /** Non-neutral surfaces used for callouts (destructive actions, success banners, error text). */
 export const accentSurface = {
   destructive: { bg: "#2b1c1c", border: "#5a2c2c", text: "#f0a0a0" },
