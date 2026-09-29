@@ -20,7 +20,7 @@ _RESOURCE_CASES = [
     ("prompts", {"id": "prompt_1", "name": "Greeting", "body": "You are helpful."}),
     ("tools", {"id": "tool_1", "description": "Does a thing"}),
     ("mcp-servers", {"id": "mcp_1", "name": "Test server", "url": "https://mcp.example.com/rpc"}),
-    ("agents", {"id": "agent_1", "name": "Support agent"}),
+    ("agents", {"id": "agent_1", "name": "Support agent", "graph_id": "demo_classify_and_route"}),
     ("llm-profiles", {"id": "llm_1", "name": "Fast model", "model": "qwen2.5:3b"}),
     (
         "chat-sessions",

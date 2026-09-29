@@ -44,6 +44,10 @@ const api = vi.hoisted(() => {
         get: vi.fn(async (id: string) => ({ run_id: id, graph_id: "demo", status: "succeeded", provider: "stub", result: "ok" })),
         traces: vi.fn(async () => []),
       },
+      agents: {
+        list: vi.fn(async () => [{ id: "agent_help", name: "Helper", graph_id: "demo", llm_profile_id: "fast", tool_ids: [] }]),
+        run: vi.fn(async () => ({ run_id: "run_a", graph_id: "demo", status: "queued", agent_id: "agent_help" })),
+      },
       providers: { models: vi.fn(async () => ({ models: [], message: "" })) },
     },
   };
@@ -92,6 +96,16 @@ describe("ChatPanel graph runs", () => {
     expect(saved.messages[1].run).toMatchObject({ run_id: "run_d", source: "draft", graph_name: "Support flow" });
     expect(await screen.findByRole("group", { name: "Run of Support flow" })).toBeTruthy();
     expect(api.client.chatSessions.send).not.toHaveBeenCalled();
+  });
+
+  it("/run @agent runs as the agent, leaving the model to its LLM profile", async () => {
+    const box = await renderChat();
+    send(box, "/run @agent_help How does TCP work?");
+    await vi.waitFor(() => expect(api.client.agents.run).toHaveBeenCalledWith("agent_help", { input: { question: "How does TCP work?" } }));
+    await vi.waitFor(() => expect(api.client.chatSessions.update).toHaveBeenCalled());
+    const saved = api.client.chatSessions.update.mock.calls.at(-1)![0] as { messages: { run?: unknown }[] };
+    expect(saved.messages.at(-1)!.run).toMatchObject({ run_id: "run_a", agent_id: "agent_help", agent_name: "Helper" });
+    expect(api.client.runs.start).not.toHaveBeenCalled();
   });
 
   it("a release run waits for an explicit confirm", async () => {

@@ -11,8 +11,14 @@ import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 /** `latest` = newest published release; `rel_…` = a specific release; null = the draft. */
 export type ReleaseSelector = "latest" | string | null;
 
+/** What running as an agent needs: its id, name and graph, and whether its
+ * LLM profile should pick the model (so the chat's model isn't sent). */
+export type RunnableAgent = { id: string; name: string; graph_id: string; llm_profile_id?: string | null };
+
 export type RunTarget = {
   graph: RunnableGraph;
+  /** Run as this agent (`/run @agent …`): its graph, profile and instructions. */
+  agent?: RunnableAgent;
   release: ReleaseSelector;
   input: Record<string, string>;
   /** Proposed from free text ("run the support flow") rather than an
@@ -60,15 +66,18 @@ export function findGraph<G extends Pick<GraphSummary, "id" | "name">>(graphs: r
 /**
  * `/run <graph>[@latest|@rel_…] [input]`. The graph is an id, a quoted
  * name, or (unquoted) the longest leading run of words naming a graph.
+ * `/run @<agent> [input]` runs an agent (by id, or a quoted name) instead.
  */
 export function parseRunCommand<G extends RunnableGraph>(
   text: string,
   graphs: readonly G[],
+  agents: readonly RunnableAgent[] = [],
 ): ParsedRunCommand | null {
   const match = text.trim().match(/^\/run(?:\s+([\s\S]*))?$/i);
   if (!match) return null;
   const rest = (match[1] ?? "").trim();
-  if (!rest) return { ok: false, error: "Usage: /run <graph>[@latest|@release_id] [input or key=value …]" };
+  if (!rest) return { ok: false, error: "Usage: /run <graph>[@latest|@release_id] [input or key=value …], or /run @<agent> [input]" };
+  if (rest.startsWith("@")) return parseAgentCommand(rest.slice(1), graphs, agents);
 
   let graphPart: string;
   let tail: string;
@@ -102,6 +111,16 @@ export function parseRunCommand<G extends RunnableGraph>(
   const selector = (selectorPart ?? "").replace(/^@/, "");
   const release: ReleaseSelector = !selector || selector === "draft" ? null : selector === "latest" || selector === "release" ? "latest" : selector;
   return { ok: true, target: { graph, release, input: buildRunInput(graph.input_variables, tail), inferred: false } };
+}
+
+function parseAgentCommand<G extends RunnableGraph>(rest: string, graphs: readonly G[], agents: readonly RunnableAgent[]): ParsedRunCommand {
+  const quoted = rest.match(/^"([^"]+)"\s*([\s\S]*)$/);
+  const [query, tail] = quoted ? [quoted[1], quoted[2]] : [rest.split(/\s+/)[0], rest.split(/\s+/).slice(1).join(" ")];
+  const agent = agents.find((entry) => entry.id === query) ?? agents.find((entry) => normalizeName(entry.name) === normalizeName(query));
+  if (!agent) return { ok: false, error: `No agent named "${query}".` };
+  const graph = graphs.find((entry) => entry.id === agent.graph_id);
+  if (!graph) return { ok: false, error: `Agent "${agent.name}" runs graph "${agent.graph_id}", which no longer exists.` };
+  return { ok: true, target: { graph, agent, release: null, input: buildRunInput(graph.input_variables, tail), inferred: false } };
 }
 
 /** `name@selector`, where the selector is a single token (`@latest`, `@rel_…`). */

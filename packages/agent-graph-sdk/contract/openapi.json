@@ -1,6 +1,59 @@
 {
   "components": {
     "schemas": {
+      "AgentRunRequest": {
+        "description": "Body for POST /api/agents/{id}/runs: the agent supplies the graph (and\nits LLM profile the default provider/model); these override it.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "input": {
+            "additionalProperties": true,
+            "title": "Input",
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ollama",
+                  "stub",
+                  "openai_compat",
+                  "groq",
+                  "google",
+                  "azure"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "title": "AgentRunRequest",
+        "type": "object"
+      },
       "AnalyticsDailyPoint": {
         "properties": {
           "date": {
@@ -3153,6 +3206,17 @@
       },
       "RunSummary": {
         "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
           "compiler_version": {
             "anyOf": [
               {
@@ -3594,6 +3658,56 @@
           }
         },
         "summary": "Create Agents"
+      }
+    },
+    "/api/agents/{agent_id}/runs": {
+      "post": {
+        "description": "Runs the agent's graph with the agent applied (agents.py): its LLM\nprofile as the default provider/model, its instructions prepended to\nmodel nodes' system prompts, and its tool allow-list enforced.",
+        "operationId": "start_agent_run_api_agents__agent_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Agent Run"
       }
     },
     "/api/agents/{resource_id}": {

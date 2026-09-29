@@ -155,7 +155,7 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
 2. **Form foundation (C1–C6):**
    - Name-first generated ids.
    - A shared `ProviderModelPicker` in LLM profiles.
-   - A graph picker for the agent's default graph.
+   - ~~A graph picker for the agent's default graph.~~ (shipped with slice 6)
    - JSON validation for tool parameters.
    - Required markers.
    - Copy fixes (C7).
@@ -171,7 +171,12 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
    - `$ref` data binding.
    - The authoring editor.
    - Library cards.
-6. **Agents decision:** make agents real (graph + profile + prompt + tools, selectable in Run and Chat) or hide the kind.
+6. **Agents decision:** make agents real (graph + profile + prompt + tools, selectable in Run and Chat) or hide the kind. **Decided: real; shipped 2026-09-29.**
+   - `AgentProfile` is `graph_id` (required), `llm_profile_id`, `system_prompt_id`, `system_instructions` and `tool_ids`. Stored agents with `default_flow_id` / `optional_elements` read in the new shape.
+   - `POST /api/agents/{id}/runs` (`agents.py` `apply_agent`): the profile gives the default provider/model (the request's still wins); the prompt and instructions are prepended to every llm/tool_loop node's system prompt, in a copy of the graph, so the run snapshot records what ran; a non-empty allow-list refuses graphs that call other tools (`AGENT_TOOL_NOT_ALLOWED`, 422).
+   - Runs and chat run refs carry `agent_id` (persisted, including SQLite).
+   - Studio: the agent form uses pickers (graph, LLM profile, system prompt, allowed-tool checkboxes), cards link to "Run"; the Run panel's "Run as" (and `?agent=`) runs as an agent; chat takes `/run @<agent id or "name"> …`.
+   - e2e: `e2e/specs/agents.spec.ts`.
 7. **Datasets page:** browse, rename and delete, with "Open in routing lab".
 
-Slices 1 and 2 have no design dependencies and can start immediately. Slice 6 needs a product decision first.
+Slices 1 and 2 have no design dependencies and can start immediately. Slice 6's decision was "make agents real".

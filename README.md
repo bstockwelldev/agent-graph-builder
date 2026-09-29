@@ -36,6 +36,12 @@ a free-form LLM answer. Ask something non-technical to see the other branch run.
   another release or the unsaved canvas, and replay a past run. You can replay
   it frozen, or as a counterfactual (force a different route, or swap an LLM
   node's provider or model).
+- **Agents:** an agent is a graph plus an LLM profile (the run's default
+  model), a system prompt and instructions (prepended to every LLM and tool
+  loop node), and a tool allow-list (a run that would call anything else is
+  refused with a blocking diagnostic). Run one from its graph's Run panel
+  ("Run as"), from the Agents page, or with `/run @agent …` in chat. The run
+  records `agent_id`, and its graph snapshot records the applied prompts.
 - **Supporting surfaces:** a per-graph knowledge base (RAG), versioned reusable
   resources (prompts, tools, LLM profiles, policies), fixture-based simulation,
   a chat scratchpad, and usage/spend analytics.
@@ -336,6 +342,7 @@ seams, so each piece can be swapped without touching the others.
 | Version-pinned run identity (`RunGraphSnapshot`) | `models.py`, `runtime.py` |
 | Replay and counterfactual replay | `replay.py` |
 | Versioned reusable entities (prompts, tools, LLM profiles) | `resource_versions.py` |
+| Agents: graph + LLM profile + instructions + tool allow-list | `agents.py` |
 | Runtime adapter boundary with a capability matrix | `adapters.py` |
 | Durable storage for graphs, releases, and completed runs | `storage.py`, `supabase_store.py`, `object_store.py` |
 | Six provider adapters behind one protocol | `providers/` |

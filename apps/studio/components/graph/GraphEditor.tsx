@@ -41,7 +41,7 @@ import {
 } from "@bstockwelldev/agent-graph-sdk";
 
 import { client, waitForRun } from "@/lib/api-client";
-import { isReadOnlyGraphError } from "@/lib/apiErrors";
+import { blockingDiagnostics, errorDetail, isReadOnlyGraphError } from "@/lib/apiErrors";
 import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
 import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
@@ -118,7 +118,7 @@ import { MOBILE_TAB_BAR_HEIGHT, MobileTabBar } from "@/components/navigation/mob
 import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { FlowCanvas } from "./FlowCanvas";
-import { RunPanel, type RunSelection } from "./RunPanel";
+import { RunPanel, type RunAgentOption, type RunSelection } from "./RunPanel";
 import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
 import { GraphConfigPanel } from "./GraphConfigPanel";
@@ -554,6 +554,26 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     const nodeId = consumeCanvasFocus(graphId);
     if (nodeId && nodes.some((n) => n.id === nodeId)) focusNode(nodeId);
   }, [graphId, nodes, focusNode]);
+
+  // Slice 6 (resource-forms-consistency-plan.md): agents built on this graph,
+  // for the Run panel's "Run as". `?agent=` (the Agents page's Run link)
+  // preselects one.
+  const [runAgents, setRunAgents] = useState<RunAgentOption[]>([]);
+  const [runAgentId, setRunAgentId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setRunAgentId(new URLSearchParams(window.location.search).get("agent"));
+    client.agents.list().then(
+      (agents) => {
+        if (!cancelled) setRunAgents(agents.filter((agent) => agent.graph_id === graphId));
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [graphId]);
+  const runAgent = runAgents.find((agent) => agent.id === runAgentId) ?? null;
 
   const refreshRunHistory = useCallback(async () => {
     setRunHistoryLoading(true);
@@ -1561,7 +1581,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           }
         }
 
-        const synced = applyRunSelectionToLlmNodes(nodes, provider, model);
+        // Full runs go through the selected agent; a run from a node stays
+        // graph-only (the agent route has no node mocks).
+        const agent = nodeOutputs ? null : runAgent;
+        // An agent with an LLM profile picks the run's model, so the run
+        // selection isn't written onto the graph's LLM nodes.
+        const synced = agent?.llm_profile_id ? nodes : applyRunSelectionToLlmNodes(nodes, provider, model);
         const graph = await persistForRun(synced);
         if (!graph) return;
         const compileResult = await client.graphs.compile(graph.id);
@@ -1576,7 +1601,25 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setInspectionRouteDecisions([]);
         closeStreamRef.current?.();
 
-        const { run: summary } = await client.runs.start({ graphId: graph.id, input, provider, model, apiKey, nodeOutputs });
+        let summary: RunSummary;
+        // A read-only graph's edits fork into a copy the agent isn't bound
+        // to; that run stays graph-only.
+        if (agent && graph.id === graphId) {
+          try {
+            summary = await client.agents.run(agent.id, { input, ...(agent.llm_profile_id ? {} : { provider, model, apiKey }) });
+          } catch (error) {
+            const blocking = blockingDiagnostics(error);
+            if (blocking.length > 0) {
+              setDiagnostics(blocking);
+              focusDiagnostics();
+            } else {
+              setProviderBlockMessage(errorDetail(error));
+            }
+            return;
+          }
+        } else {
+          ({ run: summary } = await client.runs.start({ graphId: graph.id, input, provider, model, apiKey, nodeOutputs }));
+        }
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
         await followRun(summary);
@@ -1584,7 +1627,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [focusDiagnostics, followRun, nodes, persistForRun],
+    [focusDiagnostics, followRun, graphId, nodes, persistForRun, runAgent],
   );
 
   // Slice 1 (resource-forms-consistency-plan.md): approve or reject the
@@ -2738,6 +2781,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           runSummary={runSummary}
           checkpoint={checkpoint}
           onResume={handleResume}
+          agents={runAgents}
+          agentId={runAgent?.id ?? null}
+          onAgentChange={setRunAgentId}
           runHistory={runHistory}
           runHistoryLoading={runHistoryLoading}
           compiling={compiling}

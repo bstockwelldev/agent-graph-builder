@@ -112,13 +112,13 @@ describe("runSummarySchema", () => {
 });
 
 describe("agentProfileSchema", () => {
-  it("requires optional_elements even when other fields are nullish", () => {
-    const agent = { id: "a1", name: "Support agent", optional_elements: [] };
+  it("needs a graph; profile, prompt and instructions are nullish", () => {
+    const agent = { id: "a1", name: "Support agent", graph_id: "g1", tool_ids: [], llm_profile_id: null };
     expect(agentProfileSchema.safeParse(agent).success).toBe(true);
   });
 
-  it("rejects a missing optional_elements array", () => {
-    const agent = { id: "a1", name: "Support agent" };
+  it("rejects an agent without a graph", () => {
+    const agent = { id: "a1", name: "Support agent", tool_ids: [] };
     expect(agentProfileSchema.safeParse(agent).success).toBe(false);
   });
 });

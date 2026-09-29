@@ -25,6 +25,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{agent_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Agent Run
+         * @description Runs the agent's graph with the agent applied (agents.py): its LLM
+         *     profile as the default provider/model, its instructions prepended to
+         *     model nodes' system prompts, and its tool allow-list enforced.
+         */
+        post: operations["start_agent_run_api_agents__agent_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{resource_id}": {
         parameters: {
             query?: never;
@@ -1609,6 +1631,23 @@ export type paths = {
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
+        /**
+         * AgentRunRequest
+         * @description Body for POST /api/agents/{id}/runs: the agent supplies the graph (and
+         *     its LLM profile the default provider/model); these override it.
+         */
+        AgentRunRequest: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Input */
+            input?: {
+                [key: string]: unknown;
+            };
+            /** Model */
+            model?: string | null;
+            /** Provider */
+            provider?: ("ollama" | "stub" | "openai_compat" | "groq" | "google" | "azure") | null;
+        };
         /** AnalyticsDailyPoint */
         AnalyticsDailyPoint: {
             /** Date */
@@ -2695,6 +2734,8 @@ export type components = {
         };
         /** RunSummary */
         RunSummary: {
+            /** Agent Id */
+            agent_id?: string | null;
             /** Compiler Version */
             compiler_version?: string | null;
             /** Completed At */
@@ -2860,6 +2901,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_agent_run_api_agents__agent_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummary"];
                 };
             };
             /** @description Validation Error */

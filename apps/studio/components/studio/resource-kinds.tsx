@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import type {
   AgentProfile,
   LlmProfile,
@@ -21,6 +22,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { client } from "@/lib/api-client";
 import { describeTransform } from "@/lib/transforms";
 import { cn } from "@/lib/utils";
+
+import { AgentFields } from "./agent-fields";
 
 /**
  * One config per resource registry (studio-graph-workbench-redesign-plan.md,
@@ -309,71 +312,69 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
   noun: "agent",
   panelTitle: "Agents",
   pageTitle: "Agents",
-  pageDescription: "Named profiles with a default graph, system instructions, and optional elements merged into a run.",
-  dialogDescription: "A named profile a run can select to merge a default graph and system instructions.",
-  emptyText: "No agent profiles.",
+  pageDescription:
+    "A graph plus an LLM profile, system instructions, and a tool allow-list. Run one from its graph's Run panel or with /run @agent in chat.",
+  dialogDescription: "Pick the graph this agent runs and what it layers on top: a default model, instructions, and the tools it may call.",
+  emptyText: "No agents.",
   listLayout: "grid",
   itemLabel: (agent) => agent.name,
-  deleteDescription: (agent) => `Remove agent profile "${agent.name}"?`,
+  deleteDescription: (agent) => `Remove agent "${agent.name}"?`,
   renderCardHeader: (agent) => (
     <>
       <CardTitle className="text-base">{agent.name}</CardTitle>
-      <CardDescription>
-        {agent.description || agent.default_flow_id
-          ? `${agent.description ?? ""}${agent.default_flow_id ? ` · default graph: ${agent.default_flow_id}` : ""}`
-          : "No description."}
-      </CardDescription>
+      <CardDescription>{agent.description || "No description."}</CardDescription>
     </>
+  ),
+  renderCardBody: (agent) => (
+    <div className="space-y-2 text-sm">
+      <div className="flex flex-wrap gap-1.5">
+        <Badge variant="secondary" className="font-mono">
+          {agent.graph_id}
+        </Badge>
+        {agent.llm_profile_id ? <Badge variant="outline">profile: {agent.llm_profile_id}</Badge> : null}
+        <Badge variant="outline">{agent.tool_ids.length === 0 ? "any tool" : `${agent.tool_ids.length} tool${agent.tool_ids.length === 1 ? "" : "s"}`}</Badge>
+      </div>
+      <Link
+        href={`/graphs/${encodeURIComponent(agent.graph_id)}?panel=run&agent=${encodeURIComponent(agent.id)}`}
+        className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+        aria-label={`Run ${agent.name}`}
+      >
+        Run
+      </Link>
+    </div>
   ),
   emptyForm: () => ({
     id: genId("agent"),
     name: "",
     description: "",
-    default_flow_id: "",
+    graph_id: "",
+    llm_profile_id: null,
+    system_prompt_id: null,
     system_instructions: "",
-    optional_elements: [],
+    tool_ids: [],
   }),
   normalize: (form) => {
     const id = form.id?.trim();
     const name = form.name?.trim();
-    if (!id || !name) return null;
+    const graph_id = form.graph_id?.trim();
+    if (!id || !name || !graph_id) return null;
     return {
       id,
       name,
       description: form.description?.trim() || null,
-      default_flow_id: form.default_flow_id?.trim() || null,
+      graph_id,
+      llm_profile_id: form.llm_profile_id || null,
+      system_prompt_id: form.system_prompt_id || null,
       system_instructions: form.system_instructions?.trim() || null,
-      optional_elements: (form.optional_elements ?? []).map((line) => line.trim()).filter(Boolean),
+      tool_ids: [...new Set(form.tool_ids ?? [])],
     };
   },
-  // join/split round-trip cleanly (split(join(x)) === x), so the array
-  // itself is the live form state -- no scratch string field needed.
   renderFields: (props) => (
     <>
       <IdField {...props} />
       <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
       <AreaField id={`${props.idPrefix}-description`} label="Description" value={props.form.description ?? ""} onChange={(description) => props.setForm({ description })} rows={2} />
-      <TextField
-        id={`${props.idPrefix}-default-graph`}
-        label="Default graph id"
-        value={props.form.default_flow_id ?? ""}
-        onChange={(default_flow_id) => props.setForm({ default_flow_id })}
-        mono
-      />
-      <AreaField
-        id={`${props.idPrefix}-system-instructions`}
-        label="System instructions"
-        value={props.form.system_instructions ?? ""}
-        onChange={(system_instructions) => props.setForm({ system_instructions })}
-        rows={4}
-      />
-      <AreaField
-        id={`${props.idPrefix}-optional-elements`}
-        label="Optional elements (one per line)"
-        value={(props.form.optional_elements ?? []).join("\n")}
-        onChange={(text) => props.setForm({ optional_elements: text.split("\n") })}
-        rows={3}
-      />
+      <AgentFields form={props.form} setForm={props.setForm} idPrefix={props.idPrefix} />
     </>
   ),
 };

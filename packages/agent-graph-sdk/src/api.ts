@@ -99,6 +99,8 @@ export type RunListRequest = { graphId?: string };
 /** `values`: the checkpoint's GenUI form field values, readable downstream as `{<gate_id>[field]}` on approve. */
 export type ResumeRunRequest = { approve?: boolean; reason?: string; values?: Record<string, unknown> };
 
+export type AgentRunRequest = { input?: Record<string, unknown>; provider?: ChatProvider; model?: string; apiKey?: string };
+
 export type PublishReleaseRequest = { notes?: string; author?: string };
 export type ReleaseRunRequest = Omit<StartRunRequest, "graphId" | "nodeOutputs">;
 
@@ -404,7 +406,17 @@ export function buildNamespaces(transport: Transport) {
     prompts: { ...resourceNamespace(transport, "prompts", promptTemplateSchema), versions: versionNamespace(transport, "prompts") },
     tools: { ...resourceNamespace(transport, "tools", toolDefinitionSchema), versions: versionNamespace(transport, "tools") },
     mcpServers: { ...resourceNamespace(transport, "mcp-servers", mcpServerConfigSchema), versions: versionNamespace(transport, "mcp-servers") },
-    agents: { ...resourceNamespace(transport, "agents", agentProfileSchema), versions: versionNamespace(transport, "agents") },
+    agents: {
+      ...resourceNamespace(transport, "agents", agentProfileSchema),
+      versions: versionNamespace(transport, "agents"),
+      /** Runs the agent's graph with the agent applied; `provider`/`model` override its LLM profile. */
+      run: (agentId: string, request: AgentRunRequest = {}) =>
+        transport.request(
+          path`/api/agents/${agentId}/runs`,
+          json({ input: request.input ?? {}, provider: request.provider, model: request.model, api_key: request.apiKey }),
+          runSummarySchema,
+        ),
+    },
     llmProfiles: { ...resourceNamespace(transport, "llm-profiles", llmProfileSchema), versions: versionNamespace(transport, "llm-profiles") },
     /** Reusable deterministic transforms, bound by id from edges and transform nodes. */
     transforms: {

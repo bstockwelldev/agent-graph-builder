@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Bot,
   Bug,
   CheckCircle2,
   ChevronDown,
@@ -66,11 +67,14 @@ import { IconTabs, type IconTab } from "./ui/IconTabs";
 import { PanelFrame, PanelHeader } from "./ui/PanelFrame";
 import { SkeletonBlock } from "./ui/Skeleton";
 import { TemplateEditor } from "./ui/TemplateEditor";
-import { PasswordInput, TextArea } from "./ui/fields";
+import { PasswordInput, Select, TextArea } from "./ui/fields";
 import { errorDetail } from "@/lib/apiErrors";
 
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
 const DEFAULT_QUESTION = "How does a database index work?";
+
+/** An agent the Run panel can run this graph as (slice 6). */
+export type RunAgentOption = { id: string; name: string; llm_profile_id?: string | null };
 
 export type RunSelection = {
   provider: ChatProvider;
@@ -264,6 +268,9 @@ export function RunPanel({
   runSummary,
   checkpoint = null,
   onResume,
+  agents = [],
+  agentId = null,
+  onAgentChange,
   runHistory,
   runHistoryLoading = false,
   onSelectRun,
@@ -313,6 +320,10 @@ export function RunPanel({
   checkpoint?: Checkpoint | null;
   /** Approve or reject that checkpoint, then follow the run. */
   onResume?: (decision: ResumeDecision) => Promise<void>;
+  /** Agents built on this graph (slice 6): "Run as" picks one, or none for the bare graph. */
+  agents?: readonly RunAgentOption[];
+  agentId?: string | null;
+  onAgentChange?: (agentId: string | null) => void;
   runHistory: RunSummary[];
   runHistoryLoading?: boolean;
   onSelectRun: (runId: string) => void;
@@ -484,6 +495,7 @@ export function RunPanel({
     }
   }, [onValidate]);
 
+  const selectedAgent = agents.find((agent) => agent.id === agentId) ?? null;
   const running = runSummary?.status === "queued" || runSummary?.status === "running";
   const busy = running || compiling;
   const summary = validationSummary(diagnostics);
@@ -806,6 +818,27 @@ export function RunPanel({
             </Button>
           )}
         </div>
+      )}
+
+      {agents.length > 0 && onAgentChange && (
+        <Group title="Run as" icon={<Bot size={13} />}>
+          <Field
+            label="Agent"
+            hint="An agent runs this graph with its own LLM profile, instructions and allowed tools."
+            meta={selectedAgent?.llm_profile_id ? `profile: ${selectedAgent.llm_profile_id}` : undefined}
+          >
+            {(id) => (
+              <Select id={id} value={agentId ?? ""} disabled={busy} onChange={(event) => onAgentChange(event.target.value || null)} style={{ marginBottom: -spacing[3] }}>
+                <option value="">Graph only</option>
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </Group>
       )}
 
       <div ref={inputsRef}>

@@ -528,6 +528,7 @@ def _prepare_run(
     parent_run_id: str | None = None,
     parent_node_id: str | None = None,
     depth: int = 0,
+    agent_id: str | None = None,
 ) -> tuple[ExecContext, Any, dict[str, Any]]:
     graph = COMPILED_WORKFLOWS[compiled_workflow_id]
     run_id = f"run_{uuid.uuid4().hex[:12]}"
@@ -552,6 +553,7 @@ def _prepare_run(
         compiler_version=COMPILER_VERSION,
         parent_run_id=parent_run_id,
         parent_node_id=parent_node_id,
+        agent_id=agent_id,
     )
     RUN_TRACES[run_id] = {}
 
@@ -619,6 +621,7 @@ def start_run(
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None,
     release_id: str | None = None,
     fixture_node_outputs: dict[str, Any] | None = None,
+    agent_id: str | None = None,
 ) -> tuple[str, RunEventBus]:
     """Creates run bookkeeping and returns immediately; caller schedules `_execute`.
 
@@ -644,6 +647,7 @@ def start_run(
         release_resource_snapshots=release_resource_snapshots,
         release_id=release_id,
         fixture_node_outputs=fixture_node_outputs,
+        agent_id=agent_id,
     )
     asyncio.create_task(_execute(ctx, compiled_app, run_input))
     return ctx.run_id, ctx.bus
@@ -663,6 +667,7 @@ async def start_run_inline(
     parent_run_id: str | None = None,
     parent_node_id: str | None = None,
     depth: int = 0,
+    agent_id: str | None = None,
 ) -> tuple[str, RunEventBus]:
     """Create the run and await execution in this request (Vercel / serverless).
     See `start_run` for `release_resource_snapshots`/`release_id`/
@@ -682,6 +687,7 @@ async def start_run_inline(
         parent_run_id=parent_run_id,
         parent_node_id=parent_node_id,
         depth=depth,
+        agent_id=agent_id,
     )
     await _execute(ctx, compiled_app, run_input)
     return ctx.run_id, ctx.bus

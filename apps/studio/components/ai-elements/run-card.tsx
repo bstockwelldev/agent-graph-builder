@@ -24,7 +24,8 @@ const DEFAULT_DEPS: RunCardDeps = {
   waitForRun,
 };
 
-export function versionLabel(ref: Pick<ChatRunRef, "source" | "release_id">): string {
+export function versionLabel(ref: Pick<ChatRunRef, "source" | "release_id" | "agent_name">): string {
+  if (ref.agent_name) return `Agent ${ref.agent_name}`;
   return ref.source === "release" ? `Release ${ref.release_id ?? ""}`.trim() : "Draft";
 }
 
