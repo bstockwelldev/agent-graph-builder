@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PauseCircle } from "lucide-react";
 
 import { errorDetail } from "@/lib/apiErrors";
-import { tryParseGenuiSurface } from "@/lib/genui";
+import { parseGenuiSurface, type GenuiData } from "@/lib/genui";
 import { accentSurface, color, radius, spacing, text, typeScale } from "@/lib/graph-theme";
 
 import { Button } from "./ui/Button";
@@ -28,8 +28,17 @@ export type ResumeDecision = { approve: boolean; reason?: string; values?: Recor
  * "reject" does the same as the matching button; any other actionId
  * approves and is recorded as `values.action`.
  */
-export function RunCheckpoint({ checkpoint, onResume }: { checkpoint: Checkpoint; onResume: (decision: ResumeDecision) => Promise<void> }) {
-  const surface = tryParseGenuiSurface(checkpoint.surfaceJson);
+export function RunCheckpoint({
+  checkpoint,
+  onResume,
+  data = null,
+}: {
+  checkpoint: Checkpoint;
+  onResume: (decision: ResumeDecision) => Promise<void>;
+  /** The paused run's input and traces, for the surface's `$ref`s. */
+  data?: GenuiData | null;
+}) {
+  const { surface, error: surfaceError } = parseGenuiSurface(checkpoint.surfaceJson);
   const [values, setValues] = useState<GenuiValues>({});
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
@@ -71,8 +80,11 @@ export function RunCheckpoint({ checkpoint, onResume }: { checkpoint: Checkpoint
       {checkpoint.content && <p style={{ margin: `${spacing[2]}px 0 0`, fontSize: 13, lineHeight: "18px", color: text.primary, whiteSpace: "pre-wrap" }}>{checkpoint.content}</p>}
       {surface && (
         <div style={{ marginTop: spacing[2] }}>
-          <GenuiSurface surface={surface} values={values} onValuesChange={setValues} onAction={onAction} disabled={busy !== null} />
+          <GenuiSurface surface={surface} values={values} onValuesChange={setValues} onAction={onAction} disabled={busy !== null} data={data} />
         </div>
+      )}
+      {surfaceError && (
+        <p style={{ margin: `${spacing[2]}px 0 0`, ...typeScale.caption, color: text.secondary }}>The gate&apos;s surface can&apos;t render ({surfaceError}); approve or reject below.</p>
       )}
       <label style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: spacing[2] }}>
         <span style={{ ...typeScale.caption, color: text.secondary }}>Reason (optional)</span>

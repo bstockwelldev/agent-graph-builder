@@ -67,4 +67,65 @@ describe("GenuiSurface", () => {
     expect((screen.getByLabelText("Amount") as HTMLInputElement).readOnly).toBe(true);
     expect((screen.getByRole("button", { name: "Escalate" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  // Slice 5: richer components, bound to the paused run's data.
+  it("binds $refs to the run, and collects Select and Checkbox answers", async () => {
+    const surfaceJson = JSON.stringify({
+      root: {
+        type: "Stack",
+        children: [
+          { type: "Approval", props: { title: "Ship it?", summary: { $ref: "/nodes/llm/output" }, approveLabel: "Ship" } },
+          { type: "Table", props: { rows: { $ref: "/nodes/tool/output" }, caption: "Orders" } },
+          { type: "Text", props: { content: { $ref: "/nodes/later/output" } } },
+          { type: "Select", id: "cohort", props: { label: "Cohort", options: ["10%", "50%"] } },
+          { type: "Checkbox", id: "notify", props: { label: "Notify" } },
+        ],
+      },
+    });
+    const onResume = vi.fn(async () => {});
+    const data = {
+      input: {},
+      nodes: {
+        llm: { status: "succeeded", input: null, output: "Looks **good**" },
+        tool: { status: "succeeded", input: null, output: [{ id: 1, total: 20 }] },
+      },
+    };
+    render(<RunCheckpoint checkpoint={{ ...checkpoint, surfaceJson }} onResume={onResume} data={data} />);
+    expect(screen.getByText("good").tagName).toBe("STRONG");
+    expect(screen.getByRole("region", { name: "Orders" }).textContent).toContain("20");
+    expect(screen.getByText("/nodes/later/output").parentElement?.textContent).toContain("not in this run yet");
+
+    fireEvent.change(screen.getByLabelText("Cohort"), { target: { value: "50%" } });
+    fireEvent.click(screen.getByLabelText("Notify"));
+    fireEvent.click(screen.getByRole("button", { name: "Ship" }));
+    await waitFor(() => expect(onResume).toHaveBeenCalledWith({ approve: true, reason: undefined, values: { cohort: "50%", notify: true } }));
+  });
+
+  it("still offers Approve and Reject when the surface is invalid", () => {
+    render(<RunCheckpoint checkpoint={{ ...checkpoint, surfaceJson: '{"root":{"type":"Nope"}}' }} onResume={vi.fn(async () => {})} />);
+    expect(screen.getByText(/surface can't render/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
+  });
+});
+
+describe("GenuiSurface previews", () => {
+  it("shows where a $ref points without run data, and draws charts with a table view", () => {
+    const surface = {
+      root: {
+        type: "Stack" as const,
+        children: [
+          { type: "Chart" as const, props: { title: "Revenue", data: [{ w: "W1", r: 10 }, { w: "W2", r: 15 }], x: "w", y: "r" } },
+          { type: "Diagram" as const, props: { source: "graph LR\nA[Start] --> B[End]" } },
+          { type: "KeyValue" as const, props: { items: { q: { $ref: "/input/q" } } } },
+        ],
+      },
+    };
+    render(<GenuiSurface surface={surface} />);
+    expect(screen.getByRole("img", { name: /Revenue: bar chart of r by w, 2 points/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Start to End/ })).toBeTruthy();
+    expect(screen.getByText("/input/q").parentElement?.textContent).toContain("filled in from the run");
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("columnheader", { name: "r" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "15" })).toBeTruthy();
+  });
 });

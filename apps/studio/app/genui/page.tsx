@@ -1,76 +1,100 @@
-import type { GenuiNode } from "@/lib/genui";
-import { GenuiSurfaceView } from "@/components/genui/genui-renderer";
+import type { GenuiData, GenuiNode } from "@/lib/genui";
+import { GenuiSurface } from "@/components/graph/ui/GenuiSurface";
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Ported from micro-ui-agent-builder's /genui docs page, adapted for AGB:
-// surfaces render via a `human_gate` node's genuiCheckpointSurfaceJson
-// config field (validated by node_configs.py) rather than an "Output flow
-// step" + `@repo/shared`. Action dispatch stays inert, same as MUI's.
+// Surfaces render via a `human_gate` node's genuiCheckpointSurfaceJson config
+// field. Previews here use the same renderer as the Run panel's checkpoint
+// (components/graph/ui/GenuiSurface.tsx), read-only, with sample run data
+// standing in for the paused run that `$ref`s point into.
 
-const SAMPLE_DASHBOARD: GenuiNode = {
-  type: "Stack",
-  props: { direction: "col", gap: 20 },
-  children: [
-    {
-      type: "Text",
-      props: { content: "Structured surfaces a human_gate checkpoint can present while a run is paused." },
+/** What a paused run would provide to `$ref`s (lib/genui.ts GenuiData). */
+const SAMPLE_DATA: GenuiData = {
+  input: { question: "Should we ship the Q3 pricing change?" },
+  nodes: {
+    llm_answer: {
+      status: "succeeded",
+      input: null,
+      output: "**Recommendation:** ship to 10% first.\n\n- Revenue impact looks positive\n- Churn risk is concentrated in the *Starter* tier",
     },
-    {
-      type: "Card",
-      props: { title: "Status" },
-      children: [
-        {
-          type: "Stack",
-          props: { direction: "row", gap: 8 },
-          children: [
-            { type: "Button", id: "refresh", props: { label: "Refresh", actionId: "reload_metrics" } },
-            { type: "Button", id: "export", props: { label: "Export" } },
-          ],
-        },
+    tool_metrics: {
+      status: "succeeded",
+      input: null,
+      output: [
+        { week: "W1", revenue: 120, churn: 14 },
+        { week: "W2", revenue: 134, churn: 12 },
+        { week: "W3", revenue: 129, churn: 15 },
+        { week: "W4", revenue: 151, churn: 11 },
       ],
     },
-  ],
+  },
 };
 
-const SAMPLE_FORM: GenuiNode = {
-  type: "Stack",
-  props: { direction: "col", gap: 16 },
-  children: [
-    { type: "Text", props: { content: "Quick capture" } },
-    { type: "FormField", id: "title", props: { label: "Title", inputType: "text" } },
-    { type: "FormField", id: "amount", props: { label: "Amount", inputType: "number" } },
-    { type: "Button", id: "save", props: { label: "Save draft", actionId: "save_draft" } },
-  ],
-};
+const EXAMPLES: { title: string; description: string; root: GenuiNode }[] = [
+  {
+    title: "Approval with a summary from the run",
+    description: "Approval renders Approve / Reject; its summary is Markdown pulled from an llm node's output with $ref.",
+    root: {
+      type: "Approval",
+      props: { title: "Ship the pricing change?", summary: { $ref: "/nodes/llm_answer/output" }, approveLabel: "Ship to 10%", rejectLabel: "Hold" },
+    },
+  },
+  {
+    title: "Chart and table over tool output",
+    description: "Chart (bar, line or area) and Table read rows from a node's output; the chart's Table button shows the same values.",
+    root: {
+      type: "Stack",
+      props: { gap: 16 },
+      children: [
+        { type: "Chart", props: { kind: "line", title: "Weekly revenue and churn", data: { $ref: "/nodes/tool_metrics/output" }, x: "week", y: ["revenue", "churn"] } },
+        { type: "Table", props: { rows: { $ref: "/nodes/tool_metrics/output" }, caption: "Metrics" } },
+      ],
+    },
+  },
+  {
+    title: "What changes, and why",
+    description: "KeyValue for facts, Diff for an approve-this-change view.",
+    root: {
+      type: "Stack",
+      props: { gap: 16 },
+      children: [
+        { type: "KeyValue", props: { title: "Request", items: { question: { $ref: "/input/question" }, requested_by: "pricing-team", tier: "Starter" } } },
+        { type: "Diff", props: { title: "Price table", before: "Starter: $9\nPro: $29\nTeam: $79", after: "Starter: $12\nPro: $29\nTeam: $89" } },
+      ],
+    },
+  },
+  {
+    title: "Diagram and form inputs",
+    description: "Diagram draws a Mermaid flowchart; FormField, Select and Checkbox values go back to the run on approve.",
+    root: {
+      type: "Stack",
+      props: { gap: 16 },
+      children: [
+        { type: "Diagram", props: { title: "Rollout", source: "graph LR\n  A[Draft] --> B{Approved?}\n  B -->|yes| C(Ship 10%)\n  B -->|no| D(Revise)\n  C --> E((Full rollout))" } },
+        { type: "Select", id: "cohort", props: { label: "Rollout cohort", options: ["10%", "25%", "50%"] } },
+        { type: "FormField", id: "budget", props: { label: "Budget", inputType: "number" } },
+        { type: "Checkbox", id: "notify", props: { label: "Notify the pricing channel" } },
+      ],
+    },
+  },
+];
 
 const TYPE_REFERENCE: { name: string; summary: string; fields: string[] }[] = [
-  {
-    name: "Stack",
-    summary: "Layout container; composes children vertically or horizontally.",
-    fields: ["props.gap?", "props.direction? col | row", "children[]"],
-  },
-  {
-    name: "Text",
-    summary: "Static copy block for labels, descriptions, or lightweight prose.",
-    fields: ["props.content"],
-  },
-  {
-    name: "Button",
-    summary: "Primary affordance; actionId maps to a client handler name (dispatch is currently inert).",
-    fields: ["id", "props.label", "props.actionId?"],
-  },
-  {
-    name: "Card",
-    summary: "Grouped panel with an optional title and nested GenUI children.",
-    fields: ["props.title?", "children?[]"],
-  },
-  {
-    name: "FormField",
-    summary: "Label + input shell for structured data collection UIs.",
-    fields: ["id", "props.label", "props.inputType? text | number"],
-  },
+  { name: "Stack", summary: "Layout container; children vertically or horizontally.", fields: ["props.gap?", "props.direction? col | row", "children[]"] },
+  { name: "Card", summary: "Grouped panel with an optional title.", fields: ["props.title?", "children?[]"] },
+  { name: "Text", summary: "Plain text.", fields: ["props.content (or $ref)"] },
+  { name: "Markdown", summary: "Headings, lists, **bold**, *italic*, `code`, links and code blocks. Never raw HTML.", fields: ["props.content (or $ref)"] },
+  { name: "Approval", summary: "Approve / Reject with an optional Markdown summary.", fields: ["props.title?", "props.summary? (or $ref)", "props.approveLabel?", "props.rejectLabel?"] },
+  { name: "Button", summary: "Dispatches its actionId: approve, reject, or any other id (approves, recorded as values.action).", fields: ["id", "props.label", "props.actionId?"] },
+  { name: "FormField", summary: "Text or number input; its value reaches the run on approve.", fields: ["id", "props.label", "props.inputType? text | number", "props.placeholder?"] },
+  { name: "Select", summary: "One choice from a list.", fields: ["id", "props.label", "props.options[] (string or {value, label})"] },
+  { name: "Checkbox", summary: "A yes/no answer (true/false).", fields: ["id", "props.label"] },
+  { name: "Chart", summary: "Bar, line or area over rows; up to 8 series, one axis.", fields: ["props.kind? bar | line | area", "props.data (rows or $ref)", "props.x", "props.y (key or keys)", "props.title?", "props.height?"] },
+  { name: "Table", summary: "Rows as a table.", fields: ["props.rows (rows or $ref)", "props.columns?[]", "props.caption?"] },
+  { name: "KeyValue", summary: "Labelled facts.", fields: ["props.items (object, [{label, value}] or $ref)", "props.title?"] },
+  { name: "Diff", summary: "Line diff between two values.", fields: ["props.before", "props.after", "props.title?"] },
+  { name: "Diagram", summary: "Mermaid flowchart subset (graph TD/LR, [ ] ( ) { } (( )) nodes, --> --- -.-> ==> links, |labels|).", fields: ["props.source (or $ref)", "props.title?"] },
 ];
 
 function JsonBlock({ value, label }: { value: unknown; label: string }) {
@@ -87,31 +111,22 @@ export default function GenUiPage() {
     <StudioPage>
       <StudioPageHeader
         title="GenUI component library"
-        description="Surface node types a human_gate node's genuiCheckpointSurfaceJson config can render while a run is paused for approval."
+        description="What a human_gate node's genuiCheckpointSurfaceJson can show while a run waits for approval: summaries, charts, tables, diffs, diagrams and inputs, bound to the run's data with $ref."
       />
 
       <section className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Example · dashboard strip</CardTitle>
-            <CardDescription>Card + horizontal Stack of Buttons — common pattern for toolbars.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <GenuiSurfaceView surface={{ root: SAMPLE_DASHBOARD }} />
-            <JsonBlock label="Dashboard surface JSON" value={{ root: SAMPLE_DASHBOARD }} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Example · form column</CardTitle>
-            <CardDescription>Text, FormField nodes, and a closing action.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <GenuiSurfaceView surface={{ root: SAMPLE_FORM }} />
-            <JsonBlock label="Form surface JSON" value={{ root: SAMPLE_FORM }} />
-          </CardContent>
-        </Card>
+        {EXAMPLES.map((example) => (
+          <Card key={example.title}>
+            <CardHeader>
+              <CardTitle>{example.title}</CardTitle>
+              <CardDescription>{example.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <GenuiSurface surface={{ root: example.root }} data={SAMPLE_DATA} />
+              <JsonBlock label={`${example.title} JSON`} value={{ root: example.root }} />
+            </CardContent>
+          </Card>
+        ))}
       </section>
 
       <Card>
@@ -144,10 +159,11 @@ export default function GenUiPage() {
           <CardTitle>Using GenUI in a graph</CardTitle>
           <CardDescription>
             Set a <code className="text-foreground">human_gate</code> node&apos;s{" "}
-            <code className="text-foreground">genuiCheckpointSurfaceJson</code> config field to{" "}
-            <code className="text-foreground">{"{ \"root\": <GenuiNode> }"}</code> — it renders here and in the node
-            inspector once the run reaches that checkpoint. Action dispatch stays inert for now, matching MUI&apos;s
-            original behavior.
+            <code className="text-foreground">genuiCheckpointSurfaceJson</code> to{" "}
+            <code className="text-foreground">{"{ \"root\": <GenuiNode> }"}</code>. When a run pauses there, the Run panel shows it with Approve / Reject.
+            A data prop can be <code className="text-foreground">{"{ \"$ref\": \"/nodes/<node id>/output\" }"}</code> (or{" "}
+            <code className="text-foreground">/input/&lt;variable&gt;</code>), a JSON Pointer into the paused run; a string output that is JSON is
+            read through. Input values reach the next nodes as <code className="text-foreground">{"{<gate id>[<input id>]}"}</code>.
           </CardDescription>
         </CardHeader>
       </Card>

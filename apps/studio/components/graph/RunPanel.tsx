@@ -69,6 +69,7 @@ import { SkeletonBlock } from "./ui/Skeleton";
 import { TemplateEditor } from "./ui/TemplateEditor";
 import { PasswordInput, Select, TextArea } from "./ui/fields";
 import { errorDetail } from "@/lib/apiErrors";
+import { genuiDataFromRun } from "@/lib/genui";
 
 const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
 const DEFAULT_QUESTION = "How does a database index work?";
@@ -1034,7 +1035,12 @@ export function RunPanel({
                     </div>
                   )}
                   {runSummary.status === "paused" && checkpoint && onResume && (
-                    <RunCheckpoint key={`${runSummary.run_id}:${checkpoint.nodeId}`} checkpoint={checkpoint} onResume={onResume} />
+                    <RunCheckpoint
+                      key={`${runSummary.run_id}:${checkpoint.nodeId}`}
+                      checkpoint={checkpoint}
+                      onResume={onResume}
+                      data={genuiDataFromRun(runSummary.input, nodeTraces)}
+                    />
                   )}
                   {runSummary.status === "succeeded" && <RunResultDisplay result={runSummary.result} />}
                   {runSummary.status === "failed" && runSummary.error && (
