@@ -51,7 +51,9 @@ export function ResourceEditorDialog({
   initialTab?: ResourceEditorTab;
 }) {
   const idPrefix = `resource-${useId().replace(/:/g, "")}`;
-  const canSave = kind.normalize(form) !== null;
+  const issues = kind.issues(form);
+  const canSave = issues.length === 0 && kind.normalize(form) !== null;
+  const issuesId = `${idPrefix}-issues`;
   const fields = kind.renderFields({ form, setForm, editing, idPrefix });
 
   return (
@@ -69,12 +71,24 @@ export function ResourceEditorDialog({
         ) : (
           <div className="space-y-3">{fields}</div>
         )}
-        <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+        <DialogFooter className="border-0 bg-transparent p-0 sm:items-center sm:justify-end">
+          {/* C6: say why Save is disabled instead of leaving it silently off. */}
+          {issues.length > 0 ? (
+            <p id={issuesId} className="text-muted-foreground mr-auto text-xs">
+              To save: {issues.join(" ")}
+            </p>
+          ) : null}
           <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="button" variant="synth" disabled={!canSave || saving} onClick={onSave}>
+            <Button
+              type="button"
+              variant="synth"
+              disabled={!canSave || saving}
+              aria-describedby={issues.length > 0 ? issuesId : undefined}
+              onClick={onSave}
+            >
               {saving ? "Saving…" : "Save"}
             </Button>
           </div>

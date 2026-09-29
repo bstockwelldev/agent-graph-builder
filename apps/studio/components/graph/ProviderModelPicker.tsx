@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { client } from "@/lib/api-client";
+import { useModelCatalog } from "@/hooks/use-model-catalog";
 import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
-import { showModelCatalog } from "@/lib/modelCatalog";
+import { PROVIDER_LABEL, PROVIDER_ORDER, providerLabel } from "@/lib/providers";
 import { OFFLINE_EXPLANATION } from "@/lib/serverHealth";
 import { color } from "@/lib/graph-theme";
 import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
@@ -24,53 +23,11 @@ export function ProviderModelPicker({
   onModelChange: (model: string) => void;
   disabled?: boolean;
 }) {
-  const [modelOptions, setModelOptions] = useState<Array<{ id: string; label: string }>>([]);
-  const [modelCatalogMessage, setModelCatalogMessage] = useState("");
-  const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
-  const catalogProvider = showModelCatalog(provider);
-  const onModelChangeRef = useRef(onModelChange);
-  onModelChangeRef.current = onModelChange;
-  // Read at fetch time only: the catalog is per provider, so picking (or
-  // typing a custom) model must not refetch it or snap back to the default.
-  const modelRef = useRef(model);
-  modelRef.current = model;
-
-  useEffect(() => {
-    if (!catalogProvider) {
-      setModelOptions([]);
-      setModelCatalogMessage("");
-      setModelCatalogLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setModelCatalogLoading(true);
-    client
-      .providers.models(provider, { graphId: graphId ?? undefined })
-      .then((catalog) => {
-        if (cancelled) return;
-        setModelOptions(catalog.models);
-        setModelCatalogMessage(catalog.message);
-        const current = modelRef.current;
-        if (!current || !catalog.models.some((option) => option.id === current)) {
-          const next = catalog.models[0]?.id ?? "";
-          if (next && next !== current) onModelChangeRef.current(next);
-        }
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        console.error("Failed to load provider models:", err);
-        setModelOptions([]);
-        setModelCatalogMessage("Could not load model catalog.");
-      })
-      .finally(() => {
-        if (!cancelled) setModelCatalogLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [catalogProvider, graphId, provider]);
+  const catalog = useModelCatalog({ provider, model, onModelChange, graphId });
+  const catalogProvider = catalog.enabled;
+  const modelOptions = catalog.options;
+  const modelCatalogMessage = catalog.message;
+  const modelCatalogLoading = catalog.loading;
 
   const providerMeta = PROVIDER_TAXONOMY[provider];
   return (
@@ -139,15 +96,6 @@ export function ProviderDot({ provider, size = 8 }: { provider: string; size?: n
   );
 }
 
-const PROVIDER_ORDER: ChatProvider[] = ["stub", "ollama", "groq", "google", "azure", "openai_compat"];
-const PROVIDER_LABEL: Record<string, string> = {
-  stub: "Stub",
-  ollama: "Ollama (local)",
-  groq: "Groq",
-  google: "Google Gemini",
-  azure: "Azure OpenAI",
-  openai_compat: "OpenAI-compatible",
-};
 
 /** Shown beside a stub run when no shared store is configured (see `isOfflineRun`). */
 export function OfflineBadge() {
@@ -175,9 +123,7 @@ export function OfflineBadge() {
   );
 }
 
-export function providerLabel(provider: string): string {
-  return PROVIDER_LABEL[provider] ?? provider;
-}
+export { providerLabel };
 
 export const PROVIDER_OPTIONS: ComboboxOption[] = PROVIDER_ORDER.map((value) => ({
   value,

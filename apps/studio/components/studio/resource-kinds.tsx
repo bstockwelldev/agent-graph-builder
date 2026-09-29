@@ -15,15 +15,15 @@ import type {
 
 import { Badge } from "@/components/ui/badge";
 import { CardDescription, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { client } from "@/lib/api-client";
+import { isChatProvider } from "@/lib/providers";
 import { describeTransform } from "@/lib/transforms";
 import { cn } from "@/lib/utils";
 
 import { AgentFields } from "./agent-fields";
+import { ProviderModelFields } from "./provider-model-fields";
+import { AreaField, CheckField, FieldLabel, NameIdFields, ReadOnlyId, TextField, idIssue } from "./resource-fields";
 
 /**
  * One config per resource registry (studio-graph-workbench-redesign-plan.md,
@@ -86,8 +86,10 @@ export type ResourceKindConfig<T extends ResourceLike> = {
   emptyForm: () => Partial<T>;
   /** Editor state for an existing item (defaults to the item itself). */
   toForm?: (item: T) => Partial<T>;
-  /** Trims/validates `form` into a savable resource, or null when required
-   * fields are missing (doubles as the Save button's enabled gate). */
+  /** What stops `form` from saving, in words ("Add a name."); the editor
+   * lists them beside the disabled Save (plan C6). Empty = savable. */
+  issues: (form: Partial<T>) => string[];
+  /** Trims `form` into a savable resource, or null while `issues` is non-empty. */
   normalize: (form: Partial<T>) => T | null;
   renderFields: (props: ResourceFieldsProps<T>) => ReactNode;
 };
@@ -100,89 +102,24 @@ function genId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function IdField<T extends ResourceLike>({ form, setForm, editing, idPrefix, mono = true }: ResourceFieldsProps<T> & { mono?: boolean }) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={`${idPrefix}-id`}>Id</Label>
-      <Input
-        id={`${idPrefix}-id`}
-        value={form.id ?? ""}
-        onChange={(event) => setForm({ id: event.target.value } as Partial<T>)}
-        disabled={Boolean(editing)}
-        className={cn(mono && "font-mono text-sm", editing && "opacity-80")}
-        autoComplete="off"
-      />
-    </div>
-  );
+/** "Add a name." for each blank required field, plus an id check. */
+function missing(form: Record<string, unknown>, required: [field: string, message: string][]): string[] {
+  const issues = required.filter(([field]) => !String(form[field] ?? "").trim()).map(([, message]) => message);
+  const bad = idIssue(form.id as string | undefined);
+  return bad ? [...issues, bad] : issues;
 }
 
-function TextField({
-  id,
-  label,
-  value,
-  onChange,
-  mono = false,
-  placeholder,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  mono?: boolean;
-  placeholder?: string;
-}) {
+/** Name + id fields for kinds with a name (C1). */
+function nameIdFields<T extends ResourceLike & { name?: string | null }>(props: ResourceFieldsProps<T>, fallback: string) {
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(mono && "font-mono text-sm")}
-        autoComplete="off"
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
-
-function AreaField({
-  id,
-  label,
-  value,
-  onChange,
-  rows,
-  mono = false,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  rows: number;
-  mono?: boolean;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Textarea id={id} value={value} onChange={(event) => onChange(event.target.value)} rows={rows} className={cn(mono && "font-mono text-xs")} />
-    </div>
-  );
-}
-
-function CheckField({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="border-input size-4 rounded border"
-      />
-      <Label htmlFor={id} className="font-normal">
-        {label}
-      </Label>
-    </div>
+    <NameIdFields
+      idPrefix={props.idPrefix}
+      name={props.form.name ?? ""}
+      id={props.form.id ?? ""}
+      editing={Boolean(props.editing)}
+      fallback={fallback}
+      onChange={(patch) => props.setForm(patch as Partial<T>)}
+    />
   );
 }
 
@@ -199,8 +136,8 @@ export const promptKind: ResourceKindConfig<PromptTemplate> = {
   noun: "prompt",
   panelTitle: "Prompts",
   pageTitle: "Prompt Lab",
-  pageDescription: "Prompt templates a graph's prompt/llm nodes can reference by id.",
-  dialogDescription: "Graph nodes reference prompts by id. Changing id may break existing refs.",
+  pageDescription: "Versioned prompt templates that prompt and LLM nodes bind by id.",
+  dialogDescription: "Prompt and LLM nodes bind a prompt by its id. Use {variable} placeholders for run inputs.",
   emptyText: "No prompt templates.",
   listLayout: "stack",
   itemLabel: (prompt) => prompt.name,
@@ -213,32 +150,37 @@ export const promptKind: ResourceKindConfig<PromptTemplate> = {
   ),
   renderCardBody: (prompt) => <pre className={cn(preClass, "max-h-48 p-3 text-xs")}>{prompt.body}</pre>,
   emptyForm: () => ({ id: genId("prompt"), name: "", body: "" }),
+  issues: (form) => missing(form, [["name", "Add a name."], ["body", "Add a body."]]),
   normalize: (form) => {
-    const id = form.id?.trim();
-    const name = form.name?.trim();
-    const body = form.body?.trim();
-    if (!id || !name || !body) return null;
-    return { id, name, body };
+    if (promptKind.issues(form).length > 0) return null;
+    return { id: form.id!.trim(), name: form.name!.trim(), body: form.body!.trim() };
   },
   renderFields: (props) => (
     <>
-      <IdField {...props} mono={false} />
-      <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
-      <AreaField id={`${props.idPrefix}-body`} label="Body" value={props.form.body ?? ""} onChange={(body) => props.setForm({ body })} rows={10} mono />
+      {nameIdFields(props, "prompt")}
+      <AreaField id={`${props.idPrefix}-body`} label="Body" value={props.form.body ?? ""} onChange={(body) => props.setForm({ body })} rows={10} mono required />
     </>
   ),
 };
 
 // ------------------------------------------------------------------ tools
 
-/** Lenient: valid JSON is compacted; invalid JSON is stored as typed rather than blocking save. */
-export function normalizeParametersJson(raw: string | undefined): string {
-  const text = (raw ?? "{}").trim() || "{}";
+/** Why `raw` isn't a usable parameters schema, or null (plan C4): it must
+ * parse as JSON, and be an object. Blank means `{}`. */
+export function parametersJsonIssue(raw: string | undefined): string | null {
+  const text = (raw ?? "").trim() || "{}";
+  let parsed: unknown;
   try {
-    return JSON.stringify(JSON.parse(text));
-  } catch {
-    return text;
+    parsed = JSON.parse(text);
+  } catch (error) {
+    return `Parameters aren't valid JSON: ${error instanceof Error ? error.message : String(error)}`;
   }
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? null : "Parameters must be a JSON object, e.g. {\"type\": \"object\"}.";
+}
+
+/** Compacted JSON; blank means `{}`. Call only once `parametersJsonIssue` is null. */
+export function normalizeParametersJson(raw: string | undefined): string {
+  return JSON.stringify(JSON.parse((raw ?? "").trim() || "{}"));
 }
 
 export const toolKind: ResourceKindConfig<ToolDefinition> = {
@@ -250,7 +192,7 @@ export const toolKind: ResourceKindConfig<ToolDefinition> = {
   panelTitle: "Tools",
   pageTitle: "Tool registry",
   pageDescription: "Catalog definitions exposed to graphs. Tool nodes bind to a registry entry by id.",
-  dialogDescription: "Id matches the tool name a `tool` node's config references.",
+  dialogDescription: "A tool node calls a tool by its name. Built-in tools (lookup_topic, web_search, calculator) need no entry here.",
   emptyText: "No tools configured.",
   listLayout: "grid",
   itemLabel: (tool) => tool.id,
@@ -266,31 +208,61 @@ export const toolKind: ResourceKindConfig<ToolDefinition> = {
     </>
   ),
   renderCardBody: (tool) => <pre className={cn(preClass, "max-h-36 p-2 text-[11px]")}>{tool.parameters_json}</pre>,
-  emptyForm: () => ({ id: genId("tool"), description: "", parameters_json: "{}", requires_approval: false }),
+  emptyForm: () => ({ id: "", description: "", parameters_json: "{}", requires_approval: false }),
   toForm: (tool) => ({ ...tool, parameters_json: tool.parameters_json || "{}" }),
+  issues: (form) => {
+    const issues = [];
+    const id = form.id?.trim() ?? "";
+    if (!id) issues.push("Add a tool name.");
+    else if (idIssue(id)) issues.push("Tool names use letters, digits, _ . and - only.");
+    if (!form.description?.trim()) issues.push("Add a description.");
+    const params = parametersJsonIssue(form.parameters_json);
+    if (params) issues.push(params);
+    return issues;
+  },
   normalize: (form) => {
-    const id = form.id?.trim();
-    const description = form.description?.trim();
-    if (!id || !description) return null;
+    if (toolKind.issues(form).length > 0) return null;
     return {
       ...(form as ToolDefinition),
-      id,
-      description,
+      id: form.id!.trim(),
+      description: form.description!.trim(),
       parameters_json: normalizeParametersJson(form.parameters_json),
       requires_approval: form.requires_approval ?? false,
     };
   },
   renderFields: (props) => (
     <>
-      <IdField {...props} />
-      <AreaField id={`${props.idPrefix}-desc`} label="Description" value={props.form.description ?? ""} onChange={(description) => props.setForm({ description })} rows={2} />
+      {props.editing ? (
+        <ReadOnlyId id={props.editing.id} label="Tool name" />
+      ) : (
+        <TextField
+          id={`${props.idPrefix}-id`}
+          label="Tool name"
+          value={props.form.id ?? ""}
+          onChange={(id) => props.setForm({ id })}
+          mono
+          required
+          autoFocus
+          error={props.form.id?.trim() && idIssue(props.form.id) ? "Use letters, digits, _ . and - only." : null}
+          hint="What a tool node calls. It can't change after you save."
+        />
+      )}
+      <AreaField
+        id={`${props.idPrefix}-desc`}
+        label="Description"
+        value={props.form.description ?? ""}
+        onChange={(description) => props.setForm({ description })}
+        rows={2}
+        required
+      />
       <AreaField
         id={`${props.idPrefix}-params`}
-        label="Parameters (JSON)"
+        label="Parameters (JSON Schema)"
         value={props.form.parameters_json ?? "{}"}
         onChange={(parameters_json) => props.setForm({ parameters_json })}
         rows={6}
         mono
+        error={parametersJsonIssue(props.form.parameters_json)}
       />
       <CheckField
         id={`${props.idPrefix}-approval`}
@@ -353,16 +325,14 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
     system_instructions: "",
     tool_ids: [],
   }),
+  issues: (form) => missing(form, [["name", "Add a name."], ["graph_id", "Pick a graph."]]),
   normalize: (form) => {
-    const id = form.id?.trim();
-    const name = form.name?.trim();
-    const graph_id = form.graph_id?.trim();
-    if (!id || !name || !graph_id) return null;
+    if (agentKind.issues(form).length > 0) return null;
     return {
-      id,
-      name,
+      id: form.id!.trim(),
+      name: form.name!.trim(),
       description: form.description?.trim() || null,
-      graph_id,
+      graph_id: form.graph_id!.trim(),
       llm_profile_id: form.llm_profile_id || null,
       system_prompt_id: form.system_prompt_id || null,
       system_instructions: form.system_instructions?.trim() || null,
@@ -371,8 +341,7 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
   },
   renderFields: (props) => (
     <>
-      <IdField {...props} />
-      <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
+      {nameIdFields(props, "agent")}
       <AreaField id={`${props.idPrefix}-description`} label="Description" value={props.form.description ?? ""} onChange={(description) => props.setForm({ description })} rows={2} />
       <AgentFields form={props.form} setForm={props.setForm} idPrefix={props.idPrefix} />
     </>
@@ -382,6 +351,15 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
 // -------------------------------------------------------------------- mcp
 
 const TRANSPORTS: McpServerConfig["transport"][] = ["http", "sse", "stdio"];
+
+function urlIssue(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? null : "The URL must start with http:// or https://.";
+  } catch {
+    return "Enter a full URL, e.g. https://example.com/mcp.";
+  }
+}
 
 export const mcpKind: ResourceKindConfig<McpServerConfig> = {
   id: "mcp",
@@ -393,7 +371,7 @@ export const mcpKind: ResourceKindConfig<McpServerConfig> = {
   pageTitle: "MCP servers",
   pageDescription:
     "Remote tool servers. Only http transport is currently dispatched by tool nodes; sse/stdio validate but don't execute yet.",
-  dialogDescription: 'Tools bind via mcp_server_id + mcp_tool_name; the identity is "serverId.toolName".',
+  dialogDescription: "A remote tool server. Only the http transport runs today.",
   emptyText: "No MCP servers configured.",
   listLayout: "grid",
   itemLabel: (server) => server.name,
@@ -409,20 +387,31 @@ export const mcpKind: ResourceKindConfig<McpServerConfig> = {
     </>
   ),
   emptyForm: () => ({ id: genId("mcp"), name: "", url: "", transport: "http", enabled: true }),
-  normalize: (form) => {
-    const id = form.id?.trim();
-    const name = form.name?.trim();
+  issues: (form) => {
+    const issues = missing(form, [["name", "Add a name."], ["url", "Add the server URL."]]);
     const url = form.url?.trim();
-    if (!id || !name || !url) return null;
-    return { id, name, url, transport: form.transport ?? "http", enabled: form.enabled ?? true };
+    if (url && urlIssue(url)) issues.push(urlIssue(url)!);
+    return issues;
+  },
+  normalize: (form) => {
+    if (mcpKind.issues(form).length > 0) return null;
+    return { id: form.id!.trim(), name: form.name!.trim(), url: form.url!.trim(), transport: form.transport ?? "http", enabled: form.enabled ?? true };
   },
   renderFields: (props) => (
     <>
-      <IdField {...props} />
-      <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
-      <TextField id={`${props.idPrefix}-url`} label="URL" value={props.form.url ?? ""} onChange={(url) => props.setForm({ url })} mono />
+      {nameIdFields(props, "mcp")}
+      <TextField
+        id={`${props.idPrefix}-url`}
+        label="URL"
+        value={props.form.url ?? ""}
+        onChange={(url) => props.setForm({ url })}
+        mono
+        required
+        placeholder="https://example.com/mcp"
+        error={props.form.url?.trim() ? urlIssue(props.form.url.trim()) : null}
+      />
       <div className="space-y-1.5">
-        <Label htmlFor={`${props.idPrefix}-transport`}>Transport</Label>
+        <FieldLabel htmlFor={`${props.idPrefix}-transport`}>Transport</FieldLabel>
         <Select
           value={props.form.transport ?? "http"}
           onValueChange={(value) => props.setForm({ transport: value as McpServerConfig["transport"] })}
@@ -455,8 +444,8 @@ export const llmProfileKind: ResourceKindConfig<LlmProfile> = {
   panelTitle: "LLM Profiles",
   pageTitle: "LLM profiles",
   pageDescription:
-    "Named model + provider presets. Graphs and agents can reference a profile instead of hard-coding a model string.",
-  dialogDescription: "A named model + provider preset.",
+    "Named provider + model presets. LLM nodes and agents bind a profile instead of hard-coding a model.",
+  dialogDescription: "A named provider + model. A node or agent bound to it runs on this model.",
   emptyText: "No LLM profiles.",
   listLayout: "grid",
   itemLabel: (profile) => profile.name,
@@ -470,32 +459,31 @@ export const llmProfileKind: ResourceKindConfig<LlmProfile> = {
       </CardDescription>
     </>
   ),
-  emptyForm: () => ({ id: genId("llm"), name: "", model: "", model_provider: "", description: "" }),
+  emptyForm: () => ({ id: genId("llm"), name: "", model: "", model_provider: "stub", description: "" }),
+  issues: (form) => {
+    const issues = missing(form, [["name", "Add a name."], ["model", "Pick a model."]]);
+    if (!isChatProvider(form.model_provider)) issues.push("Pick a provider.");
+    return issues;
+  },
   normalize: (form) => {
-    const id = form.id?.trim();
-    const name = form.name?.trim();
-    const model = form.model?.trim();
-    if (!id || !name || !model) return null;
+    if (llmProfileKind.issues(form).length > 0) return null;
     return {
-      id,
-      name,
-      model,
-      model_provider: form.model_provider?.trim() || null,
+      id: form.id!.trim(),
+      name: form.name!.trim(),
+      model: form.model!.trim(),
+      model_provider: form.model_provider!,
       description: form.description?.trim() || null,
     };
   },
   renderFields: (props) => (
     <>
-      <IdField {...props} />
-      <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
-      <TextField id={`${props.idPrefix}-model`} label="Model" value={props.form.model ?? ""} onChange={(model) => props.setForm({ model })} mono />
-      <TextField
-        id={`${props.idPrefix}-provider`}
-        label="Provider"
-        value={props.form.model_provider ?? ""}
-        onChange={(model_provider) => props.setForm({ model_provider })}
-        mono
-        placeholder="stub, groq, google, azure, ollama, openai_compat"
+      {nameIdFields(props, "llm")}
+      <ProviderModelFields
+        idPrefix={props.idPrefix}
+        provider={props.form.model_provider}
+        model={props.form.model ?? ""}
+        onProviderChange={(model_provider) => props.setForm({ model_provider, model: "" })}
+        onModelChange={(model) => props.setForm({ model })}
       />
       <AreaField id={`${props.idPrefix}-description`} label="Description" value={props.form.description ?? ""} onChange={(description) => props.setForm({ description })} rows={2} />
     </>
@@ -511,6 +499,12 @@ const TRANSFORM_TYPES: { value: TransformDefinition["type"]; label: string; fiel
   { value: "coerce", label: "Convert type", field: "target_type" },
 ];
 const TARGET_TYPES = ["string", "number", "boolean"] as const;
+const TRANSFORM_FIELD_ISSUE = {
+  pointer: "Add the field path.",
+  field: "Add the field name.",
+  template: "Add the message template.",
+  target_type: "Pick a type to convert to.",
+} as const;
 
 export const transformKind: ResourceKindConfig<TransformDefinition> = {
   id: "transforms",
@@ -535,16 +529,20 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
     </>
   ),
   emptyForm: () => ({ id: genId("tf"), name: "", type: "format_message", template: "{value}", description: "" }),
-  normalize: (form) => {
-    const id = form.id?.trim();
-    const name = form.name?.trim();
+  issues: (form) => {
+    const issues = missing(form, [["name", "Add a name."]]);
     const spec = TRANSFORM_TYPES.find((option) => option.value === form.type);
-    if (!id || !name || !spec) return null;
-    const value = form[spec.field];
-    if (typeof value !== "string" || !value.trim()) return null;
+    if (!spec) issues.push("Pick a transform type.");
+    else if (!String(form[spec.field] ?? "").trim()) issues.push(TRANSFORM_FIELD_ISSUE[spec.field]);
+    return issues;
+  },
+  normalize: (form) => {
+    const spec = TRANSFORM_TYPES.find((option) => option.value === form.type);
+    if (transformKind.issues(form).length > 0 || !spec) return null;
+    const value = String(form[spec.field]);
     return {
-      id,
-      name,
+      id: form.id!.trim(),
+      name: form.name!.trim(),
       description: form.description?.trim() || null,
       type: spec.value,
       [spec.field]: spec.field === "template" ? value : value.trim(),
@@ -554,10 +552,11 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
     const type = props.form.type ?? "format_message";
     return (
       <>
-        <IdField {...props} />
-        <TextField id={`${props.idPrefix}-name`} label="Name" value={props.form.name ?? ""} onChange={(name) => props.setForm({ name })} />
+        {nameIdFields(props, "tf")}
         <div className="space-y-1.5">
-          <Label htmlFor={`${props.idPrefix}-type`}>Transform</Label>
+          <FieldLabel htmlFor={`${props.idPrefix}-type`} required>
+            Transform
+          </FieldLabel>
           <Select value={type} onValueChange={(value) => props.setForm({ type: value as TransformDefinition["type"] })}>
             <SelectTrigger id={`${props.idPrefix}-type`} className="w-full">
               <SelectValue>{(value: string) => TRANSFORM_TYPES.find((option) => option.value === value)?.label ?? value}</SelectValue>
@@ -575,6 +574,7 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
           <TextField
             id={`${props.idPrefix}-pointer`}
             label="Field path (JSON Pointer)"
+            required
             value={props.form.pointer ?? ""}
             onChange={(pointer) => props.setForm({ pointer })}
             placeholder="/answer"
@@ -582,12 +582,13 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
           />
         )}
         {type === "wrap" && (
-          <TextField id={`${props.idPrefix}-field`} label="Field name" value={props.form.field ?? ""} onChange={(field) => props.setForm({ field })} placeholder="topic" mono />
+          <TextField id={`${props.idPrefix}-field`} label="Field name" value={props.form.field ?? ""} onChange={(field) => props.setForm({ field })} placeholder="topic" mono required />
         )}
         {type === "format_message" && (
           <AreaField
             id={`${props.idPrefix}-template`}
             label="Message template ({value}, {value.field})"
+            required
             value={props.form.template ?? ""}
             onChange={(template) => props.setForm({ template })}
             rows={3}
@@ -595,7 +596,9 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
         )}
         {type === "coerce" && (
           <div className="space-y-1.5">
-            <Label htmlFor={`${props.idPrefix}-target`}>Convert to</Label>
+            <FieldLabel htmlFor={`${props.idPrefix}-target`} required>
+              Convert to
+            </FieldLabel>
             <Select value={props.form.target_type ?? ""} onValueChange={(value) => props.setForm({ target_type: value as TransformDefinition["target_type"] })}>
               <SelectTrigger id={`${props.idPrefix}-target`} className="w-full">
                 <SelectValue placeholder="Pick a type" />
