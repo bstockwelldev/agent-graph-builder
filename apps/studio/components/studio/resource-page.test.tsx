@@ -34,6 +34,7 @@ const clients = vi.hoisted(() => {
     agents: makeClient([{ id: "a_1", name: "Support agent", description: "Helps", graph_id: "g1", tool_ids: [] }]),
     mcpServers: makeClient([{ id: "m_1", name: "Local MCP", url: "http://x", transport: "sse", enabled: false }]),
     llmProfiles: makeClient([{ id: "l_1", name: "Fast", model: "qwen", model_provider: "ollama" }]),
+    providers: { models: vi.fn(async () => ({ models: [{ id: "qwen", label: "Qwen" }], message: "" })) },
   };
 });
 vi.mock("@/lib/api-client", () => ({ client: clients }));
@@ -105,9 +106,17 @@ describe("ResourcePage extras", () => {
     fireEvent.click(newButton);
     const dialog = await screen.findByRole("dialog", { name: "New prompt" });
     expect(within(dialog).queryByRole("tab")).toBeNull();
+    // C6: a disabled Save says what's missing.
+    const save = within(dialog).getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(within(dialog).getByText("To save: Add a name. Add a body.")).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Greeter" } });
     fireEvent.change(within(dialog).getByLabelText("Body"), { target: { value: "Hi {name}" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await vi.waitFor(() => expect(clients.prompts.create).toHaveBeenCalledWith(expect.objectContaining({ name: "Greeter", body: "Hi {name}" })));
+    expect(within(dialog).queryByText(/^To save:/)).toBeNull();
+    fireEvent.click(save);
+    // C1: the id follows the name.
+    await vi.waitFor(() =>
+      expect(clients.prompts.create).toHaveBeenCalledWith(expect.objectContaining({ id: expect.stringMatching(/^greeter_[0-9a-f]{4}$/), name: "Greeter", body: "Hi {name}" })),
+    );
   });
 });

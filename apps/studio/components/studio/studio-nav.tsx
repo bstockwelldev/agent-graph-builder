@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BarChart3,
@@ -30,10 +31,10 @@ type NavItem = { href: string; label: string; icon: LucideIcon; description?: st
  */
 export const RESOURCE_ITEMS: readonly NavItem[] = [
   { href: "/agents", label: "Agents", icon: Bot, description: "A graph plus a model, instructions, and allowed tools, runnable by name." },
-  { href: "/prompts", label: "Prompts", icon: FileText, description: "Versioned prompt templates with variables." },
+  { href: "/prompts", label: "Prompts", icon: FileText, description: "Versioned prompt templates that prompt and LLM nodes bind." },
   { href: "/tools", label: "Tools", icon: Wrench, description: "Tool definitions agents and tool nodes can call." },
   { href: "/mcp", label: "MCP", icon: Server, description: "Model Context Protocol servers that expose tools." },
-  { href: "/llm-profiles", label: "LLM Profiles", icon: SlidersHorizontal, description: "Named provider/model/parameter presets." },
+  { href: "/llm-profiles", label: "LLM Profiles", icon: SlidersHorizontal, description: "Named provider + model presets that LLM nodes and agents bind." },
   { href: "/transforms", label: "Transforms", icon: Shuffle, description: "Reusable data reshaping between steps: select, wrap, format, convert." },
   { href: "/genui", label: "GenUI", icon: Layers, description: "Schema-driven UI surfaces for human-gate checkpoints." },
 ];
@@ -169,10 +170,57 @@ export function StudioNav({ pathname, onNavigate }: { pathname: string; onNaviga
   );
 }
 
-/** Tab strip across the top of every resource page, so switching resource types is one click from any of them. */
+/** Which ends of a horizontally scrolling strip have tabs hidden past them. */
+type Overflow = { start: boolean; end: boolean };
+
+const OVERFLOW_MASK: Record<string, string> = {
+  none: "",
+  start: "[mask-image:linear-gradient(to_right,transparent,black_2.5rem)]",
+  end: "[mask-image:linear-gradient(to_left,transparent,black_2.5rem)]",
+  both: "[mask-image:linear-gradient(to_right,transparent,black_2.5rem,black_calc(100%-2.5rem),transparent)]",
+};
+
+/**
+ * Tab strip across the top of every resource page, so switching resource
+ * types is one click from any of them. At narrow widths it scrolls: the
+ * active tab is scrolled into view, and a fade marks each end that has more
+ * tabs past it (resource-forms-consistency-plan.md, slice 2).
+ */
 export function ResourceTabs({ pathname }: { pathname: string }) {
+  const navRef = useRef<HTMLElement>(null);
+  const [overflow, setOverflow] = useState<Overflow>({ start: false, end: false });
+
+  const measure = useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const start = nav.scrollLeft > 1;
+    const end = nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1;
+    setOverflow((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+  }, []);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    nav?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    measure();
+  }, [measure, pathname]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [measure]);
+
+  const mask = overflow.start && overflow.end ? "both" : overflow.start ? "start" : overflow.end ? "end" : "none";
   return (
-    <nav aria-label="Resource types" className="mb-4 flex gap-1 overflow-x-auto border-b">
+    <nav
+      ref={navRef}
+      aria-label="Resource types"
+      onScroll={measure}
+      data-overflow={mask}
+      className={cn("mb-4 flex gap-1 overflow-x-auto border-b [scrollbar-width:thin]", OVERFLOW_MASK[mask])}
+    >
       {RESOURCE_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = matchesPrefix(pathname, href);
         return (

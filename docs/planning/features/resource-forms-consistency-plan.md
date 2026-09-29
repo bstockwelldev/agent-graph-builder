@@ -152,14 +152,15 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
    - GenUI Buttons dispatch their `actionId`s.
    - Form values are submitted on resume (backend and SDK).
    - e2e: pause at a `human_gate`, approve, then reject.
-2. **Form foundation (C1–C6):**
-   - Name-first generated ids.
-   - A shared `ProviderModelPicker` in LLM profiles.
-   - ~~A graph picker for the agent's default graph.~~ (shipped with slice 6)
-   - JSON validation for tool parameters.
-   - Required markers.
-   - Copy fixes (C7).
-   - The tab strip overflow fix.
+2. **Form foundation (C1–C6)** — **shipped 2026-09-29.**
+   - C1: Name comes first and is focused. On create the id follows the name (`slug_abcd`), with "Customize id" to edit it; after create it's display-only with a copy button (`components/studio/resource-fields.tsx`). Tools keep their name as the id, since tool nodes call it by that.
+   - C2/C3/C5: LLM profiles pick the provider from a select over the chat providers and the model from the same catalog the canvas's `ProviderModelPicker` loads (`hooks/use-model-catalog.ts`, shared). A stored provider the API doesn't run is flagged.
+   - C4: tool parameters must be a JSON object; the error shows inline and blocks Save.
+   - C6: required fields are marked, and every kind has an `issues(form)` list that the editor shows beside the disabled Save ("To save: Add a name. Pick a model."). MCP URLs must be http(s).
+   - C7: nav, page and dialog copy for Prompts, Tools, MCP and LLM profiles now describes only real fields.
+   - The resource tab strip scrolls the current tab into view and fades the ends that have more tabs past them.
+   - The agent's graph picker shipped with slice 6. Still open: prompt descriptions, the prompt body as a `TemplateEditor`, and "Used by N graphs" on cards (C8).
+   - e2e: `e2e/specs/resource-forms.spec.ts`.
 3. **Tools ↔ MCP:**
    - Tool source (Mock / MCP / Builtin).
    - An MCP test/discover route and UI.

@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import type { AgentProfile, GraphSummary, LlmProfile, PromptTemplate, ToolDefinition } from "@bstockwelldev/agent-graph-sdk";
 
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { client } from "@/lib/api-client";
 import { BUILTIN_TOOL_IDS } from "@/lib/builtinTools";
+
+import { FieldLabel } from "./resource-fields";
 
 const NONE = "__none__";
 
@@ -42,6 +43,7 @@ function Picker({
   options,
   noneLabel,
   loading,
+  required = false,
 }: {
   id: string;
   label: string;
@@ -52,13 +54,16 @@ function Picker({
   /** Offer "none" (optional fields); omit for a required pick. */
   noneLabel?: string;
   loading: boolean;
+  required?: boolean;
 }) {
   const items = noneLabel ? [{ value: NONE, label: noneLabel }, ...options] : options;
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <FieldLabel htmlFor={id} required={required}>
+        {label}
+      </FieldLabel>
       <Select value={value || (noneLabel ? NONE : "")} onValueChange={(next) => onChange(!next || next === NONE ? null : String(next))}>
-        <SelectTrigger id={id} className="w-full" aria-label={label}>
+        <SelectTrigger id={id} className="w-full" aria-label={label} aria-required={required || undefined}>
           <SelectValue placeholder={loading ? "Loading…" : `Choose ${label.toLowerCase()}`}>
             {(current: string) => items.find((item) => item.value === current)?.label ?? current}
           </SelectValue>
@@ -102,6 +107,7 @@ export function AgentFields({
         id={`${idPrefix}-graph`}
         label="Graph"
         hint="The graph this agent runs."
+        required
         value={form.graph_id}
         onChange={(graph_id) => setForm({ graph_id: graph_id ?? "" })}
         options={(options?.graphs ?? []).map((graph) => ({ value: graph.id, label: graph.name }))}
@@ -128,7 +134,7 @@ export function AgentFields({
         loading={loading}
       />
       <div className="space-y-1.5">
-        <Label htmlFor={`${idPrefix}-instructions`}>System instructions</Label>
+        <FieldLabel htmlFor={`${idPrefix}-instructions`}>System instructions</FieldLabel>
         <Textarea
           id={`${idPrefix}-instructions`}
           value={form.system_instructions ?? ""}
