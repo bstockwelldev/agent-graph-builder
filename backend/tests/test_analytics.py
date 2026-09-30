@@ -10,7 +10,10 @@ from fastapi.testclient import TestClient
 
 from app import storage
 from app.analytics import (
+    ModelUsage,
+    RunUsage,
     build_analytics_dashboard,
+    build_dashboard_from_usage,
     estimate_tokens_from_text,
     estimate_usd_from_usage,
     get_analytics_dashboard,
@@ -19,7 +22,7 @@ from app.analytics import (
 from app.compiler import compile_graph
 from app.demo_graph import build_demo_graph
 from app.main import app
-from app.models import RunSummary
+from app.models import NodeTrace, NodeType, RunSummary
 from app.runtime import COMPILED_WORKFLOWS, start_run_inline
 
 client = TestClient(app)
@@ -123,6 +126,90 @@ def test_build_analytics_dashboard_respects_max_daily_days_and_max_graphs() -> N
     payload = build_analytics_dashboard(runs, {}, max_daily_days=2, max_graphs=1)
     assert len(payload.daily) == 2
     assert len(payload.by_graph) == 1
+
+
+def test_dashboard_breaks_runs_down_by_status_latency_and_model() -> None:
+    usages = [
+        RunUsage(
+            run_id="r1",
+            graph_id="g",
+            started_at="2026-01-01T00:00:00Z",
+            status="succeeded",
+            duration_ms=120,
+            models=[
+                ModelUsage(provider="groq", model="llama", calls=2, tokens=40, estimated_usd=0.01),
+                ModelUsage(provider="stub", model="stub-small", calls=1, tokens=10),
+            ],
+        ),
+        RunUsage(
+            run_id="r2",
+            graph_id="g",
+            started_at="2026-01-01T01:00:00Z",
+            status="failed",
+            duration_ms=1_500,
+            models=[ModelUsage(provider="groq", model="llama", calls=1, tokens=5, estimated_usd=0.002)],
+        ),
+        # An entry recorded before status was stored, with no duration.
+        RunUsage(run_id="r3", graph_id="g", started_at="2026-01-02T00:00:00Z"),
+        RunUsage(run_id="r4", graph_id="g", started_at="2026-01-02T00:00:00Z", status="succeeded", duration_ms=45_000),
+    ]
+
+    payload = build_dashboard_from_usage(usages, {})
+
+    assert payload.by_status == {"succeeded": 2, "failed": 1, "unknown": 1}
+    assert [(d.date, d.by_status) for d in payload.daily] == [
+        ("2026-01-01", {"succeeded": 1, "failed": 1}),
+        ("2026-01-02", {"unknown": 1, "succeeded": 1}),
+    ]
+    assert [(bucket.label, bucket.runs) for bucket in payload.latency if bucket.runs] == [
+        ("<250 ms", 1),
+        ("1–2 s", 1),
+        ("≥30 s", 1),
+    ]
+    assert len(payload.latency) == 8 and payload.latency[-1].max_ms is None
+    assert [(row.provider, row.model, row.runs, row.calls, row.tokens) for row in payload.by_model] == [
+        ("groq", "llama", 2, 3, 45),
+        ("stub", "stub-small", 1, 1, 10),
+    ]
+    assert payload.by_model[0].estimated_usd == pytest.approx(0.012)
+
+
+def test_dashboard_without_durations_has_no_latency_buckets() -> None:
+    payload = build_dashboard_from_usage([RunUsage(run_id="r", graph_id="g", status="running")], {})
+    assert payload.latency == []
+    assert payload.by_status == {"running": 1}
+
+
+def test_run_usage_records_status_and_calls_per_model() -> None:
+    run = _run("r1", "g", "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z")
+
+    def trace(node_id: str, provider: str, model: str, status: str = "succeeded") -> NodeTrace:
+        return NodeTrace(
+            node_id=node_id,
+            node_type=NodeType.LLM,
+            status=status,
+            started_at="2026-01-01T00:00:00Z",
+            input={"provider": provider, "model": model, "userPrompt": "x" * 40},
+            output="y" * 20,
+        )
+
+    usage = build_analytics_dashboard(
+        [run],
+        {},
+        traces_by_run={
+            "r1": [
+                trace("a", "groq", "llama"),
+                trace("b", "groq", "llama"),
+                trace("c", "stub", "stub-small"),
+                trace("d", "groq", "llama", status="failed"),
+            ]
+        },
+    )
+    assert usage.by_status == {"succeeded": 1}
+    assert [(row.provider, row.model, row.runs, row.calls, row.tokens) for row in usage.by_model] == [
+        ("groq", "llama", 1, 2, 30),
+        ("stub", "stub-small", 1, 1, 15),
+    ]
 
 
 # --- storage.list_all_runs -------------------------------------------------

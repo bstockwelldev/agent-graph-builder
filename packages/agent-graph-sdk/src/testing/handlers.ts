@@ -740,10 +740,15 @@ export function mockRoutes(): Record<string, Handler> {
       const totals = { invocations: runs.length, input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_usd: 0, avg_duration_ms: 0 };
       const byGraph = new Map<string, number>();
       for (const run of runs) byGraph.set(run.graph_id, (byGraph.get(run.graph_id) ?? 0) + 1);
+      const byStatus: Record<string, number> = {};
+      for (const run of runs) byStatus[run.status] = (byStatus[run.status] ?? 0) + 1;
       return HttpResponse.json({
         totals,
-        daily: runs.length ? [{ date: FIXED_TIME.slice(0, 10), invocations: runs.length, tokens: 0, estimated_usd: 0 }] : [],
+        daily: runs.length ? [{ date: FIXED_TIME.slice(0, 10), invocations: runs.length, tokens: 0, estimated_usd: 0, by_status: byStatus }] : [],
         by_graph: [...byGraph].map(([graph_id, invocations]) => ({ graph_id, name: store.graphs.get(graph_id)?.name ?? graph_id, invocations, tokens: 0, estimated_usd: 0 })),
+        by_status: byStatus,
+        latency: [],
+        by_model: [],
       });
     },
     "GET /api/graphs/{graph_id}/analytics": ({ params, store }) => {

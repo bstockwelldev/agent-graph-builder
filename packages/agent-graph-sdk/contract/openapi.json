@@ -56,6 +56,14 @@
       },
       "AnalyticsDailyPoint": {
         "properties": {
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "By Status",
+            "type": "object"
+          },
           "date": {
             "title": "Date",
             "type": "string"
@@ -91,11 +99,35 @@
             "title": "By Graph",
             "type": "array"
           },
+          "by_model": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsModelRow"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "By Status",
+            "type": "object"
+          },
           "daily": {
             "items": {
               "$ref": "#/components/schemas/AnalyticsDailyPoint"
             },
             "title": "Daily",
+            "type": "array"
+          },
+          "latency": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsLatencyBucket"
+            },
+            "title": "Latency",
             "type": "array"
           },
           "totals": {
@@ -141,6 +173,81 @@
           "estimated_usd"
         ],
         "title": "AnalyticsGraphRow",
+        "type": "object"
+      },
+      "AnalyticsLatencyBucket": {
+        "description": "Runs whose duration falls in [min_ms, max_ms); `max_ms` None = no upper bound.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Ms"
+          },
+          "min_ms": {
+            "title": "Min Ms",
+            "type": "integer"
+          },
+          "runs": {
+            "title": "Runs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "min_ms",
+          "max_ms",
+          "runs"
+        ],
+        "title": "AnalyticsLatencyBucket",
+        "type": "object"
+      },
+      "AnalyticsModelRow": {
+        "description": "A provider/model's calls across the window (llm and tool_loop nodes).",
+        "properties": {
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "estimated_usd": {
+            "title": "Estimated Usd",
+            "type": "number"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "runs": {
+            "title": "Runs",
+            "type": "integer"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "runs",
+          "calls",
+          "tokens",
+          "estimated_usd"
+        ],
+        "title": "AnalyticsModelRow",
         "type": "object"
       },
       "AnalyticsTotals": {

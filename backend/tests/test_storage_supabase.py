@@ -372,3 +372,26 @@ def test_supabase_dashboard_reads_daily_files(monkeypatch) -> None:
         "analytics_daily/2026-01-01.json",
         "analytics_daily/2026-01-02.json",
     ]
+
+
+def test_supabase_rebuilds_daily_files_written_by_an_older_version(monkeypatch) -> None:
+    from datetime import date
+
+    from app.analytics import get_analytics_dashboard
+
+    fake = _enable_supabase(monkeypatch)
+    storage.save_run_snapshot(_run("run_old", "g_a", "2026-01-02T00:00:00Z"), [])
+    # Files from version 1 lack each run's status and models.
+    supabase_store.put_json("analytics_daily_built.json", {"version": 1})
+    supabase_store.put_json(
+        "analytics_daily/2026-01-02.json",
+        {"version": 1, "runs": {"run_old": {"run_id": "run_old", "graph_id": "g_a"}}},
+    )
+    fake.object_reads.clear()
+
+    dashboard = get_analytics_dashboard(days=1, today=date(2026, 1, 2))
+
+    assert dashboard.by_status == {"succeeded": 1}
+    assert supabase_store.get_json("analytics_daily_built.json") == {"version": 2}
+    # Rebuilt from the run blobs, once.
+    assert any(key.startswith("runs/") for key in fake.object_reads)
