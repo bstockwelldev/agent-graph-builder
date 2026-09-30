@@ -9,6 +9,7 @@ import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GenuiChart } from "@/components/graph/ui/genui/GenuiChart";
 import { GraphAnalyticsView } from "@/components/workbench/panels/AnalyticsPanel";
 import { useGraphScope } from "@/hooks/use-graph-scope";
 
@@ -106,7 +107,17 @@ export default function AnalyticsPage() {
             <CardHeader>
               <CardTitle>Daily trend</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {payload && payload.daily.length > 0 ? (
+                <GenuiChart
+                  kind="bar"
+                  title="Runs per day"
+                  rows={payload.daily.map((point) => ({ day: point.date.slice(5), runs: point.invocations }))}
+                  x="day"
+                  y={["runs"]}
+                  height={180}
+                />
+              ) : null}
               {payload && payload.daily.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
