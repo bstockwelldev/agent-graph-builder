@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { client } from "@/lib/api-client";
+import { STUDIO_BUILD_SHA, describeBuild } from "@/lib/buildInfo";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, type WorkbenchPanelId } from "./panels";
 
@@ -106,8 +108,32 @@ export function HelpOverlay() {
             <HelpRow keys="Escape" description="Close the open menu, dialog, or panel" />
           </HelpSection>
         </div>
+        <BuildInfo />
       </div>
     </>
+  );
+}
+
+/** Which commit the studio and API run, so a stale deploy is visible. */
+function BuildInfo() {
+  // undefined while loading, null when the API doesn't know its commit.
+  const [apiCommit, setApiCommit] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    client.system.health().then(
+      (health) => !cancelled && setApiCommit(health.commit ?? null),
+      () => !cancelled && setApiCommit(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const build = describeBuild(STUDIO_BUILD_SHA, apiCommit);
+  return (
+    <p className="text-muted-foreground mt-6 border-t pt-3 font-mono text-xs" aria-label="Build">
+      {build.text}
+      {build.mismatch ? <span className="text-destructive ml-2 font-sans">The studio and API are on different commits.</span> : null}
+    </p>
   );
 }
 

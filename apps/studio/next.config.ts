@@ -10,6 +10,8 @@ import type { NextConfig } from "next";
 const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // The commit shown in the Help overlay (lib/buildInfo.ts).
+  env: { NEXT_PUBLIC_BUILD_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "" },
   // e2e coverage builds (E2E_COVERAGE=1, see e2e/coverage.ts) ship browser
   // source maps so V8 coverage maps back to the studio sources.
   productionBrowserSourceMaps: process.env.E2E_COVERAGE === "1",

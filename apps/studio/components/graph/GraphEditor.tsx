@@ -67,6 +67,7 @@ import {
   nodePorts,
   type EdgeContract,
 } from "@/lib/graphAuthoring";
+import { isEdgeDimmed, neighborhoodNodeIds } from "@/lib/focusMode";
 import {
   boundTitleFor,
   computeFocusNodeIds,
@@ -1292,10 +1293,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     });
   }, [edges, nodes.length, setNodes]);
 
-  // Phase 10 Slice D, "Focus mode": recompute which nodes are outside the
-  // selected node's ancestor/descendant closure whenever the mode, the
-  // selection, or the graph shape changes. Clears dimming entirely when
-  // focus mode is off or nothing is selected.
+  // Which nodes stay lit: find matches, the Impact tab's highlight, the
+  // dependency view, or focus mode (the selected node and its direct
+  // neighbors -- canvas-workbench-ergonomics-plan.md §10). Null clears all
+  // dimming. Edges dim with them in `canvasEdges`.
   const focusSet = useMemo(
     () =>
       findMatches
@@ -1305,7 +1306,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           : dependencyView
             ? computeFocusNodeIds(dependencyView.nodeId, edges, dependencyView.direction)
             : focusMode && selectedNodeId
-              ? computeFocusNodeIds(selectedNodeId, edges)
+              ? neighborhoodNodeIds(selectedNodeId, edges)
               : null,
     [focusMode, selectedNodeId, edges, findMatches, impactHighlight, dependencyView],
   );
@@ -1828,9 +1829,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     return [...(frames as unknown as Node<GraphNodeData>[]), ...flagExpandedMembers(hideCollapsedMembers(base, displayGroups), displayGroups)];
   }, [displayGroups, focusSet, heat, lanes, nodes, renamingGroupId]);
   const canvasEdges = useMemo(() => {
-    if (lanes) return edges.filter((edge) => lanes.positions.has(edge.source) && lanes.positions.has(edge.target));
-    return rerouteEdgesForCollapsedGroups(edges, displayGroups);
-  }, [displayGroups, edges, lanes]);
+    const shown = lanes
+      ? edges.filter((edge) => lanes.positions.has(edge.source) && lanes.positions.has(edge.target))
+      : rerouteEdgesForCollapsedGroups(edges, displayGroups);
+    // Derived, not stored on the edges, so undo snapshots never carry it.
+    if (focusSet === null) return shown;
+    return shown.map((edge) => (isEdgeDimmed(edge, focusSet) ? { ...edge, data: { ...edge.data, focusDimmed: true } } : edge));
+  }, [displayGroups, edges, focusSet, lanes]);
   const framePositionsRef = useRef(new Map<string, { x: number; y: number }>());
   framePositionsRef.current = new Map(canvasNodes.filter((node) => isFrameNodeId(node.id)).map((node) => [node.id, node.position]));
   const frameDragRef = useRef<string | null>(null);
@@ -2513,7 +2518,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 setCoachDismissed(true);
               }}
             />
-              {(findOpen || dependencyView) && (
+              {(findOpen || dependencyView || (focusMode && !selectedNodeId)) && (
                 <div style={{ position: "absolute", top: (hudBottom ?? 76) + 8 + (workbench.isCompact ? 56 : 0), left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, zIndex: 15, pointerEvents: "none" }}>
                   {findOpen && (
                     <div style={{ pointerEvents: "auto" }}>
@@ -2523,6 +2528,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                         onMatchesChange={setFindMatches}
                         onClose={() => setFindOpen(false)}
                       />
+                    </div>
+                  )}
+                  {focusMode && !selectedNodeId && !dependencyView && (
+                    <div role="status" className="glass-panel" style={dependencyChipStyle}>
+                      Focus mode: select a node to see it and its neighbors
+                      <button type="button" className="agb-focus-ring" onClick={() => setFocusMode(false)} style={dependencyChipButtonStyle}>
+                        Turn off
+                      </button>
                     </div>
                   )}
                   {dependencyView && (

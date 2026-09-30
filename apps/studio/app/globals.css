@@ -297,9 +297,16 @@
   .agb-hoverable:not(:disabled):hover {
     background: rgba(255, 255, 255, 0.06) !important;
   }
+  /* Menu items (NodeContextMenu.tsx) keep their background out of the inline
+     style: an inline background beats these rules, which is why hover never
+     showed before (canvas-workbench-ergonomics-plan.md §3). Hover moves focus,
+     so :focus is the one highlight for pointer and keyboard alike. */
+  .agb-menu-item {
+    background: transparent;
+  }
   .agb-menu-item:not(:disabled):hover,
-  .agb-menu-item:focus-visible {
-    background: rgba(255, 255, 255, 0.06);
+  .agb-menu-item:not(:disabled):focus {
+    background: rgba(255, 255, 255, 0.1);
     outline: none;
   }
   /* Wave 2.5 inputs: focus ring on the inset field wells (fields.tsx). */

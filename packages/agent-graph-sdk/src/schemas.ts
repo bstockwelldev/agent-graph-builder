@@ -455,6 +455,8 @@ export const serverHealthSchema = z.object({
   ok: z.boolean(),
   storage_backend: z.string(),
   message: z.string().optional(),
+  /** The deployed commit (VERCEL_GIT_COMMIT_SHA / GIT_COMMIT_SHA); null locally, absent from older servers. */
+  commit: z.string().nullable().optional(),
 });
 
 export const providerReadySchema = z.object({

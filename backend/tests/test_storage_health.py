@@ -18,6 +18,8 @@ def _clear_durable_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.delenv("VERCEL_GIT_COMMIT_SHA", raising=False)
+    monkeypatch.delenv("GIT_COMMIT_SHA", raising=False)
 
 
 def _enable_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,6 +91,7 @@ def test_health_reports_unhealthy_on_vercel_sqlite(monkeypatch: pytest.MonkeyPat
         "message": storage.STORAGE_MISCONFIGURED_DETAIL,
         "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
         "public_demo_mode": False,
+        "commit": None,
     }
 
 
@@ -109,6 +112,7 @@ def test_health_reports_healthy_on_vercel_with_supabase(monkeypatch: pytest.Monk
         "supabase_key": supabase_store.key_kind(),
         "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
         "public_demo_mode": False,
+        "commit": None,
     }
 
 
@@ -125,6 +129,7 @@ def test_health_reports_healthy_local_sqlite(monkeypatch: pytest.MonkeyPatch) ->
         "storage_backend": "sqlite",
         "telemetry": {"ok": True, "telemetry_provider": "noop", "telemetry_configured": True},
         "public_demo_mode": False,
+        "commit": None,
     }
 
 
@@ -172,3 +177,13 @@ def test_startup_survives_unavailable_storage(monkeypatch: pytest.MonkeyPatch) -
 
     assert response.status_code == 200
     assert response.json()["storage_backend"] == "supabase"
+
+
+def test_health_reports_the_deployed_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_durable_env(monkeypatch)
+    with TestClient(app) as client:
+        assert client.get("/api/health").json()["commit"] is None
+        monkeypatch.setenv("GIT_COMMIT_SHA", "abc1234")
+        assert client.get("/api/health").json()["commit"] == "abc1234"
+        monkeypatch.setenv("VERCEL_GIT_COMMIT_SHA", "def5678")
+        assert client.get("/api/health").json()["commit"] == "def5678"
