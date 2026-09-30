@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GenuiChart } from "@/components/graph/ui/genui/GenuiChart";
 import { GraphAnalyticsView } from "@/components/workbench/panels/AnalyticsPanel";
 import { useGraphScope } from "@/hooks/use-graph-scope";
+import { latencyRows, modelRows, statusByDay } from "@/lib/analyticsCharts";
 
 // Studio-consolidation Phase 5 (docs/planning/features/studio-consolidation-plan.md):
 // the full port Phase 4c deferred — totals, a daily trend, and a per-graph
@@ -62,6 +63,7 @@ export default function AnalyticsPage() {
 
   const totals = payload?.totals;
   const graph = scope.graph;
+  const byStatus = payload ? statusByDay(payload.daily) : null;
 
   return (
     <StudioPage>
@@ -69,8 +71,8 @@ export default function AnalyticsPage() {
         title="Analytics"
         description={
           graph
-            ? `${graph.name}: success rate, latency and per-node metrics over its recent runs, and its daily trend over the last 30 days. Token counts and spend are rough estimates, not billing truth.`
-            : "Run totals, a daily trend, and per-graph spend across every graph over the last 30 days. Token counts and spend are rough estimates, not billing truth."
+            ? `${graph.name}: success rate, latency and per-node metrics over its recent runs, plus runs by status, run durations and model calls over the last 30 days. Token counts and spend are rough estimates, not billing truth.`
+            : "Run totals, runs by status, run durations, model calls and per-graph spend across every graph over the last 30 days. Token counts and spend are rough estimates, not billing truth."
         }
         loading={loading}
         actions={<ScopeSelect scope={scope} />}
@@ -108,15 +110,20 @@ export default function AnalyticsPage() {
               <CardTitle>Daily trend</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {payload && payload.daily.length > 0 ? (
-                <GenuiChart
-                  kind="bar"
-                  title="Runs per day"
-                  rows={payload.daily.map((point) => ({ day: point.date.slice(5), runs: point.invocations }))}
-                  x="day"
-                  y={["runs"]}
-                  height={180}
-                />
+              {payload && byStatus && payload.daily.length > 0 ? (
+                // One bar per status a day (a server without statuses falls back to the day's total).
+                byStatus.statuses.length > 0 ? (
+                  <GenuiChart kind="bar" title="Runs per day, by status" rows={byStatus.rows} x="day" y={byStatus.statuses} height={200} />
+                ) : (
+                  <GenuiChart
+                    kind="bar"
+                    title="Runs per day"
+                    rows={payload.daily.map((point) => ({ day: point.date.slice(5), runs: point.invocations }))}
+                    x="day"
+                    y={["runs"]}
+                    height={180}
+                  />
+                )
               ) : null}
               {payload && payload.daily.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -143,6 +150,52 @@ export default function AnalyticsPage() {
                 </div>
               ) : (
                 <p className="text-muted-foreground text-sm">No runs in the last 30 days.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Latency and models</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 lg:grid-cols-2">
+              {payload?.latency?.length ? (
+                <GenuiChart kind="bar" title="Run duration (runs)" rows={latencyRows(payload.latency)} x="duration" y={["runs"]} height={200} />
+              ) : (
+                <p className="text-muted-foreground text-sm">No finished runs in the last 30 days.</p>
+              )}
+              {payload?.by_model?.length ? (
+                <div className="space-y-3">
+                  <GenuiChart kind="bar" title="Model calls" rows={modelRows(payload.by_model)} x="model" y={["calls"]} height={200} />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-muted-foreground border-b text-left text-xs uppercase tracking-wide">
+                          <th className="py-2 pr-4 font-normal">Provider / model</th>
+                          <th className="py-2 pr-4 font-normal">Runs</th>
+                          <th className="py-2 pr-4 font-normal">Calls</th>
+                          <th className="py-2 pr-4 font-normal">Tokens</th>
+                          <th className="py-2 font-normal">Est. spend</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payload.by_model.map((row) => (
+                          <tr key={`${row.provider}/${row.model}`} className="border-b last:border-0">
+                            <td className="py-2 pr-4 font-mono text-xs">
+                              {row.provider}/{row.model}
+                            </td>
+                            <td className="py-2 pr-4">{row.runs.toLocaleString()}</td>
+                            <td className="py-2 pr-4">{row.calls.toLocaleString()}</td>
+                            <td className="py-2 pr-4">{row.tokens.toLocaleString()}</td>
+                            <td className="py-2">{USD_FORMATTER.format(row.estimated_usd)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">No model calls in the last 30 days.</p>
               )}
             </CardContent>
           </Card>

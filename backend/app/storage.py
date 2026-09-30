@@ -846,7 +846,9 @@ def list_runs_with_traces(
 # missing (fresh deploy) analytics rebuilds them from the run blobs once.
 _ANALYTICS_DAILY_PREFIX = "analytics_daily/"
 _ANALYTICS_DAILY_MARKER_KEY = "analytics_daily_built.json"
-_ANALYTICS_DAILY_VERSION = 1
+# 2: entries carry the run's status and per-model usage (analytics.RunUsage);
+# a version change makes the next dashboard read rebuild the files once.
+_ANALYTICS_DAILY_VERSION = 2
 
 
 def _analytics_daily_key(day: str) -> str:

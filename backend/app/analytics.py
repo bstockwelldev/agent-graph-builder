@@ -103,11 +103,22 @@ def _day_key(value: str | None) -> str | None:
     return dt.date().isoformat()
 
 
+class ModelUsage(BaseModel):
+    """One provider/model's share of a run: its llm/tool_loop node calls."""
+
+    provider: str
+    model: str
+    calls: int = 0
+    tokens: int = 0
+    estimated_usd: float = 0.0
+
+
 class RunTokenEstimate(BaseModel):
     input_tokens: int
     output_tokens: int
     total_tokens: int
     estimated_usd: float
+    models: list[ModelUsage] = []
 
 
 def estimate_run_tokens(run: RunSummary, traces: list[NodeTrace] | None = None) -> RunTokenEstimate:
@@ -115,6 +126,7 @@ def estimate_run_tokens(run: RunSummary, traces: list[NodeTrace] | None = None) 
     input_tokens = 0
     output_tokens = 0
     estimated_usd = 0.0
+    models: dict[tuple[str, str], ModelUsage] = {}
     if traces is None:
         traces = storage.get_run_traces(run.run_id)
     for trace in traces:
@@ -127,16 +139,20 @@ def estimate_run_tokens(run: RunSummary, traces: list[NodeTrace] | None = None) 
         output_text = "" if trace.output is None else str(trace.output)
         node_input_tokens = estimate_tokens_from_text(prompt_text)
         node_output_tokens = estimate_tokens_from_text(output_text)
+        node_usd = estimate_usd_from_usage(provider, model, node_input_tokens, node_output_tokens)
         input_tokens += node_input_tokens
         output_tokens += node_output_tokens
-        estimated_usd += estimate_usd_from_usage(
-            provider, model, node_input_tokens, node_output_tokens
-        )
+        estimated_usd += node_usd
+        entry = models.setdefault((provider, model), ModelUsage(provider=provider, model=model))
+        entry.calls += 1
+        entry.tokens += node_input_tokens + node_output_tokens
+        entry.estimated_usd += node_usd
     return RunTokenEstimate(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
         estimated_usd=estimated_usd,
+        models=list(models.values()),
     )
 
 
@@ -153,6 +169,8 @@ class AnalyticsDailyPoint(BaseModel):
     invocations: int
     tokens: int
     estimated_usd: float
+    # Runs by status that day ("succeeded", "failed", "paused", ...).
+    by_status: dict[str, int] = {}
 
 
 class AnalyticsGraphRow(BaseModel):
@@ -172,10 +190,49 @@ class AnalyticsTotals(BaseModel):
     avg_duration_ms: int
 
 
+class AnalyticsLatencyBucket(BaseModel):
+    """Runs whose duration falls in [min_ms, max_ms); `max_ms` None = no upper bound."""
+
+    label: str
+    min_ms: int
+    max_ms: int | None
+    runs: int
+
+
+class AnalyticsModelRow(BaseModel):
+    """A provider/model's calls across the window (llm and tool_loop nodes)."""
+
+    provider: str
+    model: str
+    runs: int
+    calls: int
+    tokens: int
+    estimated_usd: float
+
+
 class AnalyticsDashboardPayload(BaseModel):
     totals: AnalyticsTotals
     daily: list[AnalyticsDailyPoint]
     by_graph: list[AnalyticsGraphRow]
+    # Runs by status across the window.
+    by_status: dict[str, int] = {}
+    # Run durations in fixed buckets (all of them, so charts line up); empty
+    # when no run in the window has a duration.
+    latency: list[AnalyticsLatencyBucket] = []
+    by_model: list[AnalyticsModelRow] = []
+
+
+_LATENCY_BUCKETS: list[tuple[str, int, int | None]] = [
+    ("<250 ms", 0, 250),
+    ("250–500 ms", 250, 500),
+    ("0.5–1 s", 500, 1_000),
+    ("1–2 s", 1_000, 2_000),
+    ("2–5 s", 2_000, 5_000),
+    ("5–10 s", 5_000, 10_000),
+    ("10–30 s", 10_000, 30_000),
+    ("≥30 s", 30_000, None),
+]
+_DEFAULT_MAX_MODELS = 12
 
 
 class RunUsage(BaseModel):
@@ -186,10 +243,12 @@ class RunUsage(BaseModel):
     run_id: str
     graph_id: str
     started_at: str | None = None
+    status: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     estimated_usd: float = 0.0
     duration_ms: int | None = None
+    models: list[ModelUsage] = []
 
 
 def run_usage(run: RunSummary, traces: list[NodeTrace] | None = None) -> RunUsage:
@@ -198,10 +257,12 @@ def run_usage(run: RunSummary, traces: list[NodeTrace] | None = None) -> RunUsag
         run_id=run.run_id,
         graph_id=run.graph_id,
         started_at=run.started_at,
+        status=run.status,
         input_tokens=estimate.input_tokens,
         output_tokens=estimate.output_tokens,
         estimated_usd=estimate.estimated_usd,
         duration_ms=_run_duration_ms(run),
+        models=estimate.models,
     )
 
 
@@ -281,6 +342,7 @@ def build_dashboard_from_usage(
     *,
     max_daily_days: int = _DEFAULT_MAX_DAILY_DAYS,
     max_graphs: int = _DEFAULT_MAX_GRAPHS,
+    max_models: int = _DEFAULT_MAX_MODELS,
 ) -> AnalyticsDashboardPayload:
     input_tokens = 0
     output_tokens = 0
@@ -289,7 +351,12 @@ def build_dashboard_from_usage(
     duration_count = 0
 
     daily: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"invocations": 0, "tokens": 0, "estimated_usd": 0.0}
+        lambda: {"invocations": 0, "tokens": 0, "estimated_usd": 0.0, "by_status": defaultdict(int)}
+    )
+    by_status: dict[str, int] = defaultdict(int)
+    latency_counts = [0] * len(_LATENCY_BUCKETS)
+    by_model: dict[tuple[str, str], dict[str, Any]] = defaultdict(
+        lambda: {"runs": 0, "calls": 0, "tokens": 0, "estimated_usd": 0.0}
     )
     by_graph: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"invocations": 0, "tokens": 0, "estimated_usd": 0.0}
@@ -301,9 +368,20 @@ def build_dashboard_from_usage(
         output_tokens += usage.output_tokens
         estimated_usd += usage.estimated_usd
 
+        status = usage.status or "unknown"
+        by_status[status] += 1
+
         if usage.duration_ms is not None:
             duration_sum += usage.duration_ms
             duration_count += 1
+            latency_counts[_latency_bucket(usage.duration_ms)] += 1
+
+        for model_usage in usage.models:
+            model_bucket = by_model[(model_usage.provider, model_usage.model)]
+            model_bucket["runs"] += 1
+            model_bucket["calls"] += model_usage.calls
+            model_bucket["tokens"] += model_usage.tokens
+            model_bucket["estimated_usd"] += model_usage.estimated_usd
 
         day = _day_key(usage.started_at)
         if day is not None:
@@ -311,6 +389,7 @@ def build_dashboard_from_usage(
             bucket["invocations"] += 1
             bucket["tokens"] += total_tokens
             bucket["estimated_usd"] += usage.estimated_usd
+            bucket["by_status"][status] += 1
 
         graph_bucket = by_graph[usage.graph_id]
         graph_bucket["invocations"] += 1
@@ -328,6 +407,7 @@ def build_dashboard_from_usage(
             invocations=daily[day]["invocations"],
             tokens=daily[day]["tokens"],
             estimated_usd=daily[day]["estimated_usd"],
+            by_status=dict(daily[day]["by_status"]),
         )
         for day in tail_days
     ]
@@ -358,7 +438,30 @@ def build_dashboard_from_usage(
         ),
         daily=daily_points,
         by_graph=graph_rows,
+        by_status=dict(by_status),
+        latency=(
+            [
+                AnalyticsLatencyBucket(label=label, min_ms=low, max_ms=high, runs=count)
+                for (label, low, high), count in zip(_LATENCY_BUCKETS, latency_counts, strict=True)
+            ]
+            if duration_count
+            else []
+        ),
+        by_model=sorted(
+            (
+                AnalyticsModelRow(provider=provider, model=model, **values)
+                for (provider, model), values in by_model.items()
+            ),
+            key=lambda row: (-row.calls, row.provider, row.model),
+        )[:max_models],
     )
+
+
+def _latency_bucket(duration_ms: int) -> int:
+    for index, (_label, _low, high) in enumerate(_LATENCY_BUCKETS):
+        if high is None or duration_ms < high:
+            return index
+    return len(_LATENCY_BUCKETS) - 1
 
 
 def get_analytics_dashboard(

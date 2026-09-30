@@ -6,6 +6,8 @@ import type {
   analyticsDailyPointSchema,
   analyticsDashboardPayloadSchema,
   analyticsGraphRowSchema,
+  analyticsLatencyBucketSchema,
+  analyticsModelRowSchema,
   analyticsTotalsSchema,
   capabilityEntrySchema,
   capabilityMatrixSchema,
@@ -222,6 +224,8 @@ export type AnalyticsDailyPoint = z.infer<typeof analyticsDailyPointSchema>;
 export type AnalyticsGraphRow = z.infer<typeof analyticsGraphRowSchema>;
 export type AnalyticsTotals = z.infer<typeof analyticsTotalsSchema>;
 export type AnalyticsDashboardPayload = z.infer<typeof analyticsDashboardPayloadSchema>;
+export type AnalyticsLatencyBucket = z.infer<typeof analyticsLatencyBucketSchema>;
+export type AnalyticsModelRow = z.infer<typeof analyticsModelRowSchema>;
 // Graph/node-scoped analytics (Wave 2, backend/app/node_analytics.py).
 export type NodeMetrics = z.infer<typeof nodeMetricsSchema>;
 export type GraphAnalytics = z.infer<typeof graphAnalyticsSchema>;

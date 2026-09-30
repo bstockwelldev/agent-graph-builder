@@ -1723,6 +1723,13 @@ export type components = {
         };
         /** AnalyticsDailyPoint */
         AnalyticsDailyPoint: {
+            /**
+             * By Status
+             * @default {}
+             */
+            by_status?: {
+                [key: string]: number;
+            };
             /** Date */
             date: string;
             /** Estimated Usd */
@@ -1736,8 +1743,25 @@ export type components = {
         AnalyticsDashboardPayload: {
             /** By Graph */
             by_graph: components["schemas"]["AnalyticsGraphRow"][];
+            /**
+             * By Model
+             * @default []
+             */
+            by_model?: components["schemas"]["AnalyticsModelRow"][];
+            /**
+             * By Status
+             * @default {}
+             */
+            by_status?: {
+                [key: string]: number;
+            };
             /** Daily */
             daily: components["schemas"]["AnalyticsDailyPoint"][];
+            /**
+             * Latency
+             * @default []
+             */
+            latency?: components["schemas"]["AnalyticsLatencyBucket"][];
             totals: components["schemas"]["AnalyticsTotals"];
         };
         /** AnalyticsGraphRow */
@@ -1750,6 +1774,38 @@ export type components = {
             invocations: number;
             /** Name */
             name: string;
+            /** Tokens */
+            tokens: number;
+        };
+        /**
+         * AnalyticsLatencyBucket
+         * @description Runs whose duration falls in [min_ms, max_ms); `max_ms` None = no upper bound.
+         */
+        AnalyticsLatencyBucket: {
+            /** Label */
+            label: string;
+            /** Max Ms */
+            max_ms: number | null;
+            /** Min Ms */
+            min_ms: number;
+            /** Runs */
+            runs: number;
+        };
+        /**
+         * AnalyticsModelRow
+         * @description A provider/model's calls across the window (llm and tool_loop nodes).
+         */
+        AnalyticsModelRow: {
+            /** Calls */
+            calls: number;
+            /** Estimated Usd */
+            estimated_usd: number;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+            /** Runs */
+            runs: number;
             /** Tokens */
             tokens: number;
         };

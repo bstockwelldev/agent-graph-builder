@@ -645,6 +645,8 @@ export const analyticsDailyPointSchema = z.object({
   invocations: z.number(),
   tokens: z.number(),
   estimated_usd: z.number(),
+  /** Runs by status that day ("succeeded", "failed", "paused", ...); absent from older servers. */
+  by_status: z.record(z.string(), z.number()).optional(),
 });
 
 export const analyticsGraphRowSchema = z.object({
@@ -664,10 +666,33 @@ export const analyticsTotalsSchema = z.object({
   avg_duration_ms: z.number(),
 });
 
+/** Runs whose duration falls in [min_ms, max_ms); `max_ms` null = no upper bound. */
+export const analyticsLatencyBucketSchema = z.object({
+  label: z.string(),
+  min_ms: z.number(),
+  max_ms: z.number().nullable(),
+  runs: z.number(),
+});
+
+/** A provider/model's llm and tool_loop calls across the window. */
+export const analyticsModelRowSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  runs: z.number(),
+  calls: z.number(),
+  tokens: z.number(),
+  estimated_usd: z.number(),
+});
+
 export const analyticsDashboardPayloadSchema = z.object({
   totals: analyticsTotalsSchema,
   daily: z.array(analyticsDailyPointSchema),
   by_graph: z.array(analyticsGraphRowSchema),
+  /** The status/latency/model breakdowns are absent from older servers. */
+  by_status: z.record(z.string(), z.number()).optional(),
+  /** Fixed duration buckets; empty when no run in the window has a duration. */
+  latency: z.array(analyticsLatencyBucketSchema).optional(),
+  by_model: z.array(analyticsModelRowSchema).optional(),
 });
 
 // Graph/node-scoped analytics (studio-graph-workbench-redesign-plan.md,

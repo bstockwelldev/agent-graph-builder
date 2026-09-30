@@ -13,7 +13,10 @@ test("Analytics scopes to one graph's runs and nodes", async ({ page, api }) => 
   await expect(page.getByText("Runs (recent)")).toBeVisible();
   await expect(page.getByRole("heading", { name: "By graph" })).toHaveCount(0);
   // Slice 5: charts over the graph's runs.
-  await expect(page.getByRole("img", { name: /^Runs per day: bar chart/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /^Runs per day, by status: bar chart of succeeded/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /^Run duration \(runs\): bar chart/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /^Model calls: bar chart/ })).toBeVisible();
+  await expect(page.getByRole("cell", { name: /^stub\// }).first()).toBeVisible();
   await expect(page.getByRole("img", { name: /^P95 latency by node \(ms\): bar chart/ })).toBeVisible();
   const node = page.getByRole("link", { name: "llm_classify", exact: true });
   await expect(node).toHaveAttribute("href", `/graphs/${graph.id}?node=llm_classify&tab=history`);
