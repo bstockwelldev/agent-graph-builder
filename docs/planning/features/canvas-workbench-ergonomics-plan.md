@@ -30,7 +30,7 @@ So the environment they came from (production or a local build) predates
 AGENTS.md), so it can fall behind `master` without anyone noticing.
 
 - **Action (operator):** redeploy production from `master`.
-- **Follow-up:** show the build's short commit SHA in the Help overlay and in `GET /api/health`, so a stale deploy is visible from a screenshot.
+- **Follow-up (shipped 2026-09-30, slice A):** `GET /api/health` returns `commit` (from `VERCEL_GIT_COMMIT_SHA` or `GIT_COMMIT_SHA`; null locally). The Help overlay (`?`) ends with "Studio abc1234 · API abc1234" and flags a studio and API on different commits (`lib/buildInfo.ts`; the studio's commit is baked in at build time as `NEXT_PUBLIC_BUILD_SHA`).
 
 ## 1. Workflow summary: dispersed across the layout
 
@@ -82,9 +82,10 @@ edge legend overlaps both the minimap and the controls.
 - An inline style beats a class rule, so hover and keyboard focus never change the background.
 - The sibling rule `.agb-hoverable` works because it does use `!important`.
 - Measured: the hovered "LLM node" item's computed background is `rgba(0, 0, 0, 0)`.
-- **Fix:**
-  - Drop `background` from the inline style, or add `!important` to the rule.
-  - Raise the tint: 6% white barely shows on `surface.panel`.
+- **Fix (shipped 2026-09-30, slice A):**
+  - The inline style no longer sets a background; `.agb-menu-item` sets it in CSS.
+  - Hovering an item focuses it, so `:focus` is the one highlight for pointer and keyboard.
+  - The tint went from 6% to 10% white.
 
 **Gaps against a native context menu.**
 - **Empty canvas:** the menu only adds nodes, as a flat 14-item list.
@@ -299,6 +300,12 @@ controls' bounding boxes intersect and that the canvas column is at least
 
 **Acceptance:** on the demo graph, turning focus mode on and selecting llm_classify dims every node and edge more than one hop away. An e2e test covers it.
 
+**Shipped 2026-09-30 (slice A):**
+- Focus mode lights the selected node and its direct neighbors (`lib/focusMode.ts`, one hop).
+- Edges dim whenever either end is dimmed, for find, impact and the dependency view as well. The flag is derived in `canvasEdges`, never stored on edges.
+- With nothing selected, a chip says "Focus mode: select a node to see it and its neighbors", with a Turn off button.
+- Not yet: the hop control, fit-to-lit and Escape to exit. They wait on the status bar (slice B).
+
 ## 11. One consistent in-app knowledge base
 
 **Current behavior.** Help about how the tool works is spread across places
@@ -335,7 +342,7 @@ As a result:
 
 | # | Slice | Items | Priority | Impact |
 | - | ----- | ----- | -------- | ------ |
-| A | Quick bug fixes | §3 hover fix; §10 focus mode as a local neighborhood with edges dimmed; §0 build SHA | P1 | High, small |
+| A | Quick bug fixes — **shipped 2026-09-30** | §3 hover fix; §10 focus mode as a local neighborhood with edges dimmed; §0 build SHA | P1 | High, small |
 | B | Layout at laptop widths | §8 canvas-width breakpoints, header priority collapse, status bar; §2 minimap sizing and overlay slots | P1 | High |
 | C | Native context menu | §3 Base UI menu engine and the actions registry | P1 | High |
 | D | Console dock | §6, on the status bar from B | P2 | Medium |

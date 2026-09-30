@@ -223,6 +223,8 @@ Plan, RCAs and design notes: [canvas-workbench-ergonomics-plan.md](features/canv
 
 Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared seam) → C (menu) → D–I.
 
+**Slice A shipped 2026-09-30:** the menu hover highlight works (and hover moves focus), focus mode lights the selected node's direct neighbors and dims edges, and Help and `/api/health` show the deployed commit.
+
 ---
 
 ## Scoring rationale (requested items)

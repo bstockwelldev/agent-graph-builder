@@ -258,6 +258,9 @@ def health_check() -> JSONResponse:
     # so it's nested here and never flips the top-level `ok`/status code.
     payload["telemetry"] = telemetry_health()
     payload["public_demo_mode"] = public_demo_mode_enabled()
+    # The deployed commit, so a stale deploy shows up in a health check (Vercel
+    # sets VERCEL_GIT_COMMIT_SHA; set GIT_COMMIT_SHA elsewhere). None locally.
+    payload["commit"] = os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("GIT_COMMIT_SHA") or None
     status_code = 200 if payload["ok"] else 503
     return JSONResponse(status_code=status_code, content=payload)
 

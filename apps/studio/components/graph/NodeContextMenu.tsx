@@ -197,6 +197,10 @@ export function NodeContextMenu({
               disabled={action.disabled}
               title={action.title}
               className="agb-menu-item"
+              // Hover moves focus, so pointer and arrow keys share one highlight.
+              onMouseEnter={(event) => {
+                if (!action.disabled) event.currentTarget.focus({ preventScroll: true });
+              }}
               onClick={() => {
                 action.onClick();
                 if (!action.keepOpen) onClose();
@@ -263,7 +267,8 @@ const itemStyle: CSSProperties = {
   padding: `2px ${spacing[2]}px`,
   borderRadius: radius.md,
   border: "none",
-  background: "transparent",
+  // No background here: an inline one would override the hover/focus rules
+  // on .agb-menu-item in globals.css.
   cursor: "pointer",
   ...typeScale.caption,
   fontWeight: 500,

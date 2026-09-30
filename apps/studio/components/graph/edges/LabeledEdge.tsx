@@ -16,6 +16,8 @@ export type LabeledEdgeData = {
   runState?: EdgeRunState;
   /** Wave 7b: edges merged onto a collapsed group's card (badge "×N"). */
   mergedCount?: number;
+  /** Outside the lit set of focus mode, find, impact or the dependency view (derived, never saved). */
+  focusDimmed?: boolean;
 };
 
 /**
@@ -55,6 +57,7 @@ export function LabeledEdge({
     ...style,
     ...(runState === "failed" ? { stroke: color.error[500], strokeWidth: 2.5 } : {}),
     ...(selected ? { strokeWidth: Math.max(Number(style?.strokeWidth ?? 1.5), 2.5) } : {}),
+    ...(edgeData.focusDimmed ? { opacity: 0.2 } : {}),
   };
 
   return (
@@ -83,6 +86,7 @@ export function LabeledEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               borderColor: selected ? color.primary[500] : String(edgeStyle.stroke ?? surface.borderStrong),
               color: runState === "failed" ? color.error[500] : text.primary,
+              opacity: edgeData.focusDimmed ? 0.35 : 1,
             }}
           >
             {label}
