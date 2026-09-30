@@ -1,14 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api-client", () => ({ client: { prompts: {}, tools: {}, agents: {}, mcpServers: {}, llmProfiles: {}, transforms: {} } }));
+vi.mock("@/lib/api-client", () => ({ client: { prompts: {}, tools: {}, agents: {}, mcpServers: {}, llmProfiles: {}, transforms: {}, datasets: {} } }));
 
-import { RESOURCE_KINDS, agentKind, llmProfileKind, mcpKind, normalizeParametersJson, parametersJsonIssue, promptKind, toolKind, transformKind } from "./resource-kinds";
+import {
+  RESOURCE_KINDS,
+  agentKind,
+  datasetKind,
+  llmProfileKind,
+  mcpKind,
+  normalizeParametersJson,
+  parametersJsonIssue,
+  promptKind,
+  toolKind,
+  transformKind,
+} from "./resource-kinds";
 
 // studio-graph-workbench-redesign-plan.md, Wave 4b (STO-605): the configs
 // carry each page's former validation, moved verbatim.
 describe("resource kinds", () => {
   it("covers every CRUD registry once, with human nouns for dialog copy", () => {
-    expect(RESOURCE_KINDS.map((kind) => kind.id)).toEqual(["agents", "prompts", "tools", "mcp", "llmProfiles", "transforms"]);
+    expect(RESOURCE_KINDS.map((kind) => kind.id)).toEqual(["agents", "prompts", "tools", "mcp", "llmProfiles", "transforms", "datasets"]);
     expect(mcpKind.noun).toBe("MCP server");
     expect(llmProfileKind.noun).toBe("LLM profile");
   });
@@ -23,6 +34,41 @@ describe("resource kinds", () => {
       pointer: "/answer",
     });
     expect(transformKind.normalize({ id: "t", name: "T", type: "format_message", template: " Topic: {value} " })?.template).toBe(" Topic: {value} ");
+  });
+
+  it("edits a dataset's fixtures as JSON, keeping its provenance and creation time", () => {
+    const stored = {
+      id: "ds_1",
+      name: "Captured",
+      description: null,
+      graph_id: "g1",
+      fixtures: [{ input: { q: "a" }, node_outputs: { n: 1 } }],
+      source: "runs" as const,
+      source_run_ids: ["r1"],
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    };
+    const form = datasetKind.toForm!(stored);
+    expect(JSON.parse(form.fixtures_text!)).toEqual(stored.fixtures);
+
+    expect(datasetKind.issues({ ...form, fixtures_text: "{}" })).toEqual(["Fix the fixtures JSON."]);
+    expect(datasetKind.normalize({ ...form, fixtures_text: "{}" })).toBeNull();
+
+    const saved = datasetKind.normalize({ ...form, name: " Renamed ", fixtures_text: '[{"input": {"q": "b"}}]', graph_id: null })!;
+    expect(saved).toMatchObject({
+      id: "ds_1",
+      name: "Renamed",
+      graph_id: null,
+      fixtures: [{ input: { q: "b" }, node_outputs: {} }],
+      source: "runs",
+      source_run_ids: ["r1"],
+      created_at: stored.created_at,
+    });
+    expect(saved).not.toHaveProperty("fixtures_text");
+    expect(saved.updated_at > stored.updated_at).toBe(true);
+    // No graph node binds a dataset and it has no publish history.
+    expect(datasetKind.client.usages).toBeUndefined();
+    expect(datasetKind.client.versions).toBeUndefined();
   });
 
   it("requires each kind's mandatory fields, says what's missing, and trims", () => {

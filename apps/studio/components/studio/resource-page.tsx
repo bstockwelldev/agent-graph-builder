@@ -30,6 +30,7 @@ const SCOPE_KEY: Record<ResourceKindId, string> = {
   mcp: "mcp-servers",
   llmProfiles: "llm-profiles",
   transforms: "transforms",
+  datasets: "datasets",
 };
 
 /** With a graph in scope: the ids of this kind it uses (null while loading). */

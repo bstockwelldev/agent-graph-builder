@@ -1420,7 +1420,7 @@
         "type": "object"
       },
       "GraphResources": {
-        "description": "The library resources a graph uses, by API kind (`prompts`, `tools`,\n`mcp-servers`, `llm-profiles`, `transforms`, `agents`): what its nodes\nand edges bind, the MCP servers its tools call, and the agents built on\nit. Backs the Resources pages' graph scope.",
+        "description": "The library resources a graph uses, by API kind (`prompts`, `tools`,\n`mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`):\nwhat its nodes and edges bind, the MCP servers its tools call, the\nagents built on it, and the datasets captured from it. Backs the\nResources pages' graph scope.",
         "properties": {
           "graph_id": {
             "title": "Graph Id",
@@ -6567,7 +6567,7 @@
     },
     "/api/graphs/{graph_id}/resources": {
       "get": {
-        "description": "Resources this graph uses (slice 4's graph scope): its bindings from\nthe graph catalog, the MCP servers behind its tools, and the agents\nthat run it.",
+        "description": "Resources this graph uses (slice 4's graph scope): its bindings from\nthe graph catalog, the MCP servers behind its tools, the agents that\nrun it, and the datasets captured from it (slice 7).",
         "operationId": "graph_resources_endpoint_api_graphs__graph_id__resources_get",
         "parameters": [
           {

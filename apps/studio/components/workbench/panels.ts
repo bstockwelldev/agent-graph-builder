@@ -20,6 +20,7 @@ export type WorkbenchPanelId =
   | "mcp"
   | "llmProfiles"
   | "transforms"
+  | "datasets"
   | "analytics"
   | "console"
   | "help";
@@ -65,6 +66,7 @@ export const WORKBENCH_PANELS: Record<
   mcp: { title: "MCP", hotkey: null, scope: "global" },
   llmProfiles: { title: "LLM Profiles", hotkey: null, scope: "global" },
   transforms: { title: "Transforms", hotkey: null, scope: "global" },
+  datasets: { title: "Datasets", hotkey: null, scope: "global" },
   // Phase 10 Slice A (docs/planning/features/studio-shell-ux-gap-analysis.md):
   // workspace-wide run totals/daily-trend/per-graph spend — spans every
   // graph, so global scope, same as the resource registries. Closes the

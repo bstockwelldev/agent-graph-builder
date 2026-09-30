@@ -34,7 +34,7 @@ function useAgentOptions(): Options | null {
   return options;
 }
 
-function Picker({
+export function Picker({
   id,
   label,
   hint,

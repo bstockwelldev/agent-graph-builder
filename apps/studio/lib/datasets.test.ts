@@ -5,9 +5,12 @@ import {
   buildDatasetForSave,
   defaultCaptureName,
   describeDataset,
+  fixturePreview,
   fixturesFromText,
+  fixturesTextIssue,
   fixturesToText,
   newDatasetId,
+  routingLabHref,
   runsBlockingFrozenCapture,
 } from "./datasets";
 
@@ -91,6 +94,11 @@ describe("buildDatasetForSave", () => {
     expect(built.created_at).toBe(dataset.created_at);
   });
 
+  it("records the graph a new dataset was saved from", () => {
+    expect(buildDatasetForSave({ name: "New", fixtures: [], graphId: "g2", now }).graph_id).toBe("g2");
+    expect(buildDatasetForSave({ name: "Renamed", fixtures: [], existing: dataset, graphId: "g2", now }).graph_id).toBe("g1");
+  });
+
   it("mints distinct ids", () => {
     expect(newDatasetId()).not.toBe(newDatasetId());
   });
@@ -119,5 +127,23 @@ describe("defaultCaptureName", () => {
     const now = new Date("2026-02-03T10:00:00.000Z");
     expect(defaultCaptureName("g1", 1, now)).toBe("g1 · 1 run · 2026-02-03");
     expect(defaultCaptureName("g1", 5, now)).toBe("g1 · 5 runs · 2026-02-03");
+  });
+});
+
+describe("Datasets page helpers", () => {
+  it("links to the routing lab with the dataset loaded", () => {
+    expect(routingLabHref("g 1", "ds/1")).toBe("/graphs/g%201?panel=routingLab&dataset=ds%2F1");
+  });
+
+  it("previews a fixture's input, clipped, with its frozen outputs", () => {
+    expect(fixturePreview({ input: { q: "a" }, node_outputs: {} })).toBe('{"q":"a"}');
+    expect(fixturePreview({ input: { q: "a" }, node_outputs: { n1: 1, n2: 2 } })).toBe('{"q":"a"} · 2 frozen outputs');
+    expect(fixturePreview({ input: { q: "x".repeat(100) }, node_outputs: {} }, 20)).toBe('{"q":"xxxxxxxxxxxxx…');
+  });
+
+  it("explains fixtures text that won't parse", () => {
+    expect(fixturesTextIssue('[{"input": {}}]')).toBeNull();
+    expect(fixturesTextIssue("{}")).toBe("Dataset must be a JSON array of fixtures");
+    expect(fixturesTextIssue("[")).toMatch(/JSON/);
   });
 });

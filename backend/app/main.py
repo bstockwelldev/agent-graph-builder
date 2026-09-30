@@ -456,8 +456,8 @@ def extract_subgraph_endpoint(
 @app.get("/api/graphs/{graph_id}/resources")
 def graph_resources_endpoint(graph_id: str) -> GraphResources:
     """Resources this graph uses (slice 4's graph scope): its bindings from
-    the graph catalog, the MCP servers behind its tools, and the agents
-    that run it."""
+    the graph catalog, the MCP servers behind its tools, the agents that
+    run it, and the datasets captured from it (slice 7)."""
     graph = storage.get_graph(graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
@@ -474,6 +474,9 @@ def graph_resources_endpoint(graph_id: str) -> GraphResources:
         agent = normalize_agent_payload(payload)
         if agent.get("graph_id") == graph_id:
             ids["agents"].add(agent["id"])
+    for dataset in storage.list_resources("datasets"):
+        if dataset.get("graph_id") == graph_id:
+            ids["datasets"].add(dataset["id"])
     return GraphResources(graph_id=graph_id, ids={k: sorted(v) for k, v in ids.items()})
 
 
@@ -485,6 +488,7 @@ _GRAPH_RESOURCE_PATHS = {
     "llm_profiles": "llm-profiles",
     "transforms": "transforms",
     "agents": "agents",
+    "datasets": "datasets",
 }
 
 

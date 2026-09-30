@@ -51,11 +51,14 @@ export function buildDatasetForSave({
   name,
   fixtures,
   existing,
+  graphId = null,
   now = new Date(),
 }: {
   name: string;
   fixtures: Fixture[];
   existing?: FixtureDataset | null;
+  /** Provenance for a new dataset: the graph it was saved from. */
+  graphId?: string | null;
   now?: Date;
 }): FixtureDataset {
   const timestamp = now.toISOString();
@@ -66,7 +69,7 @@ export function buildDatasetForSave({
     id: newDatasetId(),
     name,
     description: null,
-    graph_id: null,
+    graph_id: graphId,
     fixtures,
     source: "manual",
     source_run_ids: [],
@@ -87,4 +90,27 @@ export function runsBlockingFrozenCapture(runs: RunSummary[]): RunSummary[] {
 export function defaultCaptureName(graphId: string, count: number, now = new Date()): string {
   const day = now.toISOString().slice(0, 10);
   return `${graphId} · ${count} run${count === 1 ? "" : "s"} · ${day}`;
+}
+
+/** The Routing Lab on `graphId` with `dataset` loaded (DatasetPicker reads `?dataset=`). */
+export function routingLabHref(graphId: string, datasetId: string): string {
+  return `/graphs/${encodeURIComponent(graphId)}?panel=routingLab&dataset=${encodeURIComponent(datasetId)}`;
+}
+
+/** One line per fixture for a card preview: its input as compact JSON, clipped. */
+export function fixturePreview(fixture: Fixture, max = 80): string {
+  const text = JSON.stringify(fixture.input);
+  const frozen = Object.keys(fixture.node_outputs).length;
+  const clipped = text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return frozen > 0 ? `${clipped} · ${frozen} frozen output${frozen === 1 ? "" : "s"}` : clipped;
+}
+
+/** Why `text` isn't a fixtures array, or null when it is. */
+export function fixturesTextIssue(text: string): string | null {
+  try {
+    fixturesFromText(text);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
 }

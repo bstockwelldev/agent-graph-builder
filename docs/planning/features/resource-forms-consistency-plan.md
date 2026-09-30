@@ -95,9 +95,8 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
 - It's the reference implementation for C3 and C4: a type segmented control, conditional fields and validation.
 - Its tab exists but was cut off in the review screenshots. The tab strip needs an overflow affordance at that width (scroll or "More").
 
-### Datasets (no page)
-- Datasets are stored resources with versions of their own flow. They're created from the Run panel and routing lab, but have **no Resources page**: you can't browse, rename or delete them outside a graph panel.
-- Add a Datasets page: list, fixtures preview, graph provenance, delete, "Open in routing lab".
+### Datasets (page shipped in slice 7)
+- Datasets are stored resources, created from the Run panel's history and the Routing Lab. `/datasets` now lists them with a fixtures preview, graph provenance, rename/edit, delete and "Open in routing lab".
 
 ### GenUI
 - The component library shows two static examples. The runtime is missing the pieces that make a checkpoint useful:
@@ -195,6 +194,10 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
    - Runs and chat run refs carry `agent_id` (persisted, including SQLite).
    - Studio: the agent form uses pickers (graph, LLM profile, system prompt, allowed-tool checkboxes), cards link to "Run"; the Run panel's "Run as" (and `?agent=`) runs as an agent; chat takes `/run @<agent id or "name"> …`.
    - e2e: `e2e/specs/agents.spec.ts`.
-7. **Datasets page:** browse, rename and delete, with "Open in routing lab".
+7. **Datasets page** — **shipped 2026-09-30.** `/datasets` (and a Datasets workbench panel) is a resource kind like the others (`datasetKind` in `resource-kinds.tsx`, fields in `dataset-fields.tsx`).
+   - Cards show the fixture count, source (manual or from N runs), graph and a preview of the first fixtures' inputs (with frozen-output counts). The editor renames, describes, repoints the graph (a picker) and edits the fixtures as JSON, validated like the Routing Lab's; provenance and creation time are kept. No Usage or History tab: no graph node binds a dataset, and datasets aren't versioned.
+   - "Open in routing lab" goes to `/graphs/<graph>?panel=routingLab&dataset=<id>`; the Routing Lab's saved-dataset picker loads it. A dataset saved from the Routing Lab now records that graph as its provenance.
+   - Graph scope: `GET /api/graphs/{id}/resources` lists the datasets whose `graph_id` is the graph.
+   - e2e: `e2e/specs/datasets.spec.ts`; the a11y scan covers `/datasets`.
 
 Slices 1 and 2 have no design dependencies and can start immediately. Slice 6's decision was "make agents real".

@@ -17,10 +17,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { client } from "@/lib/api-client";
 import { BUILTIN_TOOL_IDS } from "@/lib/builtinTools";
 import { isChatProvider } from "@/lib/providers";
+import { fixturePreview, fixturesFromText, fixturesTextIssue, fixturesToText, routingLabHref } from "@/lib/datasets";
 import { describeTransform } from "@/lib/transforms";
 import { cn } from "@/lib/utils";
 
 import { AgentFields } from "./agent-fields";
+import { DatasetFields, type DatasetForm } from "./dataset-fields";
 import { HeadersField, McpDiscoverySection, TransportField, headerIssues, headersUpdate, type McpServerForm } from "./mcp-server-fields";
 import { ToolSourceFields, toolSource, type ToolForm } from "./tool-source-fields";
 import { ProviderModelFields } from "./provider-model-fields";
@@ -37,7 +39,7 @@ import { AreaField, CheckField, FieldLabel, NameIdFields, ReadOnlyId, TextField,
  * Copy (titles, descriptions, empty/delete text, card content) is each
  * page's existing wording, moved here verbatim.
  */
-export type ResourceKindId = "prompts" | "tools" | "agents" | "mcp" | "llmProfiles" | "transforms";
+export type ResourceKindId = "prompts" | "tools" | "agents" | "mcp" | "llmProfiles" | "transforms" | "datasets";
 
 export type ResourceLike = { id: string };
 
@@ -629,4 +631,109 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
 };
 
 /** Every CRUD registry, in nav order (studio-nav.tsx RESOURCE_ITEMS). */
-export const RESOURCE_KINDS: readonly AnyResourceKind[] = [agentKind, promptKind, toolKind, mcpKind, llmProfileKind, transformKind];
+const PREVIEW_FIXTURES = 3;
+
+/** Slice 7: saved Routing Lab datasets, browsable outside a graph panel. */
+export const datasetKind: ResourceKindConfig<DatasetForm> = {
+  id: "datasets",
+  panelId: "datasets",
+  routeHref: "/datasets",
+  // Datasets aren't bound by graph nodes and have no publish history, so no Usage or History tab.
+  client: {
+    list: () => client.datasets.list(),
+    create: (dataset) => client.datasets.create(dataset),
+    update: (dataset) => client.datasets.update(dataset),
+    delete: (id) => client.datasets.delete(id),
+  },
+  noun: "dataset",
+  panelTitle: "Datasets",
+  pageTitle: "Datasets",
+  pageDescription:
+    "Saved fixture sets for the Routing Lab: inputs, optionally with frozen node outputs, captured from runs or written by hand. Any graph can run any dataset.",
+  dialogDescription: "Rename it, fix its fixtures, or point it at a graph. Runs stay on the offline stub provider.",
+  emptyText: "No datasets. Save one from a graph's Routing Lab, or capture runs from its Run history.",
+  listLayout: "grid",
+  itemLabel: (dataset) => dataset.name,
+  deleteDescription: (dataset) => `Remove dataset "${dataset.name}"? Graphs don't reference datasets, so nothing else changes.`,
+  renderCardHeader: (dataset) => (
+    <>
+      <CardTitle className="text-base">{dataset.name}</CardTitle>
+      {dataset.description ? <CardDescription>{dataset.description}</CardDescription> : null}
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        <Badge variant="secondary">
+          {dataset.fixtures.length} fixture{dataset.fixtures.length === 1 ? "" : "s"}
+        </Badge>
+        <Badge variant="outline">{dataset.source === "runs" ? `from ${dataset.source_run_ids.length} run${dataset.source_run_ids.length === 1 ? "" : "s"}` : "manual"}</Badge>
+        {dataset.graph_id ? (
+          <Badge variant="outline" className="font-mono">
+            {dataset.graph_id}
+          </Badge>
+        ) : null}
+      </div>
+    </>
+  ),
+  renderCardBody: (dataset) => (
+    <div className="space-y-2 text-sm">
+      {dataset.fixtures.length > 0 ? (
+        <ul className="text-muted-foreground space-y-0.5 font-mono text-[11px]" aria-label={`${dataset.name} fixtures`}>
+          {dataset.fixtures.slice(0, PREVIEW_FIXTURES).map((fixture, index) => (
+            <li key={index} className="truncate">
+              {fixturePreview(fixture)}
+            </li>
+          ))}
+          {dataset.fixtures.length > PREVIEW_FIXTURES ? <li>+{dataset.fixtures.length - PREVIEW_FIXTURES} more</li> : null}
+        </ul>
+      ) : null}
+      {dataset.graph_id ? (
+        <Link
+          href={routingLabHref(dataset.graph_id, dataset.id)}
+          className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+          aria-label={`Open ${dataset.name} in routing lab`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          Open in routing lab
+        </Link>
+      ) : (
+        <p className="text-muted-foreground text-xs">Pick a graph to open it in the Routing Lab.</p>
+      )}
+    </div>
+  ),
+  emptyForm: () => ({ id: genId("ds"), name: "", description: "", graph_id: null, fixtures_text: "[]", source: "manual", source_run_ids: [] }),
+  toForm: (dataset) => ({ ...dataset, fixtures_text: fixturesToText(dataset.fixtures) }),
+  issues: (form) => {
+    const issues = missing(form, [["name", "Add a name."]]);
+    if (fixturesTextIssue(form.fixtures_text ?? "[]")) issues.push("Fix the fixtures JSON.");
+    return issues;
+  },
+  normalize: (form) => {
+    if (datasetKind.issues(form).length > 0) return null;
+    const now = new Date().toISOString();
+    // The generic CRUD route stores exactly this body, so stamp the times here.
+    return {
+      id: form.id!.trim(),
+      name: form.name!.trim(),
+      description: form.description?.trim() || null,
+      graph_id: form.graph_id || null,
+      fixtures: fixturesFromText(form.fixtures_text ?? "[]"),
+      source: form.source ?? "manual",
+      source_run_ids: form.source_run_ids ?? [],
+      created_at: form.created_at ?? now,
+      updated_at: now,
+    };
+  },
+  renderFields: (props) => (
+    <>
+      {nameIdFields(props, "ds")}
+      <AreaField
+        id={`${props.idPrefix}-description`}
+        label="Description"
+        value={props.form.description ?? ""}
+        onChange={(description) => props.setForm({ description })}
+        rows={2}
+      />
+      <DatasetFields form={props.form} setForm={props.setForm} idPrefix={props.idPrefix} />
+    </>
+  ),
+};
+
+export const RESOURCE_KINDS: readonly AnyResourceKind[] = [agentKind, promptKind, toolKind, mcpKind, llmProfileKind, transformKind, datasetKind];
