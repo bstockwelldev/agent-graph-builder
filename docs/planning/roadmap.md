@@ -1,6 +1,6 @@
 ---
 title: Agent Graph Builder POC — product roadmap
-last_updated: 2026-09-25
+last_updated: 2026-09-30
 ---
 
 # Product roadmap
@@ -52,6 +52,7 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 
 | Pri | Item | Impact | Utility | Notes / touch points |
 | --- | ---- | ------ | ------- | -------------------- |
+| **P1** | **Canvas workbench ergonomics** | High | High for everyday authoring on laptops | **Planned 2026-09-30** — [canvas-workbench-ergonomics-plan.md](features/canvas-workbench-ergonomics-plan.md). Eleven items in nine slices (see Phase 12 below): two bugs with root causes found (context-menu hover never renders; focus mode lights the whole graph), the header overlapping itself at laptop widths (reproduced at 1180–1440px), minimap sizing, a native context menu, a Photoshop/Figma-style tool bar and palette, a full JSON/YAML code mode, a bottom console dock, edge styles, snapping and alignment guides, and one in-app knowledge base. Also found: the reviewed build is older than 2026-09-25 changes on `master`, so production likely needs a redeploy. |
 | ~~**P1**~~ | ~~**Lock workspace-scoped writes on the public deploy**~~ | High | High before the 2026-09-29 LinkedIn post | **Shipped 2026-09-29.** In `PUBLIC_DEMO_MODE`, workspace policy writes return 403 and stored workspace overrides are ignored; each client IP has a create budget (graphs, resources, releases, versions, datasets, exceptions) and a run budget, stored per hashed IP in the shared store (`backend/app/public_writes.py`, README → Public demo mode). There are no seeded library resources to protect (the demo uses the built-in `lookup_topic` tool). Still open by design (no auth): visitors can edit or delete each other's graphs and resources. **Logged 2026-09-25** — [STO-626](https://linear.app/stockwise-productions-prototypes/issue/STO-626). Follow-up to [#103](https://github.com/bstockwelldev/agent-graph-builder/pull/103), which made the seeded demo read-only and added `PUBLIC_DEMO_MODE`. Still open to anonymous writes: workspace policies (`PUT /api/policies/workspace` can set a rule to `block` and break every run, the demo's included), resource registry CRUD (`_register_resource_routes`), and unbounded graph creation. Direction: 403 or ignore workspace policies in public mode, make seeded resources read-only like `protected_graph()`, and consider a per-IP write limit or a TTL on visitor graphs. |
 | **P0** | ~~**QA + merge shell layout branch**~~ | High | Done 2026-09-09 | Merged `feat/shell-layout-polish` → `master`; run `npm run build` + `uv run pytest` before deploy. |
 | ~~**P0**~~ | ~~**Configure git remote + CI on push**~~ | Medium | Done 2026-09-10 | `origin` → GitHub; CI runs `uv run pytest` + `npm ci && npm run build` via `.github/workflows/ci.yml`. |
@@ -202,6 +203,26 @@ Full audit, slices, and acceptance criteria in [studio-graph-workbench-redesign-
 
 Deferred (cross-language contract change, not scheduled): typed multi-port handles — router/branch declare two outputs but draw one handle, and edges never set `source_port`.
 
+### Phase 12 — Canvas workbench ergonomics (P1–P2) — Planned 2026-09-30
+
+Plan, RCAs and design notes: [canvas-workbench-ergonomics-plan.md](features/canvas-workbench-ergonomics-plan.md). The requested items:
+
+| Item | Kind | Priority | Where it stands / key finding |
+| ---- | ---- | -------- | ----------------------------- |
+| Disperse the Workflow summary across the layout | UX | — | **Already shipped 2026-09-25** (`b0f8a6e`): counts and entry/terminal nodes in a header chip, recent runs under Run ▾, quick actions dropped. The screenshot came from an older build. Its facts move on to the new status bar (slice B), which also relieves the crowded header. |
+| Shrink the minimap on smaller screens | UX | P1 (B) | It's React Flow's default 200×150 at every width above 1100px, and covers nodes and the edge legend on a 500–750px canvas. Size it by canvas width, and collapse it to a button below 700px. |
+| Right-click menu: more actions, native behavior, hover effect | Bug + UX | P1 (A, C) | **RCA:** the inline `background: transparent` on each item overrides the `.agb-menu-item:hover` rule, which has no `!important`; measured hover background `rgba(0,0,0,0)`. The empty-canvas menu only adds nodes, and the edge menu only deletes. Plan: a headless Base UI menu with roving focus, typeahead and submenus, driven by an actions registry per target. |
+| Photoshop/Figma-style palette and tool bar | Feature | P2 (E) | The palette is a fixed 288px list of the 14 hardcoded node types. Plan: a tool strip (Select V, Hand H/Space, Marquee M, Connect C, Zoom Z) and a registry-driven palette (nodes, edges, library resources, transforms, subgraphs, templates) with drag-and-drop, collapsing to icons. |
+| Full graph JSON/YAML editor mode | Feature | P2 (H) | A 32rem side-panel editor exists (`GraphConfigPanel`, ⋯ menu), with Apply then a separate Save. Plan: a Canvas / Code / Split view switch, lazy-loaded CodeMirror 6, diagnostics mapped to lines, and ⌘S to validate, apply and save with a diff. |
+| Terminal-style console, collapsed at the bottom of the canvas | Feature | P2 (D) | A console exists as a floating right panel reached only by ⌘⇧J or the command palette. Plan: a bottom dock collapsed to status-bar counts, resizable, monospace, filterable, follow-tail, NDJSON export, and a user-action trail. |
+| Edge styles (dotted, dashed, solid, thick, …) | Feature | P2 (G) | Edges vary only for failed and selected. Plan: a display-only `extensions.style`, with default patterns by kind. Needs a fingerprint change: edge `extensions` are hashed raw today. |
+| Layout squished at smaller screens | Bug | P1 (B) | **RCA:** the header's identity group may shrink (`minWidth: 0`) but its children can't, and overflow is visible, so items draw over each other. Responsive rules key on the viewport (1100px), not the canvas. `canvasMinWidth` isn't enforced. Reproduced at 1180, 1256 and 1440px with palette and inspector open. |
+| Grid snapping with alignment | Feature | P2 (F) | Snapping to a 24px grid while dragging already exists. Missing: a toggle, smart guides, align and distribute, and snapping for auto-layout and add-at-point positions. |
+| Focus mode doesn't do anything | Bug | P1 (A) | **RCA:** it dims only with a node selected, and it lights that node's full upstream and downstream closure. On the demo graph, 5 of 8 nodes light everything; edges never dim; there's no hint when nothing is selected. Plan: the selected node plus N hops, with edges dimmed and a status hint. |
+| One consistent in-app knowledge base | Feature | P2 (I) | Help is scattered across taxonomy tooltips, inline hints, the shortcuts overlay and the README. Plan: Markdown articles under `content/kb/` feeding tooltips, "Learn more", a searchable Help panel and Chat grounding, with a coverage test so every node type, edge kind and panel has an article. |
+
+Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared seam) → C (menu) → D–I.
+
 ---
 
 ## Scoring rationale (requested items)
@@ -232,5 +253,6 @@ Deferred (cross-language contract change, not scheduled): typed multi-port handl
 - [Studio UX revision plan](features/studio-ux-revision-plan.md)
 - [Studio UX gap remediation plan](features/studio-ux-gap-remediation-plan.md) — diagnostics navigation, run waterfall, Chat context/invocation/disclosure
 - [Studio config editor and console plan](features/studio-config-editor-and-console-plan.md) — raw JSON/YAML config editor, app-wide console drawer
+- [Canvas workbench ergonomics plan](features/canvas-workbench-ergonomics-plan.md) — laptop layout, native context menu, tool bar and palette, code mode, console dock, edge styles, snapping, focus mode, knowledge base
 - [P0 graph foundation design](features/p0-graph-foundation-design-plan.md)
 - [README.md](../../README.md) — run instructions, CI, EDD scope boundary

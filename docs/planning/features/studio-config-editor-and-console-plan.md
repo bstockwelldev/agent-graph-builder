@@ -252,6 +252,11 @@ noted below.
 
 ---
 
+**Follow-up (2026-09-30):** a full Canvas / Code / Split editor mode and a
+bottom-docked terminal console are planned in
+[canvas-workbench-ergonomics-plan.md](canvas-workbench-ergonomics-plan.md)
+(§5, §6).
+
 ## Related docs
 
 - [Roadmap](../roadmap.md) — the two backlog rows this spec backs

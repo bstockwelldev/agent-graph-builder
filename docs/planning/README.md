@@ -16,6 +16,7 @@ Locked feature-change plans for the Agent Graph Builder POC next-set. Each SPEC 
 | [graph-native-control-plane-plan.md](features/graph-native-control-plane-plan.md) | Graph-native control plane | Strategic product plan: canonical typed graph IR, graph SDLC, contracts, simulation, replay, routing lab, policy overlays, runtime portability. **Locked 2026-09-19.** |
 | [studio-ux-revision-plan.md](features/studio-ux-revision-plan.md) | Studio UX revision | Selection-driven workflow IDE direction: rail + drawers, contextual selection dock, typed ports, scoped runs, graph-linked diagnostics. **Locked 2026-09-19.** |
 | [p0-graph-foundation-design-plan.md](features/p0-graph-foundation-design-plan.md) | P0 graph foundation | Implementation design for a versioned typed graph IR, graph validation, LangGraph adapter boundary, and release-pinned run timeline. **Proposed 2026-09-19.** |
+| [canvas-workbench-ergonomics-plan.md](features/canvas-workbench-ergonomics-plan.md) | Canvas workbench ergonomics | Laptop-width layout RCA, native context menu (hover bug RCA), tool bar and palette, code mode, bottom console, edge styles, snapping and alignment, focus mode RCA, in-app knowledge base. **Proposed 2026-09-30.** |
 | [aiql-graph-query-language-exploration.md](features/aiql-graph-query-language-exploration.md) | Agent-Graph Query Language (AIQL) | Cypher/GQL-style search over graphs, runs and lineage. **Exploration only (STO-625):** research + value proof + design review before any plan. |
 
 ## Suggested implement order
