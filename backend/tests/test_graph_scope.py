@@ -44,6 +44,9 @@ def test_graph_resources_lists_bindings_mcp_servers_and_agents(api: TestClient) 
         "agents", "old", {"id": "old", "name": "O", "default_flow_id": graph.id}
     )
     storage.save_resource("agents", "other", {"id": "other", "name": "X", "graph_id": "nope"})
+    # Datasets count by provenance (slice 7).
+    storage.save_resource("datasets", "ds_mine", {"id": "ds_mine", "name": "M", "graph_id": graph.id})
+    storage.save_resource("datasets", "ds_loose", {"id": "ds_loose", "name": "L", "graph_id": None})
 
     body = api.get(f"/api/graphs/{graph.id}/resources").json()
     assert body == {
@@ -55,6 +58,7 @@ def test_graph_resources_lists_bindings_mcp_servers_and_agents(api: TestClient) 
             "llm-profiles": ["fast"],
             "transforms": ["topic_line"],
             "agents": ["helper", "old"],
+            "datasets": ["ds_mine"],
         },
     }
     assert api.get("/api/graphs/missing/resources").status_code == 404

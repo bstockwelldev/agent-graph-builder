@@ -6,6 +6,7 @@ import {
   BarChart3,
   Bot,
   Boxes,
+  Database,
   FileText,
   Layers,
   Server,
@@ -36,6 +37,7 @@ export const RESOURCE_ITEMS: readonly NavItem[] = [
   { href: "/mcp", label: "MCP", icon: Server, description: "Model Context Protocol servers that expose tools." },
   { href: "/llm-profiles", label: "LLM Profiles", icon: SlidersHorizontal, description: "Named provider + model presets that LLM nodes and agents bind." },
   { href: "/transforms", label: "Transforms", icon: Shuffle, description: "Reusable data reshaping between steps: select, wrap, format, convert." },
+  { href: "/datasets", label: "Datasets", icon: Database, description: "Saved fixture sets for the Routing Lab, captured from runs or written by hand." },
   { href: "/genui", label: "GenUI", icon: Layers, description: "Schema-driven UI surfaces for human-gate checkpoints." },
 ];
 

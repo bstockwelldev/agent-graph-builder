@@ -113,6 +113,26 @@ describe("DatasetPicker", () => {
     expect(datasetsMock.create).not.toHaveBeenCalled();
   });
 
+  it("records the graph a new dataset was saved from", async () => {
+    datasetsMock.create.mockImplementation(async (dataset: FixtureDataset) => dataset);
+    renderPicker({ graphId: "g1" });
+    await screen.findByLabelText("Saved dataset");
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "From g1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as new" }));
+
+    await waitFor(() => expect(datasetsMock.create).toHaveBeenCalledTimes(1));
+    expect((datasetsMock.create.mock.calls[0]?.[0] as FixtureDataset).graph_id).toBe("g1");
+  });
+
+  it("loads the dataset named by initialDatasetId once the list arrives", async () => {
+    const { onLoad } = renderPicker({ initialDatasetId: "ds_new" });
+
+    await waitFor(() => expect(onLoad).toHaveBeenCalledWith(newer.fixtures));
+    expect(onLoad).toHaveBeenCalledTimes(1);
+    expect(((await screen.findByLabelText("Saved dataset")) as HTMLSelectElement).value).toBe("ds_new");
+    expect(screen.getByRole("button", { name: /Update .Captured set./ })).toBeTruthy();
+  });
+
   it("refuses to save without a name", async () => {
     renderPicker();
     await screen.findByLabelText("Saved dataset");

@@ -730,8 +730,8 @@ export type paths = {
         /**
          * Graph Resources Endpoint
          * @description Resources this graph uses (slice 4's graph scope): its bindings from
-         *     the graph catalog, the MCP servers behind its tools, and the agents
-         *     that run it.
+         *     the graph catalog, the MCP servers behind its tools, the agents that
+         *     run it, and the datasets captured from it (slice 7).
          */
         get: operations["graph_resources_endpoint_api_graphs__graph_id__resources_get"];
         put?: never;
@@ -2191,9 +2191,10 @@ export type components = {
         /**
          * GraphResources
          * @description The library resources a graph uses, by API kind (`prompts`, `tools`,
-         *     `mcp-servers`, `llm-profiles`, `transforms`, `agents`): what its nodes
-         *     and edges bind, the MCP servers its tools call, and the agents built on
-         *     it. Backs the Resources pages' graph scope.
+         *     `mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`):
+         *     what its nodes and edges bind, the MCP servers its tools call, the
+         *     agents built on it, and the datasets captured from it. Backs the
+         *     Resources pages' graph scope.
          */
         GraphResources: {
             /** Graph Id */

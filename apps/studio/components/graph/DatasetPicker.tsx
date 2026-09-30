@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Fixture, FixtureDataset } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
@@ -23,11 +23,17 @@ function byNewestUpdate(a: FixtureDataset, b: FixtureDataset): number {
 export function DatasetPicker({
   getFixtures,
   onLoad,
+  graphId = null,
+  initialDatasetId = null,
   disabled = false,
 }: {
   /** The editor's current fixtures; throws a user-readable Error when the text is invalid. */
   getFixtures: () => Fixture[];
   onLoad: (fixtures: Fixture[]) => void;
+  /** Recorded as a new dataset's provenance (the Datasets page groups by it). */
+  graphId?: string | null;
+  /** Selected and loaded once the list arrives: the Datasets page's "Open in routing lab". */
+  initialDatasetId?: string | null;
   disabled?: boolean;
 }) {
   const [datasets, setDatasets] = useState<FixtureDataset[]>([]);
@@ -56,6 +62,18 @@ export function DatasetPicker({
 
   const selected = datasets.find((dataset) => dataset.id === selectedId) ?? null;
 
+  const initialHandledRef = useRef(false);
+  useEffect(() => {
+    if (initialHandledRef.current || !initialDatasetId) return;
+    const initial = datasets.find((dataset) => dataset.id === initialDatasetId);
+    if (!initial) return;
+    initialHandledRef.current = true;
+    setSelectedId(initial.id);
+    setLoaded(initial);
+    setName(initial.name);
+    onLoad(initial.fixtures);
+  }, [datasets, initialDatasetId, onLoad]);
+
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
     setConfirmingDelete(false);
@@ -82,7 +100,7 @@ export function DatasetPicker({
       setBusy(true);
       setError(null);
       try {
-        const next = buildDatasetForSave({ name: trimmed, fixtures: getFixtures(), existing });
+        const next = buildDatasetForSave({ name: trimmed, fixtures: getFixtures(), existing, graphId });
         const saved = existing ? await client.datasets.update(next) : await client.datasets.create(next);
         setDatasets((current) => [saved, ...current.filter((dataset) => dataset.id !== saved.id)].sort(byNewestUpdate));
         setLoaded(saved);
@@ -93,7 +111,7 @@ export function DatasetPicker({
         setBusy(false);
       }
     },
-    [getFixtures, name],
+    [getFixtures, graphId, name],
   );
 
   const handleDelete = useCallback(async () => {

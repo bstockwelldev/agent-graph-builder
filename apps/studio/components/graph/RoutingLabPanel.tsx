@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
-import type { ReleaseIndexEntry, RouteNodeDistributionDelta, RoutingComparison, RoutingLabReport } from "@bstockwelldev/agent-graph-sdk";
+import type { Fixture, ReleaseIndexEntry, RouteNodeDistributionDelta, RoutingComparison, RoutingLabReport } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
 import { fixturesFromText, fixturesToText } from "@/lib/datasets";
@@ -98,6 +98,12 @@ export function RoutingLabPanel({
   reducedMotion?: boolean;
 }) {
   const [datasetText, setDatasetText] = useState(DEFAULT_DATASET_TEXT);
+  // `?dataset=<id>` (the Datasets page's "Open in routing lab") preloads a saved dataset.
+  const [initialDatasetId, setInitialDatasetId] = useState<string | null>(null);
+  useEffect(() => {
+    setInitialDatasetId(new URLSearchParams(window.location.search).get("dataset"));
+  }, []);
+  const loadFixtures = useCallback((fixtures: Fixture[]) => setDatasetText(fixturesToText(fixtures)), []);
   const [otherGraphId, setOtherGraphId] = useState("");
   // STO-609: compare the draft against a published release (default) or,
   // as before, against another graph.
@@ -173,7 +179,9 @@ export function RoutingLabPanel({
         <CollapsibleSection sectionId="routing-lab-dataset" title="Dataset" reducedMotion={reducedMotion}>
           <DatasetPicker
             getFixtures={parseDataset}
-            onLoad={(fixtures) => setDatasetText(fixturesToText(fixtures))}
+            onLoad={loadFixtures}
+            graphId={graphId}
+            initialDatasetId={initialDatasetId}
             disabled={running}
           />
           <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>

@@ -29,6 +29,16 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
     },
   ],
   [
+    "datasets",
+    async (page, graph) => {
+      await page.request.post(`${API_URL}/api/datasets`, {
+        data: { id: `ds_a11y_${Date.now()}`, name: `A11y dataset ${Date.now()}`, graph_id: graph.id, fixtures: [{ input: { question: "a" }, node_outputs: {} }] },
+      });
+      await page.goto("/datasets");
+      await page.getByRole("button", { name: /^Edit dataset A11y dataset/ }).first().waitFor();
+    },
+  ],
+  [
     "policies",
     async (page, graph) => {
       const expires = new Date(Date.now() + 86_400_000).toISOString();

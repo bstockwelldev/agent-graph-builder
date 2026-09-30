@@ -18,7 +18,7 @@ export default function ResourcesPage() {
     <StudioPage>
       <StudioPageHeader
         title="Resources"
-        description="Reusable building blocks your graphs reference — agents, prompts, tools, MCP servers, model profiles, and GenUI surfaces."
+        description="Reusable building blocks your graphs reference — agents, prompts, tools, MCP servers, model profiles, transforms, datasets, and GenUI surfaces."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {RESOURCE_ITEMS.map(({ href, label, icon: Icon, description }) => (

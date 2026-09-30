@@ -648,9 +648,10 @@ class TransformPreviewResponse(BaseModel):
 
 class GraphResources(BaseModel):
     """The library resources a graph uses, by API kind (`prompts`, `tools`,
-    `mcp-servers`, `llm-profiles`, `transforms`, `agents`): what its nodes
-    and edges bind, the MCP servers its tools call, and the agents built on
-    it. Backs the Resources pages' graph scope."""
+    `mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`):
+    what its nodes and edges bind, the MCP servers its tools call, the
+    agents built on it, and the datasets captured from it. Backs the
+    Resources pages' graph scope."""
 
     graph_id: str
     ids: dict[str, list[str]] = Field(default_factory=dict)
