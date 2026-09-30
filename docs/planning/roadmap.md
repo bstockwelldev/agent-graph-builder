@@ -225,6 +225,12 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 
 **Slice A shipped 2026-09-30:** the menu hover highlight works (and hover moves focus), focus mode lights the selected node's direct neighbors and dims edges, and Help and `/api/health` show the deployed commit.
 
+**Slice B shipped 2026-09-30:**
+- **Header:** it follows the canvas column's width and drops items by priority as the column narrows, so its controls no longer overlap at 1180–1920px.
+- **Inspector:** it floats over the canvas instead of squeezing the column under 480px.
+- **Minimap:** sized by the pane: 200×150, 160×110, or a Map button below 700px.
+- **Status bar:** a new bar at the bottom of the canvas holds the structure summary, focus-mode hops, fit to focus, a snap toggle, zoom, and the edge-kind legend.
+
 ---
 
 ## Scoring rationale (requested items)

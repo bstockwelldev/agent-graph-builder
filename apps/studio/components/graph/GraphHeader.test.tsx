@@ -119,10 +119,39 @@ describe("GraphHeader", () => {
 
   const structure = { nodes: 8, edges: 8, entrypoints: ["input: question"], terminals: ["output"] };
 
-  it("shows graph structure as a chip with entry and terminal nodes", () => {
+  it("leaves the structure summary to the canvas status bar on desktop", () => {
     renderHeader({ structure });
-    const chip = screen.getByLabelText(/8 nodes · 8 edges/);
-    expect(chip.getAttribute("aria-label")).toContain("Entry: input: question · Terminal: output");
+    expect(screen.queryByLabelText(/8 nodes · 8 edges/)).toBeNull();
+    expect(screen.queryByText("8 nodes · 8 edges")).toBeNull();
+  });
+
+  it("shows the save state as a dot only when the canvas column is snug", () => {
+    renderHeader({ dirty: true, density: "snug" });
+    const status = screen.getByRole("status");
+    expect(status.textContent).toContain("Unsaved");
+    expect(status.querySelector("span[style*='position: absolute']")?.textContent).toBe("Unsaved");
+  });
+
+  it("hides the health chip when snug; Health stays in the overflow menu", () => {
+    renderHeader({ density: "snug", health: { score: 82, band: "healthy" } });
+    expect(screen.queryByRole("button", { name: /Graph health 82/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Focus mode" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.getByText("Health · 82")).toBeTruthy();
+  });
+
+  it("moves the canvas tools into the overflow menu when tight", () => {
+    const props = renderHeader({ density: "tight" });
+    for (const name of ["Add node", "Layout", "Focus mode", "Chat about this graph"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.getByRole("button", { name: "Run" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /Add node/ }));
+    expect(props.onTogglePanel).toHaveBeenCalledWith("palette");
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Chat about this graph/ }));
+    expect(props.onOpenChat).toHaveBeenCalled();
   });
 
   it("moves the structure summary into the overflow menu when compact", () => {
