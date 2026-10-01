@@ -274,6 +274,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Help panel:** "?" searches and reads articles; inspectors, issues, panel headers and the command palette open them.
 - **Chat grounding:** `/api/kb` serves the articles, and Chat adds the matching ones to its context.
 
+**Follow-ups shipped 2026-10-01:**
+- **Help everywhere:** every panel has a help button; empty states link to their article.
+- **⌘K canvas actions:** Align, Distribute, Auto-arrange, views, Snap, Focus mode, Undo/Redo, Save, Validate and more, with the reason when one can't run.
+- **Sticky notes:** notes on the canvas with authors, pinned nodes, comment threads and Resolve. Saved with the graph; display-only (not in the semantic fingerprint or release diffs).
+
 ---
 
 ## Scoring rationale (requested items)

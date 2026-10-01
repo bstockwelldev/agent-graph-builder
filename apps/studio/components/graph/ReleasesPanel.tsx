@@ -262,12 +262,14 @@ export function ReleasesPanel({
           ) : releasesError ? (
             <div style={errorTextStyle}>{releasesError}</div>
           ) : releases.length === 0 ? (
-            <div role="status" style={emptyTextStyle}>
-              No releases yet. Publish one above to create an immutable, fingerprinted snapshot.
+            <>
+              <div role="status" style={emptyTextStyle}>
+                No releases yet. Publish one above to create an immutable, fingerprinted snapshot.
+              </div>
               <div style={{ marginTop: 4 }}>
                 <HelpLink articleId="releases">{"What's a release?"}</HelpLink>
               </div>
-            </div>
+            </>
           ) : (
             releases.map((entry) => (
               <div key={entry.release_id} style={{ marginBottom: spacing[2] }}>

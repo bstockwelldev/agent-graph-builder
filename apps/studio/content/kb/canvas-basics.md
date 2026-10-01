@@ -4,7 +4,7 @@ title: "Working on the canvas"
 summary: "Tools, menus, selection, snapping and focus mode"
 category: concept
 keywords: ["canvas", "toolbar", "hand", "pan", "zoom", "select", "marquee", "snap", "grid", "align", "distribute", "guides", "context menu", "right-click", "focus mode", "palette", "add node"]
-related: ["edge-styles", "groups-and-layers", "code-mode"]
+related: ["edge-styles", "groups-and-layers", "code-mode", "sticky-notes"]
 ---
 The canvas is where you lay out and connect steps. The tool bar on the left switches between Select, Hand (pan), Marquee, Connect and Zoom; hold Space to pan with any tool.
 

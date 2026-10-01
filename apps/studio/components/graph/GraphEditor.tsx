@@ -26,6 +26,7 @@ import {
   type GraphAnalytics,
   type GraphGroup,
   type GraphLayer,
+  type GraphNote,
   type GraphSummary,
   type GraphUsedBy,
   type GraphHealth,
@@ -146,6 +147,10 @@ import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
 import { GraphConfigPanel } from "./GraphConfigPanel";
 import { GraphCodeView } from "./GraphCodeView";
+import { NoteInspector } from "./NoteInspector";
+import { StickyNote } from "./nodes/StickyNote";
+import { addReply, buildNoteNodes, createNote, isNoteNodeId, noteIdFromNode, removeReply, unpinMissing } from "@/lib/notes";
+import { useNoteAuthor } from "@/lib/noteAuthor";
 import { buildCanvasCommands, type CanvasCommand } from "./canvasCommands";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { PolicyPanel } from "./PolicyPanel";
@@ -320,6 +325,8 @@ const nodeTypes = {
   groupFrame: GroupFrame,
   // Wave 7d: derived swimlane bands (Layers view).
   laneBand: LaneBand,
+  // Sticky notes: derived from `notes`, never in `nodes`.
+  stickyNote: StickyNote,
 };
 
 let idCounter = 1;
@@ -447,6 +454,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // Wave 7b (STO-611): display-only visual groups. Frames are derived from
   // these + member positions at render time (lib/graphGroups.ts).
   const [groups, setGroups] = useState<GraphGroup[]>([]);
+  // Sticky notes (display-only, saved with the graph) and the selected one.
+  const [notes, setNotes] = useState<GraphNote[]>([]);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const noteAuthor = useNoteAuthor();
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   // Wave 7c (STO-612): "Extract to graph" (the selection being extracted)
   // and the saved graphs whose subgraph nodes run this one.
@@ -800,6 +811,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setEdges(graph.edges.map(toFlowEdge));
         setGroups(graph.groups ?? []);
         setLayers(graph.layers ?? []);
+        setNotes(graph.notes ?? []);
+        setSelectedNoteId(null);
         setSavedFingerprint(fingerprintGraph(graph));
         clearHistory();
         setSelectedNodeId(null);
@@ -851,9 +864,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           return saved.length > 0 ? { groups: saved } : {};
         })(),
         ...(layers.length > 0 ? { layers } : {}),
+        // Notes pinned to a deleted node stay, unpinned.
+        ...(notes.length > 0 ? { notes: unpinMissing(notes, sourceNodes.map((n) => n.id)) } : {}),
       };
     },
-    [nodes, edges, graphId, graphName, graphOrientation, groups, layers],
+    [nodes, edges, graphId, graphName, graphOrientation, groups, layers, notes],
   );
 
   // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):
@@ -1021,8 +1036,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [diagnostics, applyDiagnosticsToCanvas]);
 
   const getCanvasSnapshot = useCallback(
-    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation, groups, layers),
-    [nodes, edges, graphName, graphOrientation, groups, layers],
+    () => cloneCanvasSnapshot(nodes, edges, graphName, graphOrientation, groups, layers, notes),
+    [nodes, edges, graphName, graphOrientation, groups, layers, notes],
   );
 
   const applyCanvasSnapshot = useCallback(
@@ -1033,6 +1048,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setGraphOrientation(snapshot.graphOrientation);
       setGroups(snapshot.groups ?? []);
       setLayers(snapshot.layers ?? []);
+      setNotes(snapshot.notes ?? []);
     },
     [setNodes, setEdges],
   );
@@ -1040,6 +1056,55 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const recordMutation = useCallback(() => {
     pushSnapshot(getCanvasSnapshot());
   }, [getCanvasSnapshot, pushSnapshot]);
+
+  // Sticky notes: every edit is undoable and marks the graph unsaved.
+  const [noteFocusRequest, setNoteFocusRequest] = useState(0);
+  const selectNote = useCallback((noteId: string | null) => {
+    setSelectedNoteId(noteId);
+    if (noteId) {
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+    }
+  }, []);
+  const addNoteAt = useCallback(
+    (position: { x: number; y: number }, nodeId: string | null = null) => {
+      recordMutation();
+      const note = createNote(notes, { position, author: noteAuthor.name, nodeId });
+      setNotes((current) => [...current, note]);
+      selectNote(note.id);
+      if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
+      setNoteFocusRequest((value) => value + 1);
+      logConsoleEntry({ severity: "info", source: "Notes", message: "Added a sticky note (unsaved)", graphId: graphId ?? undefined });
+    },
+    [graphId, noteAuthor.name, notes, recordMutation, selectNote, workbench],
+  );
+  const updateNote = useCallback(
+    (noteId: string, change: (note: GraphNote) => GraphNote) => {
+      recordMutation();
+      setNotes((current) => current.map((note) => (note.id === noteId ? change(note) : note)));
+    },
+    [recordMutation],
+  );
+  const deleteNote = useCallback(
+    (noteId: string) => {
+      recordMutation();
+      setNotes((current) => current.filter((note) => note.id !== noteId));
+      setSelectedNoteId((current) => (current === noteId ? null : current));
+    },
+    [recordMutation],
+  );
+  const deleteNoteRef = useRef(deleteNote);
+  deleteNoteRef.current = deleteNote;
+  // A new note opens with its text field focused.
+  useEffect(() => {
+    if (!noteFocusRequest) return;
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note text"]')?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [noteFocusRequest]);
+  // Selecting a node or edge leaves the note.
+  useEffect(() => {
+    if (selectedNodeId || selectedEdgeId) setSelectedNoteId(null);
+  }, [selectedNodeId, selectedEdgeId]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -1202,12 +1267,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         if (selectedNodeId || selectedEdgeId) {
           event.preventDefault();
           deleteSelection();
+        } else if (selectedNoteId) {
+          event.preventDefault();
+          deleteNoteRef.current(selectedNoteId);
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [applyCanvasSnapshot, deleteSelection, getCanvasSnapshot, redo, selectedEdgeId, selectedNodeId, undo]);
+  }, [applyCanvasSnapshot, deleteSelection, getCanvasSnapshot, redo, selectedEdgeId, selectedNodeId, selectedNoteId, undo]);
 
   // The seeded demo is read-only on the server (403 graph_read_only):
   // edits to it are saved as a copy the visitor owns, and the editor moves
@@ -1297,6 +1365,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setEdges(graph.edges.map(toFlowEdge));
       setGroups(graph.groups ?? []);
       setLayers(graph.layers ?? []);
+      setNotes(graph.notes ?? []);
+      setSelectedNoteId(null);
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setDiagnostics([]);
@@ -2168,7 +2238,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     () => (view === "heatmap" && heatAnalytics ? heatByNode(heatMetric, heatAnalytics.nodes) : null),
     [heatAnalytics, heatMetric, view],
   );
-  const canvasNodes = useMemo(() => {
+  const graphCanvasNodes = useMemo(() => {
     if (lanes) {
       const bands = lanes.lanes.map((lane) => ({
         id: `lane:${lane.id}`,
@@ -2194,6 +2264,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     );
     return [...(frames as unknown as Node<GraphNodeData>[]), ...flagExpandedMembers(hideCollapsedMembers(base, displayGroups), displayGroups)];
   }, [displayGroups, focusSet, heat, lanes, nodes, renamingGroupId]);
+  // Sticky notes sit above the graph; the Layers view lays out nodes only.
+  const canvasNodes = useMemo(() => {
+    if (lanes || notes.length === 0) return graphCanvasNodes;
+    const labels = new Map(nodes.map((node) => [node.id, String(node.data.extensions?.label ?? node.data.label ?? node.id)]));
+    const noteNodes = buildNoteNodes(notes, selectedNoteId, (nodeId) => labels.get(nodeId) ?? null);
+    return [...graphCanvasNodes, ...(noteNodes as unknown as Node<GraphNodeData>[])];
+  }, [graphCanvasNodes, lanes, nodes, notes, selectedNoteId]);
+  const noteDragRef = useRef<string | null>(null);
   const canvasEdges = useMemo(() => {
     const shown = lanes
       ? edges.filter((edge) => lanes.positions.has(edge.source) && lanes.positions.has(edge.target))
@@ -2214,6 +2292,22 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       const graphChanges: NodeChange<Node<GraphNodeData>>[] = [];
       for (const change of changes) {
         if ("id" in change && change.id.startsWith("lane:")) continue; // derived lane bands
+        if ("id" in change && isNoteNodeId(change.id)) {
+          // Notes are derived too: a drag moves the note, one undo step per drag.
+          if (change.type !== "position" || !change.position) continue;
+          const noteId = noteIdFromNode(change.id);
+          if (!change.dragging) {
+            noteDragRef.current = null;
+            continue;
+          }
+          if (noteDragRef.current !== noteId) {
+            noteDragRef.current = noteId;
+            recordMutation();
+          }
+          const position = { x: Math.round(change.position.x), y: Math.round(change.position.y) };
+          setNotes((current) => current.map((note) => (note.id === noteId ? { ...note, position } : note)));
+          continue;
+        }
         if (!("id" in change) || !isFrameNodeId(change.id)) {
           // Layers view positions are computed, never dragged into `nodes`.
           if (view === "layers" && change.type === "position") continue;
@@ -2384,6 +2478,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       focusMode,
       canFocus: Boolean(selectedNodeId),
       toggleFocusMode: () => setFocusMode((value) => !value),
+      addNote: () => addNoteAt(viewportCenterRef.current?.() ?? { x: 200, y: 120 }),
       undo: () => {
         const snapshot = undo(getCanvasSnapshot());
         if (snapshot) applyCanvasSnapshot(snapshot);
@@ -2689,7 +2784,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
-  const hasSelection = Boolean(selectedNode || selectedEdge);
+  const selectedNote = selectedNoteId ? notes.find((note) => note.id === selectedNoteId) : undefined;
+  const hasSelection = Boolean(selectedNode || selectedEdge || selectedNote);
   const compactDockTop = (hudBottom ?? 96) + COMPACT_DOCK_TOP_GAP_PX;
   // Keep fit-to-view clear of the floating header (and, on compact, the
   // bottom action bar).
@@ -2733,7 +2829,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // Shared between the desktop reserved-space column and the compact
   // floating overlay below — computed once so the two render paths don't
   // duplicate the NodeInspector/EdgeInspector branch.
-  const inspectorContent = selectedNode ? (
+  const inspectorContent = selectedNote ? (
+    <NoteInspector
+      key={selectedNote.id}
+      note={selectedNote}
+      nodeOptions={nodes.map((node) => ({ value: node.id, label: String(node.data.extensions?.label ?? node.data.label ?? node.id) }))}
+      author={noteAuthor}
+      onChange={(patch) => updateNote(selectedNote.id, (note) => ({ ...note, ...patch }))}
+      onReply={(text) => updateNote(selectedNote.id, (note) => addReply(note, text, noteAuthor.name))}
+      onDeleteReply={(replyId) => updateNote(selectedNote.id, (note) => removeReply(note, replyId))}
+      onDelete={() => deleteNote(selectedNote.id)}
+      onShowNode={(nodeId) => focusNode(nodeId)}
+    />
+  ) : selectedNode ? (
     <NodeInspector
       key={selectedNode.id}
       graphId={graphId}
@@ -2877,6 +2985,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         },
         groupActions: groupMenuActionsForNode(menu.nodeId),
         arrange: targets.length > 1 ? arrangeHandlers(targets) : undefined,
+        addNote: () => {
+          const node = nodes.find((candidate) => candidate.id === menu.nodeId);
+          addNoteAt(node ? { x: node.position.x, y: node.position.y - 150 } : (viewportCenterRef.current?.() ?? { x: 200, y: 120 }), menu.nodeId);
+        },
         remove: () => deleteNodes(targets),
       });
     }
@@ -2929,6 +3041,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           setSnapToGrid(value);
           writeStored(SNAP_TO_GRID_STORAGE_KEY, String(value));
         },
+        addNote: () => addNoteAt(at),
       });
     }
     // The double-click launcher: a flat, searchable list.
@@ -3251,6 +3364,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           }
           onNodeClick={(nodeId) => {
             if (isFrameNodeId(nodeId) || nodeId.startsWith("lane:")) return;
+            if (isNoteNodeId(nodeId)) {
+              selectNote(noteIdFromNode(nodeId));
+              if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
+              return;
+            }
             if (tool === "connect" && !spaceHeld && !workbench.isCompact) {
               connectClick(nodeId);
               return;
@@ -3269,6 +3387,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             setPendingConnection(null);
             setSelectedNodeId(null);
             setSelectedEdgeId(null);
+            setSelectedNoteId(null);
           }}
           onPaneDoubleClick={(x, y, flowX, flowY) => {
             setNodeLauncherQuery("");
@@ -3276,6 +3395,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           }}
           onNodeContextMenu={(nodeId, x, y) => {
             if (nodeId.startsWith("lane:")) return;
+            if (isNoteNodeId(nodeId)) {
+              selectNote(noteIdFromNode(nodeId));
+              return;
+            }
             if (isFrameNodeId(nodeId)) {
               setContextMenu({ kind: "group", groupId: groupIdFromFrame(nodeId), x, y });
               return;

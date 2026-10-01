@@ -68,7 +68,8 @@
       "related": [
         "edge-styles",
         "groups-and-layers",
-        "code-mode"
+        "code-mode",
+        "sticky-notes"
       ],
       "body": "The canvas is where you lay out and connect steps. The tool bar on the left switches between Select, Hand (pan), Marquee, Connect and Zoom; hold Space to pan with any tool.\n\n## How do I…\n- **Add a node:** **Add node** in the header opens the palette. Search it, click an item, or drag it onto the canvas. Saved prompts, LLM profiles, tools, transforms and graphs are in the palette too.\n- **Use the menus:** right-click a node, an edge, a selection or the empty canvas for the actions that apply there.\n- **Line things up:** dragged nodes snap to other nodes' edges and centers (hold ⇧ or ⌥ to drag freely). With several nodes selected, use **Align** or **Distribute** (⌥A, ⌥H, ⌥D, ⌥W, ⌥V, ⌥S; ⌥⇧H and ⌥⇧V).\n- **Snap to a grid:** turn on Snap in the status bar and pick 12, 24 or 48.\n- **Focus on one node:** select it and turn on Focus mode; set how many steps away stay lit in the status bar.\n- **See the log:** the status bar's Console opens a dock under the canvas.\n- **Run any of these from the keyboard:** ⌘K lists canvas actions (Align, Distribute, Auto-arrange, Fit view, Snap, Focus mode, Undo, views, Save, Validate) for the open graph. Ones that need a selection say so."
     },
@@ -872,6 +873,29 @@
         "node-human-gate"
       ],
       "body": "A run executes the graph once with your input. Each node reports when it starts, finishes, fails or pauses, and the studio shows these events live.\n\n## How do I…\n- **Run:** open **Run**, fill in the inputs, choose a provider, and press **Run** (⌘↵).\n- **See a step's input and output:** click the node, then its **Run** tab.\n- **See timing:** the Run panel's waterfall shows each step's duration; click a bar to open that step.\n- **Find an old run:** the Run panel's history lists past runs. Open one to inspect it or [replay](kb:replay) it.\n- **Approve a paused run:** a Human gate pauses the run; approve or reject it in the Run panel."
+    },
+    {
+      "id": "sticky-notes",
+      "title": "Sticky notes and comments",
+      "summary": "Leave notes on the canvas and discuss them with other authors",
+      "category": "concept",
+      "keywords": [
+        "note",
+        "notes",
+        "sticky",
+        "comment",
+        "comments",
+        "reply",
+        "discussion",
+        "resolve",
+        "annotate",
+        "author"
+      ],
+      "related": [
+        "canvas-basics",
+        "releases"
+      ],
+      "body": "Sticky notes hold reference text on the canvas: why a step exists, what to check, or a question for whoever edits next. Each note shows its author and has its own comment thread. Notes are saved with the graph but are for people only: they never change what runs, a release's diff, or the graph's fingerprint.\n\n## How do I…\n- **Add a note:** right-click the empty canvas ▸ **Add sticky note**, right-click a node ▸ **Add note** (pinned to that node), or ⌘K ▸ **Add sticky note**.\n- **Write and style it:** select the note; edit its text and color in the inspector. Drag it anywhere.\n- **Pin it to a node:** choose the node under **Pinned to**. If the node is deleted, the note stays, unpinned.\n- **Comment:** type under **Add a comment** and press **Comment** (⌘↵). Mark the note **Resolved** when the discussion is done.\n- **Sign your notes:** when you're signed in, your email is used; otherwise set **Your name** once and it's remembered in this browser.\n- **Delete:** select the note and press Delete, or use the trash button. Undo brings it back."
     },
     {
       "id": "transforms",

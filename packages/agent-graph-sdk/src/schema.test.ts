@@ -189,6 +189,30 @@ describe("documentFingerprint / semanticFingerprint", () => {
     expect(fingerprintGraph(styled)).not.toBe(fingerprintGraph(styledEdgeFixture({ style: { pattern: "dotted" } })));
   });
 
+  it("keeps sticky notes and their comments out of the semantic fingerprint, matching the backend", () => {
+    const plain = styledEdgeFixture();
+    const noted: GraphDefinition = {
+      ...plain,
+      notes: [
+        {
+          id: "note1",
+          text: "Check the fallback",
+          position: { x: 10, y: 20.5 },
+          color: "yellow",
+          author: "Ada",
+          created_at: "2026-10-01T00:00:00Z",
+          node_id: "n1",
+          replies: [{ id: "r1", text: "Done", author: "Bob", created_at: "2026-10-01T01:00:00Z" }],
+        },
+      ],
+    };
+    expect(documentFingerprint(noted)).toBe("8f8f8bd80ec0d47a9c14c4e15edc124db8b11f5b3051c4cc299815f6e89d9f34");
+    expect(semanticFingerprint(noted)).toBe(semanticFingerprint(plain));
+    expect(documentFingerprint({ ...plain, notes: [] })).toBe(documentFingerprint(plain));
+    // Notes are saved, so editing one marks the canvas dirty.
+    expect(fingerprintGraph(noted)).not.toBe(fingerprintGraph(plain));
+  });
+
   it("treats a node's extensions.label as display-only, matching the backend", () => {
     const named = labeledFixture({ label: "Named" });
     expect(documentFingerprint(named)).toBe("617d974406f8ad35fc3004dc233d1cd7d66cfb2b5e49219cb1b61381ce74813f");

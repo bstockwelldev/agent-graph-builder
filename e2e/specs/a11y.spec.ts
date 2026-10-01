@@ -18,6 +18,15 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
   ["node inspector", (page, graph) => openGraph(page, graph, "?node=llm_answer")],
   ["releases panel", (page, graph) => openGraph(page, graph, "?panel=releases")],
   [
+    "sticky note",
+    async (page, graph) => {
+      await openGraph(page, graph);
+      await page.locator('.react-flow__node[data-id="router_1"]').click({ button: "right" });
+      await page.getByRole("menuitem", { name: "Add note" }).click();
+      await page.getByLabel("Note text").fill("Check the fallback route");
+    },
+  ],
+  [
     "code view",
     async (page, graph) => {
       await openGraph(page, graph, "?mode=split");

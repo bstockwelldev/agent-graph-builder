@@ -483,6 +483,12 @@ As a result:
 - **Found on the way:** the command palette (⌘K) threw on open: `CommandDialog` rendered cmdk parts without the `<Command>` root. Fixed in `components/ui/command.tsx`; `e2e/specs/help.spec.ts` now opens it.
 - **Not done:** empty-state copy still lives inline; articles cover panels by mapping, and only the Run and Graph config panels (plus the inspectors) have a header help button so far.
 
+## Follow-ups shipped 2026-10-01
+
+- **Knowledge base, finished:** Releases, Routing lab, Knowledge, Policies, Health and Analytics get a title bar with a help button (`WorkbenchDrawer titleBar`); resource panels and the compact drawer get one beside their title. Empty states link to their article: the empty-graph coach, the Run panel before a run, Releases with none yet.
+- **Canvas actions in ⌘K** (`components/graph/canvasCommands.ts`): the editor publishes its commands through the workbench graph context, read when the palette opens. Arrange (Align ×6, Distribute ×2, Auto-arrange), Canvas (Select all, Fit view, Snap, Focus mode, Add sticky note, Undo/Redo), View (Canvas/Code/Split, Overview/Layers/Heatmap) and Graph (Save, Validate, Run, Find, Export). A command that can't run yet is listed disabled with the reason ("Select two or more nodes").
+- **Sticky notes with comments** (`GraphDefinition.notes`; `lib/notes.ts`, `nodes/StickyNote.tsx`, `NoteInspector.tsx`): add from the canvas menu, a node's menu (pinned to it) or ⌘K. A note has text, a color, an author, timestamps, an optional pinned node, a resolved flag and a comment thread. The author is the signed-in user's email, else a name saved in the browser. Notes are display-only: saved (document fingerprint, dirty check) but outside the semantic fingerprint and release diffs (pinned digests in the backend and SDK tests); a note whose node is deleted stays, unpinned. Edits are undoable; Delete removes the selected note.
+
 ## Suggested slices
 
 | # | Slice | Items | Priority | Impact |

@@ -2120,6 +2120,8 @@ export type components = {
             name: string;
             /** Nodes */
             nodes: components["schemas"]["GraphNode"][];
+            /** Notes */
+            notes?: components["schemas"]["GraphNote"][] | null;
             /**
              * Orientation
              * @default auto
@@ -2242,6 +2244,60 @@ export type components = {
              */
             position?: components["schemas"]["NodePosition"];
             type: components["schemas"]["NodeType"];
+        };
+        /**
+         * GraphNote
+         * @description A sticky note on the canvas, for reference and for comments between
+         *     authors. Display-only, like groups and layers: never part of the
+         *     semantic fingerprint or a release diff, never read by the compiler or
+         *     the runtime. `node_id` pins it to a node (it is dropped with the node).
+         */
+        GraphNote: {
+            /** Author */
+            author?: string | null;
+            /** Color */
+            color?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: string;
+            /** Node Id */
+            node_id?: string | null;
+            /**
+             * @default {
+             *       "x": 0,
+             *       "y": 0
+             *     }
+             */
+            position?: components["schemas"]["NodePosition"];
+            /** Replies */
+            replies?: components["schemas"]["GraphNoteReply"][];
+            /**
+             * Resolved
+             * @default false
+             */
+            resolved?: boolean;
+            /**
+             * Text
+             * @default
+             */
+            text?: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * GraphNoteReply
+         * @description A comment on a sticky note (canvas-workbench-ergonomics follow-up).
+         */
+        GraphNoteReply: {
+            /** Author */
+            author?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
         };
         /** GraphPort */
         GraphPort: {

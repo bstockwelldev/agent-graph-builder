@@ -43,6 +43,8 @@ export type PaneMenuHandlers = {
   fitView: () => void;
   snapToGrid: boolean;
   setSnapToGrid: (snap: boolean) => void;
+  /** A sticky note where the menu opened. */
+  addNote?: () => void;
 };
 
 export function paneMenuActions(
@@ -60,6 +62,7 @@ export function paneMenuActions(
       disabled: handlers.paste === null,
       onClick: () => handlers.paste?.(),
     },
+    ...(handlers.addNote ? [{ label: "Add sticky note", onClick: handlers.addNote }] : []),
     { label: "Select all", shortcut: "⌘A", onClick: handlers.selectAll },
     {
       label: "Auto-arrange",
@@ -88,6 +91,8 @@ export type NodeMenuHandlers = {
   groupActions: NodeContextMenuAction[];
   /** Align and Distribute, when the node is part of a multi-selection. */
   arrange?: ArrangeHandlers;
+  /** A sticky note pinned to this node. */
+  addNote?: () => void;
   remove: () => void;
 };
 
@@ -120,6 +125,7 @@ export function nodeMenuActions(
       onClick: () => handlers.showDependencies("both"),
     },
     { label: "Focus on this node", onClick: handlers.focusOnNode },
+    ...(handlers.addNote ? [{ label: "Add note", onClick: handlers.addNote }] : []),
     ...handlers.groupActions,
     ...(handlers.arrange ? arrangeActions(handlers.arrange) : []),
     {

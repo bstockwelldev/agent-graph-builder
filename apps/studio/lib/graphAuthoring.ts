@@ -7,6 +7,7 @@ import type {
   GraphEdge,
   GraphGroup,
   GraphLayer,
+  GraphNote,
   GraphNode,
   GraphOrientation,
 } from "@bstockwelldev/agent-graph-sdk";
@@ -20,6 +21,8 @@ export type CanvasSnapshot = {
   groups?: GraphGroup[];
   /** Wave 7d architecture layers. */
   layers?: GraphLayer[];
+  /** Sticky notes and their comments. */
+  notes?: GraphNote[];
 };
 
 /**
@@ -44,6 +47,7 @@ export function cloneCanvasSnapshot(
   graphOrientation: GraphOrientation,
   groups: GraphGroup[] = [],
   layers: GraphLayer[] = [],
+  notes: GraphNote[] = [],
 ): CanvasSnapshot {
   return {
     nodes: nodes.map((node) => ({
@@ -61,6 +65,7 @@ export function cloneCanvasSnapshot(
     graphOrientation,
     groups: groups.map((group) => ({ ...group, node_ids: [...group.node_ids] })),
     layers: layers.map((layer) => ({ ...layer })),
+    notes: notes.map((note) => ({ ...note, position: note.position ? { ...note.position } : note.position, replies: [...(note.replies ?? [])] })),
   };
 }
 
