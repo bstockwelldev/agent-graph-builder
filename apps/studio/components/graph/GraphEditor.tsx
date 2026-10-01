@@ -145,6 +145,7 @@ import { RunPanel, type RunAgentOption, type RunSelection } from "./RunPanel";
 import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
 import { GraphConfigPanel } from "./GraphConfigPanel";
+import { GraphCodeView } from "./GraphCodeView";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { PolicyPanel } from "./PolicyPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
@@ -172,8 +173,8 @@ import { IconButton } from "./ui/IconButton";
 import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
 import type { EdgeRunState } from "./edges/LabeledEdge";
 import { findFreePosition, type LayoutSpacing } from "@/layout/dagreLayout";
-import { shell } from "@/lib/graph-theme";
-import { parseGraphUrlState, serializeGraphUrlState } from "@/lib/graphUrlState";
+import { shell, surface } from "@/lib/graph-theme";
+import { parseEditorMode, parseGraphUrlState, serializeGraphUrlState, type EditorMode } from "@/lib/graphUrlState";
 import { WORKBENCH_PANELS } from "@/components/workbench/panels";
 import { CaptureDatasetDialog } from "@/components/studio/capture-dataset-dialog";
 import { emitResourceChanged } from "@/lib/resourceEvents";
@@ -454,6 +455,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // view (?view=) -- no view ever writes positions back to `nodes`.
   const [layers, setLayers] = useState<GraphLayer[]>([]);
   const [view, setView] = useState<GraphView>("canvas");
+  // Code mode (canvas-workbench-ergonomics-plan.md §5): Canvas, Code or Split.
+  const [editorMode, setEditorMode] = useState<EditorMode>("canvas");
+  const codeSaveRef = useRef<(() => void) | null>(null);
   const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(new Set());
   const [heatMetric, setHeatMetric] = useState<HeatMetric>("p95");
   const [heatAnalytics, setHeatAnalytics] = useState<GraphAnalytics | null>(null);
@@ -552,6 +556,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [libraryGraphs, setLibraryGraphs] = useState<GraphSummary[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const workbench = useWorkbench();
+  // Phones keep the canvas: Code and Split need the width.
+  const shownMode: EditorMode = workbench.isCompact ? "canvas" : editorMode;
+  // The canvas changes width (or reappears) with the mode: frame it again.
+  const shownModeRef = useRef(shownMode);
+  useEffect(() => {
+    if (shownModeRef.current === shownMode) return;
+    shownModeRef.current = shownMode;
+    if (shownMode !== "code") setFitViewNonce((value) => value + 1);
+  }, [shownMode]);
   // Default the Run panel open on desktop, matching the old playground's
   // persistently docked Run rail; computed once at mount, not tied to live
   // resize, so a window resize doesn't fight a user's manual toggle
@@ -877,13 +890,20 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [buildGraphDefinition, nodes.length]);
   semanticFingerprintRef.current = semanticFingerprint;
 
+  const draftGraph = useMemo(() => buildGraphDefinition(), [buildGraphDefinition]);
   const dirty = useMemo(() => {
     try {
-      return fingerprintGraph(buildGraphDefinition()) !== savedFingerprint;
+      return fingerprintGraph(draftGraph) !== savedFingerprint;
     } catch {
       return false;
     }
-  }, [buildGraphDefinition, savedFingerprint]);
+  }, [draftGraph, savedFingerprint]);
+  // The draft whenever it matches what's saved: Code mode diffs against it
+  // before saving (same studio formatting, so the diff shows only edits).
+  const savedGraphRef = useRef<GraphDefinition | null>(null);
+  useEffect(() => {
+    if (!dirty && !loading) savedGraphRef.current = draftGraph;
+  }, [dirty, draftGraph, loading]);
 
   // Debounced live validation — mirrors apps/playground/src/App.tsx's flow.
   useEffect(() => {
@@ -1204,13 +1224,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [router],
   );
 
-  const handleSave = useCallback(async () => {
-    if (!dirty) return;
+  // Persists `graph` as given; Code mode saves text it has just applied,
+  // before the canvas state catches up. False when the save failed.
+  const saveGraph = useCallback(async (graph: GraphDefinition): Promise<boolean> => {
     setSaving(true);
     setSaveError(null);
     dismissForkNotice();
     try {
-      const graph = buildGraphDefinition();
       try {
         await client.graphs.update(graph);
         setSavedFingerprint(fingerprintGraph(graph));
@@ -1220,6 +1240,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         await forkToCopy(graph);
         logConsoleEntry({ severity: "info", source: "Save", message: `"${graph.name}" is read-only: saved as a copy`, graphId: graph.id });
       }
+      return true;
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : String(err));
       logConsoleEntry({
@@ -1228,10 +1249,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         message: `Save failed: ${err instanceof Error ? err.message : String(err)}`,
         graphId: graphId ?? undefined,
       });
+      return false;
     } finally {
       setSaving(false);
     }
-  }, [buildGraphDefinition, dirty, dismissForkNotice, forkToCopy, graphId]);
+  }, [dismissForkNotice, forkToCopy, graphId]);
+
+  const handleSave = useCallback(async () => {
+    if (!dirty) return;
+    await saveGraph(buildGraphDefinition());
+  }, [buildGraphDefinition, dirty, saveGraph]);
 
   // Raw JSON/YAML config editor, Phase 2 - graph scope
   // (studio-config-editor-and-console-plan.md §6): copy-paste/backup/
@@ -2343,6 +2370,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     urlStateAppliedRef.current = graphId;
     const state = parseGraphUrlState(window.location.search);
     setView(parseGraphView(state.view));
+    setEditorMode(parseEditorMode(state.mode));
     // The pan/zoom waits out the load-time layout + whole-graph fit
     // (FlowCanvas's rAF and 150ms-debounced fitView), which would
     // otherwise land after it and zoom straight back out.
@@ -2419,13 +2447,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         run: inspectionRunId,
         panel: workbench.activePanel,
         view,
+        mode: editorMode,
       },
       window.location.search,
     );
     if (next !== window.location.search) {
       window.history.replaceState(window.history.state, "", `${window.location.pathname}${next}${window.location.hash}`);
     }
-  }, [graphId, selectedNodeId, selectedEdgeId, inspectorTab, inspectionRunId, workbench.activePanel, view]);
+  }, [graphId, selectedNodeId, selectedEdgeId, inspectorTab, inspectionRunId, workbench.activePanel, view, editorMode]);
 
   // Wave 7d: each view frames differently (lanes vs. the graph), so refit
   // on every switch; the heatmap loads recent-run analytics on entry.
@@ -2496,7 +2525,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        setSaveRequested(true);
+        // Code and Split views save the code (with its review); inside the
+        // editor, its own ⌘S binding has already done that.
+        if (event.target instanceof Element && event.target.closest("[data-code-editor]")) return;
+        if (codeSaveRef.current) codeSaveRef.current();
+        else setSaveRequested(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -2976,6 +3009,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         onOpenFind={() => setFindOpen(true)}
         view={view}
         onViewChange={setView}
+        editorMode={shownMode}
+        onEditorModeChange={workbench.isCompact || !graphId ? undefined : setEditorMode}
         onManageLayers={() => setManageLayersOpen(true)}
         usedBy={usedBy}
         onOpenGraph={(parentId) => router.push(`/graphs/${encodeURIComponent(parentId)}`)}
@@ -3007,7 +3042,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         </div>
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        <div data-canvas-pane="" className={shownMode === "code" ? "hidden" : "relative min-h-0 min-w-0 flex-1"}>
         <CanvasActionsProvider value={canvasActions}>
         <FlowCanvas
           graphId={graphId}
@@ -3213,6 +3249,29 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onSelectionContextMenu={(x, y) => setContextMenu({ kind: "selection", x, y })}
         />
         </CanvasActionsProvider>
+        </div>
+        {shownMode !== "canvas" && graphId && !loading && (
+          <div
+            className="min-h-0 min-w-0 flex-1"
+            style={{ paddingTop: hudBottom ?? 76, borderLeft: shownMode === "split" ? `1px solid ${surface.border}` : undefined }}
+          >
+            <GraphCodeView
+              graph={draftGraph}
+              getSavedGraph={() => savedGraphRef.current}
+              diagnostics={diagnostics}
+              saving={saving}
+              saveRef={codeSaveRef}
+              onApply={(graph) => {
+                applyGraphDefinition(graph);
+                logConsoleEntry({ severity: "info", source: "Code", message: "Applied the graph code (unsaved)", graphId: graphId ?? undefined });
+              }}
+              onSave={async (graph) => {
+                applyGraphDefinition(graph);
+                return saveGraph(graph);
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {pendingConnection && (
@@ -3425,7 +3484,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="graphConfig" side="right" mode="docked-reserve" dockedClassName="w-[32rem] border-l overflow-y-auto">
         <GraphConfigPanel
-          graph={buildGraphDefinition()}
+          graph={draftGraph}
           onApply={(graph) => {
             applyGraphDefinition(graph);
             logConsoleEntry({ severity: "info", source: "Config", message: "Applied the graph config (unsaved)", graphId: graphId ?? undefined });

@@ -13,6 +13,7 @@ describe("graph URL state", () => {
       tab: "history",
       section: "observe-history",
       view: null,
+      mode: null,
     });
   });
 

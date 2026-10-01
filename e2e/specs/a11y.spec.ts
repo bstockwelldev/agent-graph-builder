@@ -17,6 +17,13 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
   ["run panel", (page, graph) => openGraph(page, graph, "?panel=run")],
   ["node inspector", (page, graph) => openGraph(page, graph, "?node=llm_answer")],
   ["releases panel", (page, graph) => openGraph(page, graph, "?panel=releases")],
+  [
+    "code view",
+    async (page, graph) => {
+      await openGraph(page, graph, "?mode=split");
+      await page.getByRole("textbox", { name: /^Graph code/ }).waitFor();
+    },
+  ],
   // Seed a card / an exception row first so the scan covers them, not an empty state.
   [
     "transforms",
