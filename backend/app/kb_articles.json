@@ -1,0 +1,926 @@
+{
+  "version": 1,
+  "articles": [
+    {
+      "id": "agents",
+      "title": "Agents",
+      "summary": "A graph plus a model profile, instructions and allowed tools",
+      "category": "resource",
+      "keywords": [
+        "agent",
+        "agents",
+        "run as",
+        "system prompt",
+        "instructions",
+        "allow-list",
+        "tool allow list"
+      ],
+      "related": [
+        "resource-llm-profiles",
+        "resource-tools",
+        "chat"
+      ],
+      "body": "An agent is a graph plus an LLM profile (the run's default model), a system prompt and instructions (added to every LLM and tool-loop node), and a tool allow-list. A run that would call a tool outside the list is refused with a blocking issue.\n\n## How do I…\n- **Create one:** **Resources ▸ Agents** ▸ New, then pick its graph and profile.\n- **Run as an agent:** choose it under **Run as** in the graph's Run panel, use **Run** on the Agents page, or type `/run @agent …` in Chat."
+    },
+    {
+      "id": "analytics",
+      "title": "Analytics",
+      "summary": "Runs, trends and spend across the workspace or one graph",
+      "category": "panel",
+      "keywords": [
+        "analytics",
+        "usage",
+        "spend",
+        "cost",
+        "tokens",
+        "trend",
+        "metrics"
+      ],
+      "related": [
+        "runs-and-traces"
+      ],
+      "body": "Analytics shows run totals, a daily trend and spend per graph. Use the Scope picker to look at the whole workspace or one graph."
+    },
+    {
+      "id": "canvas-basics",
+      "title": "Working on the canvas",
+      "summary": "Tools, menus, selection, snapping and focus mode",
+      "category": "concept",
+      "keywords": [
+        "canvas",
+        "toolbar",
+        "hand",
+        "pan",
+        "zoom",
+        "select",
+        "marquee",
+        "snap",
+        "grid",
+        "align",
+        "distribute",
+        "guides",
+        "context menu",
+        "right-click",
+        "focus mode",
+        "palette",
+        "add node"
+      ],
+      "related": [
+        "edge-styles",
+        "groups-and-layers",
+        "code-mode"
+      ],
+      "body": "The canvas is where you lay out and connect steps. The tool bar on the left switches between Select, Hand (pan), Marquee, Connect and Zoom; hold Space to pan with any tool.\n\n## How do I…\n- **Add a node:** **Add node** in the header opens the palette. Search it, click an item, or drag it onto the canvas. Saved prompts, LLM profiles, tools, transforms and graphs are in the palette too.\n- **Use the menus:** right-click a node, an edge, a selection or the empty canvas for the actions that apply there.\n- **Line things up:** dragged nodes snap to other nodes' edges and centers (hold ⇧ or ⌥ to drag freely). With several nodes selected, use **Align** or **Distribute** (⌥A, ⌥H, ⌥D, ⌥W, ⌥V, ⌥S; ⌥⇧H and ⌥⇧V).\n- **Snap to a grid:** turn on Snap in the status bar and pick 12, 24 or 48.\n- **Focus on one node:** select it and turn on Focus mode; set how many steps away stay lit in the status bar.\n- **See the log:** the status bar's Console opens a dock under the canvas."
+    },
+    {
+      "id": "chat",
+      "title": "Chat",
+      "summary": "Ask about the open graph, or run an agent",
+      "category": "panel",
+      "keywords": [
+        "chat",
+        "assistant",
+        "ask",
+        "question",
+        "help me",
+        "/run"
+      ],
+      "related": [
+        "agents",
+        "runs-and-traces"
+      ],
+      "body": "Chat is a model scratchpad (⌘⇧C). When a graph is open, it knows the graph, the selected node or edge, and the run you're inspecting, and it can draw on these help articles to explain how the studio works.\n\n## How do I…\n- **Ask about a failure:** select the node or open the run, then ask \"why did this fail?\".\n- **Run an agent:** type `/run @agent your input`."
+    },
+    {
+      "id": "code-mode",
+      "title": "Code mode",
+      "summary": "Edit the whole graph as JSON or YAML",
+      "category": "concept",
+      "keywords": [
+        "code",
+        "code mode",
+        "json",
+        "yaml",
+        "split",
+        "raw",
+        "config",
+        "text",
+        "codemirror",
+        "graph config"
+      ],
+      "related": [
+        "validation",
+        "canvas-basics"
+      ],
+      "body": "Code mode shows the graph as JSON or YAML text. The header's **Canvas | Code | Split** buttons switch views; Split shows the canvas and the code side by side.\n\n## How do I…\n- **Find a problem:** problems are marked in the gutter and listed under the editor; click one to jump to its line.\n- **Apply:** **Apply** updates the canvas without saving (undoable).\n- **Save:** ⌘S checks the text, shows what changed since the last save, and saves on confirm. If the check fails, your text stays as typed.\n\nJSON is what's stored; YAML is only a view. The ⋯ menu's **Graph config** panel offers the same editing in a side panel."
+    },
+    {
+      "id": "console",
+      "title": "Console",
+      "summary": "Logs, warnings, errors and run events in one place",
+      "category": "panel",
+      "keywords": [
+        "console",
+        "log",
+        "logs",
+        "errors",
+        "warnings",
+        "events"
+      ],
+      "related": [
+        "runs-and-traces"
+      ],
+      "body": "The console collects saves, imports, validation, client errors and live run events. Open it with ⌘⇧J, or from the status bar for a dock under the canvas. Click an entry tied to a node to jump to it."
+    },
+    {
+      "id": "datasets",
+      "title": "Datasets",
+      "summary": "Saved inputs (and recorded outputs) to test a graph against",
+      "category": "resource",
+      "keywords": [
+        "dataset",
+        "datasets",
+        "fixture",
+        "fixtures",
+        "test cases",
+        "simulation",
+        "capture"
+      ],
+      "related": [
+        "routing-lab",
+        "runs-and-traces"
+      ],
+      "body": "A dataset is a list of fixtures: run inputs, optionally with recorded node outputs. Use them to simulate a graph without calling a model, and to check routing in the Routing lab.\n\n## How do I…\n- **Create one:** **Resources ▸ Datasets** ▸ New, then add fixtures as JSON.\n- **Capture runs:** in the Run panel's history, select runs and choose **Save as dataset**.\n- **Use one:** **Run with fixture…** (Run menu) runs one fixture without calling a model; the [Routing lab](kb:routing-lab) runs them all."
+    },
+    {
+      "id": "demo-mode",
+      "title": "Public demo",
+      "summary": "What visitors can and can't do on the public demo",
+      "category": "concept",
+      "keywords": [
+        "demo",
+        "public",
+        "read-only",
+        "fork",
+        "copy",
+        "stub only"
+      ],
+      "related": [
+        "getting-started",
+        "providers"
+      ],
+      "body": "On the public demo, the seeded demo graph is read-only: saving your edits creates a copy you own and opens it. Runs use the Stub provider. Some workspace-wide settings can't be changed."
+    },
+    {
+      "id": "edge-conditional",
+      "title": "Match text edge",
+      "summary": "Match upstream LLM text",
+      "category": "edge",
+      "keywords": [
+        "conditional",
+        "match text",
+        "condition",
+        "substring",
+        "edge"
+      ],
+      "related": [
+        "routing",
+        "edge-default"
+      ],
+      "body": "Router compares the condition as a substring of the previous LLM output (not the Prompt template). First match wins. Drawn dashed by default."
+    },
+    {
+      "id": "edge-default",
+      "title": "Fallback edge",
+      "summary": "Router fallback",
+      "category": "edge",
+      "keywords": [
+        "default",
+        "fallback",
+        "else",
+        "otherwise",
+        "edge"
+      ],
+      "related": [
+        "routing",
+        "edge-conditional"
+      ],
+      "body": "Taken when no Match-text edge matches. Each router must have exactly one Fallback outgoing edge. Drawn dotted by default."
+    },
+    {
+      "id": "edge-sequence",
+      "title": "Always edge",
+      "summary": "Always follow this path",
+      "category": "edge",
+      "keywords": [
+        "sequence",
+        "always",
+        "unconditional",
+        "edge"
+      ],
+      "related": [
+        "edge-conditional",
+        "edge-default",
+        "edge-styles"
+      ],
+      "body": "Unconditional flow (schema: sequence). Used for linear Prompt → LLM chains. Drawn solid by default."
+    },
+    {
+      "id": "edge-styles",
+      "title": "Edge styles",
+      "summary": "Line pattern, weight and color for an edge",
+      "category": "concept",
+      "keywords": [
+        "edge style",
+        "line",
+        "dashed",
+        "dotted",
+        "solid",
+        "thick",
+        "color",
+        "colour",
+        "pattern",
+        "weight"
+      ],
+      "related": [
+        "edge-sequence",
+        "edge-conditional",
+        "edge-default"
+      ],
+      "body": "Each edge kind has a default pattern: Always is solid, Match text dashed and Fallback dotted. You can restyle any edge; styles are for display only and never change what runs, or a release's diff.\n\n## How do I…\n- Select an edge and use the inspector's **Style** group, or right-click it ▸ **Style**. **Reset style** goes back to the defaults.\n\nA running edge stays animated, a failed one stays red, and a validation problem keeps its color, whatever the style."
+    },
+    {
+      "id": "genui",
+      "title": "GenUI surfaces",
+      "summary": "Structured, interactive content for approvals and results",
+      "category": "concept",
+      "keywords": [
+        "genui",
+        "surface",
+        "surfaces",
+        "approval card",
+        "chart",
+        "table",
+        "diff",
+        "form",
+        "ui"
+      ],
+      "related": [
+        "node-human-gate",
+        "runs-and-traces"
+      ],
+      "body": "A GenUI surface is a small JSON description of UI, such as a summary, chart, table, diff, diagram or form, that the studio renders safely. Human gates use them to show what needs approval; values bind to run data with `{\"$ref\": \"/nodes/<id>/output\"}`.\n\n## How do I…\n- **Browse and preview surfaces:** the **GenUI** page.\n- **Use one at a checkpoint:** set it on a Human gate node. Form values the approver enters become a run variable named after the gate."
+    },
+    {
+      "id": "getting-started",
+      "title": "Build and run your first graph",
+      "summary": "Open a graph, add steps, connect them and run it",
+      "category": "concept",
+      "keywords": [
+        "start",
+        "tutorial",
+        "first graph",
+        "how do i",
+        "new graph"
+      ],
+      "related": [
+        "canvas-basics",
+        "runs-and-traces",
+        "providers"
+      ],
+      "body": "A graph is a set of steps (nodes) joined by edges. A run starts at the input node, follows the edges, and returns whatever reaches the output node.\n\n## How do I…\n- **Start:** open **Classify & Route (demo)** from the Graphs page, or create a new graph there.\n- **Add a step:** press **Add node** (or right-click the canvas ▸ Add node) and pick a type. Drag from one node's handle to another's to connect them.\n- **Configure a step:** click it. The inspector shows its settings; problems show on the node and in the Issues list.\n- **Run it:** open **Run**, fill in the input, and press **Run**. The Stub provider needs no API key.\n- **Keep it:** press **Save** (⌘S). Publish a [release](kb:releases) when it's ready to share."
+    },
+    {
+      "id": "graph-health",
+      "title": "Graph health",
+      "summary": "A score for how ready a graph is",
+      "category": "panel",
+      "keywords": [
+        "health",
+        "score",
+        "readiness",
+        "quality"
+      ],
+      "related": [
+        "validation",
+        "policies"
+      ],
+      "body": "The health score sums up a graph's state: validation issues, policy results and recent run outcomes. The **Health** panel breaks the score down so you can see what to fix first."
+    },
+    {
+      "id": "groups-and-layers",
+      "title": "Groups, layers and subgraphs",
+      "summary": "Organize a large graph",
+      "category": "concept",
+      "keywords": [
+        "group",
+        "groups",
+        "frame",
+        "collapse",
+        "layer",
+        "layers",
+        "lanes",
+        "heatmap",
+        "view",
+        "extract subgraph"
+      ],
+      "related": [
+        "canvas-basics",
+        "node-subgraph"
+      ],
+      "body": "- **Groups** frame related nodes. Select nodes and choose **Group**; collapse a group to tidy the canvas.\n- **Layers** tag nodes by concern. The header's **View** menu shows them as lanes, and **Manage layers** edits them.\n- **Heatmap** colors nodes by run metrics p95 latency, failure rate or executions.\n- **Extract to subgraph** moves a selection into its own graph and replaces it with a [Subgraph node](kb:node-subgraph)."
+    },
+    {
+      "id": "help",
+      "title": "Using help",
+      "summary": "Find an article, a shortcut or a concept",
+      "category": "panel",
+      "keywords": [
+        "help",
+        "docs",
+        "documentation",
+        "shortcuts",
+        "keyboard",
+        "gestures",
+        "learn more",
+        "?"
+      ],
+      "related": [
+        "getting-started",
+        "canvas-basics"
+      ],
+      "body": "Press **?** (or use the command palette, ⌘K) to open Help. Search finds articles by title, summary and keywords. The **Shortcuts** tab lists keyboard shortcuts and gestures.\n\n\"Learn more\" links in the inspector, the palette and issue messages open the matching article here."
+    },
+    {
+      "id": "knowledge-base-rag",
+      "title": "Knowledge (RAG)",
+      "summary": "Documents a graph can retrieve from",
+      "category": "panel",
+      "keywords": [
+        "knowledge",
+        "rag",
+        "retrieval",
+        "documents",
+        "upload",
+        "embeddings",
+        "search"
+      ],
+      "related": [
+        "runs-and-traces"
+      ],
+      "body": "Each graph has its own knowledge base: documents you upload are split and embedded so steps can retrieve relevant passages at run time.\n\n## How do I…\n- Open **Knowledge** from the header's ⋯ menu to upload or remove documents and see which runs and nodes retrieved from them."
+    },
+    {
+      "id": "mcp-servers",
+      "title": "MCP servers",
+      "summary": "Connect tools from a Model Context Protocol server",
+      "category": "resource",
+      "keywords": [
+        "mcp",
+        "model context protocol",
+        "server",
+        "discover",
+        "headers",
+        "http"
+      ],
+      "related": [
+        "resource-tools",
+        "node-tool"
+      ],
+      "body": "An MCP server exposes tools over HTTP. Register it under **Resources ▸ MCP** with its URL and any request headers (stored write-only), then **Discover** its tools. Discovered tools appear as tools you can use on Tool nodes."
+    },
+    {
+      "id": "node-branch",
+      "title": "Branch node",
+      "summary": "Substring gate with real out-edges",
+      "category": "node",
+      "keywords": [
+        "gate",
+        "if",
+        "substring",
+        "condition"
+      ],
+      "related": [
+        "routing",
+        "node-router"
+      ],
+      "body": "Gates on a substring match in upstream text, with its own conditional and default out-edges — a real branch, not a whole-run precondition."
+    },
+    {
+      "id": "node-code-exec",
+      "title": "Code execution node",
+      "summary": "Declare a code-execution contract",
+      "category": "node",
+      "keywords": [
+        "code",
+        "sandbox",
+        "javascript",
+        "python",
+        "typescript"
+      ],
+      "related": [
+        "node-tool"
+      ],
+      "body": "Describes code the model should run via a linked tool; validated and passed through — no sandbox executor is wired yet."
+    },
+    {
+      "id": "node-guardrail",
+      "title": "Guardrail node",
+      "summary": "Validate input before the model runs",
+      "category": "node",
+      "keywords": [
+        "safety",
+        "injection",
+        "validate input",
+        "length",
+        "urls"
+      ],
+      "related": [
+        "node-rubric",
+        "policies"
+      ],
+      "body": "Checks the upstream text against an input-safety policy (length, URLs, injection phrases); fails the run on a violation."
+    },
+    {
+      "id": "node-human-gate",
+      "title": "Human gate node",
+      "summary": "Pause the run for approval",
+      "category": "node",
+      "keywords": [
+        "approval",
+        "approve",
+        "reject",
+        "pause",
+        "checkpoint",
+        "human in the loop"
+      ],
+      "related": [
+        "genui",
+        "runs-and-traces"
+      ],
+      "body": "Pauses the run at a checkpoint until someone approves or rejects it in the Run panel (or via POST /api/runs/{id}/resume). A GenUI surface can show what's being approved and collect values."
+    },
+    {
+      "id": "node-input",
+      "title": "Input node",
+      "summary": "Accept user input at run time",
+      "category": "node",
+      "keywords": [
+        "entry",
+        "variable",
+        "question"
+      ],
+      "related": [
+        "getting-started"
+      ],
+      "body": "Defines a run variable (default: question) that the Run panel supplies. Every graph needs at least one input node as the entry point; the first one is the entry."
+    },
+    {
+      "id": "node-llm",
+      "title": "LLM node",
+      "summary": "Call a chat model",
+      "category": "node",
+      "keywords": [
+        "model",
+        "chat model",
+        "completion",
+        "generate"
+      ],
+      "related": [
+        "providers",
+        "resource-llm-profiles"
+      ],
+      "body": "Sends the upstream text to a chat model and outputs the reply. The node's provider and model are defaults; the Run panel's choice overrides every LLM node for that run."
+    },
+    {
+      "id": "node-output",
+      "title": "Output node",
+      "summary": "Return the final run result",
+      "category": "node",
+      "keywords": [
+        "result",
+        "answer",
+        "end"
+      ],
+      "related": [
+        "runs-and-traces"
+      ],
+      "body": "Whatever value reaches this node becomes the run result shown in the Run panel."
+    },
+    {
+      "id": "node-prompt",
+      "title": "Prompt node",
+      "summary": "Render a text template from graph state",
+      "category": "node",
+      "keywords": [
+        "template",
+        "placeholder",
+        "variables"
+      ],
+      "related": [
+        "resource-prompts",
+        "node-llm"
+      ],
+      "body": "Fills placeholders such as {question} and {upstream}. Output is passed to the next node along Always (sequence) edges. Bind a saved prompt to reuse one template across graphs."
+    },
+    {
+      "id": "node-router",
+      "title": "Router node",
+      "summary": "Choose exactly one outgoing edge",
+      "category": "node",
+      "keywords": [
+        "route",
+        "decide",
+        "classify"
+      ],
+      "related": [
+        "routing",
+        "edge-conditional",
+        "edge-default"
+      ],
+      "body": "One Fallback (default) edge plus one or more Match-text (conditional) edges on upstream LLM output. Cycles are not supported; graphs must be acyclic."
+    },
+    {
+      "id": "node-rubric",
+      "title": "Rubric node",
+      "summary": "Static prompt-quality check",
+      "category": "node",
+      "keywords": [
+        "quality",
+        "lint",
+        "findings",
+        "placeholders"
+      ],
+      "related": [
+        "node-guardrail"
+      ],
+      "body": "Scans upstream text for static quality findings (empty text, unresolved placeholders, TODO markers). Blocks the run only when rubricFailOnFindings is set."
+    },
+    {
+      "id": "node-subgraph",
+      "title": "Subgraph node",
+      "summary": "Run another saved graph",
+      "category": "node",
+      "keywords": [
+        "nested",
+        "child graph",
+        "reuse graph",
+        "compose"
+      ],
+      "related": [
+        "groups-and-layers",
+        "releases"
+      ],
+      "body": "Runs another saved graph as a nested run with its own trace, and outputs its result. Uses the child's latest release (else its saved draft), the draft, or a pinned release; publishing freezes the exact child release."
+    },
+    {
+      "id": "node-tool-loop",
+      "title": "Tool-loop node",
+      "summary": "Multi-step tool-calling agent",
+      "category": "node",
+      "keywords": [
+        "agent loop",
+        "iterations",
+        "tool calling"
+      ],
+      "related": [
+        "node-tool",
+        "resource-tools",
+        "agents"
+      ],
+      "body": "Lets a model call tools repeatedly, up to the configured maximum number of iterations, before returning a final answer."
+    },
+    {
+      "id": "node-tool",
+      "title": "Tool node",
+      "summary": "Call a tool",
+      "category": "node",
+      "keywords": [
+        "tool",
+        "function call",
+        "lookup",
+        "web search",
+        "calculator",
+        "mcp"
+      ],
+      "related": [
+        "resource-tools",
+        "mcp-servers",
+        "node-tool-loop"
+      ],
+      "body": "Runs one tool: a built-in (lookup_topic, web_search, calculator), a registry tool, or a tool on an MCP server. Its input comes from the configured variable or the upstream value."
+    },
+    {
+      "id": "node-transform",
+      "title": "Transform node",
+      "summary": "Reshape data between steps",
+      "category": "node",
+      "keywords": [
+        "reshape",
+        "select",
+        "wrap",
+        "format",
+        "coerce"
+      ],
+      "related": [
+        "transforms",
+        "ports-and-contracts"
+      ],
+      "body": "Deterministically reshapes the upstream value: select a field (JSON Pointer), wrap it under a field, format a text message, or convert it to a string, number or boolean. No code and no model call; a value that doesn't fit fails the step. Use one inline or bind a saved transform from Resources → Transforms."
+    },
+    {
+      "id": "policies",
+      "title": "Policies",
+      "summary": "Workspace rules, graph overrides and time-boxed exceptions",
+      "category": "concept",
+      "keywords": [
+        "policy",
+        "policies",
+        "rule",
+        "rules",
+        "exception",
+        "waive",
+        "override",
+        "block publish",
+        "pinned model"
+      ],
+      "related": [
+        "validation",
+        "releases"
+      ],
+      "body": "Policies are rules every graph is checked against, such as \"LLM models must be pinned\". Each policy is an error or a warning, and can block publishing.\n\n## How do I…\n- **Set workspace defaults:** the **Policies** page.\n- **Override for one graph:** the graph's **Policies** panel (⋯ menu).\n- **Waive one temporarily:** add an exception with a reason and an expiry date; it lapses on its own."
+    },
+    {
+      "id": "ports-and-contracts",
+      "title": "Ports and contracts",
+      "summary": "What a step takes and returns, and the warnings when they don't fit",
+      "category": "concept",
+      "keywords": [
+        "port",
+        "ports",
+        "contract",
+        "kind",
+        "message",
+        "structured-json",
+        "tool-result",
+        "mismatch",
+        "contract warning",
+        "input port",
+        "output port"
+      ],
+      "related": [
+        "transforms",
+        "validation",
+        "node-transform"
+      ],
+      "body": "Every node has typed input and output ports, such as `message`, `structured-json` or `tool-result`. An edge connects an output port to an input port, and the validator checks that their kinds fit.\n\nA **contract warning** means an edge carries one kind into a port that expects another. The run still starts, but the receiving step may not get what it needs.\n\n## How do I…\n- **See a node's ports:** open its **I/O** tab in the inspector. You can add or rename ports there.\n- **Fix a kind mismatch:** add a [transform](kb:transforms) on the edge (Edge ▸ Transform) or splice a Transform node between the two steps.\n- **Pick specific ports:** select the edge and choose its source and target ports in the inspector."
+    },
+    {
+      "id": "providers",
+      "title": "Model providers",
+      "summary": "Which model a run uses, and what each provider needs",
+      "category": "concept",
+      "keywords": [
+        "provider",
+        "providers",
+        "model",
+        "stub",
+        "groq",
+        "gemini",
+        "google",
+        "azure",
+        "openai",
+        "ollama",
+        "api key",
+        "offline"
+      ],
+      "related": [
+        "node-llm",
+        "resource-llm-profiles",
+        "runs-and-traces"
+      ],
+      "body": "The provider is chosen per run in the Run panel. **Stub** is an offline, deterministic stand-in that needs no key; it's the default and what the demo uses.\n\n- **Stub:** nothing.\n- **Groq:** `GROQ_API_KEY` on the server.\n- **Google Gemini:** `GOOGLE_API_KEY` on the server.\n- **Azure OpenAI:** an Azure endpoint, key and deployment on the server.\n- **Ollama:** Ollama running where the API runs.\n- **OpenAI-compatible:** a base URL, key and default model.\n\nThe Run panel's provider and model apply to every LLM node in that run. An LLM node's own model is its default."
+    },
+    {
+      "id": "releases",
+      "title": "Releases",
+      "summary": "Publish an immutable version of a graph",
+      "category": "concept",
+      "keywords": [
+        "release",
+        "releases",
+        "publish",
+        "version",
+        "immutable",
+        "fingerprint",
+        "diff",
+        "pin",
+        "snapshot"
+      ],
+      "related": [
+        "replay",
+        "policies",
+        "node-subgraph"
+      ],
+      "body": "A release is a frozen copy of the graph, plus the exact versions of the prompts, tools, transforms and other resources it uses. Runs and subgraphs can target a release, so later edits don't change what they run.\n\n## How do I…\n- **Publish:** open **Releases** and press **Publish**. Blocking issues and policies marked \"block publish\" must be fixed or waived first.\n- **Compare:** diff a release against another release or the unsaved canvas. Display-only changes (positions, edge styles) don't count.\n- **Use a release elsewhere:** a Subgraph node can pin one, so the parent keeps running that exact version."
+    },
+    {
+      "id": "replay",
+      "title": "Replay and counterfactuals",
+      "summary": "Re-run a past run as it was, or with one thing changed",
+      "category": "concept",
+      "keywords": [
+        "replay",
+        "counterfactual",
+        "re-run",
+        "rerun",
+        "what if",
+        "force route",
+        "swap model"
+      ],
+      "related": [
+        "runs-and-traces",
+        "releases"
+      ],
+      "body": "Replay re-runs a past run from its recorded graph snapshot. A **frozen** replay reproduces it; a **counterfactual** replay changes one thing, such as forcing a router down a different edge or swapping an LLM node's provider or model, so you can compare the outcome.\n\n## How do I…\n- Open the run from the Run panel's history and choose **Replay**."
+    },
+    {
+      "id": "resource-llm-profiles",
+      "title": "LLM profiles",
+      "summary": "A saved provider and model, with defaults",
+      "category": "resource",
+      "keywords": [
+        "llm profile",
+        "profile",
+        "model",
+        "provider",
+        "temperature",
+        "defaults"
+      ],
+      "related": [
+        "node-llm",
+        "providers",
+        "agents"
+      ],
+      "body": "An LLM profile names a provider and model (plus defaults) so LLM nodes and agents can share one setting. Create one under **Resources ▸ LLM Profiles** and bind it from an LLM node or drag it from the palette."
+    },
+    {
+      "id": "resource-prompts",
+      "title": "Prompts",
+      "summary": "Reusable, versioned prompt templates",
+      "category": "resource",
+      "keywords": [
+        "prompt library",
+        "prompts",
+        "template",
+        "versioned",
+        "reuse"
+      ],
+      "related": [
+        "node-prompt",
+        "releases"
+      ],
+      "body": "A saved prompt is a template you can bind to Prompt nodes in many graphs. Edits create new versions; releases pin the version they used.\n\n## How do I…\n- Create one under **Resources ▸ Prompts**, then bind it from a Prompt node's settings or drag it from the palette."
+    },
+    {
+      "id": "resource-tools",
+      "title": "Tools",
+      "summary": "Tools steps can call",
+      "category": "resource",
+      "keywords": [
+        "tool",
+        "tools",
+        "function",
+        "parameters",
+        "approval",
+        "registry",
+        "built-in"
+      ],
+      "related": [
+        "node-tool",
+        "mcp-servers",
+        "agents"
+      ],
+      "body": "Tools are what Tool and Tool-loop nodes call: built-ins (`lookup_topic`, `web_search`, `calculator`), registry tools you define here, or tools on an [MCP server](kb:mcp-servers). A tool can require approval before it runs.\n\n## How do I…\n- Define one under **Resources ▸ Tools** (name, description, JSON parameters), then pick it on a Tool node or drag it from the palette."
+    },
+    {
+      "id": "routing-lab",
+      "title": "Routing lab",
+      "summary": "See how a dataset's inputs spread across a router's edges",
+      "category": "panel",
+      "keywords": [
+        "routing lab",
+        "route distribution",
+        "compare graphs",
+        "router test"
+      ],
+      "related": [
+        "routing",
+        "datasets"
+      ],
+      "body": "The Routing lab runs a dataset's fixtures through the graph and shows how many took each route. Compare against another graph to see whether a change moved questions to a different path.\n\n## How do I…\n- Open **Routing lab** from the header's ⋯ menu, pick a dataset, and run it."
+    },
+    {
+      "id": "routing",
+      "title": "Routing with routers and branches",
+      "summary": "How a router picks one outgoing edge",
+      "category": "concept",
+      "keywords": [
+        "router",
+        "route",
+        "routing",
+        "branch",
+        "condition",
+        "match",
+        "fallback",
+        "acyclic",
+        "loop",
+        "cycle"
+      ],
+      "related": [
+        "node-router",
+        "node-branch",
+        "edge-conditional",
+        "edge-default",
+        "routing-lab"
+      ],
+      "body": "Mark outgoing edges as Fallback (default) or Match text (conditional, substring of upstream LLM output). The compiler requires exactly one Fallback. Loops are not supported (acyclic graphs only).\n\n## How do I…\n- **Add a route:** connect the router to the next step; when asked, choose **Match text** and enter the text to look for.\n- **Change an edge's kind:** select it and use **Kind** in the inspector, or right-click ▸ Kind.\n- **Check where questions go:** run a dataset through the [Routing lab](kb:routing-lab) to see the route distribution."
+    },
+    {
+      "id": "runs-and-traces",
+      "title": "Runs, traces and events",
+      "summary": "Run a graph and inspect what each step did",
+      "category": "concept",
+      "keywords": [
+        "run",
+        "runs",
+        "trace",
+        "traces",
+        "events",
+        "event log",
+        "waterfall",
+        "history",
+        "stream",
+        "output",
+        "node output",
+        "debug"
+      ],
+      "related": [
+        "providers",
+        "replay",
+        "console",
+        "node-human-gate"
+      ],
+      "body": "A run executes the graph once with your input. Each node reports when it starts, finishes, fails or pauses, and the studio shows these events live.\n\n## How do I…\n- **Run:** open **Run**, fill in the inputs, choose a provider, and press **Run** (⌘↵).\n- **See a step's input and output:** click the node, then its **Run** tab.\n- **See timing:** the Run panel's waterfall shows each step's duration; click a bar to open that step.\n- **Find an old run:** the Run panel's history lists past runs. Open one to inspect it or [replay](kb:replay) it.\n- **Approve a paused run:** a Human gate pauses the run; approve or reject it in the Run panel."
+    },
+    {
+      "id": "transforms",
+      "title": "Transforms",
+      "summary": "Reshape a value between steps without code",
+      "category": "concept",
+      "keywords": [
+        "transform",
+        "transforms",
+        "reshape",
+        "select",
+        "json pointer",
+        "wrap",
+        "format message",
+        "template",
+        "coerce",
+        "convert",
+        "library"
+      ],
+      "related": [
+        "node-transform",
+        "ports-and-contracts"
+      ],
+      "body": "A transform reshapes a value deterministically: **Select** a field with a JSON Pointer (`/answer`), **Wrap** it under a field, **Format message** with a template (`Topic: {value.topic}`), or **Coerce** it to a string, number or boolean. There's no code and no model call; a value that doesn't fit fails the step with a clear error.\n\n## Where transforms go\n- **On an edge:** select the edge ▸ **Transform**. The value is reshaped as it crosses the edge. **Try it** previews the result.\n- **As a step:** add a Transform node.\n- **In the library:** save one under **Resources ▸ Transforms** and bind it by id from an edge or a node, so one change updates every use. Releases pin the version they used."
+    },
+    {
+      "id": "validation",
+      "title": "Validation and issues",
+      "summary": "Errors, warnings and how to fix them",
+      "category": "concept",
+      "keywords": [
+        "validate",
+        "validation",
+        "diagnostic",
+        "diagnostics",
+        "error",
+        "warning",
+        "issue",
+        "issues",
+        "blocking",
+        "compile",
+        "what's this warning"
+      ],
+      "related": [
+        "ports-and-contracts",
+        "policies",
+        "routing"
+      ],
+      "body": "The studio validates the graph as you edit. **Errors** block runs and releases; **warnings** don't block, but point at something that may not work as intended.\n\nIssues come from four checks: **structure** (entry node, reachability, router edges), **contracts** (port kinds), **policies** (workspace and graph rules) and **capabilities** (what the runtime supports).\n\n## How do I…\n- **See all issues:** the header's validation chip and the Run panel's **Issues** tab list them.\n- **Jump to one:** click it. The canvas pans to the node or edge and opens the tab that holds the setting.\n- **Read the details:** each issue names the node or edge; the inspector shows field-level issues next to the field."
+    }
+  ]
+}
