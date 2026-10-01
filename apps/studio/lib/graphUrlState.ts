@@ -19,9 +19,11 @@ export type GraphUrlState = {
   section: string | null;
   /** Wave 7d: canvas view (overview / layers / heatmap); canvas is omitted. */
   view: string | null;
+  /** Editor mode (canvas-workbench-ergonomics-plan.md §5): code or split; canvas is omitted. */
+  mode: string | null;
 };
 
-const KEYS = ["node", "edge", "run", "panel", "tab", "section", "view"] as const;
+const KEYS = ["node", "edge", "run", "panel", "tab", "section", "view", "mode"] as const;
 
 export const EMPTY_GRAPH_URL_STATE: GraphUrlState = {
   node: null,
@@ -31,6 +33,7 @@ export const EMPTY_GRAPH_URL_STATE: GraphUrlState = {
   tab: null,
   section: null,
   view: null,
+  mode: null,
 };
 
 export function parseGraphUrlState(search: string): GraphUrlState {
@@ -60,10 +63,18 @@ export function serializeGraphUrlState(state: Partial<GraphUrlState>, currentSea
     ["run", state.run],
     ["panel", state.panel],
     ["view", state.view && state.view !== "canvas" ? state.view : null],
+    ["mode", state.mode && state.mode !== "canvas" ? state.mode : null],
   ];
   for (const [key, value] of ordered) {
     if (value) params.set(key, value);
   }
   const query = params.toString();
   return query ? `?${query}` : "";
+}
+
+export type EditorMode = "canvas" | "code" | "split";
+export const EDITOR_MODES: EditorMode[] = ["canvas", "code", "split"];
+
+export function parseEditorMode(raw: string | null | undefined): EditorMode {
+  return EDITOR_MODES.includes(raw as EditorMode) ? (raw as EditorMode) : "canvas";
 }

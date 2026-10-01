@@ -264,6 +264,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Edge styles:** pattern, weight and color from the edge inspector or the edge menu's Style ▸. Display-only: fingerprints and release diffs ignore them.
 - **Defaults by kind:** Always solid, Match text dashed, Fallback dotted, shown in the status bar legend.
 
+**Slice H shipped 2026-10-01:**
+- **Code mode:** Canvas | Code | Split in the header (`?mode=`). The graph as JSON or YAML in CodeMirror 6, loaded only when opened.
+- **Problems on lines:** syntax, schema and compile diagnostics mark their lines; clicking one jumps there.
+- **Save (⌘S):** validates, shows the change against the saved version, then applies and saves in one step.
+
 ---
 
 ## Scoring rationale (requested items)

@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, FileCode2, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
+import { Activity, AlertTriangle, CodeXml, Columns2, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, FileCode2, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
 import type { Diagnostic, GraphHealth, GraphOrientation, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 import type { GraphStructure } from "@/lib/graphAuthoring";
 import type { HeaderDensity } from "@/lib/canvasLayout";
 import { HEALTH_BAND } from "@/lib/graphHealth";
 import { GRAPH_VIEWS, type GraphView } from "@/lib/graphLayers";
+import type { EditorMode } from "@/lib/graphUrlState";
 import { validationSummary } from "@/lib/diagnostics";
 import { color, radius, shell, spacing, status as statusColor, surface, text, typeScale } from "@/lib/graph-theme";
 import type { LayoutSpacing } from "@/layout/dagreLayout";
@@ -16,6 +17,12 @@ import { HoverTooltip } from "./ui/HoverTooltip";
 import { TextInput } from "./ui/fields";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
 import { structureLabel, structureTooltip } from "./CanvasStatusBar";
+
+const EDITOR_MODE_BUTTONS: { mode: EditorMode; label: string; icon: ReactNode }[] = [
+  { mode: "canvas", label: "Canvas view", icon: <Workflow size={16} /> },
+  { mode: "code", label: "Code view", icon: <CodeXml size={16} /> },
+  { mode: "split", label: "Split view", icon: <Columns2 size={16} /> },
+];
 
 export type RunPanelSectionId = "run-controls" | "run-simulate" | "run-diagnostics" | "observe-events" | "observe-history";
 
@@ -86,6 +93,8 @@ export function GraphHeader({
   onOpenFind,
   view = "canvas",
   onViewChange,
+  editorMode = "canvas",
+  onEditorModeChange,
   onManageLayers,
   usedBy = [],
   onOpenGraph,
@@ -125,6 +134,9 @@ export function GraphHeader({
   /** Wave 7d: the canvas view and its switcher, plus "Manage layers". */
   view?: GraphView;
   onViewChange?: (view: GraphView) => void;
+  /** Canvas, Code or Split (canvas-workbench-ergonomics-plan.md §5); hidden without a handler. */
+  editorMode?: EditorMode;
+  onEditorModeChange?: (mode: EditorMode) => void;
   onManageLayers?: () => void;
   /** Wave 7c: saved graphs whose subgraph nodes run this one. */
   usedBy?: { graph_id: string; name: string }[];
@@ -213,6 +225,16 @@ export function GraphHeader({
   ];
 
   const overflowActions: NodeContextMenuAction[] = [
+    // At tight widths the Canvas | Code | Split switch moves in here.
+    ...(tight && onEditorModeChange
+      ? EDITOR_MODE_BUTTONS.map((option, index) => ({
+          label: option.label,
+          icon: option.icon,
+          checked: editorMode === option.mode,
+          groupLabel: index === 0 ? "Editor" : undefined,
+          onClick: () => onEditorModeChange(option.mode),
+        }))
+      : []),
     ...(compact && structure
       ? [
           {
@@ -387,6 +409,19 @@ export function GraphHeader({
 
       {/* Tools */}
       <div style={{ ...groupStyle, paddingLeft: spacing[2], borderLeft: `1px solid ${surface.border}` }}>
+        {onEditorModeChange && !tight && (
+          <div role="group" aria-label="Editor view" style={{ display: "inline-flex", gap: 2, paddingRight: spacing[1], marginRight: spacing[1], borderRight: `1px solid ${surface.border}` }}>
+            {EDITOR_MODE_BUTTONS.map((option) => (
+              <IconButton
+                key={option.mode}
+                label={option.label}
+                icon={option.icon}
+                pressed={editorMode === option.mode}
+                onClick={() => onEditorModeChange(option.mode)}
+              />
+            ))}
+          </div>
+        )}
         {onViewChange && (
           <IconButton
             ref={viewMenuRef}

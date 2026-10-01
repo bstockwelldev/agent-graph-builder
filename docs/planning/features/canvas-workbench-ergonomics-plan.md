@@ -233,6 +233,14 @@ edge legend overlaps both the minimap and the controls.
   - The protected demo graph is read-only in Code view too.
   - JSON stays the stored contract; YAML is a view only.
 
+**Shipped 2026-10-01 (slice H):**
+- **View switch:** Canvas | Code | Split buttons in the header (in the ⋯ menu at tight widths; phones keep the canvas), stored as `?mode=code|split`. `?view=` already names the canvas view (layers, heatmap), hence `mode`. The canvas refits when it reappears or changes width.
+- **Editor** (`components/graph/code/CodeEditor.tsx`): CodeMirror 6 with `basicSetup` (line numbers, folding, search, history), JSON and YAML modes, line wrapping, and a token-colored dark theme. `GraphCodeView` loads it through `next/dynamic`, so the canvas never ships it.
+- **Problems on lines** (`lib/graphCode.ts`): one YAML document parse gives source ranges for both views (JSON is YAML 1.2). Syntax errors, `graphDefinitionSchema` issues, the fixed `id`/`entry_node_id` checks, and compile diagnostics (by node or edge id) become gutter marks and a Problems list; clicking a problem moves the cursor to its line.
+- **Save** (⌘S in the editor, anywhere in Code or Split view, or the Save button): check, then review the change against the saved version (`lib/textDiff.ts`, hunks with context; schema key order, no nulls and no `updated_at`, so the review shows edits rather than formatting), then apply and persist through `saveGraph`, the same path the header's Save uses (the read-only demo forks to a copy). A failed check or save leaves the text as typed. Apply updates the canvas without saving.
+- **Split view:** canvas edits refresh an untouched draft; a draft with edits is kept and flagged.
+- The ⋯ menu's "Graph config (JSON/YAML)" side panel stays for quick edits next to the canvas.
+
 ## 6. Terminal-style console at the bottom of the canvas
 
 **Current behavior.** The Console exists (2026-09-22,
@@ -477,7 +485,7 @@ As a result:
 | E | Tool bar and palette — **shipped 2026-10-01** | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
 | F | Snapping and alignment — **shipped 2026-10-01** | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
 | G | Edge styles — **shipped 2026-10-01** | §7, with the fingerprint change | P2 | Medium |
-| H | Code mode | §5 CodeMirror, Canvas/Code/Split, Save | P2 | Medium |
+| H | Code mode — **shipped 2026-10-01** | §5 CodeMirror, Canvas/Code/Split, Save | P2 | Medium |
 | I | Knowledge base | §11 content, Help panel, coverage test, Chat grounding | P2 | High |
 
 Slice B's status bar is the shared seam: it gives D (console), E (active tool),
