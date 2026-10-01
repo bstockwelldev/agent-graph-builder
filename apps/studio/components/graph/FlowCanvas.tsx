@@ -3,6 +3,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -34,9 +35,9 @@ import { shouldRunDagre } from "@/lib/graphAuthoring";
 import type { GraphNodeData } from "./nodes/GraphNodeView";
 import type { GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 import { canFitView } from "@/lib/canvasFit";
+import { minimapLayout } from "@/lib/canvasLayout";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { Button } from "./ui/Button";
-import { CanvasEdgeLegend } from "./CanvasEdgeLegend";
 import { LabeledEdge } from "./edges/LabeledEdge";
 
 // Studio-graph-workbench-redesign-plan.md, Slice 6: every edge renders
@@ -105,10 +106,13 @@ type FlowCanvasProps = {
   /** Filled with a function returning the flow-space point at the center
    * of the visible pane -- GraphEditor places new nodes there (Slice 5). */
   viewportCenterRef?: MutableRefObject<(() => { x: number; y: number }) | null>;
-  /** Compact/mobile: drop the zoom Controls and edge legend, which
-   * otherwise sit under GraphEditor's bottom action bar (pinch-zoom covers
-   * zooming, and edge chips now label conditional/fallback edges). */
+  /** Compact/mobile: drop the zoom Controls, which otherwise sit under
+   * GraphEditor's bottom action bar (pinch-zoom covers zooming). */
   compact?: boolean;
+  /** Snap dragged nodes to the 24px grid (the status bar's Snap toggle). */
+  snapToGrid?: boolean;
+  /** Rendered below the pane, inside the ReactFlowProvider (the status bar). */
+  footer?: ReactNode;
   /** Pixels of the pane covered by floating chrome (the graph header on
    * top; the mobile action bar at the bottom). Fit-to-view keeps the graph
    * clear of them instead of centering it underneath. */
@@ -152,6 +156,7 @@ function FlowCanvasInner({
   fitViewNonce = 0,
   viewportCenterRef,
   compact = false,
+  snapToGrid = true,
   fitInsets,
 }: FlowCanvasProps) {
   const reactFlow = useReactFlow();
@@ -398,7 +403,7 @@ function FlowCanvasInner({
         // wider than ~2x the pane (an 8-node chain), so "fit" left the ends
         // of the graph off-screen under the docked panels.
         minZoom={0.15}
-        snapToGrid
+        snapToGrid={snapToGrid}
         snapGrid={[24, 24]}
         defaultEdgeOptions={{ interactionWidth: 24 }}
         nodesConnectable
@@ -446,7 +451,7 @@ function FlowCanvasInner({
         <Background variant={BackgroundVariant.Lines} gap={24} size={1} color={canvas.grid} />
         <Background variant={BackgroundVariant.Lines} gap={120} size={1} color={canvas.gridMajor} />
         {!compact && <Controls />}
-        {showMinimap && <MiniMap nodeStrokeWidth={2} maskColor="rgba(13, 21, 32, 0.75)" pannable zoomable />}
+        {showMinimap && <CanvasMinimap paneWidth={paneSize.width} />}
       </ReactFlow>
       {noGraphSelected && !graphLoading && (
         <div style={canvasEmptyStateStyle} role="status">
@@ -471,7 +476,6 @@ function FlowCanvasInner({
         </div>
       )}
       {overlay}
-      <CanvasEdgeLegend visible={Boolean(graphId) && !graphLoading && !noGraphSelected && !compact} />
     </div>
   );
 }
@@ -507,11 +511,66 @@ const loadFailureBannerStyle: CSSProperties = {
   boxShadow: shell.shadow.drawer,
 };
 
-export function FlowCanvas(props: FlowCanvasProps) {
+/**
+ * The minimap, sized by the pane (canvas-workbench-ergonomics-plan.md §2):
+ * 200×150, 160×110, or a "Map" button below 700px that opens it at 160×110.
+ */
+function CanvasMinimap({ paneWidth }: { paneWidth: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const layout = minimapLayout(paneWidth);
+  const collapsed = layout.mode === "collapsed";
+  const size = layout.mode === "collapsed" ? { width: 160, height: 110 } : layout;
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0 }}>
+    <>
+      {(!collapsed || expanded) && (
+        <MiniMap
+          ariaLabel="Minimap"
+          nodeStrokeWidth={2}
+          maskColor="rgba(13, 21, 32, 0.75)"
+          pannable
+          zoomable
+          style={{ width: size.width, height: size.height, ...(collapsed ? { marginBottom: 52 } : {}) }}
+        />
+      )}
+      {collapsed && (
+        <Panel position="bottom-right">
+          <button
+            type="button"
+            className="agb-focus-ring agb-hoverable"
+            aria-expanded={expanded}
+            aria-label={expanded ? "Hide minimap" : "Show minimap"}
+            onClick={() => setExpanded((value) => !value)}
+            style={mapButtonStyle(expanded)}
+          >
+            Map
+          </button>
+        </Panel>
+      )}
+    </>
+  );
+}
+
+function mapButtonStyle(expanded: boolean): CSSProperties {
+  return {
+    height: 32,
+    padding: `0 ${spacing[2]}px`,
+    borderRadius: radius.lg,
+    border: `1px solid ${expanded ? surface.borderStrong : surface.border}`,
+    background: expanded ? surface.raised : surface.panel,
+    color: expanded ? color.primary[500] : text.primary,
+    cursor: "pointer",
+    ...typeScale.caption,
+  };
+}
+
+export function FlowCanvas({ footer, ...props }: FlowCanvasProps) {
+  return (
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", width: "100%", height: "100%", minHeight: 0 }}>
       <ReactFlowProvider>
-        <FlowCanvasInner {...props} />
+        <div style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>
+          <FlowCanvasInner {...props} />
+        </div>
+        {footer}
       </ReactFlowProvider>
     </div>
   );

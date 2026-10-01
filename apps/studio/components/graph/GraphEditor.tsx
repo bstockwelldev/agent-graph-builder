@@ -68,6 +68,9 @@ import {
   type EdgeContract,
 } from "@/lib/graphAuthoring";
 import { isEdgeDimmed, neighborhoodNodeIds } from "@/lib/focusMode";
+import { clampFocusHops, headerDensity, inspectorOverlaysCanvas } from "@/lib/canvasLayout";
+import { useElementWidth } from "@/hooks/useElementWidth";
+import { CanvasStatusBar } from "./CanvasStatusBar";
 import {
   boundTitleFor,
   computeFocusNodeIds,
@@ -163,6 +166,7 @@ import { ExtractSubgraphDialog } from "@/components/studio/extract-subgraph-dial
 // unavailable (private mode, blocked site data) and the defaults must hold.
 const LAYOUT_SPACING_STORAGE_KEY = "agb.layout.spacing";
 const SHOW_MINIMAP_STORAGE_KEY = "agb.layout.showMinimap";
+const SNAP_TO_GRID_STORAGE_KEY = "agb.layout.snapToGrid";
 
 function readStoredSpacing(): LayoutSpacing {
   try {
@@ -176,6 +180,14 @@ function readStoredSpacing(): LayoutSpacing {
 function readStoredShowMinimap(): boolean {
   try {
     return window.localStorage.getItem(SHOW_MINIMAP_STORAGE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function readStoredSnapToGrid(): boolean {
+  try {
+    return window.localStorage.getItem(SNAP_TO_GRID_STORAGE_KEY) !== "false";
   } catch {
     return true;
   }
@@ -363,6 +375,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // users need broad context" -- it only dims anything once a node is
   // both selected AND this is on (see the effect below).
   const [focusMode, setFocusMode] = useState(false);
+  // Focus mode's neighborhood, 1-3 hops (the status bar's control).
+  const [focusHops, setFocusHops] = useState(1);
   // Large-graph complexity, Wave 7a (STO-610): find-on-canvas matches, the
   // Impact tab's downstream highlight, and a directional dependency view.
   // Each keeps its node set lit and dims the rest (see the effect below).
@@ -433,9 +447,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // client render agree.
   const [layoutSpacing, setLayoutSpacing] = useState<LayoutSpacing>("standard");
   const [showMinimap, setShowMinimap] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(true);
   useEffect(() => {
     setLayoutSpacing(readStoredSpacing());
     setShowMinimap(readStoredShowMinimap());
+    setSnapToGrid(readStoredSnapToGrid());
   }, []);
   const [fitViewNonce, setFitViewNonce] = useState(0);
   const viewportCenterRef = useRef<(() => { x: number; y: number }) | null>(null);
@@ -1306,9 +1322,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           : dependencyView
             ? computeFocusNodeIds(dependencyView.nodeId, edges, dependencyView.direction)
             : focusMode && selectedNodeId
-              ? neighborhoodNodeIds(selectedNodeId, edges)
+              ? neighborhoodNodeIds(selectedNodeId, edges, focusHops)
               : null,
-    [focusMode, selectedNodeId, edges, findMatches, impactHighlight, dependencyView],
+    [focusMode, focusHops, selectedNodeId, edges, findMatches, impactHighlight, dependencyView],
   );
   useEffect(() => {
     setNodes((nds) =>
@@ -2172,6 +2188,28 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     void handleSave();
   }, [saveRequested, handleSave]);
 
+  // Escape leaves focus mode (§10), unless a menu, the find bar or a
+  // pending connection was what it closed.
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || isEditableKeyboardTarget(event.target)) return;
+      if (contextMenu || trayMenuAnchor || findOpen || pendingConnection) return;
+      setFocusMode(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusMode, contextMenu, trayMenuAnchor, findOpen, pendingConnection]);
+
+  // Canvas-width layout (canvas-workbench-ergonomics-plan.md §8): the header
+  // follows the canvas column's width, and the inspector floats over the
+  // canvas when docking it would squeeze the column under CANVAS_MIN_WIDTH.
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const canvasColumnRef = useRef<HTMLDivElement>(null);
+  const surfaceWidth = useElementWidth(surfaceRef);
+  const canvasColumnWidth = useElementWidth(canvasColumnRef);
+  const density = headerDensity(canvasColumnWidth);
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId);
   const hasSelection = Boolean(selectedNode || selectedEdge);
@@ -2318,12 +2356,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // when nothing was selected now lives in the header (structure chip,
   // Run ▾ recent runs), so the canvas keeps its full width by default.
   const showSelectionDock = hasSelection && !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel);
+  const inspectorOverlay = inspectorOverlaysCanvas(surfaceWidth, workbench.activePanel === "palette");
   const selectionDockContent = inspectorContent;
   const structure = graphStructure(nodes, edges);
 
   return (
     <ResourceNamesProvider value={resourceNames}>
-    <div data-graph-surface="" className="relative flex min-h-0 flex-1 overflow-hidden">
+    <div ref={surfaceRef} data-graph-surface="" className="relative flex min-h-0 flex-1 overflow-hidden">
       {/* Node palette — reserved-space docked column (fixing a real reported
           bug): a floating panel has no relation to node positions, so it
           could — and did — render on top of live canvas nodes near its
@@ -2344,7 +2383,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           canvas root now floats within this narrower column instead, so it
           shrinks along with the canvas whenever a side panel reserves
           space, rather than continuing to span the original full width. */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div ref={canvasColumnRef} data-canvas-column="" className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Graph-first header (studio-graph-workbench-redesign-plan.md,
           Slice 2) -- replaces the old floating HUD of ~19 wrapping text
           buttons. Still absolutely positioned over the canvas column, so
@@ -2353,8 +2392,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       <GraphHeader
         hudRef={hudRef}
         compact={workbench.isCompact}
+        density={density}
         graphSwitcher={
           <GraphSwitcherCombobox
+            iconOnly={density !== "full"}
             graphs={libraryGraphs}
             activeGraphId={graphId}
             activeGraphName={graphName}
@@ -2474,7 +2515,27 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           fitViewNonce={fitViewNonce}
           viewportCenterRef={viewportCenterRef}
           compact={workbench.isCompact}
+          snapToGrid={snapToGrid}
           fitInsets={fitInsets}
+          footer={
+            workbench.isCompact || !graphId ? null : (
+              <CanvasStatusBar
+                structure={structure}
+                focusMode={focusMode}
+                focusHops={focusHops}
+                onFocusHopsChange={(hops) => setFocusHops(clampFocusHops(hops))}
+                onExitFocus={() => setFocusMode(false)}
+                focusNodeIds={focusMode && selectedNodeId && focusSet ? [...focusSet] : []}
+                snapToGrid={snapToGrid}
+                onSnapToGridChange={(value) => {
+                  setSnapToGrid(value);
+                  writeStored(SNAP_TO_GRID_STORAGE_KEY, String(value));
+                }}
+                onFitView={() => setFitViewNonce((v) => v + 1)}
+                reducedMotion={workbench.reducedMotion}
+              />
+            )
+          }
           liveAnnouncement={liveAnnouncement}
           onLiveAnnouncement={setLiveAnnouncement}
           loadFailureVisible={Boolean(loadError) && nodes.length === 0}
@@ -2844,7 +2905,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         />
       </WorkbenchDrawer>
       {showSelectionDock && !workbench.isCompact && (
-        <div className="glass-panel ghost-border h-full min-h-0 w-96 shrink-0 overflow-y-auto border-l">
+        // Docked, unless that would squeeze the canvas column under
+        // CANVAS_MIN_WIDTH: then it floats over the canvas's right edge.
+        <div
+          data-inspector-mode={inspectorOverlay ? "overlay" : "docked"}
+          className={
+            inspectorOverlay
+              ? "glass-panel ghost-border absolute inset-y-0 right-0 z-30 w-96 overflow-y-auto border-l shadow-2xl"
+              : "glass-panel ghost-border h-full min-h-0 w-96 shrink-0 overflow-y-auto border-l"
+          }
+        >
           {selectionDockContent}
         </div>
       )}

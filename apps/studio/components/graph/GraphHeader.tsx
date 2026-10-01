@@ -4,6 +4,7 @@ import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "
 import { Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, FileCode2, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
 import type { Diagnostic, GraphHealth, GraphOrientation, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 import type { GraphStructure } from "@/lib/graphAuthoring";
+import type { HeaderDensity } from "@/lib/canvasLayout";
 import { HEALTH_BAND } from "@/lib/graphHealth";
 import { GRAPH_VIEWS, type GraphView } from "@/lib/graphLayers";
 import { validationSummary } from "@/lib/diagnostics";
@@ -14,6 +15,7 @@ import { IconButton } from "./ui/IconButton";
 import { HoverTooltip } from "./ui/HoverTooltip";
 import { TextInput } from "./ui/fields";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
+import { structureLabel, structureTooltip } from "./CanvasStatusBar";
 
 export type RunPanelSectionId = "run-controls" | "run-simulate" | "run-diagnostics" | "observe-events" | "observe-history";
 
@@ -60,6 +62,7 @@ const SPACING_OPTIONS: { value: LayoutSpacing; label: string }[] = [
 export function GraphHeader({
   hudRef,
   compact,
+  density = "full",
   graphSwitcher,
   graphName,
   onGraphNameChange,
@@ -92,6 +95,10 @@ export function GraphHeader({
 }: {
   hudRef?: Ref<HTMLDivElement>;
   compact: boolean;
+  /** How much fits at the canvas column's width (lib/canvasLayout.ts);
+   * ignored when compact, which drops the most. The structure summary lives
+   * in the canvas status bar except when compact. */
+  density?: HeaderDensity;
   /** The existing GraphSwitcherCombobox, rendered by the caller. */
   graphSwitcher?: ReactNode;
   graphName: string;
@@ -143,6 +150,11 @@ export function GraphHeader({
     const anchor = menuAnchorFor(trigger, align, MENU_WIDTH);
     setMenu({ id, ...anchor });
   };
+
+  // Priority collapse (canvas-workbench-ergonomics-plan.md §8): what drops
+  // first as the canvas column narrows.
+  const snug = compact || density !== "full";
+  const tight = compact || density === "tight";
 
   const summary = validationSummary(diagnostics);
   const validation = summary.errors > 0 ? "error" : summary.warnings > 0 ? "warning" : "ok";
@@ -212,17 +224,22 @@ export function GraphHeader({
           },
         ]
       : []),
-    ...(compact
+    ...(tight
       ? [
-          { label: "Layout: auto-arrange", separatorBefore: Boolean(structure), onClick: layout.onRelayout },
+          ...(compact
+            ? []
+            : [{ label: "Add node", icon: <Plus size={14} />, checked: activePanel === "palette", onClick: () => onTogglePanel("palette") }]),
+          { label: "Layout: auto-arrange", separatorBefore: compact && Boolean(structure), onClick: layout.onRelayout },
+          ...(compact ? [] : [{ label: "Fit view", onClick: layout.onFitView }]),
           { label: "Focus mode", checked: focusMode, onClick: onToggleFocusMode },
+          ...(compact ? [] : [{ label: "Chat about this graph", icon: <Sparkles size={14} />, shortcut: "⌘⇧C", onClick: onOpenChat }]),
         ]
       : []),
     {
       label: "Releases",
       icon: <Tag size={14} />,
       checked: activePanel === "releases",
-      separatorBefore: compact,
+      separatorBefore: tight,
       onClick: () => onTogglePanel("releases"),
     },
     {
@@ -275,8 +292,9 @@ export function GraphHeader({
 
   return (
     <div ref={hudRef} role="toolbar" aria-label="Graph" className="glass-panel ghost-border" style={headerStyle}>
-      {/* Identity */}
-      <div style={{ ...groupStyle, minWidth: 0, flex: "1 1 auto" }}>
+      {/* Identity. Clips rather than drawing over the next group if its
+          children still don't fit (they overlapped before, §8). */}
+      <div style={{ ...groupStyle, minWidth: 0, flex: "1 1 auto", overflow: "hidden", flexShrink: 1 }}>
         <IconButton label="All graphs" icon={<ChevronLeft size={18} />} onClick={onBack} />
         {!compact && graphSwitcher}
         <TextInput
@@ -293,7 +311,7 @@ export function GraphHeader({
               className={saving ? "agb-pulse" : undefined}
               style={{ width: 8, height: 8, borderRadius: 999, background: saveDotColor, flexShrink: 0 }}
             />
-            {compact ? <span style={visuallyHidden}>{saveStateLabel}</span> : saveStateLabel}
+            {snug ? <span style={visuallyHidden}>{saveStateLabel}</span> : saveStateLabel}
           </span>
         </HoverTooltip>
         <IconButton
@@ -307,19 +325,6 @@ export function GraphHeader({
 
       {/* Lifecycle */}
       <div style={groupStyle}>
-        {structure && !compact && (
-          <HoverTooltip content={structureTooltip(structure)}>
-            <span
-              tabIndex={0}
-              className="agb-focus-ring"
-              aria-label={`${structureLabel(structure)}. ${structureTooltip(structure)}`}
-              style={structureChipStyle}
-            >
-              <Network size={14} aria-hidden="true" />
-              <span>{structureLabel(structure)}</span>
-            </span>
-          </HoverTooltip>
-        )}
         <HoverTooltip
           content={validation === "ok" ? "No validation issues — click to re-validate" : `${summary.label} — click to review`}
         >
@@ -340,7 +345,7 @@ export function GraphHeader({
             <span>{validationText}</span>
           </button>
         </HoverTooltip>
-        {health && !compact && (
+        {health && !snug && (
           <HoverTooltip content={`Graph health: ${HEALTH_BAND[health.band].label} — click for the breakdown`}>
             <button
               type="button"
@@ -393,7 +398,7 @@ export function GraphHeader({
             onClick={() => openMenu("view", viewMenuRef.current, "right")}
           />
         )}
-        {!compact && (
+        {!tight && (
           <>
             <IconButton
               label="Add node"
@@ -425,7 +430,7 @@ export function GraphHeader({
           icon={<MoreHorizontal size={18} />}
           aria-haspopup="menu"
           aria-expanded={menu?.id === "overflow"}
-          pressed={menu?.id === "overflow" || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health" || activePanel === "graphConfig"}
+          pressed={menu?.id === "overflow" || (tight && activePanel === "palette") || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health" || activePanel === "graphConfig"}
           onClick={() => openMenu("overflow", overflowMenuRef.current, "right")}
         />
       </div>
@@ -447,22 +452,6 @@ export function GraphHeader({
 }
 
 const MENU_WIDTH = 240;
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
-export function structureLabel(structure: GraphStructure): string {
-  return `${plural(structure.nodes, "node")} · ${plural(structure.edges, "edge")}`;
-}
-
-function listOrNone(names: string[]): string {
-  return names.length === 0 ? "none" : names.join(", ");
-}
-
-function structureTooltip(structure: GraphStructure): string {
-  return `Entry: ${listOrNone(structure.entrypoints)} · Terminal: ${listOrNone(structure.terminals)}`;
-}
 
 function formatRunLabel(run: RunSummary): string {
   if (!run.started_at) return `${run.status} · ${run.run_id}`;
@@ -507,6 +496,7 @@ const nameInputStyle: CSSProperties = {
   fontWeight: 600,
   fontSize: 14,
   padding: `4px ${spacing[2]}px`,
+  textOverflow: "ellipsis",
 };
 
 const saveStateStyle: CSSProperties = {
@@ -516,19 +506,6 @@ const saveStateStyle: CSSProperties = {
   padding: `0 ${spacing[1]}px`,
   whiteSpace: "nowrap",
   color: text.muted,
-  ...typeScale.caption,
-};
-
-const structureChipStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  height: 32,
-  padding: `0 ${spacing[2]}px`,
-  borderRadius: 999,
-  color: text.muted,
-  whiteSpace: "nowrap",
-  cursor: "default",
   ...typeScale.caption,
 };
 

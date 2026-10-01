@@ -74,6 +74,13 @@ edge legend overlaps both the minimap and the controls.
 
 **Acceptance:** at 1180, 1256 and 1440px, with palette and inspector open, no overlay intersects another or covers the fitted graph's nodes. An e2e test compares bounding boxes.
 
+**Shipped 2026-09-30 (slice B):**
+- `minimapLayout` in `lib/canvasLayout.ts` sizes the minimap by the pane width from `useCanvasOrientation`.
+- Below 700px it becomes a **Map** button (`aria-expanded`) that opens it at 160×110.
+- The minimap has an `ariaLabel`.
+- The edge legend moved into the status bar as an **Edge kinds** popover.
+- `e2e/specs/canvas-layout.spec.ts` checks that the controls, minimap and status bar never intersect at 1180, 1256, 1440 and 1920px.
+
 ## 3. Right-click menu: native behavior and more actions
 
 **Bug RCA: no hover highlight.**
@@ -258,6 +265,24 @@ combination of palette and inspector open, asserts that no two header
 controls' bounding boxes intersect and that the canvas column is at least
 480px.
 
+**Shipped 2026-09-30 (slice B):**
+- **Canvas-width density.** `useElementWidth` measures the canvas column, and `headerDensity` maps its width to a density:
+  - `full`: 1120px and wider.
+  - `snug`: 760–1119px. The save state shows as a dot only (the text stays for screen readers), the graph switcher becomes an icon, and the health chip moves to ⋯.
+  - `tight`: below 760px. Add node, Layout, Focus and Chat also move to ⋯.
+  - The identity group clips instead of drawing over its neighbors, and the name input ends in an ellipsis.
+- **Structure chip:** it moved from the header to the status bar, and stays in ⋯ on compact.
+- **Minimum width enforced.** `inspectorOverlaysCanvas` measures the whole graph surface, which avoids a resize feedback loop. When docking the inspector would leave the canvas under 480px, the inspector floats over the canvas's right edge (`data-inspector-mode="overlay"`). This happens with the palette docked at 1100–1151px viewports, for example.
+  - Deviation: the palette's icon strip, the plan's first step here, waits on slice E.
+- **Status bar** (`CanvasStatusBar.tsx`, 28px, inside the ReactFlowProvider under the pane; hidden on compact, where the mobile tray takes its place). It holds:
+  - The structure summary, with entry and terminal nodes in its tooltip.
+  - Focus mode's 1–3 hop control, **Fit to focus** and exit.
+  - The **Edge kinds** popover.
+  - The **Snap** toggle, persisted in `agb.layout.snapToGrid`.
+  - The zoom readout, which fits the view on click.
+- **Still to come:** validation and save state stay in the header, since they're primary actions there. The active tool arrives with slice E and the console toggle with slice D.
+- **Tests:** `e2e/specs/canvas-layout.spec.ts` covers every width and panel combination named above, plus the minimap, the status bar and focus hops.
+
 ## 9. Grid snapping and alignment
 
 **Current behavior.**
@@ -306,6 +331,10 @@ controls' bounding boxes intersect and that the canvas column is at least
 - With nothing selected, a chip says "Focus mode: select a node to see it and its neighbors", with a Turn off button.
 - Not yet: the hop control, fit-to-lit and Escape to exit. They wait on the status bar (slice B).
 
+**Shipped 2026-09-30 (slice B):**
+- The status bar's Focus group sets 1–3 hops and has **Fit to focus**.
+- Escape leaves focus mode, unless a menu, the find bar or a pending connection took the key first.
+
 ## 11. One consistent in-app knowledge base
 
 **Current behavior.** Help about how the tool works is spread across places
@@ -343,7 +372,7 @@ As a result:
 | # | Slice | Items | Priority | Impact |
 | - | ----- | ----- | -------- | ------ |
 | A | Quick bug fixes — **shipped 2026-09-30** | §3 hover fix; §10 focus mode as a local neighborhood with edges dimmed; §0 build SHA | P1 | High, small |
-| B | Layout at laptop widths | §8 canvas-width breakpoints, header priority collapse, status bar; §2 minimap sizing and overlay slots | P1 | High |
+| B | Layout at laptop widths — **shipped 2026-09-30** | §8 canvas-width breakpoints, header priority collapse, status bar; §2 minimap sizing and overlay slots | P1 | High |
 | C | Native context menu | §3 Base UI menu engine and the actions registry | P1 | High |
 | D | Console dock | §6, on the status bar from B | P2 | Medium |
 | E | Tool bar and palette | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
