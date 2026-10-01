@@ -4,6 +4,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyf
 import type { CSSProperties } from "react";
 import type { EdgeKind } from "@bstockwelldev/agent-graph-sdk";
 import { flowEdgeLabel } from "@/lib/graphAuthoring";
+import { readEdgeStyle, resolveEdgeLook } from "@/lib/edgeStyle";
 import { color, radius, surface, text } from "@/lib/graph-theme";
 import { useCanvasActions } from "../canvasActions";
 
@@ -18,6 +19,10 @@ export type LabeledEdgeData = {
   mergedCount?: number;
   /** Outside the lit set of focus mode, find, impact or the dependency view (derived, never saved). */
   focusDimmed?: boolean;
+  /** The edge's saved extensions; `style` is its display-only look (§7). */
+  extensions?: Record<string, unknown> | null;
+  /** A validation issue on the edge (derived): its color and width win over a user style. */
+  issue?: "error" | "warning";
 };
 
 /**
@@ -53,8 +58,20 @@ export function LabeledEdge({
   const label = merged ? `×${merged}` : flowEdgeLabel(edgeData.kind ?? "sequence", edgeData.condition);
   const runState = edgeData.runState;
 
+  // The user's style over the kind's default pattern (canvas-workbench-
+  // ergonomics-plan.md §7). Running ("active") keeps its animated dash, and
+  // failed keeps red, so the two runtime signals always read.
+  const look = resolveEdgeLook(
+    edgeData.kind ?? "sequence",
+    readEdgeStyle(edgeData.extensions),
+    { stroke: style?.stroke as string | undefined, strokeWidth: Number(style?.strokeWidth ?? 1.5) },
+    Boolean(edgeData.issue),
+  );
   const edgeStyle: CSSProperties = {
     ...style,
+    ...(look.stroke ? { stroke: look.stroke } : {}),
+    strokeWidth: look.strokeWidth,
+    ...(runState !== "active" && look.strokeDasharray ? { strokeDasharray: look.strokeDasharray } : {}),
     ...(runState === "failed" ? { stroke: color.error[500], strokeWidth: 2.5 } : {}),
     ...(selected ? { strokeWidth: Math.max(Number(style?.strokeWidth ?? 1.5), 2.5) } : {}),
     ...(edgeData.focusDimmed ? { opacity: 0.2 } : {}),

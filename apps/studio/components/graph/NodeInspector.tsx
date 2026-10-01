@@ -17,7 +17,9 @@ import {
   Shuffle,
   Trash2,
   XCircle,
+  Palette,
 } from "lucide-react";
+import { EDGE_COLORS, EDGE_PATTERNS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import {
   declareFromInferred,
@@ -1298,6 +1300,7 @@ export function EdgeInspector({
             )}
             <FieldIssues issues={routingIssues} />
           </Group>
+          <EdgeStyleGroup edge={edge} onChange={onChange} />
           {(sourcePorts.length > 1 || targetPorts.length > 1 || edge.source_port || edge.target_port) && (
             <Group title="Ports" icon={<ArrowLeftRight size={13} />}>
               {sourcePorts.length > 1 && (
@@ -1399,3 +1402,54 @@ function RouterEdgeRow({
   );
 }
 
+
+/** The edge's display-only look (canvas-workbench-ergonomics-plan.md §7). */
+function EdgeStyleGroup({ edge, onChange }: { edge: GraphEdge; onChange: (patch: Partial<GraphEdge>) => void }) {
+  const style = readEdgeStyle(edge.extensions);
+  const set = (next: EdgeStyle) => onChange({ extensions: withEdgeStyle(edge.extensions, next) });
+  const withDefault = <T extends string>(options: { value: T; label: string }[]) => [
+    { value: "default" as const, label: "Default" },
+    ...options.map((option) => ({ value: option.value, label: option.label })),
+  ];
+  return (
+    <Group title="Style" icon={<Palette size={13} />}>
+      <Field label="Line" hint="Display only: a style never changes what runs. By default Always is solid, Match text dashed and Fallback dotted.">
+        <SegmentedControl
+          aria-label="Line pattern"
+          value={style.pattern ?? "default"}
+          options={withDefault(EDGE_PATTERNS)}
+          onChange={(value) => set({ ...style, pattern: value === "default" ? undefined : value })}
+        />
+      </Field>
+      <Field label="Weight">
+        <SegmentedControl
+          aria-label="Line weight"
+          value={style.weight ?? "default"}
+          options={withDefault(EDGE_WEIGHTS)}
+          onChange={(value) => set({ ...style, weight: value === "default" ? undefined : value })}
+        />
+      </Field>
+      <Field label="Color" hint="Red stays reserved for failed runs.">
+        <SegmentedControl
+          aria-label="Line color"
+          value={style.color ?? "default"}
+          options={[
+            { value: "default" as const, label: "Default" },
+            // Swatches, not words: seven named segments overflow the inspector.
+            ...EDGE_COLORS.map((option) => ({
+              value: option.value,
+              title: option.label,
+              label: (
+                <>
+                  <span aria-hidden style={{ width: 12, height: 12, borderRadius: "50%", background: option.stroke, display: "inline-block" }} />
+                  <span className="sr-only">{option.label}</span>
+                </>
+              ),
+            })),
+          ]}
+          onChange={(value) => set({ ...style, color: value === "default" ? undefined : value })}
+        />
+      </Field>
+    </Group>
+  );
+}

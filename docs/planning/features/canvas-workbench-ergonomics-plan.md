@@ -299,6 +299,13 @@ edge legend overlaps both the minimap and the controls.
 - **Keep:** animation still means "executing", and red still means "failed". User styles can't take over those two signals.
 - **Later:** routing (curved, step, straight) per edge or per graph.
 
+**Shipped 2026-10-01 (slice G):**
+- **Storage:** `extensions.style = { pattern, weight, color }` on an edge. `style` is display-only for edges in `backend/app/fingerprint.py` and the SDK's `semanticPayload`; the semantic fingerprint and release diffs ignore it (pinned digests in both test suites). The studio now round-trips edge `extensions` on save; it used to drop them.
+- **Defaults by kind:** Always solid, Match text dashed, Fallback dotted (`lib/edgeStyle.ts`). The status bar's Edge kinds legend draws each pattern.
+- **Editing:** the edge inspector's Style group (pattern, weight, and color swatches, each with Default), and the edge menu's Style ▸ with Reset style.
+- **Kept:** a running edge keeps its animated dash, a failed edge stays red, and a validation issue keeps its color and width. The palette has no red.
+- **Not done:** the palette setting the style of the next connection (its "New edges" control sets the kind, whose default pattern follows).
+
 ## 8. Layout squished at smaller screen sizes
 
 **Bug RCA** (reproduced at 1180, 1256 and even 1440px wide, with the Node
@@ -469,7 +476,7 @@ As a result:
 | D | Console dock — **shipped 2026-10-01** | §6, on the status bar from B | P2 | Medium |
 | E | Tool bar and palette — **shipped 2026-10-01** | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
 | F | Snapping and alignment — **shipped 2026-10-01** | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
-| G | Edge styles | §7, with the fingerprint change | P2 | Medium |
+| G | Edge styles — **shipped 2026-10-01** | §7, with the fingerprint change | P2 | Medium |
 | H | Code mode | §5 CodeMirror, Canvas/Code/Split, Save | P2 | Medium |
 | I | Knowledge base | §11 content, Help panel, coverage test, Chat grounding | P2 | High |
 

@@ -129,6 +129,8 @@ export function applyCompileIssueToEdge(edge: Edge, issue: CompileIssue | undefi
   return {
     ...edge,
     style: { ...edge.style, stroke, strokeWidth },
+    // LabeledEdge keeps an issue's color and width over a user's edge style.
+    data: { ...edge.data, issue: issue?.severity === "error" || issue?.severity === "warning" ? issue.severity : undefined },
   };
 }
 
