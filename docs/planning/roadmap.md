@@ -1,6 +1,6 @@
 ---
 title: Agent Graph Builder POC — product roadmap
-last_updated: 2026-09-30
+last_updated: 2026-10-01
 ---
 
 # Product roadmap
@@ -230,6 +230,17 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Inspector:** it floats over the canvas instead of squeezing the column under 480px.
 - **Minimap:** sized by the pane: 200×150, 160×110, or a Map button below 700px.
 - **Status bar:** a new bar at the bottom of the canvas holds the structure summary, focus-mode hops, fit to focus, a snap toggle, zoom, and the edge-kind legend.
+
+**Slice C shipped 2026-10-01:**
+- **Menu behavior:** right-click menus behave natively, with submenus, typeahead, Home/End and Escape order. They close on blur, a width change or wheel, and a right-click elsewhere moves the menu to the new target.
+- **Actions:** each target's actions come from one registry. New actions:
+  - the Add node ▸ submenu
+  - copy, cut and paste (with ⌘A/⌘C/⌘X/⌘V)
+  - rename
+  - focus on this node
+  - the edge Kind ▸ submenu
+  - Insert node ▸, which splices a node into an edge
+- **Not yet:** edge styles, align/distribute, and sharing the registry with the command palette.
 
 ---
 

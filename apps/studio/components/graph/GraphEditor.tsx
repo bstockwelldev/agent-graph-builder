@@ -115,11 +115,12 @@ import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import type { WorkbenchPanelId } from "@/components/workbench/panels";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
-import { NodePalette, NODE_TYPES as NODE_TYPES_FOR_CONTEXT_MENU } from "./NodePalette";
+import { NodePalette } from "./NodePalette";
 import { ConnectKindMenu } from "./ConnectKindMenu";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
+import { edgeMenuActions, nodeMenuActions, nodeTypeItems, paneMenuActions, selectionMenuActions } from "./canvasMenuActions";
+import { copyNodes, freshId, pasteNodes, type CanvasClipboard } from "@/lib/canvasClipboard";
 import { MOBILE_TAB_BAR_HEIGHT, MobileTabBar } from "@/components/navigation/mobile-tab-bar";
-import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { FlowCanvas } from "./FlowCanvas";
 import { RunPanel, type RunAgentOption, type RunSelection } from "./RunPanel";
@@ -1735,6 +1736,118 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     return picked;
   }, [nodes, selectedNodeId]);
 
+  // Copy, cut, paste and select all (canvas-workbench-ergonomics-plan.md §3):
+  // an in-app clipboard of nodes plus the edges between them.
+  const [clipboard, setClipboard] = useState<CanvasClipboard<Node<GraphNodeData>, Edge> | null>(null);
+
+  const deleteNodes = useCallback(
+    (nodeIds: string[]) => {
+      if (nodeIds.length === 0) return;
+      const doomed = new Set(nodeIds);
+      recordMutation();
+      setNodes((current) => current.filter((node) => !doomed.has(node.id)));
+      setEdges((current) => current.filter((edge) => !doomed.has(edge.source) && !doomed.has(edge.target)));
+      setSelectedNodeId((current) => (current && doomed.has(current) ? null : current));
+    },
+    [recordMutation, setEdges, setNodes],
+  );
+
+  const copySelection = useCallback(
+    (nodeIds: string[]) => {
+      const copied = copyNodes(nodes, edges, nodeIds);
+      if (copied) setClipboard(copied);
+      return copied !== null;
+    },
+    [edges, nodes],
+  );
+
+  const pasteClipboard = useCallback(
+    (at?: { x: number; y: number }) => {
+      if (!clipboard) return;
+      recordMutation();
+      const pasted = pasteNodes(clipboard, [...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)], nextId, at);
+      setNodes((current) => [...current.map((node) => (node.selected ? { ...node, selected: false } : node)), ...pasted.nodes]);
+      setEdges((current) => [...current, ...pasted.edges]);
+      setSelectedNodeId(pasted.nodes.length === 1 ? pasted.nodes[0].id : null);
+      setSelectedEdgeId(null);
+    },
+    [clipboard, edges, nodes, recordMutation, setEdges, setNodes],
+  );
+
+  const selectAllNodes = useCallback(() => {
+    setNodes((current) => current.map((node) => (node.selected ? node : { ...node, selected: true })));
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }, [setNodes]);
+
+  // Edge menu → Insert node: a new node of `type` at the edge's midpoint,
+  // spliced in as source → new → target. The first half keeps the edge's
+  // kind, condition and source port; the second is a plain sequence edge
+  // into the old target port.
+  const spliceNodeIntoEdge = useCallback(
+    (edgeId: string, type: NodeType) => {
+      const edge = edges.find((candidate) => candidate.id === edgeId);
+      const source = nodes.find((node) => node.id === edge?.source);
+      const target = nodes.find((node) => node.id === edge?.target);
+      if (!edge || !source || !target) return;
+      recordMutation();
+      const taken = new Set([...nodes.map((node) => node.id), ...edges.map((candidate) => candidate.id)]);
+      const id = freshId(type, taken, nextId);
+      const config = defaultConfig(type);
+      const midpoint = { x: (source.position.x + target.position.x) / 2, y: (source.position.y + target.position.y) / 2 };
+      const contract = edge.data?.contract as EdgeContract | undefined;
+      const kind = (edge.data?.kind as EdgeKind) ?? "sequence";
+      const first = createFlowEdge({ source: edge.source, target: id, sourceHandle: null, targetHandle: null }, kind, (edge.data?.condition as string | null) ?? null);
+      const second = createFlowEdge({ source: id, target: edge.target, sourceHandle: null, targetHandle: null }, "sequence", null);
+      if (contract?.source_port) first.data = { ...first.data, contract: { source_port: contract.source_port } };
+      if (contract?.target_port) second.data = { ...second.data, contract: { target_port: contract.target_port } };
+      setNodes((current) => [
+        ...current,
+        {
+          id,
+          type,
+          position: findFreePosition(current, midpoint),
+          data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
+        },
+      ]);
+      setEdges((current) => [...current.filter((candidate) => candidate.id !== edgeId), first, second]);
+      setSelectedNodeId(id);
+      setSelectedEdgeId(null);
+    },
+    [edges, nodes, recordMutation, setEdges, setNodes],
+  );
+
+  // Node menu → Rename: select the node, then focus its name field in the
+  // inspector once that renders.
+  const [renameRequest, setRenameRequest] = useState(0);
+  useEffect(() => {
+    if (!renameRequest) return;
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Node name"]');
+    input?.focus();
+    input?.select();
+  }, [renameRequest]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(event.target) || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "a") {
+        event.preventDefault();
+        selectAllNodes();
+      } else if (key === "c" || key === "x") {
+        const ids = selectedNodeIdsForGrouping();
+        if (ids.length === 0 || window.getSelection()?.toString()) return;
+        event.preventDefault();
+        if (copySelection(ids) && key === "x") deleteNodes(ids);
+      } else if (key === "v" && clipboard) {
+        event.preventDefault();
+        pasteClipboard();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [clipboard, copySelection, deleteNodes, pasteClipboard, selectAllNodes, selectedNodeIdsForGrouping]);
+
   const groupNodes = useCallback(
     (nodeIds: string[]) => {
       if (nodeIds.length === 0) return;
@@ -2360,6 +2473,91 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const selectionDockContent = inspectorContent;
   const structure = graphStructure(nodes, edges);
 
+  // The canvas right-click menus (canvas-workbench-ergonomics-plan.md §3):
+  // labels and order live in canvasMenuActions.tsx; the handlers are here.
+  const contextMenuActions = (menu: NonNullable<typeof contextMenu>): NodeContextMenuAction[] => {
+    if (menu.kind === "node") {
+      const ids = selectedNodeIdsForGrouping();
+      const targets = ids.includes(menu.nodeId) ? ids : [menu.nodeId];
+      return nodeMenuActions({
+        edit: () => canvasActions.editNode(menu.nodeId),
+        runFromHere: () => canvasActions.runFromNode(menu.nodeId),
+        // Select (no pan or zoom, unlike Edit) and focus the name field.
+        rename: () => {
+          if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+          setSelectedNodeId(menu.nodeId);
+          setSelectedEdgeId(null);
+          setRenameRequest((value) => value + 1);
+        },
+        duplicate: () => duplicateNode(menu.nodeId),
+        copy: () => copySelection(targets),
+        cut: () => {
+          if (copySelection(targets)) deleteNodes(targets);
+        },
+        showDependencies: (direction) => setDependencyView({ nodeId: menu.nodeId, direction }),
+        focusOnNode: () => {
+          setFocusMode(true);
+          setSelectedNodeId(menu.nodeId);
+          setSelectedEdgeId(null);
+        },
+        groupActions: groupMenuActionsForNode(menu.nodeId),
+        remove: () => deleteNodes(targets),
+      });
+    }
+    if (menu.kind === "edge") {
+      const edge = edges.find((candidate) => candidate.id === menu.edgeId);
+      return edgeMenuActions({
+        kind: (edge?.data?.kind as EdgeKind | undefined) ?? "sequence",
+        edit: () => canvasActions.selectEdge(menu.edgeId),
+        setKind: (kind) => {
+          const condition = kind === "conditional" ? ((edge?.data?.condition as string | null) ?? "") : null;
+          patchEdgeById(menu.edgeId, { kind, condition });
+          // A Match-text edge needs its text: the inspector has the field.
+          if (kind === "conditional") canvasActions.selectEdge(menu.edgeId);
+        },
+        insertNode: (type) => spliceNodeIntoEdge(menu.edgeId, type),
+        remove: deleteSelection,
+      });
+    }
+    if (menu.kind === "group") return groupMenuActions(menu.groupId);
+    if (menu.kind === "selection") {
+      const ids = selectedNodeIdsForGrouping();
+      return selectionMenuActions({
+        count: ids.length,
+        group: () => groupNodes(ids),
+        extract: () => requestExtract(ids, `${graphName} part`),
+        copy: () => copySelection(ids),
+        cut: () => {
+          if (copySelection(ids)) deleteNodes(ids);
+        },
+        remove: () => deleteNodes(ids),
+      });
+    }
+    const at = { x: menu.flowX, y: menu.flowY };
+    if (menu.kind === "pane") {
+      return paneMenuActions({
+        addNode: (type) => addNode(type, at),
+        paste: clipboard ? () => pasteClipboard(at) : null,
+        selectAll: selectAllNodes,
+        autoArrange: () => {
+          recordMutation();
+          setRelayoutNonce((v) => v + 1);
+        },
+        fitView: () => setFitViewNonce((v) => v + 1),
+        snapToGrid,
+        setSnapToGrid: (value) => {
+          setSnapToGrid(value);
+          writeStored(SNAP_TO_GRID_STORAGE_KEY, String(value));
+        },
+      });
+    }
+    // The double-click launcher: a flat, searchable list.
+    const query = nodeLauncherQuery.trim().toLowerCase();
+    return nodeTypeItems((type) => addNode(type, at))
+      .filter((item) => !query || item.label.toLowerCase().includes(query))
+      .map((item) => (query ? { ...item, groupLabel: undefined, separatorBefore: false } : item));
+  };
+
   return (
     <ResourceNamesProvider value={resourceNames}>
     <div ref={surfaceRef} data-graph-surface="" className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -2667,6 +2865,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
 
       {contextMenu && (
         <NodeContextMenu
+          // A right-click elsewhere while open re-targets the menu: remount it
+          // so focus and any open submenu start fresh.
+          key={`${contextMenu.kind}:${contextMenu.x}:${contextMenu.y}`}
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
@@ -2679,7 +2880,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                   ? "Group"
                   : contextMenu.kind === "selection"
                     ? "Selection"
-                    : "Add node"
+                    : contextMenu.kind === "pane"
+                      ? "Canvas"
+                      : "Add node"
           }
           {...(contextMenu.kind === "launcher"
             ? {
@@ -2688,40 +2891,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 searchPlaceholder: "Search node types…",
               }
             : {})}
-          actions={
-            contextMenu.kind === "node"
-              ? [
-                  { label: "Edit configuration", onClick: () => canvasActions.editNode(contextMenu.nodeId) },
-                  { label: "Run from here", onClick: () => canvasActions.runFromNode(contextMenu.nodeId) },
-                  { label: "Duplicate node", onClick: () => duplicateNode(contextMenu.nodeId) },
-                  {
-                    label: "Show upstream",
-                    separatorBefore: true,
-                    onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "upstream" }),
-                  },
-                  { label: "Show downstream", onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "downstream" }) },
-                  { label: "Show all dependencies", onClick: () => setDependencyView({ nodeId: contextMenu.nodeId, direction: "both" }) },
-                  ...groupMenuActionsForNode(contextMenu.nodeId),
-                  { label: "Delete node", onClick: deleteSelection, tone: "destructive", separatorBefore: true },
-                ]
-              : contextMenu.kind === "edge"
-                ? [{ label: "Delete edge", onClick: deleteSelection, tone: "destructive" }]
-                : contextMenu.kind === "group"
-                  ? groupMenuActions(contextMenu.groupId)
-                  : contextMenu.kind === "selection"
-                    ? [
-                        { label: "Group selection", shortcut: "⌘G", onClick: () => groupNodes(selectedNodeIdsForGrouping()) },
-                        { label: "Extract selection to graph…", onClick: () => requestExtract(selectedNodeIdsForGrouping(), `${graphName} part`) },
-                      ]
-                    : NODE_TYPES_FOR_CONTEXT_MENU.filter(
-                    (type) =>
-                      contextMenu.kind !== "launcher" ||
-                      NODE_TYPE_TAXONOMY[type].title.toLowerCase().includes(nodeLauncherQuery.toLowerCase()),
-                  ).map((type) => ({
-                    label: NODE_TYPE_TAXONOMY[type].title,
-                    onClick: () => addNode(type, { x: contextMenu.flowX, y: contextMenu.flowY }),
-                  }))
-          }
+          actions={contextMenuActions(contextMenu)}
         />
       )}
 
