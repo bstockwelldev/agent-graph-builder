@@ -108,4 +108,14 @@ describe("CanvasStatusBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Console: 1 error" }));
     expect(onToggleConsole).toHaveBeenCalled();
   });
+
+  it("picks the grid size next to the Snap toggle", () => {
+    const onGridSizeChange = vi.fn();
+    renderBar({ gridSize: 24, onGridSizeChange });
+    const select = screen.getByRole("combobox", { name: "Grid size" }) as HTMLSelectElement;
+    expect(select.value).toBe("24");
+    expect([...select.options].map((option) => option.textContent)).toEqual(["12px", "24px", "48px"]);
+    fireEvent.change(select, { target: { value: "48" } });
+    expect(onGridSizeChange).toHaveBeenCalledWith(48);
+  });
 });

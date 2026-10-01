@@ -377,6 +377,25 @@ controls' bounding boxes intersect and that the canvas column is at least
   - Group frames (`buildGroupFrameNodes`) move with their members.
   - Performance: the guide search runs only over nodes near the one being dragged.
 
+**Shipped 2026-10-01 (slice F):**
+- **Smart guides** (`lib/canvasAlign.ts` `snapToGuides`, applied in `FlowCanvas` `handleNodesChange`):
+  - While one node is dragged, it snaps to the nearest left, center or right edge (and top, middle or bottom) of another node within 6 flow px. A line marks the match (rendered through `ViewportPortal`, 1 screen px at any zoom).
+  - The search covers nodes within 800px only.
+  - Grid snapping moved out of React Flow and into the same handler, so a guide wins on its axis and the grid applies on the other. React Flow rounded to the grid first, which could leave an off-grid neighbor out of reach.
+  - The drop keeps the snapped position; React Flow's drag-end change carries the raw one.
+  - Holding ⇧ or ⌥ drags freely, grid included.
+  - Group frames don't snap themselves.
+- **Align** (left, horizontal center, right, top, vertical middle, bottom) and **Distribute** (horizontally, vertically; three or more nodes):
+  - In the selection menu, and in the node menu when the node is part of a multi-selection.
+  - Figma's shortcuts: ⌥A, ⌥H, ⌥D, ⌥W, ⌥V, ⌥S to align; ⌥⇧H and ⌥⇧V to distribute.
+  - Undoable. Sizes come from React Flow's `measured` (falling back to the card's default).
+- **Snap everywhere:** with Snap on, positions land on the grid for auto-arrange (dagre output), add node (palette, menu or drop), paste and splice.
+- **Grid size** 12, 24 or 48 next to the status bar's Snap toggle (`agb.layout.gridSize`). The background grid follows it, with major lines every 5 steps.
+- **Not yet:** Align and Distribute in the command palette, which is still navigation-only.
+- **Tests:**
+  - `e2e/specs/snapping.spec.ts` covers a guide snap with its line, Align from the menu, ⌥W and ⌥⇧H, and the grid size persisting with auto-arrange on it.
+  - Unit tests: `canvasAlign.test.ts`, plus the menu and status-bar tests.
+
 ## 10. Focus mode appears to do nothing
 
 **Bug RCA.**
@@ -449,7 +468,7 @@ As a result:
 | C | Native context menu — **shipped 2026-10-01** | §3 Base UI menu engine and the actions registry | P1 | High |
 | D | Console dock — **shipped 2026-10-01** | §6, on the status bar from B | P2 | Medium |
 | E | Tool bar and palette — **shipped 2026-10-01** | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
-| F | Snapping and alignment | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
+| F | Snapping and alignment — **shipped 2026-10-01** | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
 | G | Edge styles | §7, with the fingerprint change | P2 | Medium |
 | H | Code mode | §5 CodeMirror, Canvas/Code/Split, Save | P2 | Medium |
 | I | Knowledge base | §11 content, Help panel, coverage test, Chat grounding | P2 | High |

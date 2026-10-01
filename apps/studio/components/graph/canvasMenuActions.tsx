@@ -1,5 +1,6 @@
 import type { EdgeKind, NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
+import type { AlignMode, DistributeAxis } from "@/lib/canvasAlign";
 import type { NodeContextMenuAction } from "./NodeContextMenu";
 
 // The canvas right-click menus, one builder per target
@@ -84,6 +85,8 @@ export type NodeMenuHandlers = {
   focusOnNode: () => void;
   /** Group, ungroup and extract items, built by the caller. */
   groupActions: NodeContextMenuAction[];
+  /** Align and Distribute, when the node is part of a multi-selection. */
+  arrange?: ArrangeHandlers;
   remove: () => void;
 };
 
@@ -117,6 +120,7 @@ export function nodeMenuActions(
     },
     { label: "Focus on this node", onClick: handlers.focusOnNode },
     ...handlers.groupActions,
+    ...(handlers.arrange ? arrangeActions(handlers.arrange) : []),
     {
       label: "Delete node",
       shortcut: "⌫",
@@ -169,6 +173,7 @@ export type SelectionMenuHandlers = {
   count: number;
   group: () => void;
   extract: () => void;
+  arrange: ArrangeHandlers;
   copy: () => void;
   cut: () => void;
   remove: () => void;
@@ -180,6 +185,7 @@ export function selectionMenuActions(
   return [
     { label: "Group selection", shortcut: "⌘G", onClick: handlers.group },
     { label: "Extract selection to graph…", onClick: handlers.extract },
+    ...arrangeActions(handlers.arrange),
     {
       label: "Copy",
       shortcut: "⌘C",
@@ -192,6 +198,56 @@ export function selectionMenuActions(
       tone: "destructive",
       separatorBefore: true,
       onClick: handlers.remove,
+    },
+  ];
+}
+
+// --- Align and Distribute (canvas-workbench-ergonomics-plan.md §9) ---------
+
+export type ArrangeHandlers = {
+  count: number;
+  align: (mode: AlignMode) => void;
+  distribute: (axis: DistributeAxis) => void;
+};
+
+/** Figma's shortcuts (⌥ + key); GraphEditor binds the same keys. */
+export const ALIGN_OPTIONS: { mode: AlignMode; label: string; key: string }[] = [
+  { mode: "left", label: "Left", key: "A" },
+  { mode: "center", label: "Horizontal center", key: "H" },
+  { mode: "right", label: "Right", key: "D" },
+  { mode: "top", label: "Top", key: "W" },
+  { mode: "middle", label: "Vertical middle", key: "V" },
+  { mode: "bottom", label: "Bottom", key: "S" },
+];
+
+export const DISTRIBUTE_OPTIONS: { axis: DistributeAxis; label: string; key: string }[] = [
+  { axis: "horizontal", label: "Horizontally", key: "H" },
+  { axis: "vertical", label: "Vertically", key: "V" },
+];
+
+export function arrangeActions(handlers: ArrangeHandlers): NodeContextMenuAction[] {
+  return [
+    {
+      label: "Align",
+      separatorBefore: true,
+      disabled: handlers.count < 2,
+      onClick: () => undefined,
+      submenu: ALIGN_OPTIONS.map((option) => ({
+        label: option.label,
+        shortcut: `⌥${option.key}`,
+        onClick: () => handlers.align(option.mode),
+      })),
+    },
+    {
+      label: "Distribute",
+      title: handlers.count < 3 ? "Select three or more nodes" : undefined,
+      disabled: handlers.count < 3,
+      onClick: () => undefined,
+      submenu: DISTRIBUTE_OPTIONS.map((option) => ({
+        label: option.label,
+        shortcut: `⌥⇧${option.key}`,
+        onClick: () => handlers.distribute(option.axis),
+      })),
     },
   ];
 }

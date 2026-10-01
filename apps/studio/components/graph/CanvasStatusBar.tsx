@@ -6,6 +6,7 @@ import { Focus, Grid3x3, Info, Network, SquareTerminal, X } from "lucide-react";
 import { EDGE_KIND_TAXONOMY } from "@/content/taxonomy";
 import type { GraphStructure } from "@/lib/graphAuthoring";
 import { severityCounts, useConsoleLog } from "@/lib/consoleLog";
+import { GRID_SIZES, type GridSize } from "@/lib/canvasAlign";
 import { consoleCountsLabel } from "./CanvasConsoleDock";
 import {
   color,
@@ -59,6 +60,8 @@ export function CanvasStatusBar({
   consoleOpen = false,
   onToggleConsole,
   toolLabel,
+  gridSize,
+  onGridSizeChange,
 }: {
   structure: GraphStructure;
   focusMode: boolean;
@@ -76,6 +79,9 @@ export function CanvasStatusBar({
   onToggleConsole?: () => void;
   /** The active pointer tool (§4), e.g. "Select". */
   toolLabel?: string;
+  /** The grid step (§9), set next to the Snap toggle. */
+  gridSize?: GridSize;
+  onGridSizeChange?: (size: GridSize) => void;
 }) {
   const reactFlow = useReactFlow();
   const zoom = useStore((state) => Math.round(state.transform[2] * 100));
@@ -194,6 +200,21 @@ export function CanvasStatusBar({
         <Grid3x3 size={12} aria-hidden="true" />
         Snap
       </button>
+      {gridSize !== undefined && onGridSizeChange && (
+        <select
+          aria-label="Grid size"
+          value={gridSize}
+          onChange={(event) => onGridSizeChange(Number(event.target.value) as GridSize)}
+          className="agb-focus-ring"
+          style={gridSelectStyle}
+        >
+          {GRID_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}px
+            </option>
+          ))}
+        </select>
+      )}
       <HoverTooltip content="Fit view" placement="top">
         <button
           type="button"
@@ -344,5 +365,15 @@ const legendStyle: CSSProperties = {
   color: text.primary,
   whiteSpace: "normal",
   boxShadow: shell.shadow.drawer,
+  ...typeScale.caption,
+};
+
+const gridSelectStyle: CSSProperties = {
+  height: 22,
+  padding: "0 2px",
+  borderRadius: radius.md,
+  border: `1px solid ${surface.border}`,
+  background: surface.panel,
+  color: text.muted,
   ...typeScale.caption,
 };
