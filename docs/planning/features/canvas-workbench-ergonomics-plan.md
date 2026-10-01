@@ -121,6 +121,31 @@ edge legend overlaps both the minimap and the controls.
 - Typeahead, submenus and Escape (which closes a submenu first) behave like a native OS menu.
 - An e2e test covers each target's menu.
 
+**Shipped 2026-10-01 (slice C):**
+- **Engine.** We kept our own menu engine (`NodeContextMenu.tsx`) instead of switching to Base UI. It's token-styled already, and it also drives the header, run panel and inspector menus, so they all gain the same behavior; a Base UI swap would have meant restyling and re-testing all of them for no behavior gain. What it does now:
+  - Submenus, one level deep. They open on hover, click, Enter or ArrowRight, sit beside the parent item and flip left at the screen edge. ArrowLeft closes one.
+  - Typeahead, plus Home and End.
+  - Escape closes a submenu first, then the menu.
+  - It closes when the window loses focus, when the window width changes (height alone doesn't, so a phone keyboard won't close it), and on wheel over the canvas.
+  - A right-click elsewhere closes it and re-sends the click to whatever is underneath, so the menu opens on the new target.
+- **Actions per target:** `canvasMenuActions.tsx` has one builder per target (labels, order, groups, shortcut hints). GraphEditor supplies the handlers.
+  - **Empty canvas:** Add node ▸ (grouped Flow / Model / Data and tools / Checks and review), Paste, Select all, Auto-arrange, Fit view, Snap to grid.
+  - **Node:** Edit, Run from here, Rename (selects the node and focuses its name field), Duplicate, Copy, Cut, Show upstream / downstream / all, Focus on this node, the group actions, Delete.
+  - **Edge:** Edit, Kind ▸, Insert node ▸, Delete.
+    - Insert node splices a new node in at the edge's midpoint: the first half keeps the edge's kind, condition and source port; the second half keeps its target port.
+  - **Selection:** Group, Extract, Copy, Cut, Delete N nodes.
+- **Clipboard** (`lib/canvasClipboard.ts`): an in-app clipboard of nodes plus the edges between them.
+  - Pasted nodes get fresh ids and become the selection.
+  - Paste goes to the clicked point, or 40px offset from the original.
+  - Shortcuts: ⌘A, ⌘C, ⌘X, ⌘V. They do nothing while typing in a field, and ⌘C/⌘X leave any selected text alone.
+- **Not yet:**
+  - Style ▸ waits on §7, and Align ▸ / Distribute ▸ on §9.
+  - The command palette doesn't yet share the menu registry.
+  - Touch long-press.
+- **Tests:**
+  - `e2e/specs/context-menus.spec.ts` covers every target, the keyboard behavior, re-targeting, splice and clipboard.
+  - Unit tests: `canvasMenuActions.test.tsx`, `canvasClipboard.test.ts`, and engine tests in `NodeContextMenu.test.tsx`.
+
 ## 4. Palette panel and tool bar (Photoshop/Figma-style)
 
 **Current behavior.**
@@ -373,7 +398,7 @@ As a result:
 | - | ----- | ----- | -------- | ------ |
 | A | Quick bug fixes — **shipped 2026-09-30** | §3 hover fix; §10 focus mode as a local neighborhood with edges dimmed; §0 build SHA | P1 | High, small |
 | B | Layout at laptop widths — **shipped 2026-09-30** | §8 canvas-width breakpoints, header priority collapse, status bar; §2 minimap sizing and overlay slots | P1 | High |
-| C | Native context menu | §3 Base UI menu engine and the actions registry | P1 | High |
+| C | Native context menu — **shipped 2026-10-01** | §3 Base UI menu engine and the actions registry | P1 | High |
 | D | Console dock | §6, on the status bar from B | P2 | Medium |
 | E | Tool bar and palette | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
 | F | Snapping and alignment | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |

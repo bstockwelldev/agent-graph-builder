@@ -14,7 +14,8 @@ test("the right-click menu highlights the item under the pointer", async ({ page
   await openGraph(page, graph);
   const pane = (await page.locator(".react-flow__pane").boundingBox())!;
   await page.mouse.click(pane.x + 30, pane.y + pane.height / 2, { button: "right" });
-  const item = page.getByRole("menuitem", { name: "LLM node" });
+  await page.getByRole("menuitem", { name: "Add node" }).hover();
+  const item = page.getByRole("menu", { name: "Add node" }).getByRole("menuitem", { name: "LLM node" });
   await item.hover();
   await expect(item).toBeFocused();
   await expect.poll(() => item.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
