@@ -172,15 +172,12 @@ test("the minimap shrinks with the pane and collapses to a Map button", async ({
   await page.getByRole("button", { name: "Show minimap" }).click();
   await expect(page.locator(".react-flow__minimap")).toBeVisible();
 
-  // Docking both at 1120px would leave the canvas 448px: the inspector floats instead.
+  // Docking both at 1120px would leave the canvas 448px: the palette folds
+  // to its icon strip first, so the inspector can stay docked.
   await page.setViewportSize({ width: 1120, height: 800 });
-  await expect(page.locator("[data-inspector-mode]")).toHaveAttribute(
-    "data-inspector-mode",
-    "overlay",
-  );
-  expect(
-    (await page.locator("[data-canvas-column]").boundingBox())!.width,
-  ).toBeGreaterThanOrEqual(480);
+  await expect(page.getByRole("group", { name: "Node palette (collapsed)" })).toBeVisible();
+  await expect(page.locator("[data-inspector-mode]")).toHaveAttribute("data-inspector-mode", "docked");
+  expect((await page.locator("[data-canvas-column]").boundingBox())!.width).toBeGreaterThanOrEqual(480);
 });
 
 test("the status bar holds the structure, snapping, zoom and edge kinds", async ({

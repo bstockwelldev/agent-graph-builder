@@ -181,6 +181,32 @@ edge legend overlaps both the minimap and the controls.
   - Keyboard access to drag-to-add: Enter adds at the viewport center.
   - The touch/phone rules stay as they are (no draw-authoring below 640px).
 
+**Shipped 2026-10-01 (slice E):**
+- **Tool bar** (`CanvasToolbar.tsx`, `lib/canvasTools.ts`): a vertical strip at the canvas's left edge. Arrow keys move between the tools.
+  - **Select (V):** unchanged. Drag pans, drag a node to move it, Shift-drag draws a selection box.
+  - **Hand (H, or hold Space):** pans even over nodes, which don't move.
+  - **Marquee (M):** drag selects the nodes the box touches. Middle and right mouse buttons still pan.
+  - **Connect (C):** click a source, then a target. A chip names the pending source; Escape or a pane click cancels. The edge goes through the same path as a handle drag.
+  - **Zoom (Z):** click zooms in around the pointer; Alt-click zooms out.
+  - **Status bar and cursors:** the status bar shows the active tool. Cursors follow the tool (`[data-canvas-tool]` rules in `globals.css`).
+  - **Fit-to-view** keeps clear of the strip.
+- **Palette** (`NodePalette.tsx`, `paletteSections.ts`): it renders the registered sections, so a new kind of item is one new registry entry.
+  - **Nodes:** grouped Flow / Model / Data and tools / Checks and review.
+  - **Library:** prompts, LLM profiles and tools. Adding one creates a node already bound to it (`promptId`, `llmProfileId`, `toolName`).
+  - **Transforms:** library transforms, added as a transform node bound by `transformId`.
+  - **Subgraphs:** every other saved graph, added as a subgraph node pinned to `latest`.
+  - One search box filters every section.
+  - **New edges:** Always, Match text or Fallback. It sets the kind for handle drags and the Connect tool. Match text first asks for the condition, through the existing kind menu.
+  - **Adding nodes:** click or Enter adds a node at the viewport center; dragging drops it at the pointer.
+  - **On desktop the palette stays open** while you work, instead of closing on select or add. The compact drawer still closes.
+- **Icon strip:** the palette folds to a 56px icon strip (node types only, still clickable and draggable). The fold is per viewer (`agb.palette.collapsed`).
+  - It also folds on its own when docking it would squeeze the canvas under 480px (`dockLayout`). That was the first step of §8's minimum-width rule; the inspector now floats only if even the strip doesn't fit.
+- **Not yet:** templates (there's no template registry yet), and edge styles in the palette (§7).
+- **Tests:**
+  - e2e: `e2e/specs/canvas-tools.spec.ts` covers the tools, Connect with the new-edge kind, palette search, drag-and-drop, library binding, and the strip that persists across a reload.
+  - e2e: `canvas-layout.spec.ts` now expects the palette to fold at 1120px.
+  - Unit: `canvasTools.test.ts`, `NodePalette.test.tsx`, and `dockLayout` tests.
+
 ## 5. Full graph JSON/YAML editor mode
 
 **Current behavior.** A live editor exists (2026-09-25,
@@ -422,7 +448,7 @@ As a result:
 | B | Layout at laptop widths — **shipped 2026-09-30** | §8 canvas-width breakpoints, header priority collapse, status bar; §2 minimap sizing and overlay slots | P1 | High |
 | C | Native context menu — **shipped 2026-10-01** | §3 Base UI menu engine and the actions registry | P1 | High |
 | D | Console dock — **shipped 2026-10-01** | §6, on the status bar from B | P2 | Medium |
-| E | Tool bar and palette | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
+| E | Tool bar and palette — **shipped 2026-10-01** | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
 | F | Snapping and alignment | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
 | G | Edge styles | §7, with the fingerprint change | P2 | Medium |
 | H | Code mode | §5 CodeMirror, Canvas/Code/Split, Save | P2 | Medium |

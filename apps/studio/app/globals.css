@@ -384,3 +384,14 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Canvas pointer tools (canvas-workbench-ergonomics-plan.md §4): the cursor
+   says what a click or drag will do. */
+[data-canvas-tool="hand"] .react-flow__pane,
+[data-canvas-tool="hand"] .react-flow__node { cursor: grab; }
+[data-canvas-tool="hand"] .react-flow__pane.dragging { cursor: grabbing; }
+[data-canvas-tool="marquee"] .react-flow__pane { cursor: crosshair; }
+[data-canvas-tool="connect"] .react-flow__pane,
+[data-canvas-tool="connect"] .react-flow__node { cursor: crosshair; }
+[data-canvas-tool="zoom"] .react-flow__pane,
+[data-canvas-tool="zoom"] .react-flow__node { cursor: zoom-in; }
