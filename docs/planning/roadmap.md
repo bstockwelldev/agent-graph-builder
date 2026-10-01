@@ -255,6 +255,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
   - A "New edges" kind setting sets the kind new connections get.
   - The palette folds to an icon strip, and does so on its own before the inspector would have to float.
 
+**Slice F shipped 2026-10-01:**
+- **Smart guides:** dragged nodes snap to other nodes' edges and centers, with a line shown, ahead of the grid. Hold ⇧ or ⌥ to drag freely.
+- **Align and Distribute:** in the selection and node menus, with Figma's ⌥ shortcuts.
+- **Grid:** auto-arrange, adds, pastes and splices land on the grid, and the grid size (12, 24 or 48) is set in the status bar.
+
 ---
 
 ## Scoring rationale (requested items)

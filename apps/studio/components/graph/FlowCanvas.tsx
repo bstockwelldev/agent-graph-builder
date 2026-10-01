@@ -7,11 +7,14 @@ import {
   ReactFlow,
   ReactFlowProvider,
   SelectionMode,
+  ViewportPortal,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type EdgeTypes,
   type Node,
+  type NodeChange,
   type NodeTypes,
   type OnEdgesChange,
   type OnNodesChange,
@@ -37,6 +40,8 @@ import type { GraphNodeData } from "./nodes/GraphNodeView";
 import type { GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 import { canFitView } from "@/lib/canvasFit";
 import { minimapLayout } from "@/lib/canvasLayout";
+import { DEFAULT_GRID, snapToGrid as roundToGrid, snapToGuides, type Box, type Guide } from "@/lib/canvasAlign";
+import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
 import { flowInteraction, zoomAround, type CanvasTool } from "@/lib/canvasTools";
 import { PALETTE_DRAG_TYPE, type PaletteDrop } from "./paletteSections";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
@@ -112,8 +117,10 @@ type FlowCanvasProps = {
   /** Compact/mobile: drop the zoom Controls, which otherwise sit under
    * GraphEditor's bottom action bar (pinch-zoom covers zooming). */
   compact?: boolean;
-  /** Snap dragged nodes to the 24px grid (the status bar's Snap toggle). */
+  /** Snap to the grid and to smart guides while dragging (the status bar's Snap toggle). */
   snapToGrid?: boolean;
+  /** The grid's step in flow pixels (12, 24 or 48). */
+  gridSize?: number;
   /** The active pointer tool (§4) and whether Space is held (a temporary Hand). */
   tool?: CanvasTool;
   spaceHeld?: boolean;
@@ -165,6 +172,7 @@ function FlowCanvasInner({
   viewportCenterRef,
   compact = false,
   snapToGrid = true,
+  gridSize = DEFAULT_GRID,
   tool = "select",
   spaceHeld = false,
   onDropItem,
@@ -303,6 +311,8 @@ function FlowCanvasInner({
     setNodes(
       laidOut.map((node) => ({
         ...node,
+        // Auto-layout lands on the grid too (§9).
+        position: snapToGrid ? roundToGrid(node.position, gridSize) : node.position,
         style: {
           ...node.style,
           transition,
@@ -399,6 +409,103 @@ function FlowCanvasInner({
   );
   const interaction = flowInteraction(tool, spaceHeld);
 
+  // Smart guides (§9): while one node is dragged, it snaps to the nearest
+  // edge or center of another node within a few pixels, ahead of the grid.
+  // Holding Shift or Alt drags freely, grid included.
+  const [guides, setGuides] = useState<Guide[]>([]);
+  const [freeDrag, setFreeDrag] = useState(false);
+  useEffect(() => {
+    const update = (event: KeyboardEvent) => setFreeDrag(event.shiftKey || event.altKey);
+    const reset = () => setFreeDrag(false);
+    window.addEventListener("keydown", update);
+    window.addEventListener("keyup", update);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", update);
+      window.removeEventListener("keyup", update);
+      window.removeEventListener("blur", reset);
+    };
+  }, []);
+  const boxOf = useCallback(
+    (node: Node): Box => {
+      const measured = reactFlow.getInternalNode(node.id)?.measured;
+      return {
+        id: node.id,
+        x: node.position.x,
+        y: node.position.y,
+        width: measured?.width ?? NODE_CARD_WIDTH,
+        height: measured?.height ?? NODE_CARD_MAX_HEIGHT,
+      };
+    },
+    [reactFlow],
+  );
+  // Grid snapping happens here, not in React Flow, so a guide can win over
+  // the grid on its axis: React Flow would round to the grid first, which
+  // can leave an off-grid neighbor's edge out of reach.
+  // The drag-end change carries React Flow's raw position; it keeps the
+  // last snapped one instead.
+  const lastSnapRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const handleNodesChange = useCallback(
+    (incoming: NodeChange<Node<GraphNodeData>>[]) => {
+      const changes = incoming.map((change) => {
+        if (change.type !== "position" || change.dragging || !change.position) return change;
+        const snapped = lastSnapRef.current.get(change.id);
+        if (!snapped) return change;
+        lastSnapRef.current.delete(change.id);
+        return { ...change, position: snapped };
+      });
+      const drags = changes.filter((change) => change.type === "position" && change.dragging && change.position);
+      if (drags.length !== 1 || !snapToGrid || freeDrag) {
+        if (guides.length > 0 && changes.some((change) => change.type === "position")) setGuides([]);
+        const snapping = snapToGrid && !freeDrag;
+        if (!snapping) for (const change of drags) if ("id" in change) lastSnapRef.current.delete(change.id);
+        onNodesChange(
+          snapping
+            ? changes.map((change) => {
+                if (change.type !== "position" || !change.dragging || !change.position) return change;
+                const position = roundToGrid(change.position, gridSize);
+                lastSnapRef.current.set(change.id, position);
+                return { ...change, position };
+              })
+            : changes,
+        );
+        return;
+      }
+      const drag = drags[0] as Extract<NodeChange<Node<GraphNodeData>>, { type: "position" }>;
+      const current = reactFlow.getNode(drag.id);
+      // Group frames move their members; they don't snap themselves.
+      if (!current || !drag.position || current.type === "groupFrame" || current.type === "laneBand") {
+        onNodesChange(changes);
+        return;
+      }
+      const moving = boxOf({ ...current, position: drag.position });
+      // Only nearby nodes: a guide off-screen is no use and costs a scan.
+      const reach = 800;
+      const others = reactFlow
+        .getNodes()
+        .filter(
+          (node) =>
+            node.id !== drag.id &&
+            !node.hidden &&
+            node.type !== "groupFrame" &&
+            node.type !== "laneBand" &&
+            Math.abs(node.position.x - drag.position!.x) < reach &&
+            Math.abs(node.position.y - drag.position!.y) < reach,
+        )
+        .map(boxOf);
+      const snapped = snapToGuides(moving, others);
+      const onGrid = roundToGrid(drag.position, gridSize);
+      const position = {
+        x: snapped.guides.some((guide) => guide.orientation === "vertical") ? snapped.position.x : onGrid.x,
+        y: snapped.guides.some((guide) => guide.orientation === "horizontal") ? snapped.position.y : onGrid.y,
+      };
+      setGuides(snapped.guides);
+      lastSnapRef.current.set(drag.id, position);
+      onNodesChange(changes.map((change) => (change === drag ? { ...drag, position } : change)));
+    },
+    [boxOf, freeDrag, gridSize, guides.length, onNodesChange, reactFlow, snapToGrid],
+  );
+
   return (
     <div
       ref={paneRef}
@@ -441,7 +548,8 @@ function FlowCanvasInner({
       <ReactFlow
         nodes={renderNodes ?? nodes}
         edges={displayEdges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
+        onNodeDragStop={() => setGuides([])}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onConnectStart={(event) => {
@@ -460,8 +568,8 @@ function FlowCanvasInner({
         selectionOnDrag={interaction.selectionOnDrag}
         selectionMode={SelectionMode.Partial}
         nodesDraggable={interaction.nodesDraggable}
-        snapToGrid={snapToGrid}
-        snapGrid={[24, 24]}
+        // Snapping (grid and guides) is applied in handleNodesChange.
+        snapToGrid={false}
         defaultEdgeOptions={{ interactionWidth: 24 }}
         nodesConnectable
         nodeTypes={nodeTypes}
@@ -511,8 +619,9 @@ function FlowCanvasInner({
         colorMode="dark"
         style={{ width: "100%", height: "100%", background: canvas.pane }}
       >
-        <Background variant={BackgroundVariant.Lines} gap={24} size={1} color={canvas.grid} />
-        <Background variant={BackgroundVariant.Lines} gap={120} size={1} color={canvas.gridMajor} />
+        <Background id="minor" variant={BackgroundVariant.Lines} gap={gridSize} size={1} color={canvas.grid} />
+        <Background id="major" variant={BackgroundVariant.Lines} gap={gridSize * 5} size={1} color={canvas.gridMajor} />
+        {guides.length > 0 && <SnapGuides guides={guides} />}
         {!compact && <Controls />}
         {showMinimap && <CanvasMinimap paneWidth={paneSize.width} />}
       </ReactFlow>
@@ -573,6 +682,32 @@ const loadFailureBannerStyle: CSSProperties = {
   textAlign: "center",
   boxShadow: shell.shadow.drawer,
 };
+
+/** Smart-guide lines in flow coordinates, kept 1 screen pixel wide at any zoom. */
+function SnapGuides({ guides }: { guides: Guide[] }) {
+  const zoom = useStore((state) => state.transform[2]);
+  const thickness = 1 / zoom;
+  return (
+    <ViewportPortal>
+      {guides.map((guide) => (
+        <div
+          key={`${guide.orientation}:${guide.at}`}
+          data-testid="snap-guide"
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            pointerEvents: "none",
+            background: color.primary[500],
+            zIndex: 1000,
+            ...(guide.orientation === "vertical"
+              ? { left: guide.at - thickness / 2, top: guide.from - 8, width: thickness, height: guide.to - guide.from + 16 }
+              : { top: guide.at - thickness / 2, left: guide.from - 8, height: thickness, width: guide.to - guide.from + 16 }),
+          }}
+        />
+      ))}
+    </ViewportPortal>
+  );
+}
 
 /**
  * The minimap, sized by the pane (canvas-workbench-ergonomics-plan.md §2):

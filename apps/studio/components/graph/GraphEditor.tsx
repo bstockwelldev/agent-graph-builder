@@ -70,6 +70,19 @@ import {
 import { isEdgeDimmed, neighborhoodNodeIds } from "@/lib/focusMode";
 import { clampFocusHops, dockLayout, headerDensity } from "@/lib/canvasLayout";
 import { toolForKey, toolLabel, type CanvasTool } from "@/lib/canvasTools";
+import {
+  DEFAULT_GRID,
+  alignBoxes,
+  distributeBoxes,
+  isGridSize,
+  snapToGrid as roundToGrid,
+  type AlignMode,
+  type Box,
+  type DistributeAxis,
+  type GridSize,
+} from "@/lib/canvasAlign";
+import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
+import { ALIGN_OPTIONS, DISTRIBUTE_OPTIONS } from "./canvasMenuActions";
 import { CanvasToolbar } from "./CanvasToolbar";
 import type { PaletteDrop } from "./paletteSections";
 import { useElementWidth } from "@/hooks/useElementWidth";
@@ -172,6 +185,7 @@ import { ExtractSubgraphDialog } from "@/components/studio/extract-subgraph-dial
 const LAYOUT_SPACING_STORAGE_KEY = "agb.layout.spacing";
 const SHOW_MINIMAP_STORAGE_KEY = "agb.layout.showMinimap";
 const SNAP_TO_GRID_STORAGE_KEY = "agb.layout.snapToGrid";
+const GRID_SIZE_STORAGE_KEY = "agb.layout.gridSize";
 
 function readStoredSpacing(): LayoutSpacing {
   try {
@@ -263,6 +277,17 @@ function closesOnCanvasSelection(panel: WorkbenchPanelId | null, compact: boolea
 
 const PALETTE_COLLAPSED_STORAGE_KEY = "agb.palette.collapsed";
 const DEFAULT_EDGE_KIND_STORAGE_KEY = "agb.edges.defaultKind";
+
+/** A node's box for Align and Distribute: its measured size, or the card's default. */
+function nodeBox(node: Node<GraphNodeData>): Box {
+  return {
+    id: node.id,
+    x: node.position.x,
+    y: node.position.y,
+    width: node.measured?.width ?? NODE_CARD_WIDTH,
+    height: node.measured?.height ?? NODE_CARD_MAX_HEIGHT,
+  };
+}
 
 function readStoredEdgeKind(): EdgeKind {
   try {
@@ -480,10 +505,22 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [layoutSpacing, setLayoutSpacing] = useState<LayoutSpacing>("standard");
   const [showMinimap, setShowMinimap] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [gridSize, setGridSize] = useState<GridSize>(DEFAULT_GRID);
+  // Positions the canvas picks (add, paste, splice) land on the grid (§9).
+  const placeOnGrid = useCallback(
+    (point: { x: number; y: number }) => (snapToGrid ? roundToGrid(point, gridSize) : point),
+    [gridSize, snapToGrid],
+  );
   useEffect(() => {
     setLayoutSpacing(readStoredSpacing());
     setShowMinimap(readStoredShowMinimap());
     setSnapToGrid(readStoredSnapToGrid());
+    try {
+      const storedGrid = Number(window.localStorage.getItem(GRID_SIZE_STORAGE_KEY));
+      if (isGridSize(storedGrid)) setGridSize(storedGrid);
+    } catch {
+      // Default grid.
+    }
     setDefaultEdgeKind(readStoredEdgeKind());
     try {
       setPaletteCollapsedPref(window.localStorage.getItem(PALETTE_COLLAPSED_STORAGE_KEY) === "true");
@@ -1073,7 +1110,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         // Slice 5: the viewport center (or the clicked point), nudged to
         // the first spot that doesn't overlap an existing card -- was a
         // random position anywhere in a 400x400 box.
-        position: findFreePosition(nodes, position ?? viewportCenterRef.current?.() ?? { x: 200, y: 120 }),
+        position: placeOnGrid(findFreePosition(nodes, position ?? viewportCenterRef.current?.() ?? { x: 200, y: 120 })),
         data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
       };
       setNodes((current) => [...current, node]);
@@ -1081,7 +1118,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setSelectedEdgeId(null);
       if (workbench.activePanel === "palette" && workbench.isCompact) workbench.close();
     },
-    [nodes, recordMutation, setNodes, workbench],
+    [nodes, placeOnGrid, recordMutation, setNodes, workbench],
   );
 
   // Right-click context menu (studio-consolidation Phase 7 — new scope, no
@@ -1879,14 +1916,43 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     (at?: { x: number; y: number }) => {
       if (!clipboard) return;
       recordMutation();
-      const pasted = pasteNodes(clipboard, [...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)], nextId, at);
+      const pasted = pasteNodes(clipboard, [...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)], nextId, at && placeOnGrid(at));
       setNodes((current) => [...current.map((node) => (node.selected ? { ...node, selected: false } : node)), ...pasted.nodes]);
       setEdges((current) => [...current, ...pasted.edges]);
       setSelectedNodeId(pasted.nodes.length === 1 ? pasted.nodes[0].id : null);
       setSelectedEdgeId(null);
     },
-    [clipboard, edges, nodes, recordMutation, setEdges, setNodes],
+    [clipboard, edges, nodes, placeOnGrid, recordMutation, setEdges, setNodes],
   );
+
+  // Align and Distribute the selected nodes (§9), undoable like any edit.
+  const moveNodes = useCallback(
+    (positions: Record<string, { x: number; y: number }>) => {
+      if (Object.keys(positions).length === 0) return;
+      recordMutation();
+      setNodes((current) => current.map((node) => (positions[node.id] ? { ...node, position: positions[node.id] } : node)));
+    },
+    [recordMutation, setNodes],
+  );
+  const alignSelection = useCallback(
+    (nodeIds: string[], mode: AlignMode) => {
+      const picked = new Set(nodeIds);
+      moveNodes(alignBoxes(nodes.filter((node) => picked.has(node.id)).map(nodeBox), mode));
+    },
+    [moveNodes, nodes],
+  );
+  const distributeSelection = useCallback(
+    (nodeIds: string[], axis: DistributeAxis) => {
+      const picked = new Set(nodeIds);
+      moveNodes(distributeBoxes(nodes.filter((node) => picked.has(node.id)).map(nodeBox), axis));
+    },
+    [moveNodes, nodes],
+  );
+  const arrangeHandlers = (nodeIds: string[]) => ({
+    count: nodeIds.length,
+    align: (mode: AlignMode) => alignSelection(nodeIds, mode),
+    distribute: (axis: DistributeAxis) => distributeSelection(nodeIds, axis),
+  });
 
   const selectAllNodes = useCallback(() => {
     setNodes((current) => current.map((node) => (node.selected ? node : { ...node, selected: true })));
@@ -1920,7 +1986,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         {
           id,
           type,
-          position: findFreePosition(current, midpoint),
+          position: placeOnGrid(findFreePosition(current, midpoint)),
           data: { nodeType: type, label: labelFor(type, config), config, status: "idle", compileIssue: null },
         },
       ]);
@@ -1928,8 +1994,31 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setSelectedNodeId(id);
       setSelectedEdgeId(null);
     },
-    [edges, nodes, recordMutation, setEdges, setNodes],
+    [edges, nodes, placeOnGrid, recordMutation, setEdges, setNodes],
   );
+
+  // ⌥ + Figma's keys align the selection; ⌥⇧H / ⌥⇧V distribute it.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.metaKey || event.ctrlKey || isEditableKeyboardTarget(event.target)) return;
+      const key = event.code.startsWith("Key") ? event.code.slice(3) : "";
+      const ids = selectedNodeIdsForGrouping();
+      if (!key || ids.length < 2) return;
+      if (event.shiftKey) {
+        const distribute = DISTRIBUTE_OPTIONS.find((option) => option.key === key);
+        if (!distribute) return;
+        event.preventDefault();
+        distributeSelection(ids, distribute.axis);
+        return;
+      }
+      const align = ALIGN_OPTIONS.find((option) => option.key === key);
+      if (!align) return;
+      event.preventDefault();
+      alignSelection(ids, align.mode);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [alignSelection, distributeSelection, selectedNodeIdsForGrouping]);
 
   // Node menu → Rename: select the node, then focus its name field in the
   // inspector once that renders.
@@ -2703,6 +2792,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           setSelectedEdgeId(null);
         },
         groupActions: groupMenuActionsForNode(menu.nodeId),
+        arrange: targets.length > 1 ? arrangeHandlers(targets) : undefined,
         remove: () => deleteNodes(targets),
       });
     }
@@ -2728,6 +2818,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         count: ids.length,
         group: () => groupNodes(ids),
         extract: () => requestExtract(ids, `${graphName} part`),
+        arrange: arrangeHandlers(ids),
         copy: () => copySelection(ids),
         cut: () => {
           if (copySelection(ids)) deleteNodes(ids);
@@ -2938,6 +3029,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           viewportCenterRef={viewportCenterRef}
           compact={workbench.isCompact}
           snapToGrid={snapToGrid}
+          gridSize={gridSize}
           tool={workbench.isCompact ? "select" : tool}
           spaceHeld={spaceHeld}
           onDropItem={(item: PaletteDrop, position) => addNode(item.nodeType, position, item.config)}
@@ -2960,6 +3052,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 onSnapToGridChange={(value) => {
                   setSnapToGrid(value);
                   writeStored(SNAP_TO_GRID_STORAGE_KEY, String(value));
+                }}
+                gridSize={gridSize}
+                onGridSizeChange={(value) => {
+                  setGridSize(value);
+                  writeStored(GRID_SIZE_STORAGE_KEY, String(value));
                 }}
                 onFitView={() => setFitViewNonce((v) => v + 1)}
                 reducedMotion={workbench.reducedMotion}

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { NODE_TYPES } from "./NodePalette";
 import {
   NODE_TYPE_GROUPS,
+  arrangeActions,
   edgeMenuActions,
   nodeMenuActions,
   paneMenuActions,
@@ -110,15 +111,49 @@ describe("canvas menu actions", () => {
     expect(insertNode).toHaveBeenCalledWith("transform");
   });
 
-  it("selection: counts what it deletes", () => {
+  it("selection: counts what it deletes, and arranges", () => {
+    const align = vi.fn();
+    const distribute = vi.fn();
     const actions = selectionMenuActions({
       count: 3,
       group: vi.fn(),
       extract: vi.fn(),
+      arrange: { count: 3, align, distribute },
       copy: vi.fn(),
       cut: vi.fn(),
       remove: vi.fn(),
     });
     expect(actions.at(-1)!.label).toBe("Delete 3 nodes");
+    const alignMenu = actions.find((action) => action.label === "Align")!.submenu!;
+    expect(alignMenu.map((item) => [item.label, item.shortcut])).toEqual([
+      ["Left", "⌥A"],
+      ["Horizontal center", "⌥H"],
+      ["Right", "⌥D"],
+      ["Top", "⌥W"],
+      ["Vertical middle", "⌥V"],
+      ["Bottom", "⌥S"],
+    ]);
+    alignMenu[3].onClick();
+    expect(align).toHaveBeenCalledWith("top");
+    actions.find((action) => action.label === "Distribute")!.submenu![1].onClick();
+    expect(distribute).toHaveBeenCalledWith("vertical");
+  });
+
+  it("distribute needs three nodes; the node menu arranges only with a multi-selection", () => {
+    expect(arrangeActions({ count: 2, align: vi.fn(), distribute: vi.fn() }).map((action) => action.disabled)).toEqual([false, true]);
+    const base = {
+      edit: vi.fn(),
+      runFromHere: vi.fn(),
+      rename: vi.fn(),
+      duplicate: vi.fn(),
+      copy: vi.fn(),
+      cut: vi.fn(),
+      showDependencies: vi.fn(),
+      focusOnNode: vi.fn(),
+      groupActions: [],
+      remove: vi.fn(),
+    };
+    expect(nodeMenuActions(base).some((action) => action.label === "Align")).toBe(false);
+    expect(nodeMenuActions({ ...base, arrange: { count: 2, align: vi.fn(), distribute: vi.fn() } }).some((action) => action.label === "Align")).toBe(true);
   });
 });
