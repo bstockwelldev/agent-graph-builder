@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Diagnostic, GraphEdge } from "@bstockwelldev/agent-graph-sdk";
 
@@ -88,5 +88,22 @@ describe("EdgeInspector transform", () => {
   it("hides the Ports section when both ends have a single port", () => {
     renderEdge();
     expect(screen.queryByText("Ports")).toBeNull();
+  });
+});
+
+// canvas-workbench-ergonomics-plan.md §7: the display-only edge style.
+describe("EdgeInspector style", () => {
+  it("sets the line pattern, weight and color into extensions.style, and Default clears them", () => {
+    const onChange = renderEdge({ ...EDGE, extensions: { keep: 1 } });
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Line pattern" })).getByRole("radio", { name: "Dashed" }));
+    expect(onChange).toHaveBeenLastCalledWith({ extensions: { keep: 1, style: { pattern: "dashed" } } });
+  });
+
+  it("shows the stored style and resets one property to Default", () => {
+    const onChange = renderEdge({ ...EDGE, extensions: { style: { weight: "thick", color: "teal" } } });
+    const weight = screen.getByRole("radiogroup", { name: "Line weight" });
+    expect(weight.querySelector('[aria-checked="true"]')!.textContent).toBe("Thick");
+    fireEvent.click(within(weight).getByRole("radio", { name: "Default" }));
+    expect(onChange).toHaveBeenLastCalledWith({ extensions: { style: { color: "teal" } } });
   });
 });

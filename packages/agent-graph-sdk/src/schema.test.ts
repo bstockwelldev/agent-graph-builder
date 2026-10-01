@@ -164,6 +164,31 @@ describe("documentFingerprint / semanticFingerprint", () => {
     edges: [],
   });
 
+  // canvas-workbench-ergonomics-plan.md §7 -- same fixture and digests as
+  // backend/tests/test_fingerprint.py's test_edge_style_is_display_only.
+  const styledEdgeFixture = (extensions?: Record<string, unknown>): GraphDefinition => ({
+    id: "fixture_graph",
+    name: "Fixture",
+    entry_node_id: "n1",
+    orientation: "auto",
+    nodes: [
+      { id: "n1", type: "input", position: { x: 1, y: 2 }, config: { a: 1 } },
+      { id: "n2", type: "output", position: { x: 3, y: 4 }, config: {} },
+    ],
+    edges: [{ id: "e1", source: "n1", target: "n2", kind: "sequence", condition: null, ...(extensions ? { extensions } : {}) }],
+  });
+
+  it("treats an edge's extensions.style as display-only, matching the backend", () => {
+    const styled = styledEdgeFixture({ style: { pattern: "dashed", weight: "thick" } });
+    expect(documentFingerprint(styled)).toBe("df071e3d49c3a85936356c1b485a1f56c3f6abdd1e0b9e1e5cdd7f420d89ebf4");
+    expect(semanticFingerprint(styled)).toBe("45b9fda75f3b5ec744b1d8bf24880adb42a3e62a93046e1bbc160b9c4dc66639");
+    expect(semanticFingerprint(styledEdgeFixture())).toBe(semanticFingerprint(styled));
+    const kept = styledEdgeFixture({ style: { pattern: "dotted" }, keep: 1 });
+    expect(semanticFingerprint(kept)).toBe("d9ec62d297e2fc2eb8573260a5dcc8622ca7e64c63f6ff750b60766ee7980ff6");
+    // Restyling still marks the canvas dirty: the style is saved.
+    expect(fingerprintGraph(styled)).not.toBe(fingerprintGraph(styledEdgeFixture({ style: { pattern: "dotted" } })));
+  });
+
   it("treats a node's extensions.label as display-only, matching the backend", () => {
     const named = labeledFixture({ label: "Named" });
     expect(documentFingerprint(named)).toBe("617d974406f8ad35fc3004dc233d1cd7d66cfb2b5e49219cb1b61381ce74813f");

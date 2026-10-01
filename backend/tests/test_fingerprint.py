@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.demo_graph import build_demo_graph
-from app.fingerprint import document_fingerprint, semantic_fingerprint
+from app.fingerprint import diff_graphs, document_fingerprint, semantic_fingerprint
 from app.models import GraphDefinition, GraphEdge, GraphNode, NodePosition, NodeType
 
 
@@ -173,3 +173,42 @@ def test_non_display_extensions_stay_semantic() -> None:
         semantic_fingerprint(kept)
         == "adf41fe788bda907e980bbbb35ad6a5f7503b835ba65eed0c872ed5da107febc"
     )
+
+
+def _styled_edge_fixture(extensions: dict | None) -> GraphDefinition:
+    return GraphDefinition(
+        id="fixture_graph",
+        name="Fixture",
+        entry_node_id="n1",
+        nodes=[
+            GraphNode(id="n1", type=NodeType.INPUT, position=NodePosition(x=1, y=2), config={"a": 1}),
+            GraphNode(id="n2", type=NodeType.OUTPUT, position=NodePosition(x=3, y=4), config={}),
+        ],
+        edges=[GraphEdge(id="e1", source="n1", target="n2", extensions=extensions)],
+        orientation="auto",
+    )
+
+
+def test_edge_style_is_display_only() -> None:
+    """canvas-workbench-ergonomics-plan.md §7: an edge's extensions.style is
+    cosmetic. Restyling changes the document fingerprint (it is saved) but
+    not the semantic one; other edge extension keys stay semantic. The SDK's
+    schema.test.ts checks the same digests."""
+    plain = _styled_edge_fixture(None)
+    styled = _styled_edge_fixture({"style": {"pattern": "dashed", "weight": "thick"}})
+    restyled = _styled_edge_fixture({"style": {"pattern": "dotted"}})
+    assert semantic_fingerprint(styled) == semantic_fingerprint(plain) == semantic_fingerprint(restyled)
+    assert document_fingerprint(styled) != document_fingerprint(restyled)
+    kept = _styled_edge_fixture({"style": {"pattern": "dotted"}, "keep": 1})
+    assert semantic_fingerprint(kept) == semantic_fingerprint(_styled_edge_fixture({"keep": 1}))
+    assert semantic_fingerprint(kept) != semantic_fingerprint(plain)
+    assert document_fingerprint(styled) == "df071e3d49c3a85936356c1b485a1f56c3f6abdd1e0b9e1e5cdd7f420d89ebf4"
+    assert semantic_fingerprint(styled) == "45b9fda75f3b5ec744b1d8bf24880adb42a3e62a93046e1bbc160b9c4dc66639"
+    assert semantic_fingerprint(kept) == "d9ec62d297e2fc2eb8573260a5dcc8622ca7e64c63f6ff750b60766ee7980ff6"
+
+
+def test_edge_style_leaves_release_diffs_alone() -> None:
+    plain = _styled_edge_fixture(None)
+    styled = _styled_edge_fixture({"style": {"color": "blue"}})
+    diff = diff_graphs(plain, styled)
+    assert diff["edge_changes"] == []

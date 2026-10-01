@@ -108,6 +108,8 @@ export function fingerprintGraph(graph: GraphDefinition): string {
       kind: edge.kind,
       condition: edge.condition ?? null,
       contract: edgeContractFingerprint(edge),
+      // Edge styles (extensions.style) are display-only but saved.
+      extensions: edge.extensions ?? null,
     })),
     // Wave 7b: groups are display-only but saved, so they mark the graph dirty.
     groups: graph.groups ?? null,
@@ -220,10 +222,17 @@ function documentPayload(graph: GraphDefinition) {
 // 4): renaming a node is cosmetic, like moving it.
 // Wave 7d adds `layer` (the node's architecture layer).
 const DISPLAY_ONLY_EXTENSION_KEYS = new Set(["label", "layer"]);
+// Display-only keys inside an edge's `extensions` bag -- mirrors the
+// backend's _DISPLAY_ONLY_EDGE_EXTENSION_KEYS. `style` is the edge's line
+// pattern, weight and color: restyling is cosmetic.
+const DISPLAY_ONLY_EDGE_EXTENSION_KEYS = new Set(["style"]);
 
-function semanticExtensions(extensions: Record<string, unknown> | null): Record<string, unknown> | null {
+function semanticExtensions(
+  extensions: Record<string, unknown> | null,
+  displayOnly: ReadonlySet<string> = DISPLAY_ONLY_EXTENSION_KEYS,
+): Record<string, unknown> | null {
   if (!extensions) return extensions;
-  const kept = Object.fromEntries(Object.entries(extensions).filter(([key]) => !DISPLAY_ONLY_EXTENSION_KEYS.has(key)));
+  const kept = Object.fromEntries(Object.entries(extensions).filter(([key]) => !displayOnly.has(key)));
   // Python's `kept or None`: a bag holding only display keys is absent.
   return Object.keys(kept).length > 0 ? kept : null;
 }
@@ -240,6 +249,10 @@ function semanticPayload(graph: GraphDefinition) {
     nodes: payload.nodes.map(({ position: _position, ...rest }) => ({
       ...rest,
       extensions: semanticExtensions(rest.extensions as Record<string, unknown> | null),
+    })),
+    edges: payload.edges.map((edge) => ({
+      ...edge,
+      extensions: semanticExtensions(edge.extensions as Record<string, unknown> | null, DISPLAY_ONLY_EDGE_EXTENSION_KEYS),
     })),
   };
 }

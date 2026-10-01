@@ -122,12 +122,18 @@ def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
 # packages/agent-graph-sdk/src/schema.ts's DISPLAY_ONLY_EXTENSION_KEYS.
 # Wave 7d adds `layer` (the node's architecture layer, graph.layers).
 _DISPLAY_ONLY_EXTENSION_KEYS = frozenset({"label", "layer"})
+# Display-only keys inside an edge's `extensions` bag: `style` (line pattern,
+# weight, color; canvas-workbench-ergonomics-plan.md §7). Restyling an edge
+# is cosmetic. Mirrored by the SDK's DISPLAY_ONLY_EDGE_EXTENSION_KEYS.
+_DISPLAY_ONLY_EDGE_EXTENSION_KEYS = frozenset({"style"})
 
 
-def _semantic_extensions(extensions: dict[str, Any] | None) -> dict[str, Any] | None:
+def _semantic_extensions(
+    extensions: dict[str, Any] | None, display_only: frozenset[str] = _DISPLAY_ONLY_EXTENSION_KEYS
+) -> dict[str, Any] | None:
     if not extensions:
         return extensions
-    kept = {k: v for k, v in extensions.items() if k not in _DISPLAY_ONLY_EXTENSION_KEYS}
+    kept = {k: v for k, v in extensions.items() if k not in display_only}
     # An extensions bag holding only display keys is semantically absent —
     # so naming a previously-unnamed node leaves the fingerprint unchanged.
     return kept or None
@@ -144,6 +150,8 @@ def _semantic_payload(graph: GraphDefinition) -> dict[str, Any]:
     for node in payload["nodes"]:
         node.pop("position", None)
         node["extensions"] = _semantic_extensions(node["extensions"])
+    for edge in payload["edges"]:
+        edge["extensions"] = _semantic_extensions(edge["extensions"], _DISPLAY_ONLY_EDGE_EXTENSION_KEYS)
     return payload
 
 

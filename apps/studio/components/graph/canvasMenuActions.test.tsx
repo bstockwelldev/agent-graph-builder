@@ -89,11 +89,14 @@ describe("canvas menu actions", () => {
   it("edge: kind submenu checks the current kind; insert node splices a type", () => {
     const setKind = vi.fn();
     const insertNode = vi.fn();
+    const setStyle = vi.fn();
     const actions = edgeMenuActions({
       kind: "conditional",
       edit: vi.fn(),
       setKind,
       insertNode,
+      style: { pattern: "dotted" },
+      setStyle,
       remove: vi.fn(),
     });
     const kinds = actions.find((action) => action.label === "Kind")!.submenu!;
@@ -109,6 +112,14 @@ describe("canvas menu actions", () => {
       .submenu!.find((item) => item.label === "Transform node")!
       .onClick();
     expect(insertNode).toHaveBeenCalledWith("transform");
+
+    // Style ▸: pattern, weight and color, checked by the current style; reset clears it.
+    const style = actions.find((action) => action.label === "Style")!.submenu!;
+    expect(style.find((item) => item.label === "Dotted")!.checked).toBe(true);
+    style.find((item) => item.label === "Thick")!.onClick();
+    expect(setStyle).toHaveBeenLastCalledWith({ pattern: "dotted", weight: "thick" });
+    style.find((item) => item.label === "Reset style")!.onClick();
+    expect(setStyle).toHaveBeenLastCalledWith({});
   });
 
   it("selection: counts what it deletes, and arranges", () => {

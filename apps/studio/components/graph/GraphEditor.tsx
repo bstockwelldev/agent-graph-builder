@@ -82,6 +82,7 @@ import {
   type GridSize,
 } from "@/lib/canvasAlign";
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
+import { readEdgeStyle, withEdgeStyle } from "@/lib/edgeStyle";
 import { ALIGN_OPTIONS, DISTRIBUTE_OPTIONS } from "./canvasMenuActions";
 import { CanvasToolbar } from "./CanvasToolbar";
 import type { PaletteDrop } from "./paletteSections";
@@ -376,7 +377,7 @@ function toFlowEdge(e: GraphEdge): Edge {
     source: e.source,
     target: e.target,
     style: { stroke, strokeWidth },
-    data: { kind: e.kind, condition: e.condition ?? null, contract: edgeContract(e) },
+    data: { kind: e.kind, condition: e.condition ?? null, contract: edgeContract(e), ...(e.extensions ? { extensions: e.extensions } : {}) },
   };
 }
 
@@ -827,6 +828,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           kind: (e.data?.kind as EdgeKind) ?? "sequence",
           condition: (e.data?.condition as string | null) ?? null,
           ...(e.data?.contract as EdgeContract | undefined),
+          // Display-only extensions (edge style, §7) round-trip with the edge.
+          ...(e.data?.extensions ? { extensions: e.data.extensions as Record<string, unknown> } : {}),
         })),
         // Wave 7b: members deleted since grouping are dropped on the way out.
         ...(() => {
@@ -1072,9 +1075,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             }
             contract = Object.keys(next).length > 0 ? (next as EdgeContract) : undefined;
           }
+          const extensions = patch.extensions !== undefined ? patch.extensions : edge.data?.extensions;
           return {
             ...edge,
-            data: { ...edge.data, kind, condition, contract },
+            data: { ...edge.data, kind, condition, contract, extensions },
             style: { stroke, strokeWidth },
           };
         }),
@@ -2743,6 +2747,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         condition: (selectedEdge.data?.condition as string | null) ?? null,
         ...(selectedEdge.data?.contract as EdgeContract | undefined),
         transform: (selectedEdge.data?.contract as EdgeContract | undefined)?.transform ?? null,
+        extensions: (selectedEdge.data?.extensions as Record<string, unknown> | undefined) ?? null,
       }}
       sourcePorts={edgeEndPorts(nodes, selectedEdge.source, "output")}
       targetPorts={edgeEndPorts(nodes, selectedEdge.target, "input")}
@@ -2808,6 +2813,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           if (kind === "conditional") canvasActions.selectEdge(menu.edgeId);
         },
         insertNode: (type) => spliceNodeIntoEdge(menu.edgeId, type),
+        style: readEdgeStyle(edge?.data?.extensions as Record<string, unknown> | undefined),
+        setStyle: (style) =>
+          patchEdgeById(menu.edgeId, { extensions: withEdgeStyle(edge?.data?.extensions as Record<string, unknown> | undefined, style) }),
         remove: deleteSelection,
       });
     }

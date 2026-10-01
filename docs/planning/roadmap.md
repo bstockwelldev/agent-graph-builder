@@ -260,6 +260,10 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Align and Distribute:** in the selection and node menus, with Figma's ⌥ shortcuts.
 - **Grid:** auto-arrange, adds, pastes and splices land on the grid, and the grid size (12, 24 or 48) is set in the status bar.
 
+**Slice G shipped 2026-10-01:**
+- **Edge styles:** pattern, weight and color from the edge inspector or the edge menu's Style ▸. Display-only: fingerprints and release diffs ignore them.
+- **Defaults by kind:** Always solid, Match text dashed, Fallback dotted, shown in the status bar legend.
+
 ---
 
 ## Scoring rationale (requested items)

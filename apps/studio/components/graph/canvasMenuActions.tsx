@@ -1,6 +1,7 @@
 import type { EdgeKind, NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import type { AlignMode, DistributeAxis } from "@/lib/canvasAlign";
+import { EDGE_COLORS, EDGE_PATTERNS, EDGE_WEIGHTS, type EdgeStyle } from "@/lib/edgeStyle";
 import type { NodeContextMenuAction } from "./NodeContextMenu";
 
 // The canvas right-click menus, one builder per target
@@ -137,6 +138,9 @@ export type EdgeMenuHandlers = {
   setKind: (kind: EdgeKind) => void;
   insertNode: (type: NodeType) => void;
   remove: () => void;
+  /** The edge's display-only style (§7) and how to change it. */
+  style: EdgeStyle;
+  setStyle: (style: EdgeStyle) => void;
 };
 
 export function edgeMenuActions(
@@ -153,6 +157,11 @@ export function edgeMenuActions(
         checked: handlers.kind === kind,
         onClick: () => handlers.setKind(kind),
       })),
+    },
+    {
+      label: "Style",
+      onClick: () => undefined,
+      submenu: edgeStyleItems(handlers.style, handlers.setStyle),
     },
     {
       label: "Insert node",
@@ -248,6 +257,39 @@ export function arrangeActions(handlers: ArrangeHandlers): NodeContextMenuAction
         shortcut: `⌥⇧${option.key}`,
         onClick: () => handlers.distribute(option.axis),
       })),
+    },
+  ];
+}
+
+/** Pattern, weight and color as checkable items, plus a reset (§7). */
+export function edgeStyleItems(style: EdgeStyle, setStyle: (style: EdgeStyle) => void): NodeContextMenuAction[] {
+  return [
+    ...EDGE_PATTERNS.map((option, index) => ({
+      label: option.label,
+      checked: style.pattern === option.value,
+      groupLabel: index === 0 ? "Pattern" : undefined,
+      onClick: () => setStyle({ ...style, pattern: option.value }),
+    })),
+    ...EDGE_WEIGHTS.map((option, index) => ({
+      label: option.label,
+      checked: style.weight === option.value,
+      separatorBefore: index === 0,
+      groupLabel: index === 0 ? "Weight" : undefined,
+      onClick: () => setStyle({ ...style, weight: option.value }),
+    })),
+    ...EDGE_COLORS.map((option, index) => ({
+      label: option.label,
+      checked: style.color === option.value,
+      separatorBefore: index === 0,
+      groupLabel: index === 0 ? "Color" : undefined,
+      icon: <span aria-hidden="true" style={{ display: "inline-block", width: 10, height: 10, borderRadius: 999, background: option.stroke }} />,
+      onClick: () => setStyle({ ...style, color: option.value }),
+    })),
+    {
+      label: "Reset style",
+      separatorBefore: true,
+      disabled: Object.keys(style).length === 0,
+      onClick: () => setStyle({}),
     },
   ];
 }

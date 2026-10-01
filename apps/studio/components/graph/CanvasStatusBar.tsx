@@ -7,6 +7,7 @@ import { EDGE_KIND_TAXONOMY } from "@/content/taxonomy";
 import type { GraphStructure } from "@/lib/graphAuthoring";
 import { severityCounts, useConsoleLog } from "@/lib/consoleLog";
 import { GRID_SIZES, type GridSize } from "@/lib/canvasAlign";
+import { DEFAULT_PATTERN, dashArray } from "@/lib/edgeStyle";
 import { consoleCountsLabel } from "./CanvasConsoleDock";
 import {
   color,
@@ -279,7 +280,19 @@ function EdgeKindsButton() {
           style={legendStyle}
         >
           {EDGE_KINDS.map((kind) => (
-            <div key={kind}>
+            <div key={kind} style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              {/* The kind's default line (§7): solid, dashed, dotted. */}
+              <svg width="28" height="8" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <line
+                  x1="0"
+                  y1="4"
+                  x2="28"
+                  y2="4"
+                  stroke={text.muted}
+                  strokeWidth={1.5}
+                  strokeDasharray={dashArray(DEFAULT_PATTERN[kind], 1.5)}
+                />
+              </svg>
               <strong>{EDGE_KIND_TAXONOMY[kind].title}</strong>
               <span style={{ color: text.muted }}>
                 {" "}
