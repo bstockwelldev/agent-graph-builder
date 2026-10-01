@@ -54,7 +54,8 @@ test("the Datasets page renames a dataset, opens it in the routing lab, and dele
   await page.getByRole("button", { name: `Delete ${renamed}` }).click();
   await page.getByRole("dialog", { name: "Delete dataset" }).getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("button", { name: `Edit dataset ${renamed}` })).toHaveCount(0);
-  expect((await request.get(`${API_URL}/api/datasets/${id}`)).status()).toBe(404);
+  // The card leaves the list before the DELETE request settles.
+  await expect.poll(async () => (await request.get(`${API_URL}/api/datasets/${id}`)).status()).toBe(404);
 });
 
 test("a dataset saved from the routing lab records its graph", async ({ page, api, request }) => {

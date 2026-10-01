@@ -242,6 +242,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
   - Insert node ▸, which splices a node into an edge
 - **Not yet:** edge styles, align/distribute, and sharing the registry with the command palette.
 
+**Slice D shipped 2026-10-01:**
+- **Dock:** the console is now a terminal-style dock at the bottom of the canvas, collapsed to a status-bar segment that shows counts. It opens from there or with ⌘⇧J, and it resizes, remembering its height.
+- **Filtering:** it filters by level, source and text, and exports NDJSON.
+- **User actions:** saves, imports, config applies, validation, approvals and publishes are now logged, alongside run events.
+
 ---
 
 ## Scoring rationale (requested items)
