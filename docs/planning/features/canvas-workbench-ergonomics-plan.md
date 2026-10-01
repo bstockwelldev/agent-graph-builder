@@ -233,6 +233,28 @@ edge legend overlaps both the minimap and the controls.
 - Clicking a node id focuses the node.
 - An e2e test covers the dock at 1180px.
 
+**Shipped 2026-10-01 (slice D):**
+- **Dock** (`CanvasConsoleDock.tsx`): it sits between the pane and the status bar, inside the canvas column.
+  - Collapsed by default.
+  - A status-bar segment shows the counts ("2 errors · 5 warnings") and toggles the dock.
+  - On desktop, ⌘⇧J and the command palette's Console toggle the dock instead of the floating panel. Compact layouts keep the floating panel.
+  - Drag-resizable (or ArrowUp/ArrowDown on the handle), 120px to 60% of the viewport. The height is stored in `agb.console.height`.
+- **Terminal look:** monospace rows of time, level tag (INFO/WARN/ERR in graph-token colors), source and message.
+  - The list follows the tail, pausing while you're scrolled up (a **Jump to latest** button resumes it).
+  - New errors are announced politely. Other entries aren't.
+- **Controls:**
+  - level toggles with counts, a source filter, and a text filter over message, source, node and run
+  - Clear, and Export as NDJSON (the filtered entries)
+  - a node id link focuses the node, or opens its graph when the entry is from another graph
+- **What gets logged** (`lib/consoleLog.ts`):
+  - **System events:** run started (provider, model, agent), blocked or settled, plus the node events. Fast runs that finish before streaming starts now log their node events too.
+  - **Validation:** the header Validate result.
+  - **Your actions:** save (and fork, or failure), import, applying the graph config, approving or rejecting a paused step, publishing a release.
+- **Retention:** a 2,000-entry ring buffer (was 300).
+- **Tests:**
+  - `e2e/specs/console-dock.spec.ts`, at 1180px.
+  - `CanvasConsoleDock.test.tsx`, `consoleLog.test.ts`, and a status-bar toggle test.
+
 ## 7. Edge styles (dotted, dashed, solid, thick, …)
 
 **Current behavior.**
@@ -399,7 +421,7 @@ As a result:
 | A | Quick bug fixes — **shipped 2026-09-30** | §3 hover fix; §10 focus mode as a local neighborhood with edges dimmed; §0 build SHA | P1 | High, small |
 | B | Layout at laptop widths — **shipped 2026-09-30** | §8 canvas-width breakpoints, header priority collapse, status bar; §2 minimap sizing and overlay slots | P1 | High |
 | C | Native context menu — **shipped 2026-10-01** | §3 Base UI menu engine and the actions registry | P1 | High |
-| D | Console dock | §6, on the status bar from B | P2 | Medium |
+| D | Console dock — **shipped 2026-10-01** | §6, on the status bar from B | P2 | Medium |
 | E | Tool bar and palette | §4 tools, registry-driven palette, drag-and-drop | P2 | High |
 | F | Snapping and alignment | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
 | G | Edge styles | §7, with the fingerprint change | P2 | Medium |

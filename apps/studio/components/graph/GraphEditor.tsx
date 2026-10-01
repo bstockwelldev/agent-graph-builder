@@ -42,7 +42,7 @@ import {
 
 import { client, waitForRun } from "@/lib/api-client";
 import { blockingDiagnostics, errorDetail, isReadOnlyGraphError } from "@/lib/apiErrors";
-import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry } from "@/lib/consoleLog";
+import { consumeCanvasFocus, describePlatformEvent, logConsoleEntry, requestCanvasFocus } from "@/lib/consoleLog";
 import { exportGraphJson, importGraphJson } from "@/lib/graphJsonPortability";
 import {
   applyCompileIssueToEdge,
@@ -71,6 +71,7 @@ import { isEdgeDimmed, neighborhoodNodeIds } from "@/lib/focusMode";
 import { clampFocusHops, headerDensity, inspectorOverlaysCanvas } from "@/lib/canvasLayout";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { CanvasStatusBar } from "./CanvasStatusBar";
+import { CanvasConsoleDock } from "./CanvasConsoleDock";
 import {
   boundTitleFor,
   computeFocusNodeIds,
@@ -842,7 +843,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // RunPanel doesn't change the graph, so the debounced effect above (keyed
   // on semanticFingerprint) won't re-fire on its own; this re-validates
   // immediately so the waived diagnostic's blocking:false takes effect.
-  const refreshDiagnostics = useCallback(() => {
+  const validateDiagnostics = useCallback(() => {
     try {
       const graph = buildGraphDefinition();
       // The `return` makes this awaitable for Phase 10 Slice C's Validate
@@ -850,7 +851,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       // for this function's original fire-and-forget callers.
       return client
         .graphs.validate(graph)
-        .then((result) => setDiagnostics(result.diagnostics))
+        .then((result) => {
+          setDiagnostics(result.diagnostics);
+          return result.diagnostics;
+        })
         .catch((err: unknown) => {
           console.error("Diagnostics refresh failed:", err);
           logConsoleEntry({
@@ -864,6 +868,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       // Graph not ready yet.
     }
   }, [buildGraphDefinition, graphId]);
+  // Fire-and-forget callers (RunPanel, policy edits) don't need the result.
+  const refreshDiagnostics = useCallback(() => validateDiagnostics()?.then(() => undefined), [validateDiagnostics]);
 
   // Wave 7a (STO-610): the health score follows diagnostics (which already
   // re-validate on every semantic edit), debounced so typing doesn't spam it.
@@ -1127,16 +1133,24 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       try {
         await client.graphs.update(graph);
         setSavedFingerprint(fingerprintGraph(graph));
+        logConsoleEntry({ severity: "info", source: "Save", message: `Saved "${graph.name}"`, graphId: graph.id });
       } catch (err: unknown) {
         if (!isReadOnlyGraphError(err)) throw err;
         await forkToCopy(graph);
+        logConsoleEntry({ severity: "info", source: "Save", message: `"${graph.name}" is read-only: saved as a copy`, graphId: graph.id });
       }
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : String(err));
+      logConsoleEntry({
+        severity: "error",
+        source: "Save",
+        message: `Save failed: ${err instanceof Error ? err.message : String(err)}`,
+        graphId: graphId ?? undefined,
+      });
     } finally {
       setSaving(false);
     }
-  }, [buildGraphDefinition, dirty, dismissForkNotice, forkToCopy]);
+  }, [buildGraphDefinition, dirty, dismissForkNotice, forkToCopy, graphId]);
 
   // Raw JSON/YAML config editor, Phase 2 - graph scope
   // (studio-config-editor-and-console-plan.md §6): copy-paste/backup/
@@ -1186,14 +1200,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       const result = importGraphJson(text);
       if (!result.ok) {
         setSaveError(result.error);
+        logConsoleEntry({ severity: "error", source: "Import", message: `Import of ${file.name} failed: ${result.error}`, graphId: graphId ?? undefined });
         return;
       }
       if (dirty && !window.confirm("Importing will replace the current unsaved graph. Continue?")) {
         return;
       }
       applyGraphDefinition(result.graph);
+      logConsoleEntry({
+        severity: "info",
+        source: "Import",
+        message: `Imported ${file.name}: ${result.graph.nodes.length} nodes, ${result.graph.edges.length} edges (unsaved)`,
+        graphId: graphId ?? undefined,
+      });
     },
-    [applyGraphDefinition, dirty],
+    [applyGraphDefinition, dirty, graphId],
   );
 
   const paintInspectionPath = useCallback(
@@ -1454,6 +1475,28 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     async (summary: RunSummary) => {
       const streamedEvents: PlatformEvent[] = [];
       const applyTerminalSummary = async (latest: RunSummary) => {
+        // A run that settled before its stream did (stub runs often do)
+        // still gets its node events in the console.
+        if (streamedEvents.length === 0) {
+          for (const event of latest.events ?? []) {
+            const described = describePlatformEvent(event);
+            logConsoleEntry({
+              severity: described.severity,
+              source: "Run",
+              message: described.message,
+              graphId: graphId ?? undefined,
+              nodeId: event.node_id ?? undefined,
+              runId: event.run_id,
+            });
+          }
+        }
+        logConsoleEntry({
+          severity: latest.status === "failed" ? "error" : latest.status === "paused" ? "warning" : "info",
+          source: "Run",
+          message: `Run ${latest.status}`,
+          graphId: graphId ?? undefined,
+          runId: latest.run_id,
+        });
         setRunSummary(latest);
         setInspectionRouteDecisions(normalizeRouteDecisions(latest.route_decisions ?? []));
         const cacheable = { ...latest, events: latest.events?.length ? latest.events : streamedEvents };
@@ -1610,6 +1653,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         const compileResult = await client.graphs.compile(graph.id);
         setDiagnostics(compileResult.diagnostics);
         if (!compileResult.ok) {
+          const blocking = compileResult.diagnostics.filter((diagnostic) => diagnostic.blocking).length;
+          logConsoleEntry({
+            severity: "warning",
+            source: "Run",
+            message: `Run blocked by ${blocking} issue${blocking === 1 ? "" : "s"}`,
+            graphId: graph.id,
+          });
           focusDiagnostics();
           return;
         }
@@ -1640,6 +1690,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         }
         setRunSummary(summary);
         setInspectionRunId(summary.run_id);
+        logConsoleEntry({
+          severity: "info",
+          source: "Run",
+          message: `Run started on ${provider}${model ? ` · ${model}` : ""}${nodeOutputs ? " (from a node)" : agent ? ` (agent ${agent.name})` : ""}`,
+          graphId: graph.id,
+          runId: summary.run_id,
+        });
         await followRun(summary);
       } finally {
         setCompiling(false);
@@ -1653,11 +1710,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const handleResume = useCallback(
     async (request: { approve: boolean; reason?: string; values?: Record<string, unknown> }) => {
       if (!runSummary || runSummary.status !== "paused") return;
+      logConsoleEntry({
+        severity: "info",
+        source: "Run",
+        message: request.approve ? "Approved the paused step" : `Rejected the paused step${request.reason ? `: ${request.reason}` : ""}`,
+        graphId: graphId ?? undefined,
+        runId: runSummary.run_id,
+      });
       const resumed = await client.runs.resume(runSummary.run_id, request);
       setRunSummary(resumed);
       await followRun(resumed);
     },
-    [followRun, runSummary],
+    [followRun, graphId, runSummary],
   );
 
   // The paused gate's checkpoint as the approver sees it. Older runs lack
@@ -1714,9 +1778,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   );
 
   const handleHeaderValidate = useCallback(() => {
-    void refreshDiagnostics();
+    void validateDiagnostics()?.then((found) => {
+      if (!found) return;
+      const errors = found.filter((diagnostic) => diagnostic.severity === "error").length;
+      const warnings = found.filter((diagnostic) => diagnostic.severity === "warning").length;
+      logConsoleEntry({
+        severity: errors > 0 ? "error" : warnings > 0 ? "warning" : "info",
+        source: "Validation",
+        message: errors + warnings === 0 ? "Validated: no issues" : `Validated: ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}`,
+        graphId: graphId ?? undefined,
+      });
+    });
     openRunSection("run-diagnostics");
-  }, [openRunSection, refreshDiagnostics]);
+  }, [graphId, openRunSection, validateDiagnostics]);
 
   const deleteNodeById = useCallback(
     (nodeId: string) => {
@@ -2301,6 +2375,29 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     void handleSave();
   }, [saveRequested, handleSave]);
 
+  // The console dock (canvas-workbench-ergonomics-plan.md §6): collapsed to
+  // the status bar by default. On desktop ⌘⇧J and the command palette's
+  // "Console" (the global console panel) toggle this dock instead; compact
+  // layouts keep the floating panel.
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  useEffect(() => {
+    if (workbench.activePanel !== "console" || workbench.isCompact) return;
+    workbench.close();
+    setConsoleOpen((open) => !open);
+  }, [workbench]);
+  const focusConsoleEntry = useCallback(
+    (entry: { graphId?: string; nodeId?: string }) => {
+      if (!entry.nodeId || !entry.graphId) return;
+      if (entry.graphId === graphId) {
+        focusNode(entry.nodeId);
+        return;
+      }
+      requestCanvasFocus(entry.graphId, entry.nodeId);
+      router.push(`/graphs/${encodeURIComponent(entry.graphId)}`);
+    },
+    [focusNode, graphId, router],
+  );
+
   // Escape leaves focus mode (§10), unless a menu, the find bar or a
   // pending connection was what it closed.
   useEffect(() => {
@@ -2717,7 +2814,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           fitInsets={fitInsets}
           footer={
             workbench.isCompact || !graphId ? null : (
+              <>
+              {consoleOpen && <CanvasConsoleDock graphId={graphId} onFocusNode={focusConsoleEntry} onClose={() => setConsoleOpen(false)} />}
               <CanvasStatusBar
+                consoleOpen={consoleOpen}
+                onToggleConsole={() => setConsoleOpen((open) => !open)}
                 structure={structure}
                 focusMode={focusMode}
                 focusHops={focusHops}
@@ -2732,6 +2833,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 onFitView={() => setFitViewNonce((v) => v + 1)}
                 reducedMotion={workbench.reducedMotion}
               />
+              </>
             )
           }
           liveAnnouncement={liveAnnouncement}
@@ -3062,7 +3164,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="graphConfig" side="right" mode="docked-reserve" dockedClassName="w-[32rem] border-l overflow-y-auto">
-        <GraphConfigPanel graph={buildGraphDefinition()} onApply={applyGraphDefinition} onClose={workbench.close} />
+        <GraphConfigPanel
+          graph={buildGraphDefinition()}
+          onApply={(graph) => {
+            applyGraphDefinition(graph);
+            logConsoleEntry({ severity: "info", source: "Config", message: "Applied the graph config (unsaved)", graphId: graphId ?? undefined });
+          }}
+          onClose={workbench.close}
+        />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="health" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
         <HealthPanel

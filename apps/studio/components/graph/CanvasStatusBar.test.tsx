@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { __resetConsoleLogForTests, logConsoleEntry } from "@/lib/consoleLog";
 import { ReactFlowProvider } from "@xyflow/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -95,5 +96,16 @@ describe("CanvasStatusBar", () => {
       screen.getByRole("button", { name: "Exit focus mode (Esc)" }),
     );
     expect(props.onExitFocus).toHaveBeenCalled();
+  });
+
+  it("shows console counts and toggles the console dock", () => {
+    __resetConsoleLogForTests();
+    const onToggleConsole = vi.fn();
+    renderBar({ onToggleConsole, consoleOpen: false });
+    const toggle = screen.getByRole("button", { name: "Console: no errors or warnings" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    act(() => logConsoleEntry({ severity: "error", source: "Run", message: "node.failed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Console: 1 error" }));
+    expect(onToggleConsole).toHaveBeenCalled();
   });
 });

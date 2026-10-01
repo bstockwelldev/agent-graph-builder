@@ -26,7 +26,9 @@ export interface ConsoleEntry {
   runId?: string;
 }
 
-const MAX_ENTRIES = 300;
+// A ring buffer: the oldest entries drop off past this (canvas console
+// dock, canvas-workbench-ergonomics-plan.md §6).
+export const MAX_ENTRIES = 2000;
 
 let entries: ConsoleEntry[] = [];
 let lastViewedAt = 0;
@@ -54,6 +56,12 @@ export function logConsoleEntry(entry: Omit<ConsoleEntry, "id" | "timestamp"> & 
   notify();
 }
 
+/** Empties the log (the console dock's Clear). */
+export function clearConsole(): void {
+  entries = [];
+  notify();
+}
+
 export function markConsoleViewed(): void {
   lastViewedAt = Date.now();
   notify();
@@ -67,6 +75,9 @@ function subscribe(listener: () => void): () => void {
 function getEntriesSnapshot(): ConsoleEntry[] {
   return entries;
 }
+
+/** The current entries, oldest first, outside React. */
+export const getConsoleEntries = getEntriesSnapshot;
 
 // Must be a stable reference: a fresh `[]` per call made React warn "The
 // result of getServerSnapshot should be cached to avoid an infinite loop"
@@ -142,6 +153,43 @@ export function describePlatformEvent(event: {
     return { severity: "warning", message: `${event.event_type}${suffix}` };
   }
   return { severity: "info", message: `${event.event_type}${suffix}` };
+}
+
+// --- Console dock helpers (canvas-workbench-ergonomics-plan.md §6) -------
+
+export type ConsoleFilter = {
+  severities: ReadonlySet<ConsoleSeverity>;
+  /** Exact source, or null for every source. */
+  source: string | null;
+  /** Case-insensitive match on the message, source, node id or run id. */
+  query: string;
+};
+
+export function filterConsoleEntries(all: ConsoleEntry[], filter: ConsoleFilter): ConsoleEntry[] {
+  const query = filter.query.trim().toLowerCase();
+  return all.filter(
+    (entry) =>
+      filter.severities.has(entry.severity) &&
+      (filter.source === null || entry.source === filter.source) &&
+      (!query ||
+        [entry.message, entry.source, entry.nodeId ?? "", entry.runId ?? ""].some((field) => field.toLowerCase().includes(query))),
+  );
+}
+
+/** The distinct sources, in first-seen order (for the source filter). */
+export function consoleSources(all: ConsoleEntry[]): string[] {
+  return [...new Set(all.map((entry) => entry.source))];
+}
+
+export function severityCounts(all: ConsoleEntry[]): Record<ConsoleSeverity, number> {
+  const counts: Record<ConsoleSeverity, number> = { info: 0, warning: 0, error: 0 };
+  for (const entry of all) counts[entry.severity] += 1;
+  return counts;
+}
+
+/** One JSON object per line, oldest first (the dock's Export). */
+export function toNdjson(all: ConsoleEntry[]): string {
+  return all.map((entry) => JSON.stringify(entry)).join("\n") + (all.length > 0 ? "\n" : "");
 }
 
 /** Test-only reset for this module's singleton state. */

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { logConsoleEntry } from "@/lib/consoleLog";
 import type {
   Diagnostic,
   GraphDefinition,
@@ -105,6 +106,12 @@ export function ReleasesPanel({
         author: author.trim() || undefined,
       });
       setLastResult(result);
+      logConsoleEntry({
+        severity: "info",
+        source: "Release",
+        message: result.created ? `Published release ${shortId(result.release.id)}` : "Publish: the latest release already matches the draft",
+        graphId,
+      });
       if (result.created) setReleaseNotes("");
       await refreshReleases();
     } catch (err) {

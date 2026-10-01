@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useReactFlow, useStore } from "@xyflow/react";
-import { Focus, Grid3x3, Info, Network, X } from "lucide-react";
+import { Focus, Grid3x3, Info, Network, SquareTerminal, X } from "lucide-react";
 import { EDGE_KIND_TAXONOMY } from "@/content/taxonomy";
 import type { GraphStructure } from "@/lib/graphAuthoring";
+import { severityCounts, useConsoleLog } from "@/lib/consoleLog";
+import { consoleCountsLabel } from "./CanvasConsoleDock";
 import {
   color,
   radius,
@@ -54,6 +56,8 @@ export function CanvasStatusBar({
   onSnapToGridChange,
   onFitView,
   reducedMotion = false,
+  consoleOpen = false,
+  onToggleConsole,
 }: {
   structure: GraphStructure;
   focusMode: boolean;
@@ -66,9 +70,14 @@ export function CanvasStatusBar({
   onSnapToGridChange: (snap: boolean) => void;
   onFitView: () => void;
   reducedMotion?: boolean;
+  /** The console dock (§6): its toggle shows the error/warning counts. */
+  consoleOpen?: boolean;
+  onToggleConsole?: () => void;
 }) {
   const reactFlow = useReactFlow();
   const zoom = useStore((state) => Math.round(state.transform[2] * 100));
+  // Read here, not in GraphEditor, so a log entry re-renders only this bar.
+  const consoleCounts = severityCounts(useConsoleLog());
 
   return (
     <div role="group" aria-label="Canvas status" style={barStyle}>
@@ -83,6 +92,25 @@ export function CanvasStatusBar({
           <span>{structureLabel(structure)}</span>
         </span>
       </HoverTooltip>
+
+      {onToggleConsole && (
+        <HoverTooltip content={consoleOpen ? "Hide console  ⌘⇧J" : "Show console  ⌘⇧J"} placement="top">
+          <button
+            type="button"
+            className="agb-focus-ring agb-hoverable"
+            aria-expanded={consoleOpen}
+            aria-label={`Console: ${consoleCountsLabel(consoleCounts) === "Console" ? "no errors or warnings" : consoleCountsLabel(consoleCounts)}`}
+            onClick={onToggleConsole}
+            style={{
+              ...toggleStyle(consoleOpen),
+              color: consoleCounts.error > 0 ? color.error[500] : consoleCounts.warning > 0 ? color.warning[500] : consoleOpen ? color.primary[500] : text.muted,
+            }}
+          >
+            <SquareTerminal size={12} aria-hidden="true" />
+            {consoleCountsLabel(consoleCounts)}
+          </button>
+        </HoverTooltip>
+      )}
 
       {focusMode && (
         <div
