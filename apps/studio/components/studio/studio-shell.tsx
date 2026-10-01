@@ -181,7 +181,7 @@ export function StudioShell({
           <ResourceBrowserPanel kind={kind} />
         </WorkbenchDrawer>
       ))}
-      <WorkbenchDrawer panelId="analytics" side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
+      <WorkbenchDrawer panelId="analytics" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
         <AnalyticsPanel />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="console" side="right" dockedClassName="right-4 bottom-4 flex h-96 w-[32rem] flex-col overflow-hidden">

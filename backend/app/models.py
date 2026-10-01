@@ -166,6 +166,33 @@ class GraphLayer(BaseModel):
     color: str | None = None
 
 
+class GraphNoteReply(BaseModel):
+    """A comment on a sticky note (canvas-workbench-ergonomics follow-up)."""
+
+    id: str
+    text: str
+    author: str | None = None
+    created_at: str | None = None
+
+
+class GraphNote(BaseModel):
+    """A sticky note on the canvas, for reference and for comments between
+    authors. Display-only, like groups and layers: never part of the
+    semantic fingerprint or a release diff, never read by the compiler or
+    the runtime. `node_id` pins it to a node (it is dropped with the node)."""
+
+    id: str
+    text: str = ""
+    position: NodePosition = NodePosition(x=0, y=0)
+    color: str | None = None
+    author: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    node_id: str | None = None
+    resolved: bool = False
+    replies: list[GraphNoteReply] = Field(default_factory=list)
+
+
 class GraphDefinition(BaseModel):
     id: str
     name: str
@@ -176,6 +203,7 @@ class GraphDefinition(BaseModel):
     updated_at: str | None = None
     groups: list[GraphGroup] | None = None
     layers: list[GraphLayer] | None = None
+    notes: list[GraphNote] | None = None
 
 
 class CatalogBinding(BaseModel):

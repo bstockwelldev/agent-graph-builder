@@ -126,6 +126,28 @@ export const graphLayerSchema = z.object({
   color: z.string().nullish(),
 });
 
+/** A comment on a sticky note. */
+export const graphNoteReplySchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  author: z.string().nullish(),
+  created_at: z.string().nullish(),
+});
+
+/** A display-only sticky note on the canvas, with its comment thread; `node_id` pins it to a node. */
+export const graphNoteSchema = z.object({
+  id: z.string(),
+  text: z.string().optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+  color: z.string().nullish(),
+  author: z.string().nullish(),
+  created_at: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  node_id: z.string().nullish(),
+  resolved: z.boolean().optional(),
+  replies: z.array(graphNoteReplySchema).optional(),
+});
+
 export const graphDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -136,6 +158,7 @@ export const graphDefinitionSchema = z.object({
   updated_at: z.string().nullish(),
   groups: z.array(graphGroupSchema).nullish(),
   layers: z.array(graphLayerSchema).nullish(),
+  notes: z.array(graphNoteSchema).nullish(),
 });
 
 // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596):

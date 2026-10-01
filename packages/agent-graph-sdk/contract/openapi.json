@@ -1094,6 +1094,20 @@
             "title": "Nodes",
             "type": "array"
           },
+          "notes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GraphNote"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
           "orientation": {
             "default": "auto",
             "enum": [
@@ -1419,6 +1433,140 @@
           "type"
         ],
         "title": "GraphNode",
+        "type": "object"
+      },
+      "GraphNote": {
+        "description": "A sticky note on the canvas, for reference and for comments between\nauthors. Display-only, like groups and layers: never part of the\nsemantic fingerprint or a release diff, never read by the compiler or\nthe runtime. `node_id` pins it to a node (it is dropped with the node).",
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          },
+          "position": {
+            "$ref": "#/components/schemas/NodePosition",
+            "default": {
+              "x": 0.0,
+              "y": 0.0
+            }
+          },
+          "replies": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNoteReply"
+            },
+            "title": "Replies",
+            "type": "array"
+          },
+          "resolved": {
+            "default": false,
+            "title": "Resolved",
+            "type": "boolean"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "GraphNote",
+        "type": "object"
+      },
+      "GraphNoteReply": {
+        "description": "A comment on a sticky note (canvas-workbench-ergonomics follow-up).",
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "GraphNoteReply",
         "type": "object"
       },
       "GraphPort": {

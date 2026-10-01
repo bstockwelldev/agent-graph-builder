@@ -71,6 +71,12 @@ def _transform_payload(transform: Any) -> dict[str, Any]:
     }
 
 
+def _note_payload(note: Any) -> dict[str, Any]:
+    payload = note.model_dump(mode="json")
+    payload["position"] = {"x": _num(note.position.x), "y": _num(note.position.y)}
+    return payload
+
+
 def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
     return {
         "id": graph.id,
@@ -112,6 +118,8 @@ def _document_payload(graph: GraphDefinition) -> dict[str, Any]:
         **({"groups": [g.model_dump(mode="json") for g in graph.groups]} if graph.groups else {}),
         # Wave 7d (STO-622): same rule for architecture layers.
         **({"layers": [la.model_dump(mode="json") for la in graph.layers]} if graph.layers else {}),
+        # Sticky notes: same rule.
+        **({"notes": [_note_payload(note) for note in graph.notes]} if graph.notes else {}),
     }
 
 
@@ -147,6 +155,7 @@ def _semantic_payload(graph: GraphDefinition) -> dict[str, Any]:
     payload = _document_payload(graph)
     payload.pop("groups", None)  # Wave 7b: visual groups are display-only.
     payload.pop("layers", None)  # Wave 7d: so are architecture layers.
+    payload.pop("notes", None)  # So are sticky notes and their comments.
     for node in payload["nodes"]:
         node.pop("position", None)
         node["extensions"] = _semantic_extensions(node["extensions"])

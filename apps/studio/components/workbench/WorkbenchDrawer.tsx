@@ -5,6 +5,8 @@ import { ShellDrawer } from "@/components/graph/ShellDrawer";
 import { usePresence } from "@/hooks/usePresence";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, type WorkbenchPanelId } from "./panels";
+import { PANEL_ARTICLE } from "@/lib/kb";
+import { PanelHelpButton } from "./PanelHelpButton";
 
 /** Matches the `.agb-drawer-*[data-closing]` / `.agb-pop[data-closing]` exit animations in globals.css. */
 const EXIT_MS = 160;
@@ -18,6 +20,7 @@ export function WorkbenchDrawer({
   mode = "floating",
   className = "",
   dockedClassName = "",
+  titleBar = false,
   children,
 }: {
   panelId: WorkbenchPanelId;
@@ -47,6 +50,8 @@ export function WorkbenchDrawer({
   /** Extra classes for the docked (desktop) container only. */
   dockedClassName?: string;
   className?: string;
+  /** For panels without a header of their own: a title row with the panel's help button. */
+  titleBar?: boolean;
   children: ReactNode;
 }) {
   const workbench = useWorkbench();
@@ -65,6 +70,7 @@ export function WorkbenchDrawer({
         onClose={workbench.close}
         side={side}
         title={WORKBENCH_PANELS[panelId].title}
+        helpArticleId={PANEL_ARTICLE[panelId]}
         drawerId={`workbench-drawer-${panelId}`}
         reducedMotion={workbench.reducedMotion}
         panelWidth={workbench.drawerPanelWidth}
@@ -88,6 +94,7 @@ export function WorkbenchDrawer({
         data-workbench-panel=""
         className={`glass-panel ghost-border h-full min-h-0 shrink-0 ${side === "left" ? "agb-panel-in-left" : "agb-panel-in"} ${className} ${dockedClassName}`}
       >
+        {titleBar && <PanelTitleBar panelId={panelId} />}
         {children}
       </div>
     );
@@ -110,7 +117,17 @@ export function WorkbenchDrawer({
       className={`agb-pop glass-panel ghost-border fixed z-30 rounded-2xl border shadow-2xl ${className} ${dockedClassName}`}
       style={{ background: "var(--popover)", transformOrigin: side === "left" ? "top left" : "top right" }}
     >
+      {titleBar && <PanelTitleBar panelId={panelId} />}
       {children}
+    </div>
+  );
+}
+
+function PanelTitleBar({ panelId }: { panelId: WorkbenchPanelId }) {
+  return (
+    <div className="ghost-border bg-popover/80 sticky top-0 z-10 flex items-center gap-2 border-b py-1.5 pr-2 pl-3 backdrop-blur">
+      <h2 className="flex-1 text-sm font-semibold">{WORKBENCH_PANELS[panelId].title}</h2>
+      <PanelHelpButton articleId={PANEL_ARTICLE[panelId]} />
     </div>
   );
 }

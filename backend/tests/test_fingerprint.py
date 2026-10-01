@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.demo_graph import build_demo_graph
 from app.fingerprint import diff_graphs, document_fingerprint, semantic_fingerprint
-from app.models import GraphDefinition, GraphEdge, GraphNode, NodePosition, NodeType
+from app.models import GraphDefinition, GraphEdge, GraphNode, NodePosition, NodeType, GraphNote, GraphNoteReply
 
 
 def test_fingerprints_are_deterministic() -> None:
@@ -212,3 +212,36 @@ def test_edge_style_leaves_release_diffs_alone() -> None:
     styled = _styled_edge_fixture({"style": {"color": "blue"}})
     diff = diff_graphs(plain, styled)
     assert diff["edge_changes"] == []
+
+
+def _noted_fixture() -> GraphDefinition:
+    graph = _styled_edge_fixture(None)
+    return graph.model_copy(
+        update={
+            "notes": [
+                GraphNote(
+                    id="note1",
+                    text="Check the fallback",
+                    position=NodePosition(x=10, y=20.5),
+                    color="yellow",
+                    author="Ada",
+                    created_at="2026-10-01T00:00:00Z",
+                    node_id="n1",
+                    replies=[GraphNoteReply(id="r1", text="Done", author="Bob", created_at="2026-10-01T01:00:00Z")],
+                )
+            ]
+        }
+    )
+
+
+def test_sticky_notes_are_display_only() -> None:
+    """Sticky notes and their comments are saved (document fingerprint) but
+    never semantic, and a note-less graph's digests are unchanged. The SDK's
+    schema.test.ts pins the same digests."""
+    plain = _styled_edge_fixture(None)
+    noted = _noted_fixture()
+    assert semantic_fingerprint(noted) == semantic_fingerprint(plain)
+    assert document_fingerprint(noted) != document_fingerprint(plain)
+    assert document_fingerprint(plain.model_copy(update={"notes": []})) == document_fingerprint(plain)
+    assert document_fingerprint(noted) == "8f8f8bd80ec0d47a9c14c4e15edc124db8b11f5b3051c4cc299815f6e89d9f34"
+    assert diff_graphs(plain, noted)["node_changes"] == []

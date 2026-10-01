@@ -10,7 +10,9 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandShortcut,
 } from "@/components/ui/command";
+import type { CanvasCommand, CanvasCommandGroup } from "@/components/graph/canvasCommands";
 import { studioNavGroups } from "@/components/studio/studio-nav";
 import { client } from "@/lib/api-client";
 import { KB_ARTICLES } from "@/lib/kb";
@@ -19,6 +21,8 @@ import { useConsoleUnreadCounts } from "@/lib/consoleLog";
 import { useWorkbench } from "./WorkbenchProvider";
 import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels";
 
+const CANVAS_GROUPS: CanvasCommandGroup[] = ["Arrange", "Canvas", "View", "Graph"];
+
 // Studio-consolidation Phase 8 part B — the discoverability layer for the
 // workbench: every route and every app-wide panel (part A) is one Cmd/Ctrl+K
 // away, on every page, not just wherever a button for it happens to live.
@@ -26,6 +30,9 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
   const [search, setSearch] = useState("");
+  // Canvas actions (align, views, save, ...) from the open graph, read once
+  // per opening so they reflect the selection at that moment.
+  const [canvasCommands, setCanvasCommands] = useState<CanvasCommand[]>([]);
   const router = useRouter();
   const workbench = useWorkbench();
   // Studio-config-editor-and-console-plan.md §7's "HUD toggle shows a
@@ -49,6 +56,12 @@ export function CommandPalette() {
   // sessions" reflects anything created/renamed since it was last open
   // (studio-consolidation Phase 8 part E — this group was deferred out of
   // part B because chat sessions didn't exist yet at that point).
+  useEffect(() => {
+    if (!open) return;
+    setCanvasCommands(workbench.graphContext?.getCanvasCommands?.() ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -75,6 +88,12 @@ export function CommandPalette() {
     workbench.open(id);
   };
 
+  const runCanvasCommand = (command: CanvasCommand) => {
+    setOpen(false);
+    setSearch("");
+    command.run();
+  };
+
   const openArticle = (articleId: string) => {
     setOpen(false);
     workbench.open("help", { articleId });
@@ -97,9 +116,32 @@ export function CommandPalette() {
         if (!next) setSearch("");
       }}
     >
-      <CommandInput placeholder="Jump to a page, open a panel, or search help…" value={search} onValueChange={setSearch} />
+      <CommandInput placeholder="Jump to a page, run a canvas action, or search help…" value={search} onValueChange={setSearch} />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
+        {CANVAS_GROUPS.map((group) => {
+          const commands = canvasCommands.filter((command) => command.group === group);
+          if (commands.length === 0) return null;
+          return (
+            <CommandGroup key={group} heading={group}>
+              {commands.map((command) => (
+                <CommandItem
+                  key={command.id}
+                  value={`${group}: ${command.label}`}
+                  keywords={command.keywords}
+                  disabled={Boolean(command.disabledReason)}
+                  onSelect={() => runCanvasCommand(command)}
+                >
+                  <span className="flex-1">
+                    {command.label}
+                    {command.disabledReason && <span className="text-muted-foreground ml-2 text-xs">{command.disabledReason}</span>}
+                  </span>
+                  {command.shortcut && <CommandShortcut>{command.shortcut}</CommandShortcut>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          );
+        })}
         {studioNavGroups.map((group) => (
           <CommandGroup key={group.label} heading={group.label}>
             {group.items.map((item) => (

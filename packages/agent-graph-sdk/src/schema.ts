@@ -3,6 +3,7 @@ import { bytesToHex } from "@noble/hashes/utils";
 
 import { edgeKindSchema, nodeTypeSchema } from "./schemas.js";
 import type {
+  GraphNote,
   EdgeKind,
   EdgeTransform,
   GraphDefinition,
@@ -115,6 +116,8 @@ export function fingerprintGraph(graph: GraphDefinition): string {
     groups: graph.groups ?? null,
     // Wave 7d: likewise architecture layers.
     layers: graph.layers ?? null,
+    // Sticky notes and their comments: likewise.
+    notes: graph.notes ?? null,
   };
   return JSON.stringify(payload);
 }
@@ -213,6 +216,28 @@ function documentPayload(graph: GraphDefinition) {
     ...(graph.layers && graph.layers.length > 0
       ? { layers: graph.layers.map((layer) => ({ id: layer.id, label: layer.label, color: layer.color ?? null })) }
       : {}),
+    // Sticky notes: same rule, every field as the backend's model_dump writes it.
+    ...(graph.notes && graph.notes.length > 0 ? { notes: graph.notes.map(notePayload) } : {}),
+  };
+}
+
+function notePayload(note: GraphNote) {
+  return {
+    id: note.id,
+    text: note.text ?? "",
+    position: { x: note.position?.x ?? 0, y: note.position?.y ?? 0 },
+    color: note.color ?? null,
+    author: note.author ?? null,
+    created_at: note.created_at ?? null,
+    updated_at: note.updated_at ?? null,
+    node_id: note.node_id ?? null,
+    resolved: note.resolved ?? false,
+    replies: (note.replies ?? []).map((reply) => ({
+      id: reply.id,
+      text: reply.text,
+      author: reply.author ?? null,
+      created_at: reply.created_at ?? null,
+    })),
   };
 }
 
@@ -240,9 +265,11 @@ function semanticExtensions(
 function semanticPayload(graph: GraphDefinition) {
   // Wave 7b: visual groups are display-only, like positions.
   // Wave 7d: so are architecture layers.
-  const { groups: _groups, layers: _layers, ...payload } = documentPayload(graph) as ReturnType<typeof documentPayload> & {
+  // Sticky notes and their comments too.
+  const { groups: _groups, layers: _layers, notes: _notes, ...payload } = documentPayload(graph) as ReturnType<typeof documentPayload> & {
     groups?: unknown;
     layers?: unknown;
+    notes?: unknown;
   };
   return {
     ...payload,

@@ -54,6 +54,8 @@ import type {
   effectivePolicyRuleSchema,
   graphGroupSchema,
   graphLayerSchema,
+  graphNoteSchema,
+  graphNoteReplySchema,
   graphHealthSchema,
   healthFactorSchema,
   nodeImpactSchema,
@@ -264,3 +266,5 @@ export type GraphSummary = z.infer<typeof graphSummarySchema>;
 export type GraphUsedBy = z.infer<typeof graphUsedBySchema>;
 export type GraphGroup = z.infer<typeof graphGroupSchema>;
 export type GraphLayer = z.infer<typeof graphLayerSchema>;
+export type GraphNote = z.infer<typeof graphNoteSchema>;
+export type GraphNoteReply = z.infer<typeof graphNoteReplySchema>;

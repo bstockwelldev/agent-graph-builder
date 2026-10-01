@@ -1,4 +1,5 @@
 import { useEffect, type CSSProperties } from "react";
+import { HelpLink } from "./HelpLink";
 import { color, radius, shadow, shell, spacing, text, typeScale } from "@/lib/graph-theme";
 import type { CoachStep } from "@/lib/graphAuthoring";
 import { Button } from "./ui/Button";
@@ -70,6 +71,9 @@ export function EmptyGraphCoach({
           </li>
         ))}
       </ul>
+      <div style={{ marginTop: spacing[2], pointerEvents: "auto" }}>
+        <HelpLink articleId="getting-started">New here? Build and run your first graph</HelpLink>
+      </div>
       <Button
         variant="secondary"
         onClick={onDismiss}
