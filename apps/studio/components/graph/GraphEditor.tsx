@@ -3470,16 +3470,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           }}
         />
       </WorkbenchDrawer>
-      <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+      <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} getDraftGraph={buildGraphDefinition} />
       </WorkbenchDrawer>
-      <WorkbenchDrawer panelId="routingLab" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+      <WorkbenchDrawer panelId="routingLab" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <RoutingLabPanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
-      <WorkbenchDrawer panelId="knowledge" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+      <WorkbenchDrawer panelId="knowledge" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <KnowledgePanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
-      <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+      <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="graphConfig" side="right" mode="docked-reserve" dockedClassName="w-[32rem] border-l overflow-y-auto">
@@ -3492,7 +3492,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onClose={workbench.close}
         />
       </WorkbenchDrawer>
-      <WorkbenchDrawer panelId="health" side="right" mode="docked-reserve" dockedClassName="w-96 border-l overflow-y-auto">
+      <WorkbenchDrawer panelId="health" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <HealthPanel
           layout="rail"
           health={health}

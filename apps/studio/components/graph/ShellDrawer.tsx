@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { HelpCircle, X } from "lucide-react";
+import { useOpenHelp } from "@/components/workbench/WorkbenchProvider";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { IconButton } from "./ui/IconButton";
@@ -25,6 +26,7 @@ export function ShellDrawer({
   title,
   drawerId,
   panelWidth = "min(340px, 92vw)",
+  helpArticleId,
   children,
 }: {
   open: boolean;
@@ -37,8 +39,11 @@ export function ShellDrawer({
   /** Unused: motion is CSS-driven and honours prefers-reduced-motion globally. */
   reducedMotion?: boolean;
   panelWidth?: string;
+  /** The panel's knowledge-base article: adds a help button beside Close. */
+  helpArticleId?: string;
   children: ReactNode;
 }) {
+  const openHelp = useOpenHelp();
   const panelRef = useRef<HTMLElement>(null);
   useFocusTrap(panelRef, open && !closing);
 
@@ -84,6 +89,9 @@ export function ShellDrawer({
       >
         <div className="ghost-border flex shrink-0 items-center justify-between border-b py-2 pr-2 pl-3">
           <div className="text-sm font-semibold">{title}</div>
+          {helpArticleId && openHelp && (
+            <IconButton label={`Help: ${title}`} icon={<HelpCircle size={16} />} onClick={() => openHelp(helpArticleId)} tooltipPlacement="bottom" style={{ marginLeft: "auto" }} />
+          )}
           <IconButton label={`Close ${title}`} icon={<X size={16} />} onClick={onClose} data-autofocus="" tooltipPlacement="bottom" />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>

@@ -997,6 +997,9 @@ export function RunPanel({
             (!runSummary ? (
               <EmptyState icon={<Play size={18} color={color.primary[500]} />}>
                 No run yet. Fill in the {inputVariables.length > 1 ? "inputs" : "input"} and press <b style={{ color: text.primary }}>Run</b> (⌘↵).
+                <span style={{ display: "block", marginTop: spacing[2] }}>
+                  <HelpLink articleId="runs-and-traces">How runs and traces work</HelpLink>
+                </span>
               </EmptyState>
             ) : (
               <Group>

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { HelpLink } from "./HelpLink";
 import { useCallback, useEffect, useState } from "react";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import type {
@@ -263,6 +264,9 @@ export function ReleasesPanel({
           ) : releases.length === 0 ? (
             <div role="status" style={emptyTextStyle}>
               No releases yet. Publish one above to create an immutable, fingerprinted snapshot.
+              <div style={{ marginTop: 4 }}>
+                <HelpLink articleId="releases">{"What's a release?"}</HelpLink>
+              </div>
             </div>
           ) : (
             releases.map((entry) => (
