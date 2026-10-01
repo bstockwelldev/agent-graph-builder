@@ -41,20 +41,39 @@ export function minimapLayout(paneWidth: number): MinimapLayout {
   return { mode: "collapsed" };
 }
 
+/** The palette folded to its icon strip (§4). */
+export const PALETTE_STRIP_WIDTH = 56;
+
 /**
- * Whether the docked inspector would squeeze the canvas column below
- * CANVAS_MIN_WIDTH, in which case it floats over the canvas instead.
+ * How the docked palette and inspector share the graph surface so the
+ * canvas column keeps CANVAS_MIN_WIDTH (§8): first the palette folds to its
+ * icon strip, then the inspector floats over the canvas instead of docking.
  * Measured from the whole graph surface (not the canvas column), so
  * switching modes can't feed back into the measurement.
  */
-export function inspectorOverlaysCanvas(
-  surfaceWidth: number,
-  paletteDocked: boolean,
-): boolean {
-  if (surfaceWidth <= 0) return false;
-  const reserved =
-    DOCKED_INSPECTOR_WIDTH + (paletteDocked ? DOCKED_PALETTE_WIDTH : 0);
-  return surfaceWidth - reserved < CANVAS_MIN_WIDTH;
+export function dockLayout({
+  surfaceWidth,
+  paletteOpen,
+  paletteCollapsed,
+  inspectorOpen,
+}: {
+  surfaceWidth: number;
+  paletteOpen: boolean;
+  /** The viewer's own choice (the palette's collapse button). */
+  paletteCollapsed: boolean;
+  inspectorOpen: boolean;
+}): { paletteCollapsed: boolean; inspectorOverlay: boolean } {
+  if (surfaceWidth <= 0) return { paletteCollapsed, inspectorOverlay: false };
+  const inspector = inspectorOpen ? DOCKED_INSPECTOR_WIDTH : 0;
+  const fits = (palette: number) => surfaceWidth - palette - inspector >= CANVAS_MIN_WIDTH;
+  if (!paletteOpen) return { paletteCollapsed, inspectorOverlay: inspectorOpen && !fits(0) };
+  if (!paletteCollapsed && fits(DOCKED_PALETTE_WIDTH)) return { paletteCollapsed: false, inspectorOverlay: false };
+  return { paletteCollapsed: true, inspectorOverlay: inspectorOpen && !fits(PALETTE_STRIP_WIDTH) };
+}
+
+/** Whether the docked inspector would squeeze the canvas column below CANVAS_MIN_WIDTH. */
+export function inspectorOverlaysCanvas(surfaceWidth: number, paletteDocked: boolean): boolean {
+  return dockLayout({ surfaceWidth, paletteOpen: paletteDocked, paletteCollapsed: false, inspectorOpen: true }).inspectorOverlay;
 }
 
 /** Focus mode's neighborhood size: 1-3 hops. */

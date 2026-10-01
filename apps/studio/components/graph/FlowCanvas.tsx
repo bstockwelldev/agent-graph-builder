@@ -6,6 +6,7 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   useReactFlow,
   type Connection,
   type Edge,
@@ -36,6 +37,8 @@ import type { GraphNodeData } from "./nodes/GraphNodeView";
 import type { GraphOrientation } from "@bstockwelldev/agent-graph-sdk";
 import { canFitView } from "@/lib/canvasFit";
 import { minimapLayout } from "@/lib/canvasLayout";
+import { flowInteraction, zoomAround, type CanvasTool } from "@/lib/canvasTools";
+import { PALETTE_DRAG_TYPE, type PaletteDrop } from "./paletteSections";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { Button } from "./ui/Button";
 import { LabeledEdge } from "./edges/LabeledEdge";
@@ -111,12 +114,17 @@ type FlowCanvasProps = {
   compact?: boolean;
   /** Snap dragged nodes to the 24px grid (the status bar's Snap toggle). */
   snapToGrid?: boolean;
+  /** The active pointer tool (§4) and whether Space is held (a temporary Hand). */
+  tool?: CanvasTool;
+  spaceHeld?: boolean;
+  /** A palette item dropped on the canvas, at its flow-space point. */
+  onDropItem?: (item: PaletteDrop, flowPosition: { x: number; y: number }) => void;
   /** Rendered below the pane, inside the ReactFlowProvider (the status bar). */
   footer?: ReactNode;
   /** Pixels of the pane covered by floating chrome (the graph header on
    * top; the mobile action bar at the bottom). Fit-to-view keeps the graph
    * clear of them instead of centering it underneath. */
-  fitInsets?: { top: number; bottom: number };
+  fitInsets?: { top: number; bottom: number; /** The tool bar's strip on the left. */ left?: number };
 };
 
 function FlowCanvasInner({
@@ -157,6 +165,9 @@ function FlowCanvasInner({
   viewportCenterRef,
   compact = false,
   snapToGrid = true,
+  tool = "select",
+  spaceHeld = false,
+  onDropItem,
   fitInsets,
 }: FlowCanvasProps) {
   const reactFlow = useReactFlow();
@@ -185,12 +196,15 @@ function FlowCanvasInner({
 
   const insetTop = fitInsets?.top;
   const insetBottom = fitInsets?.bottom;
+  const insetLeft = fitInsets?.left;
   const fitPadding = useMemo(
     () =>
       insetTop === undefined || insetBottom === undefined
         ? FIT_VIEW_PADDING
-        : { top: `${insetTop}px` as const, bottom: `${insetBottom}px` as const, x: "6%" as const },
-    [insetTop, insetBottom],
+        : insetLeft
+          ? { top: `${insetTop}px` as const, bottom: `${insetBottom}px` as const, left: `${insetLeft}px` as const, right: "6%" as const }
+          : { top: `${insetTop}px` as const, bottom: `${insetBottom}px` as const, x: "6%" as const },
+    [insetTop, insetBottom, insetLeft],
   );
 
   const runFitView = useCallback(
@@ -344,8 +358,25 @@ function FlowCanvasInner({
   const DOUBLE_CLICK_WINDOW_MS = 400;
   const DOUBLE_CLICK_MAX_DRIFT_PX = 8;
 
+  const MIN_ZOOM = 0.15;
+  const MAX_ZOOM = 2;
+  const zoomAtPointer = useCallback(
+    (event: ReactMouseEvent) => {
+      const bounds = paneRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+      const next = zoomAround(reactFlow.getViewport(), point, event.altKey ? 1 / 1.5 : 1.5, { min: MIN_ZOOM, max: MAX_ZOOM });
+      void reactFlow.setViewport(next, { duration: reducedMotion ? 0 : 160 });
+    },
+    [reactFlow, reducedMotion],
+  );
+
   const handlePaneClick = useCallback(
     (event: ReactMouseEvent) => {
+      if (tool === "zoom" && !spaceHeld) {
+        zoomAtPointer(event);
+        return;
+      }
       const now = Date.now();
       const last = lastPaneClickRef.current;
       const isDoubleClick =
@@ -364,11 +395,32 @@ function FlowCanvasInner({
       lastPaneClickRef.current = { time: now, x: event.clientX, y: event.clientY };
       onPaneClick();
     },
-    [onPaneClick, onPaneDoubleClick, reactFlow],
+    [onPaneClick, onPaneDoubleClick, reactFlow, spaceHeld, tool, zoomAtPointer],
   );
+  const interaction = flowInteraction(tool, spaceHeld);
 
   return (
-    <div ref={paneRef} style={{ position: "absolute", inset: 0 }}>
+    <div
+      ref={paneRef}
+      data-canvas-tool={spaceHeld ? "hand" : tool}
+      style={{ position: "absolute", inset: 0 }}
+      onDragOver={(event) => {
+        if (!onDropItem || !event.dataTransfer.types.includes(PALETTE_DRAG_TYPE)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(event) => {
+        const raw = event.dataTransfer.getData(PALETTE_DRAG_TYPE);
+        if (!onDropItem || !raw) return;
+        event.preventDefault();
+        try {
+          const item = JSON.parse(raw) as PaletteDrop;
+          onDropItem(item, reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+        } catch {
+          // Not a palette payload.
+        }
+      }}
+    >
       <div
         aria-live="polite"
         aria-atomic="true"
@@ -402,14 +454,25 @@ function FlowCanvasInner({
         // React Flow's default minZoom (0.5) clamped fitView for graphs
         // wider than ~2x the pane (an 8-node chain), so "fit" left the ends
         // of the graph off-screen under the docked panels.
-        minZoom={0.15}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        panOnDrag={interaction.panOnDrag}
+        selectionOnDrag={interaction.selectionOnDrag}
+        selectionMode={SelectionMode.Partial}
+        nodesDraggable={interaction.nodesDraggable}
         snapToGrid={snapToGrid}
         snapGrid={[24, 24]}
         defaultEdgeOptions={{ interactionWidth: 24 }}
         nodesConnectable
         nodeTypes={nodeTypes}
         edgeTypes={EDGE_TYPES}
-        onNodeClick={(_, node) => onNodeClick(node.id)}
+        onNodeClick={(event, node) => {
+          if (tool === "zoom" && !spaceHeld) {
+            zoomAtPointer(event);
+            return;
+          }
+          onNodeClick(node.id);
+        }}
         onNodeDoubleClick={(_, node) => {
           // Double-click/double-tap a node to zoom in on just it — the one
           // canvas gesture with no existing binding (tap selects, drag

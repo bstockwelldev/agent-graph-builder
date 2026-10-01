@@ -247,6 +247,14 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Filtering:** it filters by level, source and text, and exports NDJSON.
 - **User actions:** saves, imports, config applies, validation, approvals and publishes are now logged, alongside run events.
 
+**Slice E shipped 2026-10-01:**
+- **Tool bar:** a Figma-style strip of Select (V), Hand (H, or hold Space), Marquee (M), Connect (C, click source then target) and Zoom (Z, Alt-click to zoom out). The active tool shows in the status bar.
+- **Palette:**
+  - Sections now come from one registry: nodes, library prompts, LLM profiles and tools (added as bound nodes), transforms, and saved graphs as subgraphs.
+  - One search box covers every section, and items can be dragged onto the canvas.
+  - A "New edges" kind setting sets the kind new connections get.
+  - The palette folds to an icon strip, and does so on its own before the inspector would have to float.
+
 ---
 
 ## Scoring rationale (requested items)

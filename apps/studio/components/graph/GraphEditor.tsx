@@ -68,7 +68,10 @@ import {
   type EdgeContract,
 } from "@/lib/graphAuthoring";
 import { isEdgeDimmed, neighborhoodNodeIds } from "@/lib/focusMode";
-import { clampFocusHops, headerDensity, inspectorOverlaysCanvas } from "@/lib/canvasLayout";
+import { clampFocusHops, dockLayout, headerDensity } from "@/lib/canvasLayout";
+import { toolForKey, toolLabel, type CanvasTool } from "@/lib/canvasTools";
+import { CanvasToolbar } from "./CanvasToolbar";
+import type { PaletteDrop } from "./paletteSections";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { CanvasStatusBar } from "./CanvasStatusBar";
 import { CanvasConsoleDock } from "./CanvasConsoleDock";
@@ -251,6 +254,25 @@ const CLOSE_ON_CANVAS_SELECTION_PANELS = new Set<WorkbenchPanelId | null>([
   ...INSPECTOR_EXCLUSIVE_PANELS,
 ]);
 
+// The docked palette is a tool panel on desktop: it stays open while you work
+// on the canvas (canvas-workbench-ergonomics-plan.md §4). The compact
+// drawer still gets out of the way.
+function closesOnCanvasSelection(panel: WorkbenchPanelId | null, compact: boolean): boolean {
+  return CLOSE_ON_CANVAS_SELECTION_PANELS.has(panel) && (compact || panel !== "palette");
+}
+
+const PALETTE_COLLAPSED_STORAGE_KEY = "agb.palette.collapsed";
+const DEFAULT_EDGE_KIND_STORAGE_KEY = "agb.edges.defaultKind";
+
+function readStoredEdgeKind(): EdgeKind {
+  try {
+    const value = window.localStorage.getItem(DEFAULT_EDGE_KIND_STORAGE_KEY);
+    return value === "conditional" || value === "default" ? value : "sequence";
+  } catch {
+    return "sequence";
+  }
+}
+
 const nodeTypes = {
   input: GraphNodeView,
   prompt: GraphNodeView,
@@ -377,6 +399,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // users need broad context" -- it only dims anything once a node is
   // both selected AND this is on (see the effect below).
   const [focusMode, setFocusMode] = useState(false);
+  // Pointer tools (canvas-workbench-ergonomics-plan.md §4). Holding Space is
+  // a temporary Hand; Connect remembers the clicked source until a target.
+  const [tool, setTool] = useState<CanvasTool>("select");
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [connectSource, setConnectSource] = useState<string | null>(null);
+  // The palette's "New edges" choice, and its own fold (per viewer).
+  const [defaultEdgeKind, setDefaultEdgeKind] = useState<EdgeKind>("sequence");
+  const [paletteCollapsedPref, setPaletteCollapsedPref] = useState(false);
   // Focus mode's neighborhood, 1-3 hops (the status bar's control).
   const [focusHops, setFocusHops] = useState(1);
   // Large-graph complexity, Wave 7a (STO-610): find-on-canvas matches, the
@@ -454,6 +484,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     setLayoutSpacing(readStoredSpacing());
     setShowMinimap(readStoredShowMinimap());
     setSnapToGrid(readStoredSnapToGrid());
+    setDefaultEdgeKind(readStoredEdgeKind());
+    try {
+      setPaletteCollapsedPref(window.localStorage.getItem(PALETTE_COLLAPSED_STORAGE_KEY) === "true");
+    } catch {
+      // Defaults hold.
+    }
   }, []);
   const [fitViewNonce, setFitViewNonce] = useState(0);
   const viewportCenterRef = useRef<(() => { x: number; y: number }) | null>(null);
@@ -946,10 +982,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     (connection: Connection) => {
       const sourceNode = nodes.find((node) => node.id === connection.source);
       const targetNode = nodes.find((node) => node.id === connection.target);
+      // Routers and branches, Shift-connect, and a "Match text" default all
+      // ask for the kind (and condition) first.
       const needsKindMenu =
         sourceNode?.data.nodeType === "router" ||
         sourceNode?.data.nodeType === "branch" ||
-        shiftConnectRef.current;
+        shiftConnectRef.current ||
+        defaultEdgeKind === "conditional";
 
       if (needsKindMenu) {
         setPendingConnection({
@@ -962,9 +1001,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       }
 
       recordMutation();
-      setEdges((current) => addEdge(createFlowEdge(connection, "sequence", null), current));
+      setEdges((current) => addEdge(createFlowEdge(connection, defaultEdgeKind, null), current));
     },
-    [nodes, recordMutation, setEdges],
+    [defaultEdgeKind, nodes, recordMutation, setEdges],
   );
 
   const confirmPendingConnection = useCallback(
@@ -1023,9 +1062,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [recordMutation, selectedEdgeId, selectedNodeId, setEdges, setNodes]);
 
   const addNode = useCallback(
-    (type: NodeType, position?: { x: number; y: number }) => {
+    (type: NodeType, position?: { x: number; y: number }, configOverride?: Record<string, unknown>) => {
       recordMutation();
-      const config = defaultConfig(type);
+      // A palette library item arrives pre-bound (e.g. { promptId }).
+      const config = { ...defaultConfig(type), ...configOverride };
       const id = nextId(type);
       const node: Node<GraphNodeData> = {
         id,
@@ -1039,7 +1079,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setNodes((current) => [...current, node]);
       setSelectedNodeId(id);
       setSelectedEdgeId(null);
-      if (workbench.activePanel === "palette") workbench.close();
+      if (workbench.activePanel === "palette" && workbench.isCompact) workbench.close();
     },
     [nodes, recordMutation, setNodes, workbench],
   );
@@ -2175,7 +2215,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const canvasActions = useMemo<CanvasActions>(
     () => ({
       editNode: (nodeId) => {
-        if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+        if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
         focusNode(nodeId, "configure");
       },
       runFromNode: (nodeId) => {
@@ -2193,7 +2233,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       selectEdge: (edgeId) => {
         setSelectedEdgeId(edgeId);
         setSelectedNodeId(null);
-        if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+        if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
       },
       toggleGroup,
       renameGroup,
@@ -2398,18 +2438,73 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     [focusNode, graphId, router],
   );
 
+  // Tool keys (V, H, M, C, Z) and Space-to-pan, never while typing or with
+  // a menu open. Escape drops a half-made Connect.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (contextMenu || trayMenuAnchor || pendingConnection) return;
+      if (event.key === " ") {
+        if (!event.repeat && document.activeElement?.tagName !== "BUTTON") {
+          event.preventDefault();
+          setSpaceHeld(true);
+        }
+        return;
+      }
+      if (event.key === "Escape" && connectSource) {
+        event.preventDefault();
+        setConnectSource(null);
+        return;
+      }
+      const next = event.shiftKey ? null : toolForKey(event.key);
+      if (next) {
+        setTool(next);
+        if (next !== "connect") setConnectSource(null);
+      }
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === " ") setSpaceHeld(false);
+    };
+    const release = () => setSpaceHeld(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", release);
+    };
+  }, [connectSource, contextMenu, pendingConnection, trayMenuAnchor]);
+
+  // Connect tool: the first node clicked is the source, the second the
+  // target (the same path as dragging between handles).
+  const connectClick = useCallback(
+    (nodeId: string) => {
+      if (!connectSource) {
+        setConnectSource(nodeId);
+        return;
+      }
+      if (connectSource !== nodeId) {
+        connectPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        onConnect({ source: connectSource, target: nodeId, sourceHandle: null, targetHandle: null });
+      }
+      setConnectSource(null);
+    },
+    [connectSource, onConnect],
+  );
+
   // Escape leaves focus mode (§10), unless a menu, the find bar or a
   // pending connection was what it closed.
   useEffect(() => {
     if (!focusMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented || isEditableKeyboardTarget(event.target)) return;
-      if (contextMenu || trayMenuAnchor || findOpen || pendingConnection) return;
+      if (contextMenu || trayMenuAnchor || findOpen || pendingConnection || connectSource) return;
       setFocusMode(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [focusMode, contextMenu, trayMenuAnchor, findOpen, pendingConnection]);
+  }, [focusMode, contextMenu, trayMenuAnchor, findOpen, pendingConnection, connectSource]);
 
   // Canvas-width layout (canvas-workbench-ergonomics-plan.md §8): the header
   // follows the canvas column's width, and the inspector floats over the
@@ -2428,7 +2523,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // bottom action bar).
   const fitInsetTop = (hudBottom ?? 76) + COMPACT_DOCK_TOP_GAP_PX;
   const fitInsetBottom = workbench.isCompact ? COMPACT_DOCK_BOTTOM_RESERVE_PX : 32;
-  const fitInsets = useMemo(() => ({ top: fitInsetTop, bottom: fitInsetBottom }), [fitInsetTop, fitInsetBottom]);
+  // Desktop keeps fit-to-view clear of the tool bar's strip too.
+  const fitInsetLeft = workbench.isCompact ? undefined : 72;
+  const fitInsets = useMemo(
+    () => ({ top: fitInsetTop, bottom: fitInsetBottom, left: fitInsetLeft }),
+    [fitInsetTop, fitInsetBottom, fitInsetLeft],
+  );
   const toGraphEdge = (edge: Edge): GraphEdge => ({
     id: edge.id,
     source: edge.source,
@@ -2566,7 +2666,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // when nothing was selected now lives in the header (structure chip,
   // Run ▾ recent runs), so the canvas keeps its full width by default.
   const showSelectionDock = hasSelection && !INSPECTOR_EXCLUSIVE_PANELS.has(workbench.activePanel);
-  const inspectorOverlay = inspectorOverlaysCanvas(surfaceWidth, workbench.activePanel === "palette");
+  const { paletteCollapsed, inspectorOverlay } = dockLayout({
+    surfaceWidth,
+    paletteOpen: workbench.activePanel === "palette" && !workbench.isCompact,
+    paletteCollapsed: paletteCollapsedPref,
+    inspectorOpen: showSelectionDock && !workbench.isCompact,
+  });
   const selectionDockContent = inspectorContent;
   const structure = graphStructure(nodes, edges);
 
@@ -2581,7 +2686,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         runFromHere: () => canvasActions.runFromNode(menu.nodeId),
         // Select (no pan or zoom, unlike Edit) and focus the name field.
         rename: () => {
-          if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+          if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
           setSelectedNodeId(menu.nodeId);
           setSelectedEdgeId(null);
           setRenameRequest((value) => value + 1);
@@ -2670,8 +2775,30 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           here too (GraphLibrary) — replaced by the inline
           GraphSwitcherCombobox in the HUD below, since picking a different
           graph doesn't need a whole reserved column, just a popover. */}
-      <WorkbenchDrawer panelId="palette" side="left" mode="docked-reserve" dockedClassName="w-72 border-r overflow-y-auto">
-        <NodePalette onAdd={addNode} />
+      <WorkbenchDrawer
+        panelId="palette"
+        side="left"
+        mode="docked-reserve"
+        dockedClassName={paletteCollapsed ? "w-14 border-r overflow-y-auto" : "w-72 border-r overflow-y-auto"}
+      >
+        <NodePalette
+          onAdd={(type, config) => addNode(type, undefined, config)}
+          graphId={graphId}
+          collapsed={paletteCollapsed && !workbench.isCompact}
+          onCollapsedChange={
+            workbench.isCompact
+              ? undefined
+              : (value) => {
+                  setPaletteCollapsedPref(value);
+                  writeStored(PALETTE_COLLAPSED_STORAGE_KEY, String(value));
+                }
+          }
+          defaultEdgeKind={defaultEdgeKind}
+          onDefaultEdgeKindChange={(kind) => {
+            setDefaultEdgeKind(kind);
+            writeStored(DEFAULT_EDGE_KIND_STORAGE_KEY, kind);
+          }}
+        />
       </WorkbenchDrawer>
 
       {/* Canvas column — everything that used to float directly on the
@@ -2811,12 +2938,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           viewportCenterRef={viewportCenterRef}
           compact={workbench.isCompact}
           snapToGrid={snapToGrid}
+          tool={workbench.isCompact ? "select" : tool}
+          spaceHeld={spaceHeld}
+          onDropItem={(item: PaletteDrop, position) => addNode(item.nodeType, position, item.config)}
           fitInsets={fitInsets}
           footer={
             workbench.isCompact || !graphId ? null : (
               <>
               {consoleOpen && <CanvasConsoleDock graphId={graphId} onFocusNode={focusConsoleEntry} onClose={() => setConsoleOpen(false)} />}
               <CanvasStatusBar
+                toolLabel={toolLabel(spaceHeld ? "hand" : tool)}
                 consoleOpen={consoleOpen}
                 onToggleConsole={() => setConsoleOpen((open) => !open)}
                 structure={structure}
@@ -2879,7 +3010,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 setCoachDismissed(true);
               }}
             />
-              {(findOpen || dependencyView || (focusMode && !selectedNodeId)) && (
+              {!workbench.isCompact && graphId && (
+                <CanvasToolbar
+                  tool={tool}
+                  spaceHeld={spaceHeld}
+                  top={(hudBottom ?? 76) + 12}
+                  onToolChange={(next) => {
+                    setTool(next);
+                    if (next !== "connect") setConnectSource(null);
+                  }}
+                />
+              )}
+              {(findOpen || dependencyView || (focusMode && !selectedNodeId) || connectSource) && (
                 <div style={{ position: "absolute", top: (hudBottom ?? 76) + 8 + (workbench.isCompact ? 56 : 0), left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, zIndex: 15, pointerEvents: "none" }}>
                   {findOpen && (
                     <div style={{ pointerEvents: "auto" }}>
@@ -2889,6 +3031,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                         onMatchesChange={setFindMatches}
                         onClose={() => setFindOpen(false)}
                       />
+                    </div>
+                  )}
+                  {connectSource && (
+                    <div role="status" className="glass-panel" style={dependencyChipStyle}>
+                      Connect: click a target for <span style={{ fontFamily: "ui-monospace, monospace" }}>{connectSource}</span>
+                      <button type="button" className="agb-focus-ring" onClick={() => setConnectSource(null)} style={dependencyChipButtonStyle}>
+                        Cancel
+                      </button>
                     </div>
                   )}
                   {focusMode && !selectedNodeId && !dependencyView && (
@@ -2914,16 +3064,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           }
           onNodeClick={(nodeId) => {
             if (isFrameNodeId(nodeId) || nodeId.startsWith("lane:")) return;
+            if (tool === "connect" && !spaceHeld && !workbench.isCompact) {
+              connectClick(nodeId);
+              return;
+            }
             setSelectedNodeId(nodeId);
             setSelectedEdgeId(null);
-            if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+            if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
           }}
           onEdgeClick={(edgeId) => {
             setSelectedEdgeId(edgeId);
             setSelectedNodeId(null);
-            if (CLOSE_ON_CANVAS_SELECTION_PANELS.has(workbench.activePanel)) workbench.close();
+            if (closesOnCanvasSelection(workbench.activePanel, workbench.isCompact)) workbench.close();
           }}
           onPaneClick={() => {
+            setConnectSource(null);
             setPendingConnection(null);
             setSelectedNodeId(null);
             setSelectedEdgeId(null);

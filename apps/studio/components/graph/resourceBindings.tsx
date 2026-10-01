@@ -31,7 +31,7 @@ export const RESOURCE_NOUN: Record<BindableResourceKind, string> = {
   transforms: "transform",
 };
 
-async function listBindable(kind: BindableResourceKind): Promise<BindableResource[]> {
+export async function listBindable(kind: BindableResourceKind): Promise<BindableResource[]> {
   if (kind === "prompts") {
     return (await client.prompts.list()).map((p) => ({ id: p.id, name: p.name, detail: p.body, body: p.body }));
   }

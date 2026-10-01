@@ -58,6 +58,7 @@ export function CanvasStatusBar({
   reducedMotion = false,
   consoleOpen = false,
   onToggleConsole,
+  toolLabel,
 }: {
   structure: GraphStructure;
   focusMode: boolean;
@@ -73,6 +74,8 @@ export function CanvasStatusBar({
   /** The console dock (§6): its toggle shows the error/warning counts. */
   consoleOpen?: boolean;
   onToggleConsole?: () => void;
+  /** The active pointer tool (§4), e.g. "Select". */
+  toolLabel?: string;
 }) {
   const reactFlow = useReactFlow();
   const zoom = useStore((state) => Math.round(state.transform[2] * 100));
@@ -175,6 +178,11 @@ export function CanvasStatusBar({
 
       <span style={{ flex: "1 1 auto" }} />
 
+      {toolLabel && (
+        <span data-testid="active-tool" style={{ ...itemStyle, color: text.secondary }}>
+          {toolLabel} tool
+        </span>
+      )}
       <EdgeKindsButton />
       <button
         type="button"
