@@ -116,7 +116,7 @@ export function GenuiMarkdown({ content, onKbLink }: { content: string; onKbLink
           case "heading": {
             const Tag = `h${block.level + 2}` as "h3" | "h4" | "h5";
             return (
-              <Tag key={index} style={{ margin: 0, ...HEADING[block.level], color: text.primary }}>
+              <Tag key={index} style={{ margin: 0, ...HEADING[block.level], fontWeight: 600, color: text.primary }}>
                 {renderInline(block.text, onKbLink)}
               </Tag>
             );
@@ -124,7 +124,7 @@ export function GenuiMarkdown({ content, onKbLink }: { content: string; onKbLink
           case "list": {
             const Tag = block.ordered ? "ol" : "ul";
             return (
-              <Tag key={index} style={{ margin: 0, paddingLeft: 20 }}>
+              <Tag key={index} style={{ margin: 0, paddingLeft: 20, listStyle: block.ordered ? "decimal" : "disc" }}>
                 {block.items.map((item, itemIndex) => (
                   <li key={itemIndex}>{renderInline(item, onKbLink)}</li>
                 ))}

@@ -474,6 +474,15 @@ As a result:
   - Keep articles short and task-oriented ("How do I…").
   - Link out to the SDK docs for API detail.
 
+**Shipped 2026-10-01 (slice I):**
+- **Content:** 46 short articles in `apps/studio/content/kb/*.md` (frontmatter `id`, `title`, `summary`, `category`, `keywords`, `related`; in-body `[label](kb:id)` links): guides, every node type, edge kind and resource kind, and every panel (`PANEL_ARTICLE` in `lib/kb.ts`; resource panels share their resource's article).
+- **Build:** `pnpm kb` (`apps/studio/scripts/kb-build.mjs`) validates articles and links and writes one bundle for the studio (`content/kb.generated.json`) and a copy for the API (`backend/app/kb_articles.json`), since the API deploys on its own.
+- **Consistency:** `lib/kb.test.ts` fails on a stale bundle or a node type, edge kind, panel, resource kind or diagnostic category without an article; `backend/tests/test_kb.py` checks node types and edge kinds on the API side. `content/taxonomy.ts` now derives node and edge tooltips (title, summary, opening paragraph) from the articles.
+- **Where it shows up:** "?" opens Help (search, article reader with related links, and the Shortcuts tab). Help opens on an article from the node and edge inspector headers and Learn more, the edge kind field, each Run panel issue ("What's a contract issue?"), the Run and Graph config panel headers, and the command palette ("Help: …" once you type).
+- **API and Chat:** `GET /api/kb[?q=]` and `GET /api/kb/{article_id}` (SDK `client.kb`). `chat_context.build_chat_prompt` adds up to three matching articles (plus the selected node's type) to the chat system prompt, marked as context, not instructions.
+- **Found on the way:** the command palette (⌘K) threw on open: `CommandDialog` rendered cmdk parts without the `<Command>` root. Fixed in `components/ui/command.tsx`; `e2e/specs/help.spec.ts` now opens it.
+- **Not done:** empty-state copy still lives inline; articles cover panels by mapping, and only the Run and Graph config panels (plus the inspectors) have a header help button so far.
+
 ## Suggested slices
 
 | # | Slice | Items | Priority | Impact |
@@ -486,7 +495,7 @@ As a result:
 | F | Snapping and alignment — **shipped 2026-10-01** | §9 smart guides, align/distribute, snap everywhere | P2 | Medium |
 | G | Edge styles — **shipped 2026-10-01** | §7, with the fingerprint change | P2 | Medium |
 | H | Code mode — **shipped 2026-10-01** | §5 CodeMirror, Canvas/Code/Split, Save | P2 | Medium |
-| I | Knowledge base | §11 content, Help panel, coverage test, Chat grounding | P2 | High |
+| I | Knowledge base — **shipped 2026-10-01** | §11 content, Help panel, coverage test, Chat grounding | P2 | High |
 
 Slice B's status bar is the shared seam: it gives D (console), E (active tool),
 F (snap toggle) and §1 (summary facts) a home. Do B before those.

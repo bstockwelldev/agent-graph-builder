@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from . import storage
 from .compiler import validate_graph
+from .kb import chat_grounding
 from .models import Diagnostic, GraphDefinition
 
 # Keeps a large graph/run from blowing up the prompt. Not exact -- applied
@@ -125,3 +126,22 @@ def build_chat_system_prompt(ctx: ChatContext) -> str | None:
             sections.append(f"Run {ctx.run_id}: not found (may have been deleted).")
 
     return "\n\n".join(sections)
+
+
+def _selected_node_types(ctx: ChatContext) -> list[str]:
+    if not ctx.selected_node_id:
+        return []
+    graph = ctx.graph if ctx.graph is not None else (storage.get_graph(ctx.graph_id) if ctx.graph_id else None)
+    node = next((n for n in graph.nodes if n.id == ctx.selected_node_id), None) if graph is not None else None
+    return [node.type.value] if node is not None else []
+
+
+def build_chat_prompt(ctx: ChatContext | None, message: str) -> str | None:
+    """The chat system prompt: the open graph's context (above) plus the
+    knowledge-base articles the message is about (canvas-workbench-
+    ergonomics-plan.md §11), so Chat answers "how do I..." from the same
+    Help the studio shows. None when there's neither."""
+    graph_section = build_chat_system_prompt(ctx) if ctx is not None else None
+    grounding = chat_grounding(message, _selected_node_types(ctx) if ctx is not None else [])
+    sections = [section for section in (graph_section, grounding) if section]
+    return "\n\n".join(sections) if sections else None

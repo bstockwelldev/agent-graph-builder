@@ -375,6 +375,11 @@ function mockApplyTransform(transform: TransformJson, value: unknown): unknown {
   }
 }
 
+const MOCK_KB = [
+  { id: "getting-started", title: "Build and run your first graph", summary: "Open a graph, add steps, connect them and run it", category: "concept", keywords: ["start"], related: ["transforms"], body: "A graph is a set of steps." },
+  { id: "transforms", title: "Transforms", summary: "Reshape a value between steps without code", category: "concept", keywords: ["json pointer"], related: [], body: "A transform reshapes a value." },
+];
+
 // ------------------------------------------------------------ routes
 
 type Handler = (args: { request: Request; params: Record<string, string>; store: MockStore }) => Response | Promise<Response>;
@@ -384,6 +389,17 @@ type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export function mockRoutes(): Record<string, Handler> {
   const routes: Record<string, Handler> = {
     "GET /api/health": () => HttpResponse.json({ ok: true, storage_backend: "memory" }),
+
+    // Knowledge base: a fixed two-article set (the real articles live in the studio).
+    "GET /api/kb": ({ request }) => {
+      const q = new URL(request.url).searchParams.get("q")?.toLowerCase();
+      const articles = MOCK_KB.filter((article) => !q || `${article.title} ${article.summary} ${article.keywords.join(" ")}`.toLowerCase().includes(q));
+      return HttpResponse.json(articles.map(({ body: _body, ...summary }) => summary));
+    },
+    "GET /api/kb/{article_id}": ({ params }) => {
+      const article = MOCK_KB.find((candidate) => candidate.id === params.article_id);
+      return article ? HttpResponse.json(article) : HttpResponse.json({ detail: `knowledge base article '${params.article_id}' not found` }, { status: 404 });
+    },
 
     "POST /api/transforms/preview": async ({ request, store }) => {
       const { transform, value } = (await body(request)) as { transform: TransformJson; value: unknown };
