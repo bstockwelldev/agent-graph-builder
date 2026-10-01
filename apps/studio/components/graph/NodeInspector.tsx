@@ -88,6 +88,7 @@ import { NodeImpactTab } from "./NodeImpactTab";
 import { NodeContextMenu, menuAnchorFor } from "./NodeContextMenu";
 import { NODE_TYPE_ICONS } from "./nodeTypeIcons";
 import { SubgraphConfig } from "./SubgraphConfig";
+import { HelpLink } from "./HelpLink";
 import { childRunHref } from "@/lib/subgraphs";
 
 /** Config fields each node type's Configure form renders -- the fields
@@ -288,6 +289,7 @@ export function NodeInspector({
 
   const header = (
     <PanelHeader
+      helpArticleId={NODE_TYPE_TAXONOMY[node.type]?.articleId}
       icon={
         <span
           title={taxonomy.title}
@@ -480,7 +482,12 @@ function IntentBlurb({ nodeType }: { nodeType: NodeType }) {
         {open ? "Less" : "Learn more"}
         <ChevronDown size={12} aria-hidden="true" style={{ transform: open ? "rotate(180deg)" : undefined }} />
       </button>
-      {open && <p style={{ margin: `${spacing[1]}px 0 0`, color: text.muted }}>{taxonomy.details}</p>}
+      {open && (
+        <>
+          <p style={{ margin: `${spacing[1]}px 0 ${spacing[1]}px`, color: text.muted }}>{taxonomy.details}</p>
+          <HelpLink articleId={taxonomy.articleId}>{`Read the ${taxonomy.title} article`}</HelpLink>
+        </>
+      )}
     </div>
   );
 }
@@ -1261,6 +1268,7 @@ export function EdgeInspector({
       aria-label="Edge details"
       header={
         <PanelHeader
+          helpArticleId={kindTaxonomy.articleId}
           icon={
             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: radius.lg, border: `1px solid ${border.default}`, background: surface.card, color: text.muted }}>
               <CornerDownRight size={18} aria-hidden="true" />
@@ -1290,7 +1298,7 @@ export function EdgeInspector({
       {tab === "configure" ? (
         <>
           <Group title="Routing">
-            <Field label="When to follow" hint={kindTaxonomy.details}>
+            <Field label="When to follow" hint={kindTaxonomy.details} footer={<HelpLink articleId={kindTaxonomy.articleId}>{`About ${kindTaxonomy.title} edges`}</HelpLink>}>
               <SegmentedControl aria-label="Edge kind" value={edge.kind} options={EDGE_KIND_OPTIONS} onChange={(kind) => onChange({ kind })} />
             </Field>
             {edge.kind === "conditional" && (

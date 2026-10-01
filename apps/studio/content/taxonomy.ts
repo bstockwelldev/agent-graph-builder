@@ -1,117 +1,28 @@
-import type { NodeType } from "@bstockwelldev/agent-graph-sdk";
+import { NODE_TYPES, type EdgeKind, type NodeType } from "@bstockwelldev/agent-graph-sdk";
+import { articleLead, edgeArticleId, getArticle, nodeArticleId, type KbArticle } from "@/lib/kb";
 
-export const NODE_TYPE_TAXONOMY: Record<
-  NodeType,
-  { title: string; summary: string; details: string }
-> = {
-  input: {
-    title: "Input node",
-    summary: "Accept user input at run time",
-    details:
-      "Defines a run variable (default: question) that the Run panel supplies. Every graph needs at least one input node as the entry point.",
-  },
-  prompt: {
-    title: "Prompt node",
-    summary: "Render a text template from graph state",
-    details:
-      "Fills placeholders such as {question} and {upstream}. Output is passed to the next node along Always (sequence) edges.",
-  },
-  llm: {
-    title: "LLM node",
-    summary: "Call a chat model",
-    details:
-      "Node default provider/model. The Execute panel overrides all LLM nodes when you Compile or Run.",
-  },
-  tool: {
-    title: "Tool node",
-    summary: "Local keyword lookup",
-    details:
-      "Local keyword lookup (lookup_topic). Does not call the web. Matches the input variable against an in-process table (index, cache, api, …).",
-  },
-  router: {
-    title: "Router node",
-    summary: "Choose exactly one outgoing edge",
-    details:
-      "One Fallback (default) edge plus one or more Match-text (conditional) edges on upstream LLM output. Cycles are not supported; graphs must be acyclic.",
-  },
-  output: {
-    title: "Output node",
-    summary: "Return the final run result",
-    details: "Whatever value reaches this node becomes the run result shown in the Run panel.",
-  },
-  // Absorbed from micro-ui-agent-builder's FlowStep vocabulary
-  // (studio-consolidation program, docs/planning/features/studio-consolidation-plan.md).
-  // Fully executable via the API as of Phase 2 (backend/app/nodes.py) — no
-  // palette entry yet, since NodePalette.tsx has its own literal node-type
-  // list; Phase 4 wires the ported studio's node picker instead.
-  guardrail: {
-    title: "Guardrail node",
-    summary: "Validate input before the model runs",
-    details: "Checks the upstream text against an input-safety policy (length, URLs, injection phrases); fails the run on a violation.",
-  },
-  rubric: {
-    title: "Rubric node",
-    summary: "Static prompt-quality check",
-    details: "Scans upstream text for static quality findings (empty text, unresolved placeholders, TODO markers). Blocks the run only when rubricFailOnFindings is set.",
-  },
-  human_gate: {
-    title: "Human gate node",
-    summary: "Pause the run for approval",
-    details: "Pauses execution for a human checkpoint; resume or reject via POST /api/runs/{id}/resume.",
-  },
-  tool_loop: {
-    title: "Tool-loop node",
-    summary: "Multi-step tool-calling agent",
-    details: "Repeats tool calls (currently lookup_topic) up to a configured limit before returning a final answer.",
-  },
-  transform: {
-    title: "Transform node",
-    summary: "Reshape data between steps",
-    details:
-      "Deterministically reshapes the upstream value: select a field (JSON Pointer), wrap it under a field, format a text message, or convert it to a string, number or boolean. No code and no model call; a value that doesn't fit fails the step. Use one inline or bind a saved transform from Resources → Transforms.",
-  },
-  subgraph: {
-    title: "Subgraph node",
-    summary: "Run another saved graph",
-    details: "Runs another saved graph as a nested run with its own trace, and outputs its result. Uses the child's latest release (else its saved draft), the draft, or a pinned release; publishing freezes the exact child release.",
-  },
-  code_exec: {
-    title: "Code execution node",
-    summary: "Declare a code-execution contract",
-    details: "Describes code the model should run via a linked tool; validated and passed through — no sandbox executor is wired yet.",
-  },
-  branch: {
-    title: "Branch node",
-    summary: "Substring gate with real out-edges",
-    details: "Gates on a substring match in upstream text, with its own conditional and default out-edges — a real branch, not a whole-run precondition.",
-  },
-};
+// Node and edge help comes from the knowledge base (content/kb/,
+// canvas-workbench-ergonomics-plan.md §11): title and summary from the
+// article's frontmatter, details from its opening paragraph. A missing
+// article fails here at load, and lib/kb.test.ts checks coverage too.
 
-export const EDGE_KIND_TAXONOMY = {
-  sequence: {
-    title: "Always",
-    summary: "Always follow this path",
-    details: "Unconditional flow (schema: sequence). Used for linear Prompt → LLM chains.",
-  },
-  conditional: {
-    title: "Match text",
-    summary: "Match upstream LLM text",
-    details:
-      "Router compares the condition as a substring of the previous LLM output (not the Prompt template). First match wins.",
-  },
-  default: {
-    title: "Fallback",
-    summary: "Router fallback",
-    details: "Taken when no Match-text edge matches. Each router must have exactly one Fallback outgoing edge.",
-  },
-} as const;
+type TaxonomyEntry = { title: string; summary: string; details: string; articleId: string };
 
-export const ROUTER_RULES_TAXONOMY = {
-  title: "Router rules",
-  summary: "How routing chooses an edge",
-  details:
-    "Mark outgoing edges as Fallback (default) or Match text (conditional, substring of upstream LLM output). The compiler requires exactly one Fallback. Loops are not supported (acyclic graphs only).",
-};
+function entry(articleId: string, title?: (article: KbArticle) => string): TaxonomyEntry {
+  const article = getArticle(articleId);
+  if (!article) throw new Error(`knowledge base article "${articleId}" is missing (content/kb/${articleId}.md)`);
+  return { title: title ? title(article) : article.title, summary: article.summary, details: articleLead(article), articleId };
+}
+
+export const NODE_TYPE_TAXONOMY = Object.fromEntries(NODE_TYPES.map((type) => [type, entry(nodeArticleId(type))])) as Record<NodeType, TaxonomyEntry>;
+
+const EDGE_KINDS: EdgeKind[] = ["sequence", "conditional", "default"];
+/** Titles are the edge-kind labels the UI uses ("Always", "Match text", "Fallback"). */
+export const EDGE_KIND_TAXONOMY = Object.fromEntries(
+  EDGE_KINDS.map((kind) => [kind, entry(edgeArticleId(kind), (article) => article.title.replace(/ edge$/, ""))]),
+) as Record<EdgeKind, TaxonomyEntry>;
+
+export const ROUTER_RULES_TAXONOMY = entry("routing", () => "Router rules");
 
 export const PROVIDER_TAXONOMY: Record<string, { title: string; summary: string; details: string }> = {
   stub: {

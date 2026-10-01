@@ -269,6 +269,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Problems on lines:** syntax, schema and compile diagnostics mark their lines; clicking one jumps there.
 - **Save (⌘S):** validates, shows the change against the saved version, then applies and saves in one step.
 
+**Slice I shipped 2026-10-01:**
+- **Knowledge base:** one Markdown article per concept, node type, edge kind, panel and resource kind (`apps/studio/content/kb/`, bundled by `pnpm kb`), with a coverage test.
+- **Help panel:** "?" searches and reads articles; inspectors, issues, panel headers and the command palette open them.
+- **Chat grounding:** `/api/kb` serves the articles, and Chat adds the matching ones to its context.
+
 ---
 
 ## Scoring rationale (requested items)

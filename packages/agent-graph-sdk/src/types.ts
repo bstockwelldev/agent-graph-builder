@@ -65,6 +65,8 @@ import type {
   policyParamSpecSchema,
   policyParamValueSchema,
   policyRuleInfoSchema,
+  kbArticleSchema,
+  kbArticleSummarySchema,
   policyRuleSettingSchema,
   policySettingsSchema,
   portContractSchema,
@@ -238,6 +240,8 @@ export type PolicyEnforcement = z.infer<typeof policyEnforcementSchema>;
 export type PolicyParamValue = z.infer<typeof policyParamValueSchema>;
 export type PolicyParamSpec = z.infer<typeof policyParamSpecSchema>;
 export type PolicyRuleInfo = z.infer<typeof policyRuleInfoSchema>;
+export type KbArticleSummary = z.infer<typeof kbArticleSummarySchema>;
+export type KbArticle = z.infer<typeof kbArticleSchema>;
 export type PolicyRuleSetting = z.infer<typeof policyRuleSettingSchema>;
 export type PolicySettings = z.infer<typeof policySettingsSchema>;
 export type EffectivePolicyRule = z.infer<typeof effectivePolicyRuleSchema>;

@@ -306,7 +306,7 @@ export function GraphHeader({
     },
     { label: "Export JSON", icon: <Download size={14} />, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
-    { label: "Shortcuts", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
+    { label: "Help", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
   ];
 
   const saveStateLabel = saving ? "Saving…" : dirty ? "Unsaved" : "Saved";

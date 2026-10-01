@@ -62,7 +62,7 @@ describe("GraphHeader", () => {
     expect(screen.queryByRole("button", { name: "Export JSON" })).toBeNull();
     // ...but one click away.
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-    for (const name of ["Releases", "Routing lab", "Knowledge", "Export JSON", "Import JSON…", "Shortcuts"]) {
+    for (const name of ["Releases", "Routing lab", "Knowledge", "Export JSON", "Import JSON…", "Help"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
   });

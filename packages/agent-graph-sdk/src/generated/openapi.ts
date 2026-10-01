@@ -892,6 +892,44 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/kb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Kb Articles
+         * @description The in-app knowledge base (canvas-workbench-ergonomics-plan.md §11):
+         *     every article, or with ``q`` the ones matching it, best first.
+         */
+        get: operations["list_kb_articles_api_kb_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kb/{article_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kb Article */
+        get: operations["get_kb_article_api_kb__article_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llm-profiles": {
         parameters: {
             query?: never;
@@ -2374,6 +2412,44 @@ export type components = {
             last_run_at?: string | null;
             /** Last Run Id */
             last_run_id?: string | null;
+        };
+        /** KbArticle */
+        KbArticle: {
+            /** Body */
+            body: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "concept" | "node" | "edge" | "panel" | "resource";
+            /** Id */
+            id: string;
+            /** Keywords */
+            keywords: string[];
+            /** Related */
+            related: string[];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
+        /** KbArticleSummary */
+        KbArticleSummary: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "concept" | "node" | "edge" | "panel" | "resource";
+            /** Id */
+            id: string;
+            /** Keywords */
+            keywords: string[];
+            /** Related */
+            related: string[];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
         };
         /** KnowledgeLineageEntry */
         KnowledgeLineageEntry: {
@@ -5245,6 +5321,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_kb_articles_api_kb_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbArticleSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_kb_article_api_kb__article_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbArticle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command";
 import { studioNavGroups } from "@/components/studio/studio-nav";
 import { client } from "@/lib/api-client";
+import { KB_ARTICLES } from "@/lib/kb";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
 import { useConsoleUnreadCounts } from "@/lib/consoleLog";
 import { useWorkbench } from "./WorkbenchProvider";
@@ -24,6 +25,7 @@ import { WORKBENCH_PANELS, matchesHotkey, type WorkbenchPanelId } from "./panels
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
+  const [search, setSearch] = useState("");
   const router = useRouter();
   const workbench = useWorkbench();
   // Studio-config-editor-and-console-plan.md §7's "HUD toggle shows a
@@ -73,6 +75,11 @@ export function CommandPalette() {
     workbench.open(id);
   };
 
+  const openArticle = (articleId: string) => {
+    setOpen(false);
+    workbench.open("help", { articleId });
+  };
+
   const openChatSession = (sessionId: string) => {
     setOpen(false);
     workbench.open("chat", { chatSessionId: sessionId });
@@ -83,8 +90,14 @@ export function CommandPalette() {
   );
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Jump to a page or open a panel…" />
+    <CommandDialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setSearch("");
+      }}
+    >
+      <CommandInput placeholder="Jump to a page, open a panel, or search help…" value={search} onValueChange={setSearch} />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         {studioNavGroups.map((group) => (
@@ -112,6 +125,17 @@ export function CommandPalette() {
             );
           })}
         </CommandGroup>
+        {/* Help articles (canvas-workbench-ergonomics-plan.md §11) only once
+            there's a query: all of them would bury the pages and panels. */}
+        {search.trim() && (
+          <CommandGroup heading="Help">
+            {KB_ARTICLES.map((article) => (
+              <CommandItem key={article.id} value={`Help: ${article.title}`} keywords={article.keywords} onSelect={() => openArticle(article.id)}>
+                Help: {article.title}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
         {recentSessions.length > 0 && (
           <CommandGroup heading="Recent sessions">
             {recentSessions.map((session) => (

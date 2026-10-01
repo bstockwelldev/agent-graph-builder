@@ -3411,7 +3411,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               onClick: () => workbench.toggle("health"),
             },
             {
-              label: "Shortcuts and gestures",
+              label: "Help",
               icon: <HelpCircle size={14} />,
               separatorBefore: true,
               onClick: () => workbench.toggle("help"),

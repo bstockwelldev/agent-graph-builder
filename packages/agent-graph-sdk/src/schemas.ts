@@ -451,6 +451,19 @@ export const providerCredentialsSchema = z.object({
 });
 
 /** GET /api/health. `storage_backend` is "supabase", "object_store", "turso" or "sqlite" (local, not shared). */
+/** In-app knowledge base article (canvas-workbench-ergonomics-plan.md §11), `GET /api/kb`. */
+export const kbArticleSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  summary: z.string(),
+  category: z.enum(["concept", "node", "edge", "panel", "resource"]),
+  keywords: z.array(z.string()),
+  related: z.array(z.string()),
+});
+
+/** A whole article, Markdown body included (`GET /api/kb/{article_id}`). */
+export const kbArticleSchema = kbArticleSummarySchema.extend({ body: z.string() });
+
 export const serverHealthSchema = z.object({
   ok: z.boolean(),
   storage_backend: z.string(),

@@ -59,7 +59,8 @@ export function parseMarkdown(source: string): Block[] {
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
 
-export function renderInline(source: string): ReactNode[] {
+/** `onKbLink` turns `[label](kb:article-id)` links into in-app buttons (the Help panel); without it they render as text. */
+export function renderInline(source: string, onKbLink?: (articleId: string) => void): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)\s]+\))/g;
   let last = 0;
@@ -80,7 +81,17 @@ export function renderInline(source: string): ReactNode[] {
     } else {
       const [, label, href] = token.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/) ?? [];
       nodes.push(
-        SAFE_URL.test(href ?? "") ? (
+        href?.startsWith("kb:") && onKbLink ? (
+          <button
+            key={key++}
+            type="button"
+            className="agb-focus-ring"
+            onClick={() => onKbLink(href.slice(3))}
+            style={{ padding: 0, border: "none", background: "transparent", color: color.primary[500], textDecoration: "underline", cursor: "pointer", font: "inherit" }}
+          >
+            {label}
+          </button>
+        ) : SAFE_URL.test(href ?? "") ? (
           <a key={key++} href={href} target="_blank" rel="noreferrer noopener" style={{ color: color.primary[500], textDecoration: "underline" }}>
             {label}
           </a>
@@ -97,7 +108,7 @@ export function renderInline(source: string): ReactNode[] {
 
 const HEADING = { 1: typeScale.subheading, 2: typeScale.small, 3: typeScale.small } as const;
 
-export function GenuiMarkdown({ content }: { content: string }) {
+export function GenuiMarkdown({ content, onKbLink }: { content: string; onKbLink?: (articleId: string) => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing[2], color: text.primary, fontSize: 13, lineHeight: "20px" }}>
       {parseMarkdown(content).map((block, index) => {
@@ -105,17 +116,17 @@ export function GenuiMarkdown({ content }: { content: string }) {
           case "heading": {
             const Tag = `h${block.level + 2}` as "h3" | "h4" | "h5";
             return (
-              <Tag key={index} style={{ margin: 0, ...HEADING[block.level], color: text.primary }}>
-                {renderInline(block.text)}
+              <Tag key={index} style={{ margin: 0, ...HEADING[block.level], fontWeight: 600, color: text.primary }}>
+                {renderInline(block.text, onKbLink)}
               </Tag>
             );
           }
           case "list": {
             const Tag = block.ordered ? "ol" : "ul";
             return (
-              <Tag key={index} style={{ margin: 0, paddingLeft: 20 }}>
+              <Tag key={index} style={{ margin: 0, paddingLeft: 20, listStyle: block.ordered ? "decimal" : "disc" }}>
                 {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInline(item)}</li>
+                  <li key={itemIndex}>{renderInline(item, onKbLink)}</li>
                 ))}
               </Tag>
             );
@@ -129,7 +140,7 @@ export function GenuiMarkdown({ content }: { content: string }) {
           default:
             return (
               <p key={index} style={{ margin: 0 }}>
-                {renderInline(block.text)}
+                {renderInline(block.text, onKbLink)}
               </p>
             );
         }

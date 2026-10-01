@@ -23,10 +23,13 @@ export function Field({
   issues = [],
   children,
   htmlFor,
+  footer,
 }: {
   label: ReactNode;
   hint?: ReactNode;
   meta?: ReactNode;
+  /** Below the control, e.g. a link to the help article. */
+  footer?: ReactNode;
   issues?: Diagnostic[];
   children: ReactNode | ((id: string) => ReactNode);
   htmlFor?: string;
@@ -49,6 +52,7 @@ export function Field({
         {meta && <span style={{ marginLeft: "auto", fontSize: 11, color: text.secondary }}>{meta}</span>}
       </div>
       {typeof children === "function" ? children(id) : children}
+      {footer && <div style={{ marginTop: spacing[1] }}>{footer}</div>}
       {issues.length > 0 && <FieldIssues issues={issues} />}
     </div>
   );

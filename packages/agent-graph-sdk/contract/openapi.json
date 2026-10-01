@@ -1854,6 +1854,113 @@
         "title": "ImpactRuns",
         "type": "object"
       },
+      "KbArticle": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "concept",
+              "node",
+              "edge",
+              "panel",
+              "resource"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "related": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Related",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "category",
+          "keywords",
+          "related",
+          "body"
+        ],
+        "title": "KbArticle",
+        "type": "object"
+      },
+      "KbArticleSummary": {
+        "properties": {
+          "category": {
+            "enum": [
+              "concept",
+              "node",
+              "edge",
+              "panel",
+              "resource"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "related": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Related",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "category",
+          "keywords",
+          "related"
+        ],
+        "title": "KbArticleSummary",
+        "type": "object"
+      },
       "KnowledgeLineageEntry": {
         "properties": {
           "chunk_id": {
@@ -7067,6 +7174,96 @@
           }
         },
         "summary": "Health Check"
+      }
+    },
+    "/api/kb": {
+      "get": {
+        "description": "The in-app knowledge base (canvas-workbench-ergonomics-plan.md \u00a711):\nevery article, or with ``q`` the ones matching it, best first.",
+        "operationId": "list_kb_articles_api_kb_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KbArticleSummary"
+                  },
+                  "title": "Response List Kb Articles Api Kb Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Kb Articles"
+      }
+    },
+    "/api/kb/{article_id}": {
+      "get": {
+        "operationId": "get_kb_article_api_kb__article_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "article_id",
+            "required": true,
+            "schema": {
+              "title": "Article Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbArticle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Kb Article"
       }
     },
     "/api/llm-profiles": {

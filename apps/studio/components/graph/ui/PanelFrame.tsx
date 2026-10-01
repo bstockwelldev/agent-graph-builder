@@ -1,5 +1,11 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { HelpCircle } from "lucide-react";
+import { useOpenHelp } from "@/components/workbench/WorkbenchProvider";
+import { getArticle } from "@/lib/kb";
 import { border, spacing, surface, text } from "@/lib/graph-theme";
+import { IconButton } from "./IconButton";
 
 /**
  * Shared frame for the right-side panels (Wave 2.5: node inspector, run
@@ -46,11 +52,14 @@ export function PanelHeader({
   title,
   subtitle,
   actions,
+  helpArticleId,
 }: {
   icon?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  /** Adds a help button that opens this knowledge-base article (canvas-workbench-ergonomics-plan.md §11). */
+  helpArticleId?: string;
 }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -63,7 +72,19 @@ export function PanelHeader({
           </div>
         )}
       </div>
-      {actions && <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>{actions}</div>}
+      {(actions || helpArticleId) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          {helpArticleId && <PanelHelpButton articleId={helpArticleId} />}
+          {actions}
+        </div>
+      )}
     </div>
   );
+}
+
+function PanelHelpButton({ articleId }: { articleId: string }) {
+  const openHelp = useOpenHelp();
+  const article = getArticle(articleId);
+  if (!openHelp || !article) return null;
+  return <IconButton label={`Help: ${article.title}`} icon={<HelpCircle size={15} />} onClick={() => openHelp(articleId)} tooltipPlacement="bottom" />;
 }

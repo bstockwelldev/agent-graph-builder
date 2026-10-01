@@ -63,6 +63,15 @@ describe("the mock API, through the real client", () => {
     expect((await client.transforms.preview({ transform_id: "t1" }, { name: "Ada" })).output).toBe("Hi Ada");
   });
 
+  it("lists, searches and reads knowledge base articles", async () => {
+    const all = await client.kb.list();
+    expect(all.map((article) => article.id)).toEqual(["getting-started", "transforms"]);
+    expect("body" in all[0]).toBe(false);
+    expect((await client.kb.list({ q: "json pointer" })).map((article) => article.id)).toEqual(["transforms"]);
+    expect((await client.kb.get("transforms")).body).toContain("reshapes");
+    await expect(client.kb.get("nope")).rejects.toBeInstanceOf(AgentGraphApiError);
+  });
+
   it("keeps MCP server headers write-only and discovers tools", async () => {
     await client.mcpServers.create({ id: "srv", name: "Docs", url: "https://mcp.test/rpc", transport: "http", enabled: true });
     expect(await client.mcpServers.headers.update("srv", { Authorization: "Bearer k" })).toEqual({ names: ["Authorization"] });

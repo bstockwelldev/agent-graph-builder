@@ -82,7 +82,7 @@ export const WORKBENCH_PANELS: Record<
   // check doesn't fit a symbol that inherently requires Shift to type), so
   // `hotkey` stays null here to avoid the generic loop silently no-op'ing
   // on every "?" press. Still `scope: "global"` for the command palette entry.
-  help: { title: "Shortcuts & gestures", hotkey: null, scope: "global" },
+  help: { title: "Help", hotkey: null, scope: "global" },
 };
 
 /** Matches a KeyboardEvent against a "mod+shift+<key>"-style hotkey string. */

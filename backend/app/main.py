@@ -20,7 +20,8 @@ from .adapters import get_adapter
 from .api_contract import API_VERSION, API_VERSION_HEADER
 from .analytics import AnalyticsDashboardPayload, get_analytics_dashboard
 from .bindings import resource_usages
-from .chat_context import ChatContext, build_chat_system_prompt
+from .chat_context import ChatContext, build_chat_prompt
+from .kb import KbArticle, KbArticleSummary, get_article, load_articles, search_articles
 from .datasets import DatasetBuildError, build_dataset_from_runs
 from .demo_graph import build_demo_graph, protected_graph
 from .env_config import (
@@ -263,6 +264,22 @@ def health_check() -> JSONResponse:
     payload["commit"] = os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("GIT_COMMIT_SHA") or None
     status_code = 200 if payload["ok"] else 503
     return JSONResponse(status_code=status_code, content=payload)
+
+
+@app.get("/api/kb")
+def list_kb_articles(q: str | None = None) -> list[KbArticleSummary]:
+    """The in-app knowledge base (canvas-workbench-ergonomics-plan.md §11):
+    every article, or with ``q`` the ones matching it, best first."""
+    articles = search_articles(q, limit=50) if q and q.strip() else list(load_articles())
+    return [KbArticleSummary.model_validate(article.model_dump(exclude={"body"})) for article in articles]
+
+
+@app.get("/api/kb/{article_id}")
+def get_kb_article(article_id: str) -> KbArticle:
+    article = get_article(article_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail=f"knowledge base article {article_id!r} not found")
+    return article
 
 
 @app.get("/api/graphs")
@@ -1167,7 +1184,7 @@ async def send_chat_session_message_route(
     history = [{"role": m.role, "content": m.content} for m in session.messages]
     session.messages.append(ChatMessage(role="user", content=body.content))
 
-    system_prompt = build_chat_system_prompt(body.context) if body.context is not None else None
+    system_prompt = build_chat_prompt(body.context, body.content)
     chat_model = get_chat_model(model=session.model, provider=session.provider)
     reply = await chat_model.generate(
         system_prompt=system_prompt, user_prompt=body.content, history=history

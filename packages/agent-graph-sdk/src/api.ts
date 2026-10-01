@@ -18,6 +18,8 @@ import {
   graphReleaseSchema,
   graphSummarySchema,
   graphUsedBySchema,
+  kbArticleSchema,
+  kbArticleSummarySchema,
   graphResourcesSchema,
   knowledgeDeleteResponseSchema,
   knowledgeLineageEntrySchema,
@@ -395,6 +397,13 @@ export function buildNamespaces(transport: Transport) {
 
     system: {
       health: () => transport.request("/api/health", undefined, serverHealthSchema),
+    },
+
+    /** The in-app knowledge base (canvas-workbench-ergonomics-plan.md §11). */
+    kb: {
+      /** Every article without its body, or with `q` the matching ones, best first. */
+      list: (request: { q?: string } = {}) => transport.request(`/api/kb${query({ q: request.q })}`, undefined, kbArticleSummarySchema.array()),
+      get: (articleId: string) => transport.request(path`/api/kb/${articleId}`, undefined, kbArticleSchema),
     },
 
     providers: {
