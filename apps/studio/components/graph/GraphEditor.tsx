@@ -146,6 +146,7 @@ import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
 import { GraphConfigPanel } from "./GraphConfigPanel";
 import { GraphCodeView } from "./GraphCodeView";
+import { buildCanvasCommands, type CanvasCommand } from "./canvasCommands";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { PolicyPanel } from "./PolicyPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
@@ -871,12 +872,14 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       runId: inspectionRunId ?? runSummary?.run_id ?? null,
       focusNode: (nodeId, tab) => focusNodeRef.current(nodeId, tab),
       inspectRun: (runId) => inspectRunRef.current(runId),
+      getCanvasCommands: () => canvasCommandsRef.current(),
     });
     return () => workbench.setGraphContext(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphId, graphName, buildGraphDefinition, selectedNodeId, selectedEdgeId, inspectionRunId, runSummary?.run_id]);
 
   const paintedFingerprintRef = useRef("");
+  const canvasCommandsRef = useRef<() => CanvasCommand[]>(() => []);
   const focusNodeRef = useRef<(nodeId: string, tab?: string) => void>(() => {});
   const inspectRunRef = useRef<(runId: string) => void>(() => {});
   const semanticFingerprintRef = useRef("");
@@ -2360,6 +2363,49 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     }),
     [deleteNodeById, duplicateNode, focusNode, renameGroup, toggleGroup, workbench],
   );
+
+  // ⌘K canvas commands, read when the palette opens (current selection and state).
+  canvasCommandsRef.current = () =>
+    buildCanvasCommands({
+      selectedNodeIds: selectedNodeIdsForGrouping(),
+      align: alignSelection,
+      distribute: distributeSelection,
+      selectAll: selectAllNodes,
+      autoArrange: () => {
+        recordMutation();
+        setRelayoutNonce((value) => value + 1);
+      },
+      fitView: () => setFitViewNonce((value) => value + 1),
+      snapToGrid,
+      setSnapToGrid: (value) => {
+        setSnapToGrid(value);
+        writeStored(SNAP_TO_GRID_STORAGE_KEY, String(value));
+      },
+      focusMode,
+      canFocus: Boolean(selectedNodeId),
+      toggleFocusMode: () => setFocusMode((value) => !value),
+      undo: () => {
+        const snapshot = undo(getCanvasSnapshot());
+        if (snapshot) applyCanvasSnapshot(snapshot);
+      },
+      redo: () => {
+        const snapshot = redo(getCanvasSnapshot());
+        if (snapshot) applyCanvasSnapshot(snapshot);
+      },
+      editorMode: shownMode,
+      setEditorMode,
+      view,
+      setView,
+      save: () => {
+        if (codeSaveRef.current) codeSaveRef.current();
+        else void handleSave();
+      },
+      dirty,
+      validate: handleHeaderValidate,
+      openRun: () => workbench.open("run"),
+      find: () => setFindOpen(true),
+      exportJson: handleExportGraph,
+    });
 
   // Wave 2 URL state -- apply once per graph, after its nodes load: select +
   // pan to ?node (opening ?tab) or ?edge, paint ?run onto the canvas, and

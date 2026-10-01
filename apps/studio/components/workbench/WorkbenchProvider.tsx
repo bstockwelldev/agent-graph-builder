@@ -1,5 +1,6 @@
 "use client";
 
+import type { CanvasCommand } from "@/components/graph/canvasCommands";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
 import { useShellLayout } from "@/hooks/useShellLayout";
@@ -26,6 +27,8 @@ export type StudioGraphContext = {
    * node, or paint a run onto the canvas -- without a route change. */
   focusNode?: (nodeId: string, tab?: string) => void;
   inspectRun?: (runId: string) => void;
+  /** Canvas actions for the command palette (align, view, save, ...), built fresh on each call. */
+  getCanvasCommands?: () => CanvasCommand[];
 };
 
 // Studio-consolidation Phase 8 — promotes the drawer mechanism (ShellDrawer/
