@@ -191,6 +191,18 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   return <WorkbenchContext.Provider value={value}>{children}</WorkbenchContext.Provider>;
 }
 
+/** The workbench, or null outside a provider (components that also render standalone, e.g. in unit tests). */
+export function useOptionalWorkbench(): WorkbenchContextValue | null {
+  return useContext(WorkbenchContext);
+}
+
+/** Opens the Help panel, on an article when given one (canvas-workbench-ergonomics-plan.md §11). Null outside a provider. */
+export function useOpenHelp(): ((articleId?: string) => void) | null {
+  const workbench = useContext(WorkbenchContext);
+  if (!workbench) return null;
+  return (articleId) => workbench.open("help", articleId ? { articleId } : undefined);
+}
+
 export function useWorkbench(): WorkbenchContextValue {
   const context = useContext(WorkbenchContext);
   if (!context) throw new Error("useWorkbench must be used within a WorkbenchProvider");

@@ -26,6 +26,7 @@ export function GraphConfigPanel({
       aria-label="Graph config"
       header={
         <PanelHeader
+          helpArticleId="code-mode"
           icon={
             <span
               aria-hidden="true"

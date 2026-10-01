@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
+import { HelpLink } from "./HelpLink";
+import { DIAGNOSTIC_ARTICLE } from "@/lib/kb";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
@@ -642,6 +644,7 @@ export function RunPanel({
   const offline = isOfflineRun(provider, storageBackend);
   const header = (
     <PanelHeader
+      helpArticleId="runs-and-traces"
       icon={
         <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: radius.lg, background: `${color.primary[500]}1f`, color: color.primary[500], flexShrink: 0 }}>
           <Play size={16} />
@@ -1283,6 +1286,11 @@ export function RunPanel({
                         </button>
                       ) : (
                         <div style={diagnosticStyle(diagnostic.severity, false)}>{body}</div>
+                      )}
+                      {diagnostic.category && DIAGNOSTIC_ARTICLE[diagnostic.category] && (
+                        <div style={{ marginTop: 4 }}>
+                          <HelpLink articleId={DIAGNOSTIC_ARTICLE[diagnostic.category]}>{`What's a ${diagnostic.category} issue?`}</HelpLink>
+                        </div>
                       )}
                       {waivable && (
                         <div role="group" aria-label={`Waive ${diagnostic.code}`} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
