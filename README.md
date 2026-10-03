@@ -342,6 +342,7 @@ seams, so each piece can be swapped without touching the others.
 | Immutable, fingerprinted releases and semantic diffs | `releases.py`, `fingerprint.py` |
 | Version-pinned run identity (`RunGraphSnapshot`) | `models.py`, `runtime.py` |
 | Replay and counterfactual replay | `replay.py` |
+| Durable `human_gate` checkpoints: resume on any instance or after a restart; full run event history in every backend | `runtime.py`, `storage.py` |
 | Versioned reusable entities (prompts, tools, LLM profiles) | `resource_versions.py` |
 | Agents: graph + LLM profile + instructions + tool allow-list | `agents.py` |
 | Runtime adapter boundary with a capability matrix | `adapters.py` |
@@ -353,8 +354,7 @@ seams, so each piece can be swapped without touching the others.
 
 | Today | EDD target | Swap point |
 | --- | --- | --- |
-| `human_gate` pause checkpoints are in memory (`RUN_PAUSES`). A paused run's summary persists, but it can't be resumed after a process restart, or on Vercel when the resume lands on a different instance (the Run panel then shows the 404). | Durable checkpoints | `runtime.py` → a `storage.py` backend |
-| Live runs and SSE event buses are in memory (`RUN_STORE`, `RUN_BUSES`). Completed runs persist, but in-flight streams are lost on restart, and on serverless a live stream exists only in the instance that started the run. | Durable run store with cross-instance streaming | `runtime.py`, `events.py` |
+| Live SSE event buses are in memory (`RUN_BUSES`). Paused and finished runs, with all their events, persist, and a paused run resumes on any instance (its checkpoint is stored; its API key is not, so a keyed provider needs it resent). But a live stream exists only in the instance running the run; on Vercel runs finish inside the request, and other instances replay events from storage. | Cross-instance live streaming | `events.py` → an append-only event log |
 | No multi-tenancy. There's optional Studio sign-in, but no orgs or projects, no per-tenant isolation, and no RLS. Every graph is visible to every user of a deployment. | Supabase Auth + RLS + org/project hierarchy | `storage.py`, Studio middleware |
 | Storage is a JSON document store (Supabase Storage, S3, Turso, or SQLite), not relational tables. | Supabase PostgreSQL | `storage.py` |
 | `code_exec` declares a contract but has no sandbox executor. | Sandboxed execution | `nodes.py` |

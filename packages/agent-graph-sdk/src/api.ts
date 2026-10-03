@@ -102,7 +102,8 @@ export type StartRunRequest = {
 };
 export type RunListRequest = { graphId?: string };
 /** `values`: the checkpoint's GenUI form field values, readable downstream as `{<gate_id>[field]}` on approve. */
-export type ResumeRunRequest = { approve?: boolean; reason?: string; values?: Record<string, unknown> };
+/** `apiKey`: a paused run's key is never stored, so resuming a run on a keyed provider on another instance (or after a restart) needs it again. */
+export type ResumeRunRequest = { approve?: boolean; reason?: string; values?: Record<string, unknown>; apiKey?: string };
 
 export type AgentRunRequest = { input?: Record<string, unknown>; provider?: ChatProvider; model?: string; apiKey?: string };
 
@@ -266,7 +267,7 @@ export function buildNamespaces(transport: Transport) {
         transport.request(path`/api/runs/${runId}/replay`, request ? json(request) : { method: "POST" }, counterfactualResultSchema),
       /** Resolves a `human_gate` checkpoint; `approve: false` fails the run. */
       resume: (runId: string, request: ResumeRunRequest = {}) =>
-        transport.request(path`/api/runs/${runId}/resume`, json({ approve: request.approve ?? true, reason: request.reason, ...(request.values ? { values: request.values } : {}) }), runSummarySchema),
+        transport.request(path`/api/runs/${runId}/resume`, json({ approve: request.approve ?? true, reason: request.reason, ...(request.values ? { values: request.values } : {}), ...(request.apiKey ? { api_key: request.apiKey } : {}) }), runSummarySchema),
       stream,
       wait,
     },

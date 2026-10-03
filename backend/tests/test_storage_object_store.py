@@ -316,3 +316,15 @@ def test_object_store_resource_crud(monkeypatch) -> None:
         assert storage.delete_resource("prompts", "p1") is True
         assert storage.get_resource("prompts", "p1") is None
         assert storage.delete_resource("prompts", "p1") is False
+
+
+def test_object_store_keeps_pause_checkpoints(monkeypatch) -> None:
+    """Durable human_gate checkpoints round-trip on the object backends too."""
+    _enable_object_store(monkeypatch)
+    fake = FakeS3()
+    with patch("app.object_store.boto3.client", return_value=fake):
+        storage.save_run_pause("run_pause_1", {"run_id": "run_pause_1", "paused_node_id": "gate_1"}, created_at="2026-10-03T00:00:00Z")
+        assert storage.get_run_pause("run_pause_1") == {"run_id": "run_pause_1", "paused_node_id": "gate_1"}
+        assert "run_pauses/run_pause_1.json" in fake.objects
+        storage.delete_run_pause("run_pause_1")
+        assert storage.get_run_pause("run_pause_1") is None

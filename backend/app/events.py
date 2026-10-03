@@ -113,11 +113,16 @@ class RunEventBus:
 _BUSES: dict[str, RunEventBus] = {}
 
 
-def create_bus(run_id: str) -> RunEventBus:
-    # A resumed run (human_gate) gets a fresh bus; keep its sequence numbers
-    # climbing so SSE ids / Last-Event-ID stay monotonic across the resume.
+def create_bus(run_id: str, prior_events: list[PlatformEvent] | None = None) -> RunEventBus:
+    """A run's bus. A resumed run (human_gate) passes the events it already
+    has (from this process's previous bus or the stored run), so the new bus
+    keeps them -- the run's final snapshot holds the whole history -- and its
+    sequence numbers keep climbing for SSE ids / Last-Event-ID."""
     previous = _BUSES.get(run_id)
-    bus = RunEventBus(run_id, start_sequence=previous._seq if previous else 0)
+    history = list(prior_events) if prior_events is not None else (previous.collected_events() if previous else [])
+    start = max((event.sequence for event in history), default=previous._seq if previous else 0)
+    bus = RunEventBus(run_id, start_sequence=start)
+    bus._collected = history
     _BUSES[run_id] = bus
     return bus
 

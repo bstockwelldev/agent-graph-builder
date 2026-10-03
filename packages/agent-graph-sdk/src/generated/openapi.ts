@@ -1486,10 +1486,10 @@ export type paths = {
          * @description Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
          *
          *     approve=True (default) continues execution from the paused node;
-         *     approve=False fails the run instead. 404 when there is nothing paused
-         *     for this run_id (already resolved, unknown run, or — same accepted
-         *     simplification as compiled-workflow lookup elsewhere in this API — the
-         *     compiled workflow was lost to a process restart).
+         *     approve=False fails the run instead. Works on any instance: the
+         *     checkpoint and the run's graph snapshot are stored. 404 when there is
+         *     nothing paused for this run_id; 409 when the run's graph can't be found,
+         *     or its provider needs an API key the request didn't send.
          */
         post: operations["resume_run_api_runs__run_id__resume_post"];
         delete?: never;
@@ -3040,6 +3040,8 @@ export type components = {
          *     without resuming execution.
          */
         RunResumeRequest: {
+            /** Api Key */
+            api_key?: string | null;
             /**
              * Approve
              * @default true

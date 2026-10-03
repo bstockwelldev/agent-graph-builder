@@ -3649,6 +3649,17 @@
       "RunResumeRequest": {
         "description": "Body for POST /api/runs/{id}/resume (studio-consolidation Phase 2,\nhuman_gate). approve=False rejects the checkpoint and fails the run\nwithout resuming execution.",
         "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
           "approve": {
             "default": true,
             "title": "Approve",
@@ -9557,7 +9568,7 @@
     },
     "/api/runs/{run_id}/resume": {
       "post": {
-        "description": "Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).\n\napprove=True (default) continues execution from the paused node;\napprove=False fails the run instead. 404 when there is nothing paused\nfor this run_id (already resolved, unknown run, or \u2014 same accepted\nsimplification as compiled-workflow lookup elsewhere in this API \u2014 the\ncompiled workflow was lost to a process restart).",
+        "description": "Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).\n\napprove=True (default) continues execution from the paused node;\napprove=False fails the run instead. Works on any instance: the\ncheckpoint and the run's graph snapshot are stored. 404 when there is\nnothing paused for this run_id; 409 when the run's graph can't be found,\nor its provider needs an API key the request didn't send.",
         "operationId": "resume_run_api_runs__run_id__resume_post",
         "parameters": [
           {

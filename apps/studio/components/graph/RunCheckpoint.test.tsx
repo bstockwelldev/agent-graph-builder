@@ -128,4 +128,18 @@ describe("GenuiSurface previews", () => {
     expect(screen.getByRole("columnheader", { name: "r" })).toBeTruthy();
     expect(screen.getByRole("cell", { name: "15" })).toBeTruthy();
   });
+
+  it("asks for the API key when the server needs it again, and resends it", async () => {
+    const onResume = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("This run uses groq, which needs an API key to continue. Enter the key and approve again."))
+      .mockResolvedValueOnce(undefined);
+    render(<RunCheckpoint checkpoint={{ ...checkpoint, surfaceJson: "" }} onResume={onResume} />);
+    expect(screen.queryByLabelText("API key")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/needs an API key/));
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: " sk-test " } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(onResume).toHaveBeenLastCalledWith(expect.objectContaining({ approve: true, apiKey: "sk-test" })));
+  });
 });

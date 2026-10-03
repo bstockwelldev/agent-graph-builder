@@ -1923,7 +1923,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // Slice 1 (resource-forms-consistency-plan.md): approve or reject the
   // human_gate a paused run is waiting at, then follow it to its end.
   const handleResume = useCallback(
-    async (request: { approve: boolean; reason?: string; values?: Record<string, unknown> }) => {
+    async (request: { approve: boolean; reason?: string; values?: Record<string, unknown>; apiKey?: string }) => {
       if (!runSummary || runSummary.status !== "paused") return;
       logConsoleEntry({
         severity: "info",

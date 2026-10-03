@@ -78,11 +78,10 @@ COMPILED_WORKFLOWS: dict[str, GraphDefinition] = {}
 RUN_STORE: dict[str, RunSummary] = {}
 RUN_TRACES: dict[str, dict[str, NodeTrace]] = {}
 RUN_BUSES: dict[str, RunEventBus] = {}
-# `human_gate` pause checkpoints (studio-consolidation Phase 2). Process-
-# local only, same accepted simplification as COMPILED_WORKFLOWS — a paused
-# run's RunSummary still persists durably with status="paused", but resuming
-# it after a process restart is not possible until this gets a storage.py
-# backend (see docs/planning/features/studio-consolidation-plan.md).
+# `human_gate` pause checkpoints (studio-consolidation Phase 2). A cache of
+# the durable copy in storage (`storage.save_run_pause`), so a paused run
+# resumes on any instance and after a restart; the API key is kept only
+# here, never stored.
 RUN_PAUSES: dict[str, RunPauseState] = {}
 # Telemetry trace per run (studio-consolidation Phase 5). Process-local like
 # the stores above; a resumed run starts a fresh trace, same accepted
@@ -104,7 +103,45 @@ def get_run_node_traces(run_id: str) -> list[NodeTrace]:
 
 
 def get_run_pause_state(run_id: str) -> RunPauseState | None:
-    return RUN_PAUSES.get(run_id)
+    pause = RUN_PAUSES.get(run_id)
+    if pause is not None:
+        return pause
+    try:
+        payload = storage.get_run_pause(run_id)
+    except Exception:  # noqa: BLE001 - a storage outage reads as "nothing to resume"
+        logger.exception("failed to read pause checkpoint for run %s", run_id)
+        return None
+    return RunPauseState.model_validate(payload) if payload else None
+
+
+def _save_pause(pause: RunPauseState) -> None:
+    try:
+        storage.save_run_pause(
+            pause.run_id, pause.model_dump(mode="json", exclude={"api_key"}), created_at=now_iso()
+        )
+    except Exception:  # noqa: BLE001 - the in-process copy still resumes; only cross-instance resume is lost
+        logger.exception("failed to persist pause checkpoint for run %s", pause.run_id)
+
+
+def _drop_pause(run_id: str) -> None:
+    RUN_PAUSES.pop(run_id, None)
+    try:
+        storage.delete_run_pause(run_id)
+    except Exception:  # noqa: BLE001 - a stale checkpoint is harmless: resuming a finished run is refused
+        logger.exception("failed to delete pause checkpoint for run %s", run_id)
+
+
+def _hydrate_run(run_id: str) -> bool:
+    """Loads a stored run into this process's stores (a resume on another
+    instance, or after a restart). True when the run is available."""
+    if run_id in RUN_STORE:
+        return True
+    summary = storage.get_run(run_id)
+    if summary is None:
+        return False
+    RUN_STORE[run_id] = summary
+    RUN_TRACES[run_id] = {trace.node_id: trace for trace in storage.get_run_traces(run_id)}
+    return True
 
 
 def _persist_run_snapshot(run_id: str) -> None:
@@ -417,12 +454,13 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
             RouteDecision.model_validate(decision)
             for decision in final_state.get("route_decisions") or []
         ]
-        RUN_PAUSES.pop(run_id, None)
+        if was_paused:
+            _drop_pause(run_id)
         bus.emit("run.completed", {"result": _jsonable(final_state.get("result"))})
     except RunPaused as exc:
         RUN_STORE[run_id].status = "paused"
         RUN_STORE[run_id].paused_node_id = exc.node_id
-        RUN_PAUSES[run_id] = RunPauseState(
+        RUN_PAUSES[run_id] = pause = RunPauseState(
             run_id=run_id,
             graph_id=graph.id,
             compiled_workflow_id=ctx.compiled_workflow_id or "",
@@ -434,12 +472,14 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
             model=ctx.requested_model,
             api_key=ctx.api_key,
         )
+        _save_pause(pause)
         bus.emit("run.paused", {"nodeId": exc.node_id})
         _finish_telemetry_trace(run_id, "ok", {"paused": True, "nodeId": exc.node_id})
     except Exception as exc:  # noqa: BLE001 - reported via run status + SSE, not raised further
         RUN_STORE[run_id].status = "failed"
         RUN_STORE[run_id].error = str(exc)
-        RUN_PAUSES.pop(run_id, None)
+        if was_paused:
+            _drop_pause(run_id)
         bus.emit("run.failed", {"error": str(exc)})
         _fail_telemetry_trace(run_id, exc)
     else:
@@ -693,31 +733,67 @@ async def start_run_inline(
     return ctx.run_id, ctx.bus
 
 
+class ResumeNeedsApiKey(Exception):
+    """The paused run used a provider that needs an API key, and neither
+    the resume request nor the server has one (keys are never stored)."""
+
+
+def _resume_graph(
+    run_id: str, pause: RunPauseState
+) -> tuple[GraphDefinition, dict[str, dict[str, Any]] | None] | None:
+    """The graph a paused run continues on, and its release's pinned
+    resource snapshots for a release run. From the run's durable graph
+    snapshot (any instance), else this process's compiled workflow."""
+    snapshot = storage.get_run_graph_snapshot(run_id)
+    if snapshot and snapshot.get("source") == "release" and snapshot.get("release_id"):
+        from .releases import get_release
+
+        release = get_release(snapshot["release_id"], snapshot.get("graph_id") or pause.graph_id)
+        if release is not None:
+            return release.graph, release.resource_snapshots
+    if snapshot and snapshot.get("graph"):
+        return GraphDefinition.model_validate(snapshot["graph"]), None
+    graph = COMPILED_WORKFLOWS.get(pause.compiled_workflow_id)
+    return (graph, None) if graph is not None else None
+
+
 def _prepare_resume(
-    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None
+    run_id: str,
+    values: dict[str, Any] | None = None,
+    reason: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[ExecContext, Any, dict[str, Any]] | None:
     """Builds a fresh ExecContext seeded from a `human_gate` pause snapshot,
-    approving that gate. Returns None when there is nothing to resume: an
-    unknown run_id, an already-resolved run, or (same accepted
-    simplification as COMPILED_WORKFLOWS) the compiled workflow was lost to
-    a process restart.
+    approving that gate. Works on any instance: the checkpoint, the run and
+    its graph snapshot come from storage when this process doesn't have
+    them. Returns None when there is nothing to resume (unknown or already
+    resolved run, or its graph can't be found). Raises ResumeNeedsApiKey
+    when a live provider has no key to continue with.
     """
-    pause = RUN_PAUSES.get(run_id)
-    if pause is None:
+    pause = get_run_pause_state(run_id)
+    if pause is None or not _hydrate_run(run_id):
         return None
-    graph = COMPILED_WORKFLOWS.get(pause.compiled_workflow_id)
-    if graph is None:
+    resolved = _resume_graph(run_id, pause)
+    if resolved is None:
         return None
+    graph, release_resource_snapshots = resolved
+    key = api_key or pause.api_key
+    if pause.provider and not key:
+        from .replay import _provider_usable
 
-    run_input = RUN_STORE[run_id].input if run_id in RUN_STORE else {}
-    graph = _with_library_transforms(graph, None)
-    bus = create_bus(run_id)
+        if not _provider_usable(pause.provider):
+            raise ResumeNeedsApiKey(pause.provider)
+
+    run_input = RUN_STORE[run_id].input
+    graph = _with_library_transforms(graph, release_resource_snapshots)
+    bus = create_bus(run_id, prior_events=RUN_STORE[run_id].events)
     RUN_BUSES[run_id] = bus
+    RUN_PAUSES[run_id] = pause
     _start_telemetry_trace(run_id, graph.id)
 
     def chat_model_factory(node_model: str | None):
         effective_model = pause.model or node_model
-        return get_chat_model(effective_model, provider=pause.provider, api_key=pause.api_key)
+        return get_chat_model(effective_model, provider=pause.provider, api_key=key)
 
     ctx = ExecContext(
         run_id=run_id,
@@ -738,20 +814,21 @@ def _prepare_resume(
         compiled_workflow_id=pause.compiled_workflow_id,
         resolved_provider=pause.provider,
         requested_model=pause.model,
-        api_key=pause.api_key,
+        api_key=key,
+        release_resource_snapshots=release_resource_snapshots,
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
 
 
 def resume_run(
-    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None
+    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None, api_key: str | None = None
 ) -> tuple[str, RunEventBus] | None:
     """Approves the paused `human_gate` checkpoint and resumes execution in
     the background. Use on long-lived processes; see `resume_run_inline`
     for serverless. Returns None when there is nothing to resume.
     """
-    prepared = _prepare_resume(run_id, values, reason)
+    prepared = _prepare_resume(run_id, values, reason, api_key)
     if prepared is None:
         return None
     ctx, compiled_app, run_input = prepared
@@ -764,10 +841,10 @@ def resume_run(
 
 
 async def resume_run_inline(
-    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None
+    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None, api_key: str | None = None
 ) -> tuple[str, RunEventBus] | None:
     """Serverless variant of `resume_run` — awaits execution in this request."""
-    prepared = _prepare_resume(run_id, values, reason)
+    prepared = _prepare_resume(run_id, values, reason, api_key)
     if prepared is None:
         return None
     ctx, compiled_app, run_input = prepared
@@ -780,11 +857,12 @@ def reject_run(run_id: str, reason: str | None = None) -> bool:
     without resuming execution. Returns False when there is nothing paused
     for this run_id.
     """
-    pause = RUN_PAUSES.pop(run_id, None)
-    if pause is None or run_id not in RUN_STORE:
+    pause = get_run_pause_state(run_id)
+    if pause is None or not _hydrate_run(run_id):
         return False
+    _drop_pause(run_id)
     message = reason or f"Rejected at human_gate {pause.paused_node_id!r}"
-    bus = create_bus(run_id)
+    bus = create_bus(run_id, prior_events=RUN_STORE[run_id].events)
     RUN_BUSES[run_id] = bus
     RUN_STORE[run_id].status = "failed"
     RUN_STORE[run_id].paused_node_id = None
