@@ -279,6 +279,9 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **⌘K canvas actions:** Align, Distribute, Auto-arrange, views, Snap, Focus mode, Undo/Redo, Save, Validate and more, with the reason when one can't run.
 - **Sticky notes:** notes on the canvas with authors, pinned nodes, comment threads and Resolve. Saved with the graph; display-only (not in the semantic fingerprint or release diffs).
 
+**Notes polish shipped 2026-10-03:**
+- Pinned notes move with their node; a Notes panel lists every note (Open/Resolved/All) and jumps to one; notes can be hidden on the canvas; the status bar counts open notes.
+
 ---
 
 ## Scoring rationale (requested items)

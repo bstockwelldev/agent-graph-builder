@@ -35,6 +35,8 @@ export type CanvasCommandHandlers = {
   canFocus: boolean;
   toggleFocusMode: () => void;
   addNote?: () => void;
+  /** Sticky notes: the panel listing them, and showing them on the canvas. */
+  notes?: { count: number; visible: boolean; setVisible: (visible: boolean) => void; openPanel: () => void };
   undo: () => void;
   redo: () => void;
   editorMode: EditorMode;
@@ -89,6 +91,19 @@ export function buildCanvasCommands(h: CanvasCommandHandlers): CanvasCommand[] {
       run: h.toggleFocusMode,
     },
     ...(h.addNote ? [{ id: "add-note", group: "Canvas" as const, label: "Add sticky note", keywords: ["note", "comment", "sticky"], run: h.addNote }] : []),
+    ...(h.notes
+      ? [
+          { id: "notes-panel", group: "Canvas" as const, label: "Show all notes", keywords: ["notes", "comments", "sticky"], run: h.notes.openPanel },
+          {
+            id: "notes-visible",
+            group: "Canvas" as const,
+            label: h.notes.visible ? "Hide notes on canvas" : "Show notes on canvas",
+            disabledReason: h.notes.count === 0 ? "No notes yet" : undefined,
+            keywords: ["notes", "sticky"],
+            run: () => h.notes!.setVisible(!h.notes!.visible),
+          },
+        ]
+      : []),
     { id: "undo", group: "Canvas", label: "Undo", shortcut: "⌘Z", run: h.undo },
     { id: "redo", group: "Canvas", label: "Redo", shortcut: "⌘⇧Z", run: h.redo },
     ...(["canvas", "code", "split"] as const).map((mode) => ({

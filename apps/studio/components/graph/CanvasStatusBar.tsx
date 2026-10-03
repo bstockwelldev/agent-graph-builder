@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useReactFlow, useStore } from "@xyflow/react";
-import { Focus, Grid3x3, Info, Network, SquareTerminal, X } from "lucide-react";
+import { Focus, Grid3x3, Info, Network, SquareTerminal, X, StickyNote } from "lucide-react";
 import { EDGE_KIND_TAXONOMY } from "@/content/taxonomy";
 import type { GraphStructure } from "@/lib/graphAuthoring";
 import { severityCounts, useConsoleLog } from "@/lib/consoleLog";
@@ -60,6 +60,9 @@ export function CanvasStatusBar({
   reducedMotion = false,
   consoleOpen = false,
   onToggleConsole,
+  openNotes = 0,
+  notesPanelOpen = false,
+  onToggleNotes,
   toolLabel,
   gridSize,
   onGridSizeChange,
@@ -78,6 +81,10 @@ export function CanvasStatusBar({
   /** The console dock (§6): its toggle shows the error/warning counts. */
   consoleOpen?: boolean;
   onToggleConsole?: () => void;
+  /** Sticky notes: the open (unresolved) count, and the Notes panel toggle. */
+  openNotes?: number;
+  notesPanelOpen?: boolean;
+  onToggleNotes?: () => void;
   /** The active pointer tool (§4), e.g. "Select". */
   toolLabel?: string;
   /** The grid step (§9), set next to the Snap toggle. */
@@ -118,6 +125,22 @@ export function CanvasStatusBar({
           >
             <SquareTerminal size={12} aria-hidden="true" />
             {consoleCountsLabel(consoleCounts)}
+          </button>
+        </HoverTooltip>
+      )}
+
+      {onToggleNotes && (
+        <HoverTooltip content={notesPanelOpen ? "Hide the Notes panel" : "Show all notes"} placement="top">
+          <button
+            type="button"
+            className="agb-focus-ring agb-hoverable"
+            aria-expanded={notesPanelOpen}
+            aria-label={openNotes > 0 ? `Notes: ${openNotes} open` : "Notes"}
+            onClick={onToggleNotes}
+            style={toggleStyle(notesPanelOpen)}
+          >
+            <StickyNote size={12} aria-hidden="true" />
+            {openNotes > 0 ? `${openNotes} open ${openNotes === 1 ? "note" : "notes"}` : "Notes"}
           </button>
         </HoverTooltip>
       )}

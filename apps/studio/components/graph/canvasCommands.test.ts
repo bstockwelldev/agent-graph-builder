@@ -66,5 +66,11 @@ describe("canvas commands", () => {
   it("offers sticky notes only when the editor supports them", () => {
     expect(buildCanvasCommands(handlers()).some((command) => command.id === "add-note")).toBe(false);
     expect(byId(buildCanvasCommands(handlers({ addNote: vi.fn() })), "add-note").label).toBe("Add sticky note");
+    const setVisible = vi.fn();
+    const withNotes = buildCanvasCommands(handlers({ notes: { count: 2, visible: true, setVisible, openPanel: vi.fn() } }));
+    expect(byId(withNotes, "notes-visible").label).toBe("Hide notes on canvas");
+    byId(withNotes, "notes-visible").run();
+    expect(setVisible).toHaveBeenCalledWith(false);
+    expect(byId(buildCanvasCommands(handlers({ notes: { count: 0, visible: true, setVisible, openPanel: vi.fn() } })), "notes-visible").disabledReason).toBe("No notes yet");
   });
 });

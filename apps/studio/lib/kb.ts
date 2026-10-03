@@ -40,6 +40,7 @@ export const PANEL_ARTICLE: Record<WorkbenchPanelId, string> = {
   policies: "policies",
   health: "graph-health",
   graphConfig: "code-mode",
+  notes: "sticky-notes",
   chat: "chat",
   agents: "agents",
   prompts: "resource-prompts",

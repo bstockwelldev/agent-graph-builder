@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addReply, buildNoteNodes, createNote, isNoteNodeId, noteIdFromNode, relativeTime, removeReply, unpinMissing } from "./notes";
+import { addReply, buildNoteNodes, createNote, filterNotes, followPinnedNodes, isNoteNodeId, noteIdFromNode, relativeTime, removeReply, unpinMissing } from "./notes";
 
 const NOW = "2026-10-01T12:00:00.000Z";
 
@@ -41,5 +41,25 @@ describe("sticky notes", () => {
     expect(relativeTime("2026-10-01T11:00:00.000Z", now)).toBe("1h ago");
     expect(relativeTime("2026-09-28T12:00:00.000Z", now)).toBe("3d ago");
     expect(relativeTime(null, now)).toBe("");
+  });
+
+  it("moves pinned notes with their node, and leaves the rest", () => {
+    const pinned = createNote([], { position: { x: 100, y: 50 }, author: null, nodeId: "llm_1", now: NOW });
+    const loose = createNote([pinned], { position: { x: 0, y: 0 }, author: null, now: NOW });
+    const notes = [pinned, loose];
+    const before = new Map([["llm_1", { x: 10, y: 10 }]]);
+    const moved = followPinnedNodes(notes, before, new Map([["llm_1", { x: 40, y: -5 }]]));
+    expect(moved.map((note) => note.position)).toEqual([{ x: 130, y: 35 }, { x: 0, y: 0 }]);
+    // Nothing moved: the same array, so no re-render.
+    expect(followPinnedNodes(notes, before, new Map(before))).toBe(notes);
+  });
+
+  it("filters open and resolved notes, newest first", () => {
+    const a = { ...createNote([], { position: { x: 0, y: 0 }, author: null, now: "2026-10-01T10:00:00.000Z" }) };
+    const b = { ...createNote([a], { position: { x: 0, y: 0 }, author: null, now: "2026-10-01T11:00:00.000Z" }), resolved: true };
+    const c = createNote([a, b], { position: { x: 0, y: 0 }, author: null, now: "2026-10-01T12:00:00.000Z" });
+    expect(filterNotes([a, b, c], "open").map((note) => note.id)).toEqual([c.id, a.id]);
+    expect(filterNotes([a, b, c], "resolved").map((note) => note.id)).toEqual([b.id]);
+    expect(filterNotes([a, b, c], "all")).toHaveLength(3);
   });
 });

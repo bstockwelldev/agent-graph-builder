@@ -489,6 +489,13 @@ As a result:
 - **Canvas actions in ⌘K** (`components/graph/canvasCommands.ts`): the editor publishes its commands through the workbench graph context, read when the palette opens. Arrange (Align ×6, Distribute ×2, Auto-arrange), Canvas (Select all, Fit view, Snap, Focus mode, Add sticky note, Undo/Redo), View (Canvas/Code/Split, Overview/Layers/Heatmap) and Graph (Save, Validate, Run, Find, Export). A command that can't run yet is listed disabled with the reason ("Select two or more nodes").
 - **Sticky notes with comments** (`GraphDefinition.notes`; `lib/notes.ts`, `nodes/StickyNote.tsx`, `NoteInspector.tsx`): add from the canvas menu, a node's menu (pinned to it) or ⌘K. A note has text, a color, an author, timestamps, an optional pinned node, a resolved flag and a comment thread. The author is the signed-in user's email, else a name saved in the browser. Notes are display-only: saved (document fingerprint, dirty check) but outside the semantic fingerprint and release diffs (pinned digests in the backend and SDK tests); a note whose node is deleted stays, unpinned. Edits are undoable; Delete removes the selected note.
 
+## Notes polish shipped 2026-10-03
+
+- **Pinned notes follow their node:** a drag, Align, Distribute or auto-arrange moves a pinned note by its node's change in position (`followPinnedNodes`). Loading, undo/redo and Apply set notes and nodes together and skip it, so a note never moves twice.
+- **Notes panel** (graph-scope workbench panel, `NotesPanel.tsx`): every note, filtered Open, Resolved or All (newest activity first); clicking one shows notes, selects it and pans to it. **Show notes on canvas** hides or shows them (remembered per browser); hidden notes stay saved and listed.
+- **Status bar:** "N open notes" opens the panel. ⌘K adds **Show all notes** and **Hide/Show notes on canvas**.
+- Not done: @mentions (there's no user directory to resolve them against).
+
 ## Suggested slices
 
 | # | Slice | Items | Priority | Impact |
