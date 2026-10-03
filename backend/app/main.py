@@ -1427,30 +1427,30 @@ async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
     """Resolves a `human_gate` checkpoint (studio-consolidation Phase 2).
 
     approve=True (default) continues execution from the paused node;
-    approve=False fails the run instead. 404 when there is nothing paused
-    for this run_id (already resolved, unknown run, or — same accepted
-    simplification as compiled-workflow lookup elsewhere in this API — the
-    compiled workflow was lost to a process restart).
+    approve=False fails the run instead. Works on any instance: the
+    checkpoint and the run's graph snapshot are stored. 404 when there is
+    nothing paused for this run_id; 409 when the run's graph can't be found,
+    or its provider needs an API key the request didn't send.
     """
     if runtime.get_run_pause_state(run_id) is None:
         raise HTTPException(
             status_code=404, detail="run has no pending human_gate checkpoint to resume"
         )
 
-    if not request.approve:
-        runtime.reject_run(run_id, reason=request.reason)
-    elif runtime.is_serverless_runtime():
-        if await runtime.resume_run_inline(run_id, request.values, request.reason) is None:
-            raise HTTPException(
-                status_code=409,
-                detail="run's compiled workflow is no longer available; cannot resume",
-            )
-    else:
-        if runtime.resume_run(run_id, request.values, request.reason) is None:
-            raise HTTPException(
-                status_code=409,
-                detail="run's compiled workflow is no longer available; cannot resume",
-            )
+    try:
+        if not request.approve:
+            runtime.reject_run(run_id, reason=request.reason)
+        elif runtime.is_serverless_runtime():
+            resumed = await runtime.resume_run_inline(run_id, request.values, request.reason, request.api_key)
+            if resumed is None:
+                raise HTTPException(status_code=409, detail="run's graph is no longer available; cannot resume")
+        elif runtime.resume_run(run_id, request.values, request.reason, request.api_key) is None:
+            raise HTTPException(status_code=409, detail="run's graph is no longer available; cannot resume")
+    except runtime.ResumeNeedsApiKey as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This run uses {exc.args[0]}, which needs an API key to continue. Enter the key and approve again.",
+        ) from exc
 
     summary = runtime.get_run_summary(run_id)
     if summary is None:

@@ -415,6 +415,10 @@ class RunResumeRequest(BaseModel):
     # On approve they become the run variable named after the gate node, so
     # downstream templates can read `{gate_id[field]}`.
     values: dict[str, Any] = Field(default_factory=dict)
+    # A paused run's API key is never stored: a resume on another instance
+    # (or after a restart) of a run on a keyed provider needs it again,
+    # unless the server has one configured.
+    api_key: str | None = None
 
 
 class RouteDecision(BaseModel):
@@ -497,14 +501,10 @@ class NodeTrace(BaseModel):
 
 
 class RunPauseState(BaseModel):
-    """Persisted checkpoint for a run stopped at a `human_gate` node.
-
-    Added for studio-consolidation Phase 2. Deliberately process-local only
-    for now (kept in runtime.py's RUN_PAUSES, not storage.py) — the same
-    accepted simplification `COMPILED_WORKFLOWS` already makes in this file;
-    durable pause state across restarts/serverless isolates is a follow-up
-    (see docs/planning/features/studio-consolidation-plan.md, Phase 2 notes).
-    """
+    """Persisted checkpoint for a run stopped at a `human_gate` node
+    (studio-consolidation Phase 2). Stored durably (`storage.save_run_pause`)
+    so any instance can resume it; `api_key` lives only in the process that
+    ran it and is never written to storage."""
 
     run_id: str
     graph_id: str

@@ -459,7 +459,7 @@
         "genui",
         "runs-and-traces"
       ],
-      "body": "Pauses the run at a checkpoint until someone approves or rejects it in the Run panel (or via POST /api/runs/{id}/resume). A GenUI surface can show what's being approved and collect values."
+      "body": "Pauses the run at a checkpoint until someone approves or rejects it in the Run panel (or via POST /api/runs/{id}/resume). A GenUI surface can show what's being approved and collect values.\n\nA paused run waits as long as needed: it can be approved later, from any browser, even after the server restarts. If the run uses a provider that needs an API key, approving asks for the key again (keys are never stored)."
     },
     {
       "id": "node-input",

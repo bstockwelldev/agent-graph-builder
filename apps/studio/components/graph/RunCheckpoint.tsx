@@ -9,7 +9,7 @@ import { accentSurface, color, radius, spacing, text, typeScale } from "@/lib/gr
 
 import { Button } from "./ui/Button";
 import { GenuiSurface, type GenuiValues } from "./ui/GenuiSurface";
-import { TextArea } from "./ui/fields";
+import { PasswordInput, TextArea } from "./ui/fields";
 
 export type Checkpoint = {
   nodeId: string;
@@ -19,7 +19,10 @@ export type Checkpoint = {
   surfaceJson: string;
 };
 
-export type ResumeDecision = { approve: boolean; reason?: string; values?: Record<string, unknown> };
+export type ResumeDecision = { approve: boolean; reason?: string; values?: Record<string, unknown>; apiKey?: string };
+
+/** The API's 409 when a paused run's provider needs its key again (keys are never stored). */
+const NEEDS_KEY = /needs an API key/i;
 
 /**
  * The approver's view of a run paused at a human_gate: the gate's message,
@@ -43,6 +46,8 @@ export function RunCheckpoint({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsKey, setNeedsKey] = useState(false);
+  const [apiKey, setApiKey] = useState("");
 
   const decide = async (approve: boolean, action?: string) => {
     setBusy(approve ? "approve" : "reject");
@@ -53,9 +58,12 @@ export function RunCheckpoint({
         approve,
         reason: reason.trim() || undefined,
         values: approve && Object.keys(formValues).length > 0 ? formValues : undefined,
+        apiKey: approve && apiKey.trim() ? apiKey.trim() : undefined,
       });
     } catch (err) {
-      setError(errorDetail(err));
+      const message = errorDetail(err);
+      if (NEEDS_KEY.test(message)) setNeedsKey(true);
+      setError(message);
     } finally {
       setBusy(null);
     }
@@ -90,6 +98,12 @@ export function RunCheckpoint({
         <span style={{ ...typeScale.caption, color: text.secondary }}>Reason (optional)</span>
         <TextArea aria-label="Reason" value={reason} rows={2} disabled={busy !== null} onChange={(event) => setReason(event.target.value)} placeholder="Recorded on the run" />
       </label>
+      {needsKey && (
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: spacing[2] }}>
+          <span style={{ ...typeScale.caption, color: text.secondary }}>API key (used for this resume only, never stored)</span>
+          <PasswordInput aria-label="API key" value={apiKey} disabled={busy !== null} onChange={(event) => setApiKey(event.target.value)} autoComplete="off" />
+        </label>
+      )}
       {error && (
         <div role="alert" style={{ marginTop: spacing[2], padding: spacing[2], borderRadius: radius.md, border: `1px solid ${accentSurface.destructive.border}`, background: accentSurface.destructive.bg, color: accentSurface.destructive.text, fontSize: 12 }}>
           {error}

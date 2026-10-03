@@ -129,6 +129,15 @@ _SCHEMA_STATEMENTS = (
         created_at text not null
     )
     """,
+    # Durable human_gate checkpoints: a paused run resumes on any instance
+    # and after a restart (the API key is never stored).
+    """
+    create table if not exists run_pause (
+        run_id text primary key,
+        payload_json text not null,
+        created_at text not null
+    )
+    """,
     # P1 rollout plan (docs/planning/features/p1-rollout-plan.md), parallel
     # track "Versioned reusable entity registry": storage primitives for an
     # immutable version/history table beside the mutable `resource` table
@@ -360,6 +369,11 @@ def _ensure_run_schema(conn: _DbConnection) -> None:
     for column in identity_columns:
         if column not in columns:
             conn.execute(f"alter table run add column {column} text")
+    # The whole RunSummary (events, paused node, parent run, ...), so the
+    # SQL backends round-trip a run like the object backends do. Older rows
+    # without it read back from the columns above.
+    if "summary_json" not in columns:
+        conn.execute("alter table run add column summary_json text")
 
 
 def _open_sqlite(path: Path) -> sqlite3.Connection:
@@ -665,14 +679,15 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
                 run_id, graph_id, status, input_json, provider,
                 result_json, error, started_at, completed_at, route_decisions_json,
                 graph_release_id, graph_fingerprint, source, runtime_target, compiler_version,
-                agent_id
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                agent_id, summary_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(run_id) do update set
                 status = excluded.status,
                 result_json = excluded.result_json,
                 error = excluded.error,
                 completed_at = excluded.completed_at,
-                route_decisions_json = excluded.route_decisions_json
+                route_decisions_json = excluded.route_decisions_json,
+                summary_json = excluded.summary_json
             """,
             (
                 summary.run_id,
@@ -695,6 +710,7 @@ def save_run_snapshot(summary: RunSummary, traces: list[NodeTrace]) -> None:
                 summary.runtime_target,
                 summary.compiler_version,
                 summary.agent_id,
+                summary.model_dump_json(by_alias=True),
             ),
         )
         conn.execute("delete from run_node_trace where run_id = ?", (summary.run_id,))
@@ -714,14 +730,17 @@ def get_run(run_id: str) -> RunSummary | None:
             select run_id, graph_id, status, input_json, provider,
                    result_json, error, started_at, completed_at, route_decisions_json,
                    graph_release_id, graph_fingerprint, source, runtime_target, compiler_version,
-                   agent_id
+                   agent_id, summary_json
             from run where run_id = ?
             """,
             (run_id,),
         ).fetchone()
     if row is None:
         return None
-    return _row_to_run_summary(row)
+    *columns, summary_json = row
+    if summary_json:
+        return RunSummary.model_validate_json(summary_json)
+    return _row_to_run_summary(tuple(columns))
 
 
 # Remote object run listing. Run blobs live flat at ``runs/{run_id}.json``
@@ -1191,6 +1210,46 @@ def get_run_graph_snapshot(run_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return json.loads(row[0])
+
+
+# Durable human_gate checkpoints: the pause state a resume needs, so any
+# instance (or the same one after a restart) can continue the run.
+_RUN_PAUSE_PREFIX = "run_pauses/"
+
+
+def _run_pause_key(run_id: str) -> str:
+    return f"{_RUN_PAUSE_PREFIX}{run_id}.json"
+
+
+def save_run_pause(run_id: str, payload: dict[str, Any], *, created_at: str) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.put_json(_run_pause_key(run_id), payload)
+        return
+    with _connect() as conn:
+        conn.execute(
+            "insert into run_pause (run_id, payload_json, created_at) values (?, ?, ?) "
+            "on conflict(run_id) do update set payload_json = excluded.payload_json",
+            (run_id, json.dumps(payload), created_at),
+        )
+
+
+def get_run_pause(run_id: str) -> dict[str, Any] | None:
+    remote = _json_object_backend()
+    if remote is not None:
+        return remote.get_json(_run_pause_key(run_id))
+    with _connect() as conn:
+        row = conn.execute("select payload_json from run_pause where run_id = ?", (run_id,)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def delete_run_pause(run_id: str) -> None:
+    remote = _json_object_backend()
+    if remote is not None:
+        remote.delete_json(_run_pause_key(run_id))
+        return
+    with _connect() as conn:
+        conn.execute("delete from run_pause where run_id = ?", (run_id,))
 
 
 # ---------------------------------------------------------------------------

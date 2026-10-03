@@ -282,6 +282,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 **Notes polish shipped 2026-10-03:**
 - Pinned notes move with their node; a Notes panel lists every note (Open/Resolved/All) and jumps to one; notes can be hidden on the canvas; the status bar counts open notes.
 
+**Durable runs shipped 2026-10-03:**
+- **Checkpoints:** a run paused at a human gate resumes on any instance and after a restart. The checkpoint is stored (never the API key; a keyed provider asks for it again), and the graph comes from the run's snapshot or its release, with the release's pinned resources.
+- **Event history:** a resumed run keeps its pre-pause events, and the SQLite/Turso backends now store the whole run summary (events, paused node), so replay works everywhere.
+- **Still open:** live SSE across instances (an append-only event log).
+
 ---
 
 ## Scoring rationale (requested items)
