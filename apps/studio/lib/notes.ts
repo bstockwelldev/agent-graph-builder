@@ -104,3 +104,34 @@ export function relativeTime(iso: string | null | undefined, now = Date.now()): 
   if (days < 30) return `${days}d ago`;
   return new Date(then).toISOString().slice(0, 10);
 }
+
+/**
+ * Pinned notes keep their place relative to their node: each moves by its
+ * node's change in position between `previous` and `current`. Returns the
+ * same array when nothing moved, so callers can skip a re-render.
+ */
+export function followPinnedNodes(
+  notes: GraphNote[],
+  previous: ReadonlyMap<string, { x: number; y: number }>,
+  current: ReadonlyMap<string, { x: number; y: number }>,
+): GraphNote[] {
+  let changed = false;
+  const next = notes.map((note) => {
+    if (!note.node_id) return note;
+    const before = previous.get(note.node_id);
+    const after = current.get(note.node_id);
+    if (!before || !after || (before.x === after.x && before.y === after.y)) return note;
+    changed = true;
+    const position = note.position ?? { x: 0, y: 0 };
+    return { ...note, position: { x: Math.round(position.x + after.x - before.x), y: Math.round(position.y + after.y - before.y) } };
+  });
+  return changed ? next : notes;
+}
+
+export type NotesFilter = "open" | "resolved" | "all";
+
+export function filterNotes(notes: GraphNote[], filter: NotesFilter): GraphNote[] {
+  const shown = filter === "all" ? notes : notes.filter((note) => Boolean(note.resolved) === (filter === "resolved"));
+  // Newest activity first.
+  return [...shown].sort((a, b) => (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? ""));
+}

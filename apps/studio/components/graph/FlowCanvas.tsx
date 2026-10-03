@@ -186,6 +186,9 @@ function FlowCanvasInner({
   const fitViewDebounceRef = useRef<number | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   nodesRef.current = nodes;
+  // Focus requests can target derived nodes too (sticky notes, frames).
+  const renderNodesRef = useRef(renderNodes);
+  renderNodesRef.current = renderNodes;
   edgesRef.current = edges;
   const displayEdges = useMemo(
     () =>
@@ -254,7 +257,7 @@ function FlowCanvasInner({
         targetIds.add(edge.target);
       }
     }
-    const targetNodes = nodesRef.current.filter((candidate) => targetIds.has(candidate.id));
+    const targetNodes = (renderNodesRef.current ?? nodesRef.current).filter((candidate) => targetIds.has(candidate.id));
     if (targetNodes.length === 0) return;
     void reactFlow.fitView({
       nodes: targetNodes,

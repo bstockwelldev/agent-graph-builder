@@ -79,3 +79,44 @@ test("sticky notes: add, write, comment, resolve, and they save with the graph",
   await page.keyboard.press("ControlOrMeta+z");
   await expect(card).toBeVisible();
 });
+
+test("a pinned note follows its node; the Notes panel lists, filters, opens and hides notes", async ({ page, api }) => {
+  await page.addInitScript(() => window.localStorage.setItem("agb.notes.author", "Ada"));
+  const graph = await api.createDemoGraph(`E2E notes panel ${Date.now()}`);
+  await openGraph(page, graph);
+  await waitForCanvasToSettle(page);
+
+  await node(page, "router_1").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add note" }).click();
+  await page.keyboard.type("Pinned to the router");
+  const card = page.getByRole("group", { name: /^Note by Ada: Pinned to the router/ });
+
+  // Drag the router: the note keeps its offset.
+  const noteBefore = (await card.boundingBox())!;
+  const routerBox = await box(page, "router_1");
+  await page.mouse.move(routerBox.x + routerBox.width / 2, routerBox.y + routerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(routerBox.x + routerBox.width / 2 + 30, routerBox.y + routerBox.height / 2 + 60, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => {
+      const after = (await card.boundingBox())!;
+      const routerAfter = await box(page, "router_1");
+      return [Math.round(after.x - routerAfter.x - (noteBefore.x - routerBox.x)), Math.round(after.y - routerAfter.y - (noteBefore.y - routerBox.y))];
+    })
+    .toEqual([0, 0]);
+  // The status bar counts open notes and opens the panel.
+  await page.getByRole("button", { name: "Notes: 1 open" }).click();
+  const list = page.getByRole("list", { name: "Notes" });
+  await expect(list.getByRole("button", { name: /Pinned to the router/ })).toBeVisible();
+  await page.getByRole("radio", { name: /Resolved \(0\)/ }).click();
+  await expect(page.getByText("No resolved notes.")).toBeVisible();
+  await page.getByRole("radio", { name: /Open \(1\)/ }).click();
+
+  // Hide notes on the canvas, then open one from the list: it shows again and is selected.
+  await page.getByRole("switch", { name: "Show notes on canvas" }).click();
+  await expect(card).toHaveCount(0);
+  await list.getByRole("button", { name: /Pinned to the router/ }).click();
+  await expect(card).toBeVisible();
+  await expect(page.getByLabel("Note text")).toHaveValue("Pinned to the router");
+});

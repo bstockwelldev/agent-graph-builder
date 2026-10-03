@@ -149,7 +149,8 @@ import { GraphConfigPanel } from "./GraphConfigPanel";
 import { GraphCodeView } from "./GraphCodeView";
 import { NoteInspector } from "./NoteInspector";
 import { StickyNote } from "./nodes/StickyNote";
-import { addReply, buildNoteNodes, createNote, isNoteNodeId, noteIdFromNode, removeReply, unpinMissing } from "@/lib/notes";
+import { addReply, buildNoteNodes, createNote, followPinnedNodes, isNoteNodeId, noteIdFromNode, noteNodeId, removeReply, unpinMissing } from "@/lib/notes";
+import { NotesPanel } from "./NotesPanel";
 import { useNoteAuthor } from "@/lib/noteAuthor";
 import { buildCanvasCommands, type CanvasCommand } from "./canvasCommands";
 import { KnowledgePanel } from "./KnowledgePanel";
@@ -249,6 +250,7 @@ const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
   "policies",
   "health",
   "graphConfig",
+  "notes",
   "chat",
 ]);
 
@@ -284,6 +286,7 @@ function closesOnCanvasSelection(panel: WorkbenchPanelId | null, compact: boolea
 }
 
 const PALETTE_COLLAPSED_STORAGE_KEY = "agb.palette.collapsed";
+const SHOW_NOTES_STORAGE_KEY = "agb.notes.visible";
 const DEFAULT_EDGE_KIND_STORAGE_KEY = "agb.edges.defaultKind";
 
 /** A node's box for Align and Distribute: its measured size, or the card's default. */
@@ -458,6 +461,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [notes, setNotes] = useState<GraphNote[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const noteAuthor = useNoteAuthor();
+  // Notes on the canvas can be hidden (remembered per browser); the Notes panel still lists them.
+  const [showNotes, setShowNotes] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(SHOW_NOTES_STORAGE_KEY) === "false") setShowNotes(false);
+    } catch {
+      // Storage blocked: notes stay visible.
+    }
+  }, []);
+  const changeShowNotes = useCallback((show: boolean) => {
+    setShowNotes(show);
+    writeStored(SHOW_NOTES_STORAGE_KEY, String(show));
+  }, []);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   // Wave 7c (STO-612): "Extract to graph" (the selection being extracted)
   // and the saved graphs whose subgraph nodes run this one.
@@ -813,6 +829,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setLayers(graph.layers ?? []);
         setNotes(graph.notes ?? []);
         setSelectedNoteId(null);
+        skipNoteFollowRef.current = true;
         setSavedFingerprint(fingerprintGraph(graph));
         clearHistory();
         setSelectedNodeId(null);
@@ -1049,6 +1066,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setGroups(snapshot.groups ?? []);
       setLayers(snapshot.layers ?? []);
       setNotes(snapshot.notes ?? []);
+      skipNoteFollowRef.current = true;
     },
     [setNodes, setEdges],
   );
@@ -1101,6 +1119,21 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     const frame = requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note text"]')?.focus());
     return () => cancelAnimationFrame(frame);
   }, [noteFocusRequest]);
+  // Pinned notes move with their node (drag, align, auto-arrange). Loads,
+  // undo/redo and Apply set notes and nodes together, so they skip this.
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }> | null>(null);
+  const skipNoteFollowRef = useRef(false);
+  useEffect(() => {
+    const current = new Map(nodes.map((node) => [node.id, node.position]));
+    const previous = nodePositionsRef.current;
+    nodePositionsRef.current = current;
+    if (!previous || skipNoteFollowRef.current) {
+      skipNoteFollowRef.current = false;
+      return;
+    }
+    setNotes((existing) => followPinnedNodes(existing, previous, current));
+  }, [nodes]);
+
   // Selecting a node or edge leaves the note.
   useEffect(() => {
     if (selectedNodeId || selectedEdgeId) setSelectedNoteId(null);
@@ -1367,6 +1400,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setLayers(graph.layers ?? []);
       setNotes(graph.notes ?? []);
       setSelectedNoteId(null);
+      skipNoteFollowRef.current = true;
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setDiagnostics([]);
@@ -2266,11 +2300,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [displayGroups, focusSet, heat, lanes, nodes, renamingGroupId]);
   // Sticky notes sit above the graph; the Layers view lays out nodes only.
   const canvasNodes = useMemo(() => {
-    if (lanes || notes.length === 0) return graphCanvasNodes;
+    if (lanes || notes.length === 0 || !showNotes) return graphCanvasNodes;
     const labels = new Map(nodes.map((node) => [node.id, String(node.data.extensions?.label ?? node.data.label ?? node.id)]));
     const noteNodes = buildNoteNodes(notes, selectedNoteId, (nodeId) => labels.get(nodeId) ?? null);
     return [...graphCanvasNodes, ...(noteNodes as unknown as Node<GraphNodeData>[])];
-  }, [graphCanvasNodes, lanes, nodes, notes, selectedNoteId]);
+  }, [graphCanvasNodes, lanes, nodes, notes, selectedNoteId, showNotes]);
   const noteDragRef = useRef<string | null>(null);
   const canvasEdges = useMemo(() => {
     const shown = lanes
@@ -2479,6 +2513,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       canFocus: Boolean(selectedNodeId),
       toggleFocusMode: () => setFocusMode((value) => !value),
       addNote: () => addNoteAt(viewportCenterRef.current?.() ?? { x: 200, y: 120 }),
+      notes: { count: notes.length, visible: showNotes, setVisible: changeShowNotes, openPanel: () => workbench.open("notes") },
       undo: () => {
         const snapshot = undo(getCanvasSnapshot());
         if (snapshot) applyCanvasSnapshot(snapshot);
@@ -3245,6 +3280,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
                 toolLabel={toolLabel(spaceHeld ? "hand" : tool)}
                 consoleOpen={consoleOpen}
                 onToggleConsole={() => setConsoleOpen((open) => !open)}
+                openNotes={notes.filter((note) => !note.resolved).length}
+                notesPanelOpen={workbench.activePanel === "notes"}
+                onToggleNotes={() => workbench.toggle("notes")}
                 structure={structure}
                 focusMode={focusMode}
                 focusHops={focusHops}
@@ -3650,6 +3688,24 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="notes" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
+        <NotesPanel
+          notes={notes}
+          nodeLabel={(nodeId) => {
+            const node = nodes.find((candidate) => candidate.id === nodeId);
+            return node ? String(node.data.extensions?.label ?? node.data.label ?? node.id) : null;
+          }}
+          showNotes={showNotes}
+          onShowNotesChange={changeShowNotes}
+          onOpen={(noteId) => {
+            changeShowNotes(true);
+            workbench.close();
+            selectNote(noteId);
+            setFocusRequest({ nodeId: noteNodeId(noteId), nonce: Date.now() });
+          }}
+          onAdd={() => addNoteAt(viewportCenterRef.current?.() ?? { x: 200, y: 120 })}
+        />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="graphConfig" side="right" mode="docked-reserve" dockedClassName="w-[32rem] border-l overflow-y-auto">
         <GraphConfigPanel
