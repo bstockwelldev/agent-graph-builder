@@ -7,6 +7,8 @@ describe("edge styles", () => {
     expect(readEdgeStyle(null)).toEqual({});
     expect(readEdgeStyle({ style: { pattern: "dashed", weight: "huge", color: "red" } })).toEqual({ pattern: "dashed" });
     expect(readEdgeStyle({ style: "solid" })).toEqual({});
+    expect(readEdgeStyle({ style: { routing: "step" } })).toEqual({ routing: "step" });
+    expect(readEdgeStyle({ style: { routing: "zigzag" } })).toEqual({});
   });
 
   it("stores the style alongside other extension keys, and drops it when empty", () => {

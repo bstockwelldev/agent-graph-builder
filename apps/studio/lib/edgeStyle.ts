@@ -11,7 +11,15 @@ import { color, nodeType } from "@/lib/graph-theme";
 export type EdgePattern = "solid" | "dashed" | "dotted";
 export type EdgeWeight = "thin" | "normal" | "thick";
 export type EdgeColor = "slate" | "blue" | "teal" | "violet" | "pink" | "green";
-export type EdgeStyle = { pattern?: EdgePattern; weight?: EdgeWeight; color?: EdgeColor };
+export type EdgeRouting = "curved" | "step" | "straight";
+export type EdgeStyle = { pattern?: EdgePattern; weight?: EdgeWeight; color?: EdgeColor; routing?: EdgeRouting };
+
+/** How the line travels between ports: the default curve, right angles, or a straight line. */
+export const EDGE_ROUTINGS: { value: EdgeRouting; label: string }[] = [
+  { value: "curved", label: "Curved" },
+  { value: "step", label: "Step" },
+  { value: "straight", label: "Straight" },
+];
 
 export const EDGE_PATTERNS: { value: EdgePattern; label: string }[] = [
   { value: "solid", label: "Solid" },
@@ -53,6 +61,7 @@ export function readEdgeStyle(extensions: Record<string, unknown> | null | undef
     ...(isOneOf(EDGE_PATTERNS, style.pattern) ? { pattern: style.pattern } : {}),
     ...(isOneOf(EDGE_WEIGHTS, style.weight) ? { weight: style.weight } : {}),
     ...(isOneOf(EDGE_COLORS, style.color) ? { color: style.color } : {}),
+    ...(isOneOf(EDGE_ROUTINGS, style.routing) ? { routing: style.routing } : {}),
   };
 }
 

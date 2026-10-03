@@ -19,7 +19,7 @@ import {
   XCircle,
   Palette,
 } from "lucide-react";
-import { EDGE_COLORS, EDGE_PATTERNS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
+import { EDGE_COLORS, EDGE_PATTERNS, EDGE_ROUTINGS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import {
   declareFromInferred,
@@ -1421,6 +1421,14 @@ function EdgeStyleGroup({ edge, onChange }: { edge: GraphEdge; onChange: (patch:
   ];
   return (
     <Group title="Style" icon={<Palette size={13} />}>
+      <Field label="Routing">
+        <SegmentedControl
+          aria-label="Line routing"
+          value={style.routing ?? "curved"}
+          options={EDGE_ROUTINGS.map((option) => ({ value: option.value, label: option.label }))}
+          onChange={(value) => set({ ...style, routing: value === "curved" ? undefined : value })}
+        />
+      </Field>
       <Field label="Line" hint="Display only: a style never changes what runs. By default Always is solid, Match text dashed and Fallback dotted.">
         <SegmentedControl
           aria-label="Line pattern"

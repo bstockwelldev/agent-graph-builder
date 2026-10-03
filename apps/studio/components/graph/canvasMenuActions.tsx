@@ -1,7 +1,7 @@
 import type { EdgeKind, NodeType } from "@bstockwelldev/agent-graph-sdk";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import type { AlignMode, DistributeAxis } from "@/lib/canvasAlign";
-import { EDGE_COLORS, EDGE_PATTERNS, EDGE_WEIGHTS, type EdgeStyle } from "@/lib/edgeStyle";
+import { EDGE_COLORS, EDGE_PATTERNS, EDGE_ROUTINGS, EDGE_WEIGHTS, type EdgeStyle } from "@/lib/edgeStyle";
 import type { NodeContextMenuAction } from "./NodeContextMenu";
 
 // The canvas right-click menus, one builder per target
@@ -267,12 +267,19 @@ export function arrangeActions(handlers: ArrangeHandlers): NodeContextMenuAction
   ];
 }
 
-/** Pattern, weight and color as checkable items, plus a reset (§7). */
+/** Routing, pattern, weight and color as checkable items, plus a reset (§7). */
 export function edgeStyleItems(style: EdgeStyle, setStyle: (style: EdgeStyle) => void): NodeContextMenuAction[] {
   return [
+    ...EDGE_ROUTINGS.map((option, index) => ({
+      label: option.label,
+      checked: (style.routing ?? "curved") === option.value,
+      groupLabel: index === 0 ? "Routing" : undefined,
+      onClick: () => setStyle({ ...style, routing: option.value === "curved" ? undefined : option.value }),
+    })),
     ...EDGE_PATTERNS.map((option, index) => ({
       label: option.label,
       checked: style.pattern === option.value,
+      separatorBefore: index === 0,
       groupLabel: index === 0 ? "Pattern" : undefined,
       onClick: () => setStyle({ ...style, pattern: option.value }),
     })),

@@ -1,6 +1,6 @@
 "use client";
 
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, type EdgeProps } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import type { EdgeKind } from "@bstockwelldev/agent-graph-sdk";
 import { flowEdgeLabel } from "@/lib/graphAuthoring";
@@ -53,7 +53,13 @@ export function LabeledEdge({
 }: EdgeProps) {
   const edgeData = (data ?? {}) as LabeledEdgeData;
   const actions = useCanvasActions();
-  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const userStyle = readEdgeStyle(edgeData.extensions);
+  const [path, labelX, labelY] =
+    userStyle.routing === "step"
+      ? getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 6 })
+      : userStyle.routing === "straight"
+        ? getStraightPath({ sourceX, sourceY, targetX, targetY })
+        : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const merged = (edgeData.mergedCount ?? 1) > 1 ? edgeData.mergedCount : null;
   const label = merged ? `×${merged}` : flowEdgeLabel(edgeData.kind ?? "sequence", edgeData.condition);
   const runState = edgeData.runState;
@@ -63,7 +69,7 @@ export function LabeledEdge({
   // failed keeps red, so the two runtime signals always read.
   const look = resolveEdgeLook(
     edgeData.kind ?? "sequence",
-    readEdgeStyle(edgeData.extensions),
+    userStyle,
     { stroke: style?.stroke as string | undefined, strokeWidth: Number(style?.strokeWidth ?? 1.5) },
     Boolean(edgeData.issue),
   );

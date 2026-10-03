@@ -1,5 +1,6 @@
 "use client";
 
+import { EDGE_PATTERNS, EDGE_ROUTINGS, type EdgeStyle } from "@/lib/edgeStyle";
 import {
   useEffect,
   useMemo,
@@ -77,6 +78,8 @@ export function NodePalette({
   onCollapsedChange,
   defaultEdgeKind,
   onDefaultEdgeKindChange,
+  defaultEdgeStyle,
+  onDefaultEdgeStyleChange,
 }: {
   onAdd: (type: NodeType, config?: Record<string, unknown>) => void;
   graphId?: string | null;
@@ -85,6 +88,9 @@ export function NodePalette({
   onCollapsedChange?: (collapsed: boolean) => void;
   defaultEdgeKind?: EdgeKind;
   onDefaultEdgeKindChange?: (kind: EdgeKind) => void;
+  /** The line new edges get (routing and pattern); display only. */
+  defaultEdgeStyle?: EdgeStyle;
+  onDefaultEdgeStyleChange?: (style: EdgeStyle) => void;
 }) {
   if (collapsed)
     return (
@@ -97,6 +103,8 @@ export function NodePalette({
       onCollapse={onCollapsedChange ? () => onCollapsedChange(true) : undefined}
       defaultEdgeKind={defaultEdgeKind}
       onDefaultEdgeKindChange={onDefaultEdgeKindChange}
+      defaultEdgeStyle={defaultEdgeStyle}
+      onDefaultEdgeStyleChange={onDefaultEdgeStyleChange}
     />
   );
 }
@@ -107,12 +115,16 @@ function FullPalette({
   onCollapse,
   defaultEdgeKind,
   onDefaultEdgeKindChange,
+  defaultEdgeStyle,
+  onDefaultEdgeStyleChange,
 }: {
   onAdd: (type: NodeType, config?: Record<string, unknown>) => void;
   graphId: string | null;
   onCollapse?: () => void;
   defaultEdgeKind?: EdgeKind;
   onDefaultEdgeKindChange?: (kind: EdgeKind) => void;
+  defaultEdgeStyle?: EdgeStyle;
+  onDefaultEdgeStyleChange?: (style: EdgeStyle) => void;
 }) {
   const [query, setQuery] = useState("");
   const [loaded, setLoaded] = useState<Record<string, PaletteItem[] | null>>(
@@ -213,6 +225,45 @@ function FullPalette({
               </button>
             ))}
           </div>
+          {onDefaultEdgeStyleChange && defaultEdgeStyle && (
+            <>
+              <div role="group" aria-label="New edge routing" style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                {EDGE_ROUTINGS.map((option) => {
+                  const active = (defaultEdgeStyle.routing ?? "curved") === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className="agb-focus-ring agb-hoverable"
+                      aria-pressed={active}
+                      onClick={() => onDefaultEdgeStyleChange({ ...defaultEdgeStyle, routing: option.value === "curved" ? undefined : option.value })}
+                      style={segmentStyle(active)}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div role="group" aria-label="New edge pattern" style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                {[{ value: undefined, label: "By kind" }, ...EDGE_PATTERNS].map((option) => {
+                  const active = defaultEdgeStyle.pattern === option.value;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className="agb-focus-ring agb-hoverable"
+                      aria-pressed={active}
+                      title={option.value ? undefined : "Always solid, Match text dashed, Fallback dotted"}
+                      onClick={() => onDefaultEdgeStyleChange({ ...defaultEdgeStyle, pattern: option.value })}
+                      style={segmentStyle(active)}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
