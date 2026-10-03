@@ -287,6 +287,12 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Event history:** a resumed run keeps its pre-pause events, and the SQLite/Turso backends now store the whole run summary (events, paused node), so replay works everywhere.
 - **Still open:** live SSE across instances (an append-only event log).
 
+**Canvas polish shipped 2026-10-03:**
+- **Edge routing:** Curved, Step or Straight per edge (inspector Style, right-click ▸ Style); display only, like the other edge styles.
+- **New-edge line:** the palette's **New edges** sets the routing and pattern new connections get.
+- **Drag undo:** moving nodes is one undo step per drag.
+- **Touch:** press and hold opens the node, edge, selection or canvas menu.
+
 ---
 
 ## Scoring rationale (requested items)
