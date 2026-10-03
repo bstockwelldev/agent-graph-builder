@@ -1,3 +1,4 @@
+import { useLongPress } from "@/hooks/useLongPress";
 import {
   Background,
   BackgroundVariant,
@@ -509,11 +510,24 @@ function FlowCanvasInner({
     [boxOf, freeDrag, gridSize, guides.length, onNodesChange, reactFlow, snapToGrid],
   );
 
+  // Touch has no right-click: a long press opens the same menus.
+  const longPress = useLongPress((target, x, y) => {
+    const node = target.closest(".react-flow__node[data-id]");
+    if (node) return onNodeContextMenu?.(node.getAttribute("data-id")!, x, y);
+    const edge = target.closest(".react-flow__edge[data-id]");
+    if (edge) return onEdgeContextMenu?.(edge.getAttribute("data-id")!, x, y);
+    if (target.closest(".react-flow__nodesselection")) return onSelectionContextMenu?.(x, y);
+    if (!target.closest(".react-flow__pane")) return;
+    const flowPosition = reactFlow.screenToFlowPosition({ x, y });
+    onPaneContextMenu?.(x, y, flowPosition.x, flowPosition.y);
+  });
+
   return (
     <div
       ref={paneRef}
       data-canvas-tool={spaceHeld ? "hand" : tool}
       style={{ position: "absolute", inset: 0 }}
+      {...longPress}
       onDragOver={(event) => {
         if (!onDropItem || !event.dataTransfer.types.includes(PALETTE_DRAG_TYPE)) return;
         event.preventDefault();

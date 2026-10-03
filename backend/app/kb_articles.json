@@ -61,6 +61,9 @@
         "guides",
         "context menu",
         "right-click",
+        "long-press",
+        "touch",
+        "undo",
         "focus mode",
         "palette",
         "add node"
@@ -71,7 +74,7 @@
         "code-mode",
         "sticky-notes"
       ],
-      "body": "The canvas is where you lay out and connect steps. The tool bar on the left switches between Select, Hand (pan), Marquee, Connect and Zoom; hold Space to pan with any tool.\n\n## How do I…\n- **Add a node:** **Add node** in the header opens the palette. Search it, click an item, or drag it onto the canvas. Saved prompts, LLM profiles, tools, transforms and graphs are in the palette too.\n- **Use the menus:** right-click a node, an edge, a selection or the empty canvas for the actions that apply there.\n- **Line things up:** dragged nodes snap to other nodes' edges and centers (hold ⇧ or ⌥ to drag freely). With several nodes selected, use **Align** or **Distribute** (⌥A, ⌥H, ⌥D, ⌥W, ⌥V, ⌥S; ⌥⇧H and ⌥⇧V).\n- **Snap to a grid:** turn on Snap in the status bar and pick 12, 24 or 48.\n- **Focus on one node:** select it and turn on Focus mode; set how many steps away stay lit in the status bar.\n- **See the log:** the status bar's Console opens a dock under the canvas.\n- **Run any of these from the keyboard:** ⌘K lists canvas actions (Align, Distribute, Auto-arrange, Fit view, Snap, Focus mode, Undo, views, Save, Validate) for the open graph. Ones that need a selection say so."
+      "body": "The canvas is where you lay out and connect steps. The tool bar on the left switches between Select, Hand (pan), Marquee, Connect and Zoom; hold Space to pan with any tool.\n\n## How do I…\n- **Add a node:** **Add node** in the header opens the palette. Search it, click an item, or drag it onto the canvas. Saved prompts, LLM profiles, tools, transforms and graphs are in the palette too.\n- **Use the menus:** right-click a node, an edge, a selection or the empty canvas for the actions that apply there. On a touch screen, press and hold instead.\n- **Undo a move:** dragging nodes is one undo step (⌘Z), however far you drag.\n- **Line things up:** dragged nodes snap to other nodes' edges and centers (hold ⇧ or ⌥ to drag freely). With several nodes selected, use **Align** or **Distribute** (⌥A, ⌥H, ⌥D, ⌥W, ⌥V, ⌥S; ⌥⇧H and ⌥⇧V).\n- **Snap to a grid:** turn on Snap in the status bar and pick 12, 24 or 48.\n- **Focus on one node:** select it and turn on Focus mode; set how many steps away stay lit in the status bar.\n- **See the log:** the status bar's Console opens a dock under the canvas.\n- **Run any of these from the keyboard:** ⌘K lists canvas actions (Align, Distribute, Auto-arrange, Fit view, Snap, Focus mode, Undo, views, Save, Validate) for the open graph. Ones that need a selection say so."
     },
     {
       "id": "chat",
@@ -229,7 +232,7 @@
     {
       "id": "edge-styles",
       "title": "Edge styles",
-      "summary": "Line pattern, weight and color for an edge",
+      "summary": "Routing, line pattern, weight and color for an edge",
       "category": "concept",
       "keywords": [
         "edge style",
@@ -241,14 +244,18 @@
         "color",
         "colour",
         "pattern",
-        "weight"
+        "weight",
+        "routing",
+        "step",
+        "straight",
+        "curved"
       ],
       "related": [
         "edge-sequence",
         "edge-conditional",
         "edge-default"
       ],
-      "body": "Each edge kind has a default pattern: Always is solid, Match text dashed and Fallback dotted. You can restyle any edge; styles are for display only and never change what runs, or a release's diff.\n\n## How do I…\n- Select an edge and use the inspector's **Style** group, or right-click it ▸ **Style**. **Reset style** goes back to the defaults.\n\nA running edge stays animated, a failed one stays red, and a validation problem keeps its color, whatever the style."
+      "body": "Each edge kind has a default pattern: Always is solid, Match text dashed and Fallback dotted. You can restyle any edge; styles are for display only and never change what runs, or a release's diff.\n\n## How do I…\n- Select an edge and use the inspector's **Style** group, or right-click it ▸ **Style**. **Reset style** goes back to the defaults.\n- Pick a **Routing**: Curved (the default), Step (right angles) or Straight.\n- Set the line new edges get in the palette, under **New edges**: a routing and a pattern (\"By kind\" keeps each kind's default).\n\nA running edge stays animated, a failed one stays red, and a validation problem keeps its color, whatever the style."
     },
     {
       "id": "genui",

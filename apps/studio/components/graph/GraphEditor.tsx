@@ -83,7 +83,7 @@ import {
   type GridSize,
 } from "@/lib/canvasAlign";
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
-import { readEdgeStyle, withEdgeStyle } from "@/lib/edgeStyle";
+import { readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
 import { ALIGN_OPTIONS, DISTRIBUTE_OPTIONS } from "./canvasMenuActions";
 import { CanvasToolbar } from "./CanvasToolbar";
 import type { PaletteDrop } from "./paletteSections";
@@ -288,6 +288,7 @@ function closesOnCanvasSelection(panel: WorkbenchPanelId | null, compact: boolea
 const PALETTE_COLLAPSED_STORAGE_KEY = "agb.palette.collapsed";
 const SHOW_NOTES_STORAGE_KEY = "agb.notes.visible";
 const DEFAULT_EDGE_KIND_STORAGE_KEY = "agb.edges.defaultKind";
+const DEFAULT_EDGE_STYLE_STORAGE_KEY = "agb.edges.defaultStyle";
 
 /** A node's box for Align and Distribute: its measured size, or the card's default. */
 function nodeBox(node: Node<GraphNodeData>): Box {
@@ -306,6 +307,16 @@ function readStoredEdgeKind(): EdgeKind {
     return value === "conditional" || value === "default" ? value : "sequence";
   } catch {
     return "sequence";
+  }
+}
+
+/** The line style new edges get (routing and pattern only), from the palette. */
+function readStoredEdgeStyle(): EdgeStyle {
+  try {
+    const { routing, pattern } = readEdgeStyle({ style: JSON.parse(window.localStorage.getItem(DEFAULT_EDGE_STYLE_STORAGE_KEY) ?? "null") });
+    return { ...(routing ? { routing } : {}), ...(pattern ? { pattern } : {}) };
+  } catch {
+    return {};
   }
 }
 
@@ -393,14 +404,15 @@ function toFlowEdge(e: GraphEdge): Edge {
   };
 }
 
-function createFlowEdge(connection: Connection, kind: EdgeKind, condition: string | null): Edge {
+function createFlowEdge(connection: Connection, kind: EdgeKind, condition: string | null, lineStyle: EdgeStyle = {}): Edge {
   const { stroke, strokeWidth } = edgeStrokeForKind(kind);
+  const extensions = withEdgeStyle(null, lineStyle);
   return {
     id: nextId("e"),
     source: connection.source!,
     target: connection.target!,
     style: { stroke, strokeWidth },
-    data: { kind, condition },
+    data: { kind, condition, ...(extensions ? { extensions } : {}) },
   };
 }
 
@@ -444,6 +456,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [connectSource, setConnectSource] = useState<string | null>(null);
   // The palette's "New edges" choice, and its own fold (per viewer).
   const [defaultEdgeKind, setDefaultEdgeKind] = useState<EdgeKind>("sequence");
+  const [defaultEdgeStyle, setDefaultEdgeStyle] = useState<EdgeStyle>({});
   const [paletteCollapsedPref, setPaletteCollapsedPref] = useState(false);
   // Focus mode's neighborhood, 1-3 hops (the status bar's control).
   const [focusHops, setFocusHops] = useState(1);
@@ -555,6 +568,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       // Default grid.
     }
     setDefaultEdgeKind(readStoredEdgeKind());
+    setDefaultEdgeStyle(readStoredEdgeStyle());
     try {
       setPaletteCollapsedPref(window.localStorage.getItem(PALETTE_COLLAPSED_STORAGE_KEY) === "true");
     } catch {
@@ -1162,19 +1176,19 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       }
 
       recordMutation();
-      setEdges((current) => addEdge(createFlowEdge(connection, defaultEdgeKind, null), current));
+      setEdges((current) => addEdge(createFlowEdge(connection, defaultEdgeKind, null, defaultEdgeStyle), current));
     },
-    [defaultEdgeKind, nodes, recordMutation, setEdges],
+    [defaultEdgeKind, defaultEdgeStyle, nodes, recordMutation, setEdges],
   );
 
   const confirmPendingConnection = useCallback(
     (kind: EdgeKind, condition: string | null) => {
       if (!pendingConnection) return;
       recordMutation();
-      setEdges((current) => addEdge(createFlowEdge(pendingConnection.connection, kind, condition), current));
+      setEdges((current) => addEdge(createFlowEdge(pendingConnection.connection, kind, condition, defaultEdgeStyle), current));
       setPendingConnection(null);
     },
-    [pendingConnection, recordMutation, setEdges],
+    [defaultEdgeStyle, pendingConnection, recordMutation, setEdges],
   );
 
   const patchEdgeById = useCallback(
@@ -2306,6 +2320,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     return [...graphCanvasNodes, ...(noteNodes as unknown as Node<GraphNodeData>[])];
   }, [graphCanvasNodes, lanes, nodes, notes, selectedNoteId, showNotes]);
   const noteDragRef = useRef<string | null>(null);
+  const nodeDragRef = useRef(false);
   const canvasEdges = useMemo(() => {
     const shown = lanes
       ? edges.filter((edge) => lanes.positions.has(edge.source) && lanes.positions.has(edge.target))
@@ -2345,6 +2360,16 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         if (!("id" in change) || !isFrameNodeId(change.id)) {
           // Layers view positions are computed, never dragged into `nodes`.
           if (view === "layers" && change.type === "position") continue;
+          // One undo step per drag of graph nodes (a multi-select drag included);
+          // React Flow only reports `dragging` once the pointer actually moves.
+          if (change.type === "position") {
+            if (change.dragging && !nodeDragRef.current) {
+              nodeDragRef.current = true;
+              recordMutation();
+            } else if (change.dragging === false) {
+              nodeDragRef.current = false;
+            }
+          }
           graphChanges.push(change);
           continue;
         }
@@ -3123,6 +3148,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           onDefaultEdgeKindChange={(kind) => {
             setDefaultEdgeKind(kind);
             writeStored(DEFAULT_EDGE_KIND_STORAGE_KEY, kind);
+          }}
+          defaultEdgeStyle={defaultEdgeStyle}
+          onDefaultEdgeStyleChange={(style) => {
+            setDefaultEdgeStyle(style);
+            writeStored(DEFAULT_EDGE_STYLE_STORAGE_KEY, JSON.stringify(style));
           }}
         />
       </WorkbenchDrawer>
