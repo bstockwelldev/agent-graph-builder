@@ -24,6 +24,7 @@ import {
   knowledgeDeleteResponseSchema,
   knowledgeLineageEntrySchema,
   knowledgeSummarySchema,
+  lineageGraphSchema,
   knowledgeUploadResponseSchema,
   llmProfileSchema,
   transformDefinitionSchema,
@@ -378,6 +379,17 @@ export function buildNamespaces(transport: Transport) {
       lineage: (graphId: string, request: KnowledgeLineageRequest = {}) => lineage.list({ graphId, ...request }),
       lineagePage: (graphId: string, request: KnowledgeLineageRequest & PageRequest) => lineage.listPage({ graphId, ...request }),
       iterateLineage: (graphId: string, request: KnowledgeLineageRequest & IterateRequest = {}) => lineage.iterate({ graphId, ...request }),
+      /** The lineage as a graph (documents → chunks → runs → nodes), newest rows first-capped by `limit`. */
+      lineageGraph: (graphId: string, request: { runId?: string; documentId?: string; limit?: number } = {}) =>
+        transport.request(
+          `${path`/api/graphs/${graphId}/knowledge/lineage-graph`}${query({
+            run_id: request.runId,
+            document_id: request.documentId,
+            limit: request.limit,
+          })}`,
+          undefined,
+          lineageGraphSchema,
+        ),
     },
 
     analytics: {

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
@@ -38,7 +38,9 @@ from .events import get_bus
 from .graph_templates import create_graph_definition
 from .pagination import NEXT_CURSOR_HEADER, Page, field_key, paginate
 from .knowledge import (
+    LINEAGE_GRAPH_LIMIT,
     KnowledgeUploadError,
+    knowledge_lineage_graph,
     delete_knowledge_document,
     get_knowledge_entry,
     list_knowledge_lineage,
@@ -51,6 +53,7 @@ from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
+    LineageGraph,
     GraphResources,
     McpDiscovery,
     McpHeaderNames,
@@ -176,7 +179,9 @@ app = FastAPI(title="Agent Graph Builder POC", version=API_VERSION, lifespan=lif
 
 
 @app.exception_handler(LiveProviderBlocked)
-async def live_provider_blocked_handler(_request: Request, exc: LiveProviderBlocked) -> JSONResponse:
+async def live_provider_blocked_handler(
+    _request: Request, exc: LiveProviderBlocked
+) -> JSONResponse:
     return JSONResponse(
         status_code=403,
         content={"detail": {"code": "live_provider_requires_api_key", "message": str(exc)}},
@@ -261,7 +266,9 @@ def health_check() -> JSONResponse:
     payload["public_demo_mode"] = public_demo_mode_enabled()
     # The deployed commit, so a stale deploy shows up in a health check (Vercel
     # sets VERCEL_GIT_COMMIT_SHA; set GIT_COMMIT_SHA elsewhere). None locally.
-    payload["commit"] = os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("GIT_COMMIT_SHA") or None
+    payload["commit"] = (
+        os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("GIT_COMMIT_SHA") or None
+    )
     status_code = 200 if payload["ok"] else 503
     return JSONResponse(status_code=status_code, content=payload)
 
@@ -271,14 +278,19 @@ def list_kb_articles(q: str | None = None) -> list[KbArticleSummary]:
     """The in-app knowledge base (canvas-workbench-ergonomics-plan.md §11):
     every article, or with ``q`` the ones matching it, best first."""
     articles = search_articles(q, limit=50) if q and q.strip() else list(load_articles())
-    return [KbArticleSummary.model_validate(article.model_dump(exclude={"body"})) for article in articles]
+    return [
+        KbArticleSummary.model_validate(article.model_dump(exclude={"body"}))
+        for article in articles
+    ]
 
 
 @app.get("/api/kb/{article_id}")
 def get_kb_article(article_id: str) -> KbArticle:
     article = get_article(article_id)
     if article is None:
-        raise HTTPException(status_code=404, detail=f"knowledge base article {article_id!r} not found")
+        raise HTTPException(
+            status_code=404, detail=f"knowledge base article {article_id!r} not found"
+        )
     return article
 
 
@@ -397,9 +409,7 @@ def publish_release_endpoint(
 
 
 @app.get("/api/graphs/{graph_id}/releases")
-def list_releases_endpoint(
-    graph_id: str, page: Page
-) -> list[dict[str, Any]]:
+def list_releases_endpoint(graph_id: str, page: Page) -> list[dict[str, Any]]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return paginate(list_releases(graph_id), page, key=field_key("created_at", "release_id"))
@@ -685,14 +695,10 @@ def create_policy_exception_endpoint(
 
 
 @app.get("/api/graphs/{graph_id}/policy-exceptions")
-def list_policy_exceptions_endpoint(
-    graph_id: str, page: Page
-) -> list[PolicyException]:
+def list_policy_exceptions_endpoint(graph_id: str, page: Page) -> list[PolicyException]:
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
-    return paginate(
-        list_graph_policy_exceptions(graph_id), page, key=field_key("created_at", "id")
-    )
+    return paginate(list_graph_policy_exceptions(graph_id), page, key=field_key("created_at", "id"))
 
 
 @app.patch("/api/graphs/{graph_id}/policy-exceptions/{exception_id}")
@@ -884,6 +890,19 @@ def get_graph_knowledge_lineage(
     return paginate(
         list_knowledge_lineage(graph_id, document_id), page, key=field_key("created_at", "id")
     )
+
+
+@app.get("/api/graphs/{graph_id}/knowledge/lineage-graph")
+def get_graph_knowledge_lineage_graph(
+    graph_id: str,
+    run_id: str | None = None,
+    document_id: str | None = None,
+    limit: int = Query(LINEAGE_GRAPH_LIMIT, ge=1, le=1000),
+) -> LineageGraph:
+    """Documents → chunks → runs → nodes from the newest lineage rows."""
+    if storage.get_graph(graph_id) is None:
+        raise HTTPException(status_code=404, detail="graph not found")
+    return knowledge_lineage_graph(graph_id, run_id=run_id, document_id=document_id, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1132,9 +1151,7 @@ def _register_resource_version_routes(kind: str, path: str) -> None:
         name=f"list_{kind}_versions",
         operation_id=f"list_{kind}_versions",
     )
-    def list_versions_route(
-        resource_id: str, page: Page
-    ) -> list[dict[str, Any]]:
+    def list_versions_route(resource_id: str, page: Page) -> list[dict[str, Any]]:
         return paginate(
             list_resource_versions(kind, resource_id),
             page,
@@ -1441,11 +1458,17 @@ async def resume_run(run_id: str, request: RunResumeRequest) -> RunSummary:
         if not request.approve:
             runtime.reject_run(run_id, reason=request.reason)
         elif runtime.is_serverless_runtime():
-            resumed = await runtime.resume_run_inline(run_id, request.values, request.reason, request.api_key)
+            resumed = await runtime.resume_run_inline(
+                run_id, request.values, request.reason, request.api_key
+            )
             if resumed is None:
-                raise HTTPException(status_code=409, detail="run's graph is no longer available; cannot resume")
+                raise HTTPException(
+                    status_code=409, detail="run's graph is no longer available; cannot resume"
+                )
         elif runtime.resume_run(run_id, request.values, request.reason, request.api_key) is None:
-            raise HTTPException(status_code=409, detail="run's graph is no longer available; cannot resume")
+            raise HTTPException(
+                status_code=409, detail="run's graph is no longer available; cannot resume"
+            )
     except runtime.ResumeNeedsApiKey as exc:
         raise HTTPException(
             status_code=409,

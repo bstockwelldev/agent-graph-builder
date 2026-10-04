@@ -573,6 +573,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/graphs/{graph_id}/knowledge/lineage-graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Graph Knowledge Lineage Graph
+         * @description Documents → chunks → runs → nodes from the newest lineage rows.
+         */
+        get: operations["get_graph_knowledge_lineage_graph_api_graphs__graph_id__knowledge_lineage_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/graphs/{graph_id}/nodes/{node_id}/history": {
         parameters: {
             query?: never;
@@ -2517,16 +2537,77 @@ export type components = {
             document_id: string;
             /** Document Name */
             document_name: string;
+            /** Document Version */
+            document_version?: number | null;
+            /** Embedding Model */
+            embedding_model?: string | null;
             /** Graph Id */
             graph_id: string;
             /** Id */
             id: string;
             /** Node Id */
             node_id: string;
+            /** Query */
+            query?: string | null;
+            /** Rank */
+            rank?: number | null;
+            /** Release Id */
+            release_id?: string | null;
             /** Run Id */
             run_id: string;
             /** Score */
             score: number;
+        };
+        /**
+         * LineageGraph
+         * @description `GET /api/graphs/{id}/knowledge/lineage-graph`: documents → chunks →
+         *     runs → nodes, built from the newest lineage rows (`truncated` when the
+         *     limit cut older ones off).
+         */
+        LineageGraph: {
+            /** Edges */
+            edges: components["schemas"]["LineageGraphEdge"][];
+            /** Nodes */
+            nodes: components["schemas"]["LineageGraphNode"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated?: boolean;
+        };
+        /** LineageGraphEdge */
+        LineageGraphEdge: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "contains" | "retrieved" | "used_in";
+            /** Score */
+            score?: number | null;
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+        };
+        /**
+         * LineageGraphNode
+         * @description One box in the lineage graph: a document, one of its chunks, a run,
+         *     or a graph node within a run (id `node:{run_id}:{node_id}`).
+         */
+        LineageGraphNode: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "document" | "chunk" | "run" | "node";
+            /** Label */
+            label: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * McpDiscovery
@@ -4664,6 +4745,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeLineageEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_graph_knowledge_lineage_graph_api_graphs__graph_id__knowledge_lineage_graph_get: {
+        parameters: {
+            query?: {
+                document_id?: string | null;
+                limit?: number;
+                run_id?: string | null;
+            };
+            header?: never;
+            path: {
+                graph_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineageGraph"];
                 };
             };
             /** @description Validation Error */

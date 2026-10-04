@@ -76,6 +76,18 @@ test("knowledge uploads a document that runs then retrieve from", async ({ page,
   await expect(page.getByText(/indexes\.md\s*1 retrieval across 1 run/)).toBeVisible();
   await expect(page.getByText(/llm_classify ← indexes\.md \(0\.\d+\)/)).toBeVisible();
 
+  // The lineage graph links the document to the run and its llm nodes; a node
+  // box opens that run with the node's Run tab, which lists its sources.
+  const lineage = page.getByRole("group", { name: "Lineage graph" });
+  await expect(lineage.getByRole("img", { name: "Document indexes.md (version 1)" })).toBeVisible();
+  await expect(lineage.getByRole("button", { name: /^Run run_\w+: open$/ })).toBeVisible();
+  await lineage.getByRole("button", { name: /^Node llm_classify in run run_\w+: open$/ }).click();
+  const sources = page.getByRole("list", { name: "Knowledge sources" });
+  await expect(sources).toContainText("indexes.md");
+  await expect(sources).toContainText("v1");
+
+  await openGraph(page, graph, "?panel=knowledge");
+
   // Removing asks for confirmation first.
   await page.getByRole("button", { name: "Remove indexes.md" }).click();
   await page.getByRole("button", { name: "Confirm remove indexes.md" }).click();

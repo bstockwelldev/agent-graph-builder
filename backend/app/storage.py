@@ -344,6 +344,26 @@ def _bootstrap_schema(conn: _DbConnection) -> None:
     for statement in _SCHEMA_STATEMENTS:
         conn.execute(statement)
     _ensure_run_schema(conn)
+    _ensure_lineage_schema(conn)
+
+
+_LINEAGE_EXTRA_COLUMNS = (
+    ("document_version", "integer"),
+    ("rank", "integer"),
+    ("query", "text"),
+    ("embedding_model", "text"),
+    ("release_id", "text"),
+)
+
+
+def _ensure_lineage_schema(conn: _DbConnection) -> None:
+    """Richer retrieval lineage (2026-10): nullable, so older rows need no backfill."""
+    columns = {
+        row[1] for row in conn.execute("pragma table_info(knowledge_lineage_entry)").fetchall()
+    }
+    for column, kind in _LINEAGE_EXTRA_COLUMNS:
+        if column not in columns:
+            conn.execute(f"alter table knowledge_lineage_entry add column {column} {kind}")
 
 
 def _ensure_run_schema(conn: _DbConnection) -> None:
@@ -1239,7 +1259,9 @@ def get_run_pause(run_id: str) -> dict[str, Any] | None:
     if remote is not None:
         return remote.get_json(_run_pause_key(run_id))
     with _connect() as conn:
-        row = conn.execute("select payload_json from run_pause where run_id = ?", (run_id,)).fetchone()
+        row = conn.execute(
+            "select payload_json from run_pause where run_id = ?", (run_id,)
+        ).fetchone()
     return json.loads(row[0]) if row else None
 
 
@@ -1550,7 +1572,8 @@ def save_knowledge_lineage_entry(graph_id: str, entry_id: str, payload: dict[str
         conn.execute(
             "insert into knowledge_lineage_entry "
             "(id, graph_id, document_id, document_name, chunk_id, run_id, node_id, score, "
-            "created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "created_at, document_version, rank, query, embedding_model, release_id) "
+            "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entry_id,
                 graph_id,
@@ -1561,6 +1584,7 @@ def save_knowledge_lineage_entry(graph_id: str, entry_id: str, payload: dict[str
                 payload["node_id"],
                 payload["score"],
                 payload["created_at"],
+                *(payload.get(column) for column, _kind in _LINEAGE_EXTRA_COLUMNS),
             ),
         )
 
@@ -1577,7 +1601,8 @@ def list_knowledge_lineage(graph_id: str, document_id: str | None = None) -> lis
         with _connect() as conn:
             rows = conn.execute(
                 "select id, graph_id, document_id, document_name, chunk_id, run_id, node_id, "
-                "score, created_at from knowledge_lineage_entry where graph_id = ? "
+                "score, created_at, document_version, rank, query, embedding_model, release_id "
+                "from knowledge_lineage_entry where graph_id = ? "
                 "order by created_at",
                 (graph_id,),
             ).fetchall()
@@ -1592,6 +1617,7 @@ def list_knowledge_lineage(graph_id: str, document_id: str | None = None) -> lis
                 "node_id": row[6],
                 "score": row[7],
                 "created_at": row[8],
+                **{column: row[9 + i] for i, (column, _kind) in enumerate(_LINEAGE_EXTRA_COLUMNS)},
             }
             for row in rows
         ]

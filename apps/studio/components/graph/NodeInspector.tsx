@@ -19,6 +19,7 @@ import {
   XCircle,
   Palette,
 } from "lucide-react";
+import { knowledgeHitsOf } from "@/lib/lineageGraph";
 import { EDGE_COLORS, EDGE_PATTERNS, EDGE_ROUTINGS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import {
@@ -1188,6 +1189,7 @@ function RunTab({
   }
 
   const duration = formatTraceDuration(selectedTrace);
+  const hits = knowledgeHitsOf(selectedTrace.input);
   const tone = statusColor[selectedTrace.status];
   const childRun = childGraphId !== undefined ? childRunHref(selectedTrace, childGraphId) : null;
   return (
@@ -1219,6 +1221,23 @@ function RunTab({
           </a>
         )}
       </Group>
+      {hits.length > 0 && (
+        <Group title="Sources">
+          <ol aria-label="Knowledge sources" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: spacing[2] }}>
+            {hits.map((hit) => (
+              <li key={`${hit.rank}-${hit.chunkId}`} style={{ fontSize: 12, lineHeight: "16px" }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                  <span style={{ color: text.secondary, fontFamily: fontFamily.mono }}>#{hit.rank}</span>
+                  <strong style={{ overflowWrap: "anywhere" }}>{hit.documentName}</strong>
+                  {hit.documentVersion !== null && <span style={{ color: text.secondary }}>v{hit.documentVersion}</span>}
+                  <span style={{ marginLeft: "auto", color: text.secondary, fontFamily: fontFamily.mono }}>{hit.score.toFixed(2)}</span>
+                </div>
+                {hit.preview && <div style={{ color: text.secondary, marginTop: 2, overflowWrap: "anywhere" }}>{hit.preview}</div>}
+              </li>
+            ))}
+          </ol>
+        </Group>
+      )}
     </div>
   );
 }

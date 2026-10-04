@@ -146,4 +146,18 @@ describe("graphs.summaries", () => {
     expect(await client.graphs.summaries.list()).toEqual([summary]);
     expect(sent(fetch).url).toBe("/api/graph-summaries");
   });
+
+  it("reads the knowledge lineage graph with its filters", async () => {
+    const fetch = vi.fn(async (_url: string) =>
+      json({
+        nodes: [{ id: "doc:d1", kind: "document", label: "notes.md" }],
+        edges: [{ source: "doc:d1", target: "chunk:c1", kind: "contains" }],
+      }),
+    );
+    const client = createAgentGraphClient({ fetch: fetch as never });
+    const graph = await client.knowledge.lineageGraph("g 1", { runId: "run_1", limit: 50 });
+    expect(fetch.mock.calls[0][0]).toBe("/api/graphs/g%201/knowledge/lineage-graph?run_id=run_1&limit=50");
+    expect(graph.nodes[0].label).toBe("notes.md");
+    expect(graph.truncated).toBeUndefined();
+  });
 });

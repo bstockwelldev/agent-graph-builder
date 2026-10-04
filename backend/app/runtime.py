@@ -628,6 +628,7 @@ def _prepare_run(
         requested_model=model,
         api_key=api_key,
         release_resource_snapshots=release_resource_snapshots,
+        release_id=release_id,
         fixture_node_outputs=frozenset(seeded_node_outputs) or None,
         forced_routes=forced_routes or None,
         node_chat_models=node_chat_models or None,
@@ -816,13 +817,17 @@ def _prepare_resume(
         requested_model=pause.model,
         api_key=key,
         release_resource_snapshots=release_resource_snapshots,
+        release_id=RUN_STORE[run_id].graph_release_id if run_id in RUN_STORE else None,
     )
     compiled_app = _build_langgraph(graph, ctx)
     return ctx, compiled_app, run_input
 
 
 def resume_run(
-    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None, api_key: str | None = None
+    run_id: str,
+    values: dict[str, Any] | None = None,
+    reason: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[str, RunEventBus] | None:
     """Approves the paused `human_gate` checkpoint and resumes execution in
     the background. Use on long-lived processes; see `resume_run_inline`
@@ -841,7 +846,10 @@ def resume_run(
 
 
 async def resume_run_inline(
-    run_id: str, values: dict[str, Any] | None = None, reason: str | None = None, api_key: str | None = None
+    run_id: str,
+    values: dict[str, Any] | None = None,
+    reason: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[str, RunEventBus] | None:
     """Serverless variant of `resume_run` — awaits execution in this request."""
     prepared = _prepare_resume(run_id, values, reason, api_key)
