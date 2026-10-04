@@ -136,6 +136,74 @@ class TransformNodeConfig(BaseModel):
         return self
 
 
+class DecisionRule(BaseModel):
+    """One deterministic rule on a decision node: when ``match`` (case-insensitive
+    substring) appears in the upstream text, the node returns ``verdict``
+    without calling any model. Policy-team owned; never depends on model
+    judgment."""
+
+    name: str = Field(min_length=1)
+    match: str = Field(min_length=1)
+    verdict: str = Field(min_length=1)
+
+
+class DecisionConfig(BaseModel):
+    """Constrained decision node (decision_models/).
+
+    ``schema`` names a built-in schema (``route`` / ``gate`` / ``triage``) or
+    carries an inline JSON Schema object (restricted subset -- see
+    ``decision_models.schemas.model_from_json_schema``). ``onLowConfidence``
+    is ``"default"`` (take the default edge -- human review path) unless the
+    graph performs state changes downstream, in which case ``"fail"`` fails
+    the run rather than acting on an uncalibrated guess.
+    """
+
+    schema: str | dict[str, Any] = "route"
+    outcomeField: str | None = None
+    abstainValues: list[str] = Field(default_factory=lambda: ["abstain", "needs_review"])
+    provider: str | None = None
+    model: str | None = None
+    threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    onLowConfidence: Literal["default", "fail"] = "default"
+    rules: list[DecisionRule] = Field(default_factory=list)
+    systemPrompt: str | None = None
+
+    @model_validator(mode="after")
+    def _check_schema_and_rules(self) -> DecisionConfig:
+        from .decision_models.schemas import resolve_decision_schema
+
+        if isinstance(self.schema, dict) and not self.outcomeField:
+            raise ValueError("outcomeField is required with an inline schema")
+        try:
+            schema_cls, outcome_values = resolve_decision_schema(
+                self.schema, self.outcomeField
+            )
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        for rule in self.rules:
+            if outcome_values and rule.verdict not in outcome_values:
+                raise ValueError(
+                    f"rule {rule.name!r}: verdict {rule.verdict!r} is not a "
+                    f"valid outcome (expected one of {outcome_values})"
+                )
+        # Deterministic rule payloads only carry outcome + confidence (+ an
+        # optional reason code), so rules are rejected when the schema demands
+        # other required fields the rule cannot fill.
+        if self.rules and isinstance(self.schema, dict):
+            unfillable = [
+                name
+                for name, f in schema_cls.model_fields.items()
+                if f.is_required()
+                and name not in {schema_cls.outcome_field(), "confidence"}
+            ]
+            if unfillable:
+                raise ValueError(
+                    f"rules require fillable schemas: required fields "
+                    f"{unfillable} cannot be set by a deterministic rule"
+                )
+        return self
+
+
 _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.GUARDRAIL: GuardrailConfig,
     NodeType.RUBRIC: RubricConfig,
@@ -145,6 +213,7 @@ _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.HUMAN_GATE: HumanGateConfig,
     NodeType.SUBGRAPH: SubgraphConfig,
     NodeType.TRANSFORM: TransformNodeConfig,
+    NodeType.DECISION: DecisionConfig,
 }
 
 
@@ -167,3 +236,4 @@ def validate_node_config(node_type: NodeType, config: dict[str, Any]) -> list[st
 def _format_error(error: dict[str, Any]) -> str:
     field = ".".join(str(part) for part in error.get("loc", ())) or "config"
     return f"{field}: {error.get('msg', 'invalid value')}"
+
