@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown } from "lucide-react";
 import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,11 @@ export function GraphSwitcherCombobox({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  // Viewport-anchored popover position, measured from the trigger on open.
+  // The popover is portaled to document.body (see below), so `top`/`bottom`
+  // are viewport coordinates for `position: fixed`.
+  const [popoverPos, setPopoverPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
   const activeGraph = graphs.find((graph) => graph.id === activeGraphId) ?? null;
   const triggerLabel = activeGraph?.name ?? activeGraphName ?? "Switch graph";
 
@@ -49,6 +55,22 @@ export function GraphSwitcherCombobox({
     setOpen(next);
     onOpenChange?.(next);
   };
+
+  // Measure the trigger's viewport rect when the popover opens. `fixed`
+  // positioning (via the portal below) is relative to the viewport, so the
+  // popover tracks the trigger even though it no longer lives inside the
+  // header's layout.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    // w-72 = 288px; keep the popover on-screen horizontally.
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - 288 - 8));
+    setPopoverPos(
+      openDirection === "up"
+        ? { bottom: window.innerHeight - rect.top + 8, left }
+        : { top: rect.bottom + 8, left },
+    );
+  }, [open, openDirection]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +86,7 @@ export function GraphSwitcherCombobox({
   }, [open]);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={triggerRef}>
       <Button
         type="button"
         variant="outline"
@@ -84,59 +106,72 @@ export function GraphSwitcherCombobox({
           </>
         )}
       </Button>
-      {open && (
-        <>
-          {/* Full-viewport transparent backdrop dismisses on outside click —
-              same convention as ConnectKindMenu/NodeContextMenu's floating
-              panels elsewhere in this codebase. */}
-          <button
-            type="button"
-            aria-label="Close graph switcher"
-            className="fixed inset-0 z-30 cursor-default bg-transparent"
-            onClick={() => setOpenAndNotify(false)}
-          />
-          <div
-            className={cn(
-              "animate-in fade-in-0 zoom-in-95 absolute left-0 z-40 w-72 max-w-[calc(100vw-2rem)] duration-150",
-              openDirection === "up" ? "slide-in-from-bottom-1 bottom-full mb-2 origin-bottom-left" : "slide-in-from-top-1 top-full mt-2 origin-top-left",
-            )}
-          >
-            <Command className="border border-border shadow-lg">
-              <CommandInput placeholder="Find a graph…" autoFocus />
-              <CommandList>
-                {loading ? (
-                  <div className="text-muted-foreground px-3 py-6 text-center text-sm">Loading graphs…</div>
-                ) : (
-                  <>
-                    <CommandEmpty>No graphs found.</CommandEmpty>
-                    <CommandGroup>
-                      {graphs.map((graph) => {
-                        const active = graph.id === activeGraphId;
-                        return (
-                          <CommandItem
-                            key={graph.id}
-                            value={`${graph.name} ${graph.id}`}
-                            onSelect={() => {
-                              setOpenAndNotify(false);
-                              onSelect(graph.id);
-                            }}
-                          >
-                            <Check className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-0")} />
-                            <span className="flex min-w-0 flex-1 flex-col">
-                              <span className="truncate font-medium">{graph.name}</span>
-                              <span className="text-muted-foreground truncate text-xs">{graph.id}</span>
-                            </span>
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  </>
-                )}
-              </CommandList>
-            </Command>
-          </div>
-        </>
-      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <>
+            {/* Full-viewport transparent backdrop dismisses on outside click —
+                same convention as ConnectKindMenu/NodeContextMenu's floating
+                panels elsewhere in this codebase. */}
+            <button
+              type="button"
+              aria-label="Close graph switcher"
+              className="fixed inset-0 z-30 cursor-default bg-transparent"
+              onClick={() => setOpenAndNotify(false)}
+            />
+            <div
+              className={cn(
+                "animate-in fade-in-0 zoom-in-95 fixed z-40 w-72 max-w-[calc(100vw-2rem)] duration-150",
+                openDirection === "up" ? "slide-in-from-bottom-1 origin-bottom-left" : "slide-in-from-top-1 origin-top-left",
+              )}
+              // Portaled to document.body: the trigger lives inside
+              // GraphHeader's identity group, which is `overflow: hidden` (it
+              // must stay that way so the group clips instead of overlapping
+              // its neighbors at narrow widths). An absolutely-positioned
+              // popover in there gets cut off and the graph list never
+              // appears; `fixed` in a portal escapes every clipping ancestor.
+              // Hidden until measured so the first paint never flashes the
+              // popover at the wrong spot (the layout effect above runs
+              // before paint).
+              style={popoverPos ?? { visibility: "hidden" }}
+            >
+              <Command className="border border-border shadow-lg">
+                <CommandInput placeholder="Find a graph…" autoFocus />
+                <CommandList>
+                  {loading ? (
+                    <div className="text-muted-foreground px-3 py-6 text-center text-sm">Loading graphs…</div>
+                  ) : (
+                    <>
+                      <CommandEmpty>No graphs found.</CommandEmpty>
+                      <CommandGroup>
+                        {graphs.map((graph) => {
+                          const active = graph.id === activeGraphId;
+                          return (
+                            <CommandItem
+                              key={graph.id}
+                              value={`${graph.name} ${graph.id}`}
+                              onSelect={() => {
+                                setOpenAndNotify(false);
+                                onSelect(graph.id);
+                              }}
+                            >
+                              <Check className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-0")} />
+                              <span className="flex min-w-0 flex-1 flex-col">
+                                <span className="truncate font-medium">{graph.name}</span>
+                                <span className="text-muted-foreground truncate text-xs">{graph.id}</span>
+                              </span>
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </>
+                  )}
+                </CommandList>
+              </Command>
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }
