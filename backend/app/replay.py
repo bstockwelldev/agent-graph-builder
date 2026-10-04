@@ -8,7 +8,7 @@ tool/LLM calls at all. This is the `studio-ux-revision-plan.md` "Replay
 run" slot: "Opens immutable workflow version in read-only execution mode."
 
 Counterfactual replay (STO-609) builds on the same mechanism: a
-`ReplayRequest` can pin routers/branches to a different target
+`ReplayRequest` can pin routers/branches/decision nodes to a different target
 (`forced_routes`) and give LLM/tool_loop nodes a different provider/model
 (`model_overrides`). Every node reachable downstream of a change is
 "affected" and recomputes instead of using its recorded output -- on the
@@ -53,7 +53,7 @@ from .provider_credentials import get_provider_credentials
 from .providers.base import ChatModel, ChatProvider, get_chat_model
 from .releases import get_release
 
-_ROUTING_NODE_TYPES = frozenset({NodeType.ROUTER, NodeType.BRANCH})
+_ROUTING_NODE_TYPES = frozenset({NodeType.ROUTER, NodeType.BRANCH, NodeType.DECISION})
 
 
 class ReplayNotFound(Exception):
@@ -142,7 +142,7 @@ def _validate_request(graph: GraphDefinition, request: ReplayRequest) -> list[Di
         node = nodes_by_id.get(node_id)
         if node is None or node.type not in _ROUTING_NODE_TYPES:
             diagnostics.append(
-                _counterfactual_error(f"{node_id!r} is not a router or branch node.", node_id)
+                _counterfactual_error(f"{node_id!r} is not a router, branch, or decision node.", node_id)
             )
             continue
         targets = {e.target for e in graph.edges if e.source == node_id}
@@ -314,3 +314,4 @@ async def replay_run(run_id: str, request: ReplayRequest | None = None) -> Count
 
 
 __all__ = ["ReplayNotFound", "ReplayBlocked", "replay_run"]
+
