@@ -148,7 +148,7 @@ describe("graphs.summaries", () => {
   });
 
   it("reads the knowledge lineage graph with its filters", async () => {
-    const fetch = vi.fn(async () =>
+    const fetch = vi.fn(async (_url: string) =>
       json({
         nodes: [{ id: "doc:d1", kind: "document", label: "notes.md" }],
         edges: [{ source: "doc:d1", target: "chunk:c1", kind: "contains" }],
