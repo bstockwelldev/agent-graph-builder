@@ -1,12 +1,13 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KnowledgeLineageEntry, KnowledgeSummary } from "@bstockwelldev/agent-graph-sdk";
+import type { KnowledgeLineageEntry, KnowledgeSummary, LineageGraph } from "@bstockwelldev/agent-graph-sdk";
 
 import { client } from "@/lib/api-client";
 import { color, fontFamily, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { describeEmbedding, errorDetail, summarizeLineageByDocument } from "@/lib/knowledgePanel";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
+import { LineageGraphView } from "./LineageGraphView";
 import { SkeletonBlock } from "./ui/Skeleton";
 
 // Knowledge base panel (docs/planning/features/studio-shell-ux-gap-analysis.md,
@@ -31,10 +32,16 @@ export function KnowledgePanel({
   graphId,
   layout = "rail",
   reducedMotion = false,
+  onOpenRun,
+  onOpenNode,
 }: {
   graphId: string | null;
   layout?: "rail" | "drawer";
   reducedMotion?: boolean;
+  /** Lineage graph: a run box opens that run in the Run panel. */
+  onOpenRun?: (runId: string) => void;
+  /** Lineage graph: a node box opens the run and that node's Run tab. */
+  onOpenNode?: (runId: string, nodeId: string) => void;
 }) {
   const [summary, setSummary] = useState<KnowledgeSummary | null>(null);
   const [lineage, setLineage] = useState<KnowledgeLineageEntry[]>([]);
@@ -44,6 +51,8 @@ export function KnowledgePanel({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lineageError, setLineageError] = useState<string | null>(null);
+  const [lineageGraph, setLineageGraph] = useState<LineageGraph | null>(null);
+  const [lineageDocument, setLineageDocument] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Lineage is secondary to the document list: a failure there must not
@@ -51,6 +60,7 @@ export function KnowledgePanel({
   const loadLineage = useCallback(async (id: string) => {
     try {
       setLineage(await client.knowledge.lineage(id));
+      setLineageGraph(await client.knowledge.lineageGraph(id));
       setLineageError(null);
     } catch (err) {
       setLineageError(errorDetail(err));
@@ -222,6 +232,44 @@ export function KnowledgePanel({
           </div>
         </CollapsibleSection>
 
+        <CollapsibleSection sectionId="knowledge-lineage" title="Lineage" defaultOpen reducedMotion={reducedMotion}>
+          {lineageGraph === null || lineageGraph.nodes.length === 0 ? (
+            <div role="status" style={{ ...typeScale.caption, opacity: 0.6, lineHeight: "18px" }}>
+              Which documents and chunks fed which runs and nodes. Nothing yet: run this graph after uploading a document.
+            </div>
+          ) : (
+            <>
+              <label style={{ ...typeScale.caption, display: "flex", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
+                Document
+                <select
+                  value={lineageDocument}
+                  onChange={(event) => {
+                    const documentId = event.target.value;
+                    setLineageDocument(documentId);
+                    if (!graphId) return;
+                    client.knowledge
+                      .lineageGraph(graphId, documentId ? { documentId } : {})
+                      .then(setLineageGraph)
+                      .catch((err: unknown) => setLineageError(errorDetail(err)));
+                  }}
+                  style={selectStyle}
+                >
+                  <option value="">All documents</option>
+                  {usage.map((row) => (
+                    <option key={row.documentId} value={row.documentId}>
+                      {row.documentName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <LineageGraphView graph={lineageGraph} onOpenRun={onOpenRun} onOpenNode={onOpenNode} />
+              {lineageGraph.truncated && (
+                <div style={{ ...typeScale.caption, opacity: 0.7, marginTop: spacing[1] }}>Showing the most recent retrievals.</div>
+              )}
+            </>
+          )}
+        </CollapsibleSection>
+
         <CollapsibleSection sectionId="knowledge-usage" title="Usage" defaultOpen reducedMotion={reducedMotion}>
           {lineageError ? (
             <div role="alert" style={{ ...typeScale.caption, color: color.warning[500], lineHeight: "16px" }}>
@@ -284,6 +332,17 @@ const scrollerStyle: CSSProperties = {
 };
 
 const monoStyle: CSSProperties = { fontFamily: fontFamily.mono };
+
+const selectStyle: CSSProperties = {
+  ...typeScale.caption,
+  flex: 1,
+  minWidth: 0,
+  height: 28,
+  borderRadius: radius.md,
+  border: `1px solid ${surface.borderStrong}`,
+  background: surface.inset,
+  color: text.primary,
+};
 
 const rowStyle: CSSProperties = {
   padding: spacing[2],

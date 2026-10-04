@@ -20,7 +20,10 @@ from app.knowledge import (
     chunk_text,
     cosine_similarity,
     format_knowledge_augmentation,
+    get_knowledge_entry,
+    knowledge_hit_summary,
     list_knowledge_lineage,
+    retrieve_knowledge,
     top_k_chunks_by_embedding,
 )
 from app.main import app
@@ -490,7 +493,7 @@ def test_upload_success_then_conflict_on_model_mismatch_then_delete(
 # --- compute_llm wiring: RAG augmentation is called for every llm node ---
 
 
-async def test_compute_llm_calls_augment_system_with_knowledge(
+async def test_compute_llm_calls_retrieve_knowledge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[str, str, str, str | None, str | None]] = []
@@ -503,11 +506,11 @@ async def test_compute_llm_calls_augment_system_with_knowledge(
         run_id: str | None = None,
         node_id: str | None = None,
         **_: object,
-    ) -> str:
+    ) -> tuple[str, list[dict[str, object]]]:
         calls.append((system, graph_id, query, run_id, node_id))
-        return system
+        return system, []
 
-    monkeypatch.setattr("app.nodes.augment_system_with_knowledge", _spy)
+    monkeypatch.setattr("app.nodes.retrieve_knowledge", _spy)
 
     graph = GraphDefinition(
         id="graph_rag_wiring_test",
@@ -759,3 +762,158 @@ def test_summary_reports_public_demo_mode(monkeypatch: pytest.MonkeyPatch) -> No
     body = client.get(f"/api/graphs/{demo.id}/knowledge").json()
     assert body["activeEmbeddingProvider"] == "supabase"
     assert body["embeddingUnavailableReason"] is None
+
+
+# --- Richer lineage (2026-10): versions, stable chunk ids, hits, graph ------
+
+
+async def test_retrieve_knowledge_records_rank_query_model_and_release(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    graph_id = "graph_lineage_rich"
+    _seed_lineage_entry(monkeypatch, graph_id)
+
+    augmented, hits = await retrieve_knowledge(
+        "base prompt",
+        graph_id,
+        "what color is the sky?",
+        run_id="run_9",
+        node_id="llm_1",
+        release_id="rel_1",
+    )
+
+    assert "the sky is blue" in augmented
+    assert [hit["rank"] for hit in hits] == [1]
+    summary = knowledge_hit_summary(hits[0])
+    assert summary == {
+        "documentId": "doc1",
+        "documentName": "facts.txt",
+        "documentVersion": 1,
+        "chunkId": "c1",
+        "rank": 1,
+        "score": 1.0,
+        "preview": "the sky is blue",
+    }
+    [row] = list_knowledge_lineage(graph_id)
+    assert row.rank == 1
+    assert row.document_version == 1
+    assert row.query == "what color is the sky?"
+    assert row.embedding_model == "openai/text-embedding-3-small"
+    assert row.release_id == "rel_1"
+
+
+def test_reupload_keeps_the_document_id_bumps_version_and_keeps_chunk_ids(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    demo = editable_demo_graph()
+    storage.save_graph(demo)
+    _clear_embedding_env(monkeypatch)
+    _configure_openai_embeddings(monkeypatch)
+    monkeypatch.setattr("app.knowledge.embed_texts", _fake_embed_texts)
+
+    def upload(text: bytes) -> dict:
+        response = client.post(
+            f"/api/graphs/{demo.id}/knowledge", files={"file": ("notes.txt", text, "text/plain")}
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    first = upload(b"Kubernetes orchestrates containers.")
+    first_chunks = [chunk.id for chunk in storage_entry(demo.id).chunks]
+    second = upload(b"Kubernetes orchestrates containers.")
+    assert second["documentId"] == first["documentId"]
+    assert (first["documentVersion"], second["documentVersion"]) == (1, 2)
+    entry = storage_entry(demo.id)
+    assert len(entry.documents) == 1 and entry.documents[0].content_hash
+    # Same text, same chunk ids; nothing duplicated.
+    assert [chunk.id for chunk in entry.chunks] == first_chunks
+
+    upload(b"Something else entirely.")
+    assert [chunk.id for chunk in storage_entry(demo.id).chunks] != first_chunks
+    assert len(storage_entry(demo.id).chunks) == 1
+
+
+def storage_entry(graph_id: str) -> KnowledgeEntry:
+    entry = get_knowledge_entry(graph_id)
+    assert entry is not None
+    return entry
+
+
+def test_lineage_graph_links_documents_chunks_runs_and_nodes(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    import asyncio
+
+    demo = editable_demo_graph()
+    graph_id = f"{demo.id}_lineage_graph"
+    storage.save_graph(demo.model_copy(update={"id": graph_id}))
+    _seed_lineage_entry(monkeypatch, graph_id)
+    for run_id in ("run_a", "run_b"):
+        asyncio.run(retrieve_knowledge("p", graph_id, "sky?", run_id=run_id, node_id="llm_1"))
+
+    body = client.get(f"/api/graphs/{graph_id}/knowledge/lineage-graph").json()
+    kinds = sorted((node["kind"], node["id"]) for node in body["nodes"])
+    assert kinds == [
+        ("chunk", "chunk:c1"),
+        ("document", "doc:doc1"),
+        ("node", "node:run_a:llm_1"),
+        ("node", "node:run_b:llm_1"),
+        ("run", "run:run_a"),
+        ("run", "run:run_b"),
+    ]
+    edges = {(edge["source"], edge["target"], edge["kind"]) for edge in body["edges"]}
+    assert ("doc:doc1", "chunk:c1", "contains") in edges
+    assert ("chunk:c1", "run:run_a", "retrieved") in edges
+    assert ("run:run_b", "node:run_b:llm_1", "used_in") in edges
+    assert body["truncated"] is False
+
+    one_run = client.get(f"/api/graphs/{graph_id}/knowledge/lineage-graph?run_id=run_a").json()
+    assert {node["id"] for node in one_run["nodes"] if node["kind"] == "run"} == {"run:run_a"}
+    capped = client.get(f"/api/graphs/{graph_id}/knowledge/lineage-graph?limit=1").json()
+    assert capped["truncated"] is True
+    assert client.get("/api/graphs/nope/knowledge/lineage-graph").status_code == 404
+
+
+async def test_llm_trace_lists_the_chunks_it_used(
+    monkeypatch: pytest.MonkeyPatch, _isolated_db: None
+) -> None:
+    from app.runtime import get_run_node_traces
+
+    graph_id = "graph_rag_trace_hits"
+    _seed_lineage_entry(monkeypatch, graph_id)
+    graph = GraphDefinition(
+        id=graph_id,
+        name="RAG trace",
+        entry_node_id="input_1",
+        nodes=[
+            GraphNode(
+                id="input_1",
+                type=NodeType.INPUT,
+                position=NodePosition(x=0, y=0),
+                config={"variableName": "question"},
+            ),
+            GraphNode(
+                id="llm_1",
+                type=NodeType.LLM,
+                position=NodePosition(x=200, y=0),
+                config={"model": "stub"},
+            ),
+            GraphNode(
+                id="output_1", type=NodeType.OUTPUT, position=NodePosition(x=400, y=0), config={}
+            ),
+        ],
+        edges=[
+            {"id": "e1", "source": "input_1", "target": "llm_1", "kind": "sequence"},
+            {"id": "e2", "source": "llm_1", "target": "output_1", "kind": "sequence"},
+        ],
+    )
+    assert compile_graph(graph, "cwf_rag_trace_hits").ok
+    COMPILED_WORKFLOWS["cwf_rag_trace_hits"] = graph
+
+    run_id, _bus = await start_run_inline(
+        "cwf_rag_trace_hits", {"question": "sky?"}, provider="stub"
+    )
+
+    llm = next(trace for trace in get_run_node_traces(run_id) if trace.node_id == "llm_1")
+    assert [hit["chunkId"] for hit in llm.input["knowledgeHits"]] == ["c1"]
+    assert list_knowledge_lineage(graph_id)[0].run_id == run_id

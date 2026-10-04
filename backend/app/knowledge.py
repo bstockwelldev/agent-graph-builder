@@ -19,6 +19,7 @@ base — no per-node opt-in.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from datetime import UTC, datetime
@@ -41,7 +42,7 @@ from .embedding_model import (
 )
 from .env_config import public_demo_mode_enabled
 from .events import now_iso
-from .models import KnowledgeLineageEntry
+from .models import KnowledgeLineageEntry, LineageGraph, LineageGraphEdge, LineageGraphNode
 
 CHUNK_TARGET = 900
 CHUNK_OVERLAP = 100
@@ -59,6 +60,12 @@ class KnowledgeDocument(BaseModel):
     mime_type: str
     uploaded_at: str
     char_count: int
+    # Retrieval lineage: sha256 of the text, and a version that goes up
+    # each time a document with the same name is uploaded again (it
+    # replaces the old chunks; lineage rows keep the version they used).
+    # Older entries read back as version 1 with no hash.
+    content_hash: str | None = None
+    version: int = 1
 
 
 class KnowledgeChunk(BaseModel):
@@ -66,6 +73,7 @@ class KnowledgeChunk(BaseModel):
     document_id: str
     text: str
     vector: list[float]
+    index: int | None = None
 
 
 class KnowledgeEntry(BaseModel):
@@ -175,6 +183,92 @@ def list_knowledge_lineage(
     ]
 
 
+LINEAGE_GRAPH_LIMIT = 200
+
+
+def knowledge_lineage_graph(
+    graph_id: str,
+    *,
+    run_id: str | None = None,
+    document_id: str | None = None,
+    limit: int = LINEAGE_GRAPH_LIMIT,
+) -> LineageGraph:
+    """The lineage rows as a graph: document → chunk (`contains`), chunk →
+    run (`retrieved`, best score), run → node (`used_in`). Uses the newest
+    `limit` rows after filtering."""
+    rows = list_knowledge_lineage(graph_id, document_id)
+    if run_id is not None:
+        rows = [row for row in rows if row.run_id == run_id]
+    truncated = len(rows) > limit
+    rows = rows[-limit:]
+    entry = get_knowledge_entry(graph_id)
+    previews = {chunk.id: chunk.text[:160] for chunk in entry.chunks} if entry else {}
+    nodes: dict[str, LineageGraphNode] = {}
+    edges: dict[tuple[str, str, str], LineageGraphEdge] = {}
+
+    def add_edge(source: str, target: str, kind: str, score: float | None = None) -> None:
+        key = (source, target, kind)
+        existing = edges.get(key)
+        if existing is None:
+            edges[key] = LineageGraphEdge(source=source, target=target, kind=kind, score=score)  # type: ignore[arg-type]
+        elif score is not None and (existing.score is None or score > existing.score):
+            existing.score = score
+
+    for row in rows:
+        doc = f"doc:{row.document_id}"
+        chunk = f"chunk:{row.chunk_id}"
+        run = f"run:{row.run_id}"
+        node = f"node:{row.run_id}:{row.node_id}"
+        nodes.setdefault(
+            doc,
+            LineageGraphNode(
+                id=doc,
+                kind="document",
+                label=row.document_name,
+                meta={"documentId": row.document_id},
+            ),
+        )
+        if row.document_version is not None:
+            versions = nodes[doc].meta.setdefault("versions", [])
+            if row.document_version not in versions:
+                versions.append(row.document_version)
+        nodes.setdefault(
+            chunk,
+            LineageGraphNode(
+                id=chunk,
+                kind="chunk",
+                label=previews.get(row.chunk_id, row.chunk_id)[:60],
+                meta={
+                    "chunkId": row.chunk_id,
+                    "preview": previews.get(row.chunk_id),
+                    "removed": row.chunk_id not in previews,
+                },
+            ),
+        )
+        nodes.setdefault(
+            run,
+            LineageGraphNode(
+                id=run,
+                kind="run",
+                label=row.run_id,
+                meta={"runId": row.run_id, "releaseId": row.release_id, "at": row.created_at},
+            ),
+        )
+        nodes.setdefault(
+            node,
+            LineageGraphNode(
+                id=node,
+                kind="node",
+                label=row.node_id,
+                meta={"runId": row.run_id, "nodeId": row.node_id},
+            ),
+        )
+        add_edge(doc, chunk, "contains")
+        add_edge(chunk, run, "retrieved", row.score)
+        add_edge(run, node, "used_in")
+    return LineageGraph(nodes=list(nodes.values()), edges=list(edges.values()), truncated=truncated)
+
+
 # P0 graph foundation, Slice C: sentinel distinguishing "no resource_snapshot
 # argument given" (draft-sourced run — resolve live, the pre-Slice-C
 # behavior) from an explicit `None` (release-sourced run whose release has
@@ -201,7 +295,25 @@ def _embedding_model_for_entry(entry: KnowledgeEntry) -> ResolvedEmbeddingModel 
     return None
 
 
-def _record_lineage(graph_id: str, run_id: str, node_id: str, hits: list[dict[str, Any]]) -> None:
+def chunk_id_for(content_hash: str, index: int) -> str:
+    """Stable chunk id: the same text uploaded again gets the same ids, so
+    lineage rows still point at the chunk that answered."""
+    return hashlib.sha256(f"{content_hash}:{index}".encode()).hexdigest()[:16]
+
+
+LINEAGE_QUERY_LIMIT = 300
+
+
+def _record_lineage(
+    graph_id: str,
+    run_id: str,
+    node_id: str,
+    hits: list[dict[str, Any]],
+    *,
+    query: str = "",
+    embedding_model: str | None = None,
+    release_id: str | None = None,
+) -> None:
     """P2, "Retrieval/document lineage graph": one durable row per chunk
     actually used to augment this node's prompt, so "which runs used
     document X" stays queryable without scanning every run's NodeTraces.
@@ -220,6 +332,11 @@ def _record_lineage(graph_id: str, run_id: str, node_id: str, hits: list[dict[st
                 node_id=node_id,
                 score=hit["score"],
                 created_at=now,
+                document_version=hit.get("documentVersion"),
+                rank=hit.get("rank"),
+                query=query[:LINEAGE_QUERY_LIMIT] or None,
+                embedding_model=embedding_model,
+                release_id=release_id,
             )
             storage.save_knowledge_lineage_entry(graph_id, entry.id, entry.model_dump(mode="json"))
     except Exception:  # noqa: BLE001 - lineage recording is best-effort
@@ -235,6 +352,36 @@ async def augment_system_with_knowledge(
     run_id: str | None = None,
     node_id: str | None = None,
 ) -> str:
+    """`retrieve_knowledge` without the hits: the augmented prompt only."""
+    augmented, _hits = await retrieve_knowledge(
+        system, graph_id, query, resource_snapshot=resource_snapshot, run_id=run_id, node_id=node_id
+    )
+    return augmented
+
+
+def knowledge_hit_summary(hit: dict[str, Any]) -> dict[str, Any]:
+    """What a run trace keeps about a retrieved chunk (no vector, a short preview)."""
+    return {
+        "documentId": hit["documentId"],
+        "documentName": hit["documentName"],
+        "documentVersion": hit.get("documentVersion"),
+        "chunkId": hit["chunkId"],
+        "rank": hit["rank"],
+        "score": round(float(hit["score"]), 4),
+        "preview": hit["text"][:200],
+    }
+
+
+async def retrieve_knowledge(
+    system: str,
+    graph_id: str,
+    query: str,
+    *,
+    resource_snapshot: Any = UNSET,
+    run_id: str | None = None,
+    node_id: str | None = None,
+    release_id: str | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
     """When `graph_id` has an uploaded knowledge base, embeds `query` and
     appends top-K snippets above the score threshold to `system`. Degrades
     silently to the unmodified prompt on any failure (missing/mismatched
@@ -265,27 +412,42 @@ async def augment_system_with_knowledge(
         )
     )
     if entry is None or not entry.chunks:
-        return system
+        return system, []
     query = query.strip()
     if not query:
-        return system
+        return system, []
     model = _embedding_model_for_entry(entry)
     if model is None:
-        return system
+        return system, []
     try:
         query_vector = await embed_query(model, query)
         names = {doc.id: doc.name for doc in entry.documents}
+        versions = {doc.id: doc.version for doc in entry.documents}
         hits = [
-            hit
-            for hit in top_k_chunks_by_embedding(query_vector, entry.chunks, names, TOP_K)
-            if hit["score"] > SCORE_THRESHOLD
+            {**hit, "rank": rank, "documentVersion": versions.get(hit["documentId"])}
+            for rank, hit in enumerate(
+                (
+                    hit
+                    for hit in top_k_chunks_by_embedding(query_vector, entry.chunks, names, TOP_K)
+                    if hit["score"] > SCORE_THRESHOLD
+                ),
+                start=1,
+            )
         ]
         if hits and run_id is not None and node_id is not None:
-            _record_lineage(graph_id, run_id, node_id, hits)
+            _record_lineage(
+                graph_id,
+                run_id,
+                node_id,
+                hits,
+                query=query,
+                embedding_model=f"{entry.embedding_provider}/{entry.embedding_model_id}",
+                release_id=release_id,
+            )
         block = format_knowledge_augmentation(hits)
-        return f"{system}{block}" if block else system
+        return (f"{system}{block}" if block else system), hits
     except Exception:  # noqa: BLE001 - RAG is best-effort, never fails the run
-        return system
+        return system, []
 
 
 class KnowledgeUploadError(Exception):
@@ -396,10 +558,19 @@ async def upload_knowledge_document(
             embedding_model_id=resolution.model_id,
         )
 
-    doc_id = uuid4().hex
+    # Uploading a name again replaces that document: same id, next version.
+    content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    previous = next((doc for doc in entry.documents if doc.name == name), None)
+    doc_id = previous.id if previous else uuid4().hex
     now = datetime.now(UTC).isoformat()
     doc = KnowledgeDocument(
-        id=doc_id, name=name, mime_type=mime, uploaded_at=now, char_count=len(text)
+        id=doc_id,
+        name=name,
+        mime_type=mime,
+        uploaded_at=now,
+        char_count=len(text),
+        content_hash=content_hash,
+        version=previous.version + 1 if previous else 1,
     )
 
     new_chunks: list[KnowledgeChunk] = []
@@ -419,18 +590,26 @@ async def upload_knowledge_document(
             ) from exc
         if len(vectors) != len(batch):
             raise KnowledgeUploadError(502, "Embedding provider returned unexpected batch size")
-        for text_piece, vector in zip(batch, vectors, strict=True):
+        for offset, (text_piece, vector) in enumerate(zip(batch, vectors, strict=True)):
+            index = i + offset
             new_chunks.append(
-                KnowledgeChunk(id=uuid4().hex, document_id=doc_id, text=text_piece, vector=vector)
+                KnowledgeChunk(
+                    id=chunk_id_for(content_hash, index),
+                    document_id=doc_id,
+                    text=text_piece,
+                    vector=vector,
+                    index=index,
+                )
             )
 
-    entry.documents.append(doc)
-    entry.chunks.extend(new_chunks)
+    entry.documents = [*(d for d in entry.documents if d.id != doc_id), doc]
+    entry.chunks = [*(c for c in entry.chunks if c.document_id != doc_id), *new_chunks]
     storage.save_resource(_RESOURCE_KIND, graph_id, entry.model_dump())
 
     return {
         "ok": True,
         "documentId": doc_id,
+        "documentVersion": doc.version,
         "addedChunkCount": len(new_chunks),
         **summarize_entry(entry),
     }

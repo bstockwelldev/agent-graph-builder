@@ -822,3 +822,39 @@ class KnowledgeLineageEntry(BaseModel):
     node_id: str
     score: float
     created_at: str
+    # Richer lineage (2026-10): which version of the document, where the chunk
+    # ranked, the query that found it, the embedding model and the release
+    # the run came from. Older rows read back without them.
+    document_version: int | None = None
+    rank: int | None = None
+    query: str | None = None
+    embedding_model: str | None = None
+    release_id: str | None = None
+
+
+class LineageGraphNode(BaseModel):
+    """One box in the lineage graph: a document, one of its chunks, a run,
+    or a graph node within a run (id `node:{run_id}:{node_id}`)."""
+
+    id: str
+    kind: Literal["document", "chunk", "run", "node"]
+    label: str
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class LineageGraphEdge(BaseModel):
+    source: str
+    target: str
+    kind: Literal["contains", "retrieved", "used_in"]
+    # Best similarity score for a `retrieved` edge; None otherwise.
+    score: float | None = None
+
+
+class LineageGraph(BaseModel):
+    """`GET /api/graphs/{id}/knowledge/lineage-graph`: documents → chunks →
+    runs → nodes, built from the newest lineage rows (`truncated` when the
+    limit cut older ones off)."""
+
+    nodes: list[LineageGraphNode]
+    edges: list[LineageGraphEdge]
+    truncated: bool = False

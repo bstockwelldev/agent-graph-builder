@@ -27,7 +27,7 @@ from .builtin_tools import (
 )
 from .events import RunEventBus
 from .guardrails import check_guardrail
-from .knowledge import augment_system_with_knowledge
+from .knowledge import knowledge_hit_summary, retrieve_knowledge
 from .mcp.client import call_mcp_tool
 from .mcp.secrets import load_headers as load_mcp_headers
 from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode
@@ -117,6 +117,8 @@ class ExecContext:
     # run — unchanged behavior, live `storage.get_resource` lookups. `_resolve_resource`
     # below is the one place that reads this.
     release_resource_snapshots: dict[str, dict[str, Any]] | None = None
+    # The release a `source: "release"` run came from; recorded on retrieval lineage.
+    release_id: str | None = None
     # P1 rollout plan, Slice B ("Fixture-based simulation"): node ids whose
     # `state["node_outputs"]` entry was pre-seeded from a Fixture rather than
     # produced by a real resume-after-pause. Only distinguishes which event
@@ -250,12 +252,13 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
         if ctx.release_resource_snapshots is not None
         else {}
     )
-    augmented_system_prompt = await augment_system_with_knowledge(
+    augmented_system_prompt, knowledge_hits = await retrieve_knowledge(
         system_prompt or "",
         ctx.graph.id,
         str(upstream),
         run_id=ctx.run_id,
         node_id=node.id,
+        release_id=ctx.release_id,
         **knowledge_kwargs,
     )
     output = await chat_model.generate(
@@ -266,6 +269,12 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
         "model": chat_model.model,
         "systemPrompt": system_prompt,
         "userPrompt": upstream,
+        # The chunks that augmented the prompt (the Run tab's "Sources").
+        **(
+            {"knowledgeHits": [knowledge_hit_summary(hit) for hit in knowledge_hits]}
+            if knowledge_hits
+            else {}
+        ),
     }
     return input_repr, output, {}
 
@@ -678,7 +687,9 @@ async def compute_transform(node: GraphNode, state: dict[str, Any], ctx: ExecCon
     if isinstance(ref, str) and ref:
         definition = _resolve_resource(ctx, "transforms", ref)
         if definition is None:
-            raise ValueError(f"transform node {node.id!r}: transformId: transforms {ref!r} not found")
+            raise ValueError(
+                f"transform node {node.id!r}: transformId: transforms {ref!r} not found"
+            )
         config.update(
             type=definition.get("type"),
             pointer=definition.get("pointer"),

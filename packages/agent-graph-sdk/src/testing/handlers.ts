@@ -748,6 +748,39 @@ export function mockRoutes(): Record<string, Handler> {
       const documentId = new URL(request.url).searchParams.get("document_id");
       return listResponse(request, store.lineage.filter((entry) => entry.graph_id === params.graph_id && (!documentId || entry.document_id === documentId)));
     },
+    "GET /api/graphs/{graph_id}/knowledge/lineage-graph": ({ request, params, store }) => {
+      const search = new URL(request.url).searchParams;
+      const runId = search.get("run_id");
+      const documentId = search.get("document_id");
+      const limit = Number(search.get("limit") ?? 200);
+      const matching = store.lineage.filter(
+        (entry) =>
+          entry.graph_id === params.graph_id && (!runId || entry.run_id === runId) && (!documentId || entry.document_id === documentId),
+      );
+      const rows = matching.slice(-limit);
+      const nodes = new Map<string, { id: string; kind: string; label: string; meta: Record<string, unknown> }>();
+      const edges = new Map<string, { source: string; target: string; kind: string; score: number | null }>();
+      const edge = (source: string, target: string, kind: string, score: number | null = null) => {
+        const key = `${source}|${target}|${kind}`;
+        const existing = edges.get(key);
+        if (!existing) edges.set(key, { source, target, kind, score });
+        else if (score !== null && (existing.score === null || score > existing.score)) existing.score = score;
+      };
+      for (const row of rows) {
+        const doc = `doc:${row.document_id}`;
+        const chunk = `chunk:${row.chunk_id}`;
+        const run = `run:${row.run_id}`;
+        const node = `node:${row.run_id}:${row.node_id}`;
+        if (!nodes.has(doc)) nodes.set(doc, { id: doc, kind: "document", label: row.document_name, meta: { documentId: row.document_id } });
+        if (!nodes.has(chunk)) nodes.set(chunk, { id: chunk, kind: "chunk", label: row.chunk_id, meta: { chunkId: row.chunk_id } });
+        if (!nodes.has(run)) nodes.set(run, { id: run, kind: "run", label: row.run_id, meta: { runId: row.run_id, releaseId: row.release_id ?? null } });
+        if (!nodes.has(node)) nodes.set(node, { id: node, kind: "node", label: row.node_id, meta: { runId: row.run_id, nodeId: row.node_id } });
+        edge(doc, chunk, "contains");
+        edge(chunk, run, "retrieved", row.score);
+        edge(run, node, "used_in");
+      }
+      return HttpResponse.json({ nodes: [...nodes.values()], edges: [...edges.values()], truncated: matching.length > rows.length });
+    },
 
     // Analytics
     "GET /api/analytics": ({ request, store }) => {

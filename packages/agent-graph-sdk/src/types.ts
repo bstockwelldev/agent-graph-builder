@@ -33,6 +33,9 @@ import type {
   graphReleaseSchema,
   knowledgeDeleteResponseSchema,
   knowledgeDocumentSchema,
+  lineageGraphSchema,
+  lineageGraphNodeSchema,
+  lineageGraphEdgeSchema,
   knowledgeLineageEntrySchema,
   knowledgeSummarySchema,
   knowledgeUploadResponseSchema,
@@ -250,6 +253,9 @@ export type EffectivePolicyRule = z.infer<typeof effectivePolicyRuleSchema>;
 
 // P2, "Retrieval/document lineage graph" (backend/app/knowledge.py).
 export type KnowledgeLineageEntry = z.infer<typeof knowledgeLineageEntrySchema>;
+export type LineageGraph = z.infer<typeof lineageGraphSchema>;
+export type LineageGraphNode = z.infer<typeof lineageGraphNodeSchema>;
+export type LineageGraphEdge = z.infer<typeof lineageGraphEdgeSchema>;
 
 // Studio-consolidation Phase 5 knowledge base (backend/app/knowledge.py).
 export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;

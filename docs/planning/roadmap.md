@@ -293,6 +293,11 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Drag undo:** moving nodes is one undo step per drag.
 - **Touch:** press and hold opens the node, edge, selection or canvas menu.
 
+**Retrieval lineage shipped 2026-10-04:**
+- **Recorded:** each retrieval keeps the document version, chunk, rank, score, query, embedding model and release. Documents carry a content hash and a version (re-uploading a name replaces it); chunk ids are content-derived, so unchanged text keeps its ids.
+- **Seen:** Knowledge ▸ Lineage draws documents → chunks → runs → nodes (`GET /api/graphs/{id}/knowledge/lineage-graph`); an llm node's Run tab lists its **Sources**.
+- **Still open:** a retriever node type, document parsing beyond .txt/.md, and a vector store.
+
 ---
 
 ## Scoring rationale (requested items)

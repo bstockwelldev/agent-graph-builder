@@ -3714,7 +3714,17 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         <RoutingLabPanel layout="rail" graphId={graphId} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="knowledge" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
-        <KnowledgePanel layout="rail" graphId={graphId} />
+        <KnowledgePanel
+          layout="rail"
+          graphId={graphId}
+          onOpenRun={(runId) => inspectRunRef.current(runId)}
+          onOpenNode={(runId, nodeId) => {
+            inspectRunRef.current(runId);
+            // The Knowledge panel shares the inspector's slot: close it so the node's Run tab shows.
+            workbench.close();
+            focusNodeRef.current(nodeId, "run");
+          }}
+        />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />

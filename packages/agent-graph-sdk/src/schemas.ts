@@ -857,6 +857,31 @@ export const knowledgeLineageEntrySchema = z.object({
   node_id: z.string(),
   score: z.number(),
   created_at: z.string(),
+  // Richer lineage (2026-10); older rows omit them.
+  document_version: z.number().nullish(),
+  rank: z.number().nullish(),
+  query: z.string().nullish(),
+  embedding_model: z.string().nullish(),
+  release_id: z.string().nullish(),
+});
+
+/** `GET /api/graphs/{id}/knowledge/lineage-graph`: documents → chunks → runs → nodes. */
+export const lineageGraphNodeSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["document", "chunk", "run", "node"]),
+  label: z.string(),
+  meta: z.record(z.string(), z.unknown()).optional(),
+});
+export const lineageGraphEdgeSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  kind: z.enum(["contains", "retrieved", "used_in"]),
+  score: z.number().nullish(),
+});
+export const lineageGraphSchema = z.object({
+  nodes: z.array(lineageGraphNodeSchema),
+  edges: z.array(lineageGraphEdgeSchema),
+  truncated: z.boolean().optional(),
 });
 
 /**
@@ -871,6 +896,8 @@ export const knowledgeDocumentSchema = z.object({
   mime_type: z.string(),
   uploaded_at: z.string(),
   char_count: z.number(),
+  content_hash: z.string().nullish(),
+  version: z.number().optional(),
 });
 
 // `summarize_entry`'s camelCase shape. The embedding fields are null when

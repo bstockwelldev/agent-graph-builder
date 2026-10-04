@@ -8,7 +8,7 @@ import { AgentGraphApiError } from "@bstockwelldev/agent-graph-sdk";
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
-    knowledge: { get: vi.fn(), lineage: vi.fn(), upload: vi.fn(), delete: vi.fn() },
+    knowledge: { get: vi.fn(), lineage: vi.fn(), lineageGraph: vi.fn(), upload: vi.fn(), delete: vi.fn() },
   },
 }));
 
@@ -44,6 +44,7 @@ const lineageRow = {
 beforeEach(() => {
   resetClientMock(clientMock);
   clientMock.knowledge.lineage.mockResolvedValue([]);
+  clientMock.knowledge.lineageGraph.mockResolvedValue({ nodes: [], edges: [], truncated: false });
   try {
     window.localStorage.clear();
   } catch {
@@ -81,6 +82,38 @@ describe("KnowledgePanel", () => {
     expect(screen.getByTestId("knowledge-embedding").textContent).toBe("Embeddings: OpenAI · text-embedding-3-small");
     expect(await screen.findByText(/1 retrieval across 1 run/)).toBeTruthy();
     expect(screen.getByText(/llm_1/)).toBeTruthy();
+  });
+
+  it("draws the lineage graph and opens a run or a node from it", async () => {
+    clientMock.knowledge.get.mockResolvedValue(populated);
+    clientMock.knowledge.lineage.mockResolvedValue([lineageRow]);
+    clientMock.knowledge.lineageGraph.mockResolvedValue({
+      nodes: [
+        { id: "doc:d1", kind: "document", label: "notes.md", meta: {} },
+        { id: "chunk:c1", kind: "chunk", label: "c1", meta: { preview: "the sky" } },
+        { id: "run:run_1", kind: "run", label: "run_1", meta: { runId: "run_1" } },
+        { id: "node:run_1:llm_1", kind: "node", label: "llm_1", meta: { runId: "run_1", nodeId: "llm_1" } },
+      ],
+      edges: [
+        { source: "doc:d1", target: "chunk:c1", kind: "contains" },
+        { source: "chunk:c1", target: "run:run_1", kind: "retrieved", score: 0.8 },
+        { source: "run:run_1", target: "node:run_1:llm_1", kind: "used_in" },
+      ],
+      truncated: false,
+    });
+    const onOpenRun = vi.fn();
+    const onOpenNode = vi.fn();
+    render(<KnowledgePanel graphId="g1" onOpenRun={onOpenRun} onOpenNode={onOpenNode} />);
+
+    const lineage = await screen.findByRole("group", { name: "Lineage graph" });
+    expect(lineage.textContent).toContain("notes.md");
+    fireEvent.click(screen.getByRole("button", { name: "Run run_1: open" }));
+    expect(onOpenRun).toHaveBeenCalledWith("run_1");
+    fireEvent.click(screen.getByRole("button", { name: "Node llm_1 in run run_1: open" }));
+    expect(onOpenNode).toHaveBeenCalledWith("run_1", "llm_1");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Document" }), { target: { value: "d1" } });
+    await waitFor(() => expect(clientMock.knowledge.lineageGraph).toHaveBeenLastCalledWith("g1", { documentId: "d1" }));
   });
 
   it("uploads the chosen file and shows the resulting document list", async () => {
