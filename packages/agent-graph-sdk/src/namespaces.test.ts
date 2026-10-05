@@ -160,4 +160,23 @@ describe("graphs.summaries", () => {
     expect(graph.nodes[0].label).toBe("notes.md");
     expect(graph.truncated).toBeUndefined();
   });
+
+  it("runs, lists, reads and compares evals on their routes", async () => {
+    const evalRun = { id: "evr_1", suite_id: "s 1", graph_id: "g", provider: "stub", started_at: "t", completed_at: "t" };
+    const fetch = vi.fn(async (url: string) =>
+      json(url.includes("/compare/") ? { baseline: evalRun, candidate: evalRun } : url.endsWith("/runs") && fetch.mock.calls.length > 1 ? [evalRun] : evalRun),
+    );
+    const client = createAgentGraphClient({ fetch: fetch as never });
+    const run = await client.evals.run("s 1", { provider: "groq", apiKey: "k" });
+    expect(run.id).toBe("evr_1");
+    expect(sent(fetch)).toMatchObject({ url: "/api/eval-suites/s%201/runs", body: { target: "draft", provider: "groq", api_key: "k" } });
+    expect((await client.evals.runs("s 1"))[0].id).toBe("evr_1");
+    await client.evals.getRun("evr_1");
+    await client.evals.compare("evr_1", "evr_2");
+    expect(fetch.mock.calls.slice(1).map((c) => c[0])).toEqual([
+      "/api/eval-suites/s%201/runs",
+      "/api/eval-runs/evr_1",
+      "/api/eval-runs/evr_1/compare/evr_2",
+    ]);
+  });
 });

@@ -298,6 +298,13 @@ Suggested order: A (quick fixes) → B (laptop layout and status bar, the shared
 - **Seen:** Knowledge ▸ Lineage draws documents → chunks → runs → nodes (`GET /api/graphs/{id}/knowledge/lineage-graph`); an llm node's Run tab lists its **Sources**.
 - **Still open:** a retriever node type, document parsing beyond .txt/.md, and a vector store.
 
+**Scored evals shipped 2026-10-04:**
+- **Expectations:** dataset fixtures take `expected` (`output`, `contains`, `regex`, `json_fields`, `route`).
+- **Suites:** a new `eval_suites` resource (graph + dataset + scorers + pass mark) with a Resources page; scorers are exact, contains, regex, JSON fields, route and rubric.
+- **Runs:** Stub by default (simulated, never live); a live provider is opt-in with a key (required in public demo mode). Each case links to its run; results, cost and pass rate are stored per suite, capped at 50 cases and ~45 s live.
+- **Compare:** the graph's Evals panel compares a run with the one before, case by case.
+- **Still open:** LLM-as-judge scorers, scheduled/CI eval runs, and gating a release on a suite.
+
 ---
 
 ## Scoring rationale (requested items)

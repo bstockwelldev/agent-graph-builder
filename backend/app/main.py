@@ -53,6 +53,9 @@ from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
 from .models import (
     CapabilityMatrix,
+    EvalComparison,
+    EvalRun,
+    EvalRunRequest,
     LineageGraph,
     GraphResources,
     McpDiscovery,
@@ -133,7 +136,14 @@ from .releases import (
     publish_release,
 )
 from .replay import ReplayBlocked, ReplayNotFound, replay_run
-from .resource_models import RESOURCE_MODELS, ChatMessage, ChatSession, McpServerConfig
+from .resource_models import (
+    RESOURCE_MODELS,
+    ChatMessage,
+    ChatSession,
+    EvalSuite,
+    FixtureDataset,
+    McpServerConfig,
+)
 from .resource_versions import (
     VERSIONABLE_RESOURCE_KINDS,
     ResourceNotFound,
@@ -142,6 +152,8 @@ from .resource_versions import (
     publish_resource_version,
 )
 from .routing_lab import compare_routing_reports, run_routing_dataset
+from .evals import compare_eval_runs, get_eval_run, list_eval_runs, run_eval_suite
+from .replay import _provider_usable
 from .transforms import preview_transform
 from .simulate import SimulateBlocked, simulate_graph
 from .spa_cache import SpaCacheControlMiddleware
@@ -487,7 +499,7 @@ def extract_subgraph_endpoint(
 def graph_resources_endpoint(graph_id: str) -> GraphResources:
     """Resources this graph uses (slice 4's graph scope): its bindings from
     the graph catalog, the MCP servers behind its tools, the agents that
-    run it, and the datasets captured from it (slice 7)."""
+    run it, the datasets captured from it (slice 7) and its eval suites."""
     graph = storage.get_graph(graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="graph not found")
@@ -507,6 +519,9 @@ def graph_resources_endpoint(graph_id: str) -> GraphResources:
     for dataset in storage.list_resources("datasets"):
         if dataset.get("graph_id") == graph_id:
             ids["datasets"].add(dataset["id"])
+    for suite in storage.list_resources("eval_suites"):
+        if suite.get("graph_id") == graph_id:
+            ids["eval-suites"].add(suite["id"])
     return GraphResources(graph_id=graph_id, ids={k: sorted(v) for k, v in ids.items()})
 
 
@@ -519,6 +534,7 @@ _GRAPH_RESOURCE_PATHS = {
     "transforms": "transforms",
     "agents": "agents",
     "datasets": "datasets",
+    "eval_suites": "eval-suites",
 }
 
 
@@ -927,6 +943,7 @@ _RESOURCE_ROUTE_PATHS: dict[str, str] = {
     "transforms": "transforms",
     "chat_sessions": "chat-sessions",
     "datasets": "datasets",
+    "eval_suites": "eval-suites",
 }
 
 
@@ -1098,6 +1115,79 @@ def preview_transform_route(body: TransformPreviewRequest) -> TransformPreviewRe
 
 for _kind, _path in _RESOURCE_ROUTE_PATHS.items():
     _register_resource_routes(_kind, _path, RESOURCE_MODELS[_kind])
+
+
+# Scored evals (evals.py): run a suite, list its runs, read and compare runs.
+@app.post("/api/eval-suites/{suite_id}/runs")
+async def run_eval_suite_endpoint(suite_id: str, request: EvalRunRequest, http: Request) -> EvalRun:
+    """Stub by default (never a live call). Another provider runs live: in
+    public demo mode only with a key in the request, elsewhere with the
+    request's key or the server's."""
+    payload = storage.get_resource("eval_suites", suite_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="eval suite not found")
+    suite = EvalSuite.model_validate(payload)
+    dataset = storage.get_resource("datasets", suite.dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=422, detail=f"dataset {suite.dataset_id!r} not found")
+    fixtures = FixtureDataset.model_validate(dataset).fixtures
+    if not fixtures:
+        raise HTTPException(status_code=422, detail="the dataset has no fixtures")
+    provider = (request.provider or "stub").strip() or "stub"
+    if provider != "stub":
+        require_live_provider_allowed(provider, request.api_key)
+        if not (request.api_key or "").strip() and not _provider_usable(provider):
+            raise HTTPException(
+                status_code=400, detail=f"{provider} needs an API key: enter one to run this suite live."
+            )
+    snapshots: dict[str, dict[str, Any]] | None = None
+    release_id: str | None = None
+    if request.target == "draft":
+        graph = storage.get_graph(suite.graph_id)
+        if graph is None:
+            raise HTTPException(status_code=404, detail="graph not found")
+    else:
+        release = resolve_release_selector(suite.graph_id, request.target)
+        if release is None:
+            raise HTTPException(status_code=404, detail="release not found")
+        graph, snapshots, release_id = release.graph, release.resource_snapshots, release.id
+    charge_public_write(http, "run")
+    return await run_eval_suite(
+        suite,
+        graph,
+        fixtures,
+        provider=provider,
+        model=request.model,
+        api_key=request.api_key,
+        release_resource_snapshots=snapshots,
+        release_id=release_id,
+    )
+
+
+@app.get("/api/eval-suites/{suite_id}/runs")
+def list_eval_runs_endpoint(suite_id: str) -> list[EvalRun]:
+    """A suite's stored runs, newest first."""
+    if storage.get_resource("eval_suites", suite_id) is None:
+        raise HTTPException(status_code=404, detail="eval suite not found")
+    return list_eval_runs(suite_id)
+
+
+@app.get("/api/eval-runs/{run_id}")
+def get_eval_run_endpoint(run_id: str) -> EvalRun:
+    run = get_eval_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="eval run not found")
+    return run
+
+
+@app.get("/api/eval-runs/{baseline_id}/compare/{candidate_id}")
+def compare_eval_runs_endpoint(baseline_id: str, candidate_id: str) -> EvalComparison:
+    """Per-case score changes from `baseline_id` to `candidate_id`."""
+    baseline = get_eval_run(baseline_id)
+    candidate = get_eval_run(candidate_id)
+    if baseline is None or candidate is None:
+        raise HTTPException(status_code=404, detail="eval run not found")
+    return compare_eval_runs(baseline, candidate)
 
 
 class CreateDatasetFromRunsRequest(BaseModel):

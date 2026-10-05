@@ -180,6 +180,35 @@ class ChatSession(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+EvalScorerKind = Literal["exact", "contains", "regex", "json_field", "route", "rubric"]
+
+
+class EvalScorer(BaseModel):
+    kind: EvalScorerKind
+    weight: float = Field(default=1.0, ge=0)
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+def _default_scorers() -> list[EvalScorer]:
+    return [EvalScorer(kind=kind) for kind in ("exact", "contains", "regex", "json_field", "route")]
+
+
+class EvalSuite(BaseModel):
+    """A scored eval (evals.py): run `graph_id` over the fixtures of
+    `dataset_id` and score each run with `scorers` against the fixtures'
+    `expected` fields. A case passes at `pass_threshold` or above."""
+
+    id: str
+    name: str
+    description: str | None = None
+    graph_id: str
+    dataset_id: str
+    scorers: list[EvalScorer] = Field(default_factory=_default_scorers)
+    pass_threshold: float = Field(default=1.0, ge=0, le=1)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 # Resource kind -> model, used generically by main.py's CRUD routes and by
 # compiler.py's tool-binding check.
 RESOURCE_MODELS: dict[str, type[BaseModel]] = {
@@ -191,4 +220,5 @@ RESOURCE_MODELS: dict[str, type[BaseModel]] = {
     "transforms": TransformDefinition,
     "chat_sessions": ChatSession,
     "datasets": FixtureDataset,
+    "eval_suites": EvalSuite,
 }

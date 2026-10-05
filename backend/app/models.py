@@ -531,9 +531,90 @@ class RunPauseState(BaseModel):
 # inline per simulate call; a stored, reusable Fixture registry is a
 # natural but out-of-scope follow-on (see the P1 doc's parallel "reusable
 # entity registry" track).
+class FixtureExpectation(BaseModel):
+    """What a scored eval checks a fixture's run against (evals.py). Every
+    field is optional; a scorer with nothing to check skips the case."""
+
+    output: Any = None
+    contains: list[str] = Field(default_factory=list)
+    regex: str | None = None
+    # JSON pointer ("/answer/label") -> expected value, read from the output parsed as JSON.
+    json_fields: dict[str, Any] = Field(default_factory=dict)
+    # Router/branch node id -> the node it should route to.
+    route: dict[str, str] = Field(default_factory=dict)
+
+
 class Fixture(BaseModel):
     input: dict[str, Any] = Field(default_factory=dict)
     node_outputs: dict[str, Any] = Field(default_factory=dict)
+    expected: FixtureExpectation | None = None
+
+
+# Scored evals (evals.py): one stored result per suite run.
+class EvalScore(BaseModel):
+    scorer: str
+    score: float
+    passed: bool
+    detail: str = ""
+
+
+class EvalCaseResult(BaseModel):
+    fixture_index: int
+    run_id: str | None = None
+    status: str
+    output: Any = None
+    scores: list[EvalScore] = Field(default_factory=list)
+    # Weighted mean of the scorers that had something to check; None when none did.
+    score: float | None = None
+    passed: bool | None = None
+    estimated_usd: float = 0.0
+    error: str | None = None
+
+
+class EvalRun(BaseModel):
+    id: str
+    suite_id: str
+    graph_id: str
+    release_id: str | None = None
+    provider: str
+    model: str | None = None
+    started_at: str
+    completed_at: str
+    cases: list[EvalCaseResult] = Field(default_factory=list)
+    # Means over scored cases; None when no case had anything to check.
+    score: float | None = None
+    pass_rate: float | None = None
+    estimated_usd: float = 0.0
+    duration_ms: int = 0
+    # True when the case cap or time budget stopped the run early.
+    partial: bool = False
+
+
+class EvalRunRequest(BaseModel):
+    """`target`: "draft" (the saved graph) or a release id ("latest" works).
+    Stub by default; another provider runs live and needs a key in public demo mode."""
+
+    target: str = "draft"
+    provider: str = "stub"
+    model: str | None = None
+    api_key: str | None = None
+
+
+class EvalCaseDelta(BaseModel):
+    fixture_index: int
+    baseline_score: float | None = None
+    candidate_score: float | None = None
+    delta: float | None = None
+    baseline_passed: bool | None = None
+    candidate_passed: bool | None = None
+
+
+class EvalComparison(BaseModel):
+    baseline: EvalRun
+    candidate: EvalRun
+    score_delta: float | None = None
+    pass_rate_delta: float | None = None
+    cases: list[EvalCaseDelta] = Field(default_factory=list)
 
 
 class SimulateResult(BaseModel):
@@ -676,9 +757,10 @@ class TransformPreviewResponse(BaseModel):
 
 class GraphResources(BaseModel):
     """The library resources a graph uses, by API kind (`prompts`, `tools`,
-    `mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`):
-    what its nodes and edges bind, the MCP servers its tools call, the
-    agents built on it, and the datasets captured from it. Backs the
+    `mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`,
+    `eval-suites`): what its nodes and edges bind, the MCP servers its tools
+    call, the agents built on it, the datasets captured from it and the
+    eval suites that score it. Backs the
     Resources pages' graph scope."""
 
     graph_id: str

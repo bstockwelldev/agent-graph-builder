@@ -19,10 +19,14 @@ export function fixturesFromText(text: string): Fixture[] {
   if (!Array.isArray(parsed)) throw new Error("Dataset must be a JSON array of fixtures");
   return parsed.map((item: unknown, index) => {
     if (!isPlainObject(item)) throw new Error(`Fixture ${index + 1} must be an object`);
-    const { input = {}, node_outputs: nodeOutputs = {} } = item;
+    const { input = {}, node_outputs: nodeOutputs = {}, expected } = item;
     if (!isPlainObject(input)) throw new Error(`Fixture ${index + 1}: input must be a JSON object`);
     if (!isPlainObject(nodeOutputs)) throw new Error(`Fixture ${index + 1}: node_outputs must be a JSON object`);
-    return { input, node_outputs: nodeOutputs };
+    if (expected !== undefined && expected !== null && !isPlainObject(expected)) {
+      throw new Error(`Fixture ${index + 1}: expected must be a JSON object`);
+    }
+    // `expected` is what scored evals check the run against (lib/evals.ts).
+    return isPlainObject(expected) ? { input, node_outputs: nodeOutputs, expected } : { input, node_outputs: nodeOutputs };
   });
 }
 

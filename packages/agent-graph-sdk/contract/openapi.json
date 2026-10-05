@@ -917,6 +917,367 @@
         "title": "EffectivePolicyRule",
         "type": "object"
       },
+      "EvalCaseDelta": {
+        "properties": {
+          "baseline_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Passed"
+          },
+          "baseline_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Score"
+          },
+          "candidate_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Passed"
+          },
+          "candidate_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Score"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "fixture_index": {
+            "title": "Fixture Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fixture_index"
+        ],
+        "title": "EvalCaseDelta",
+        "type": "object"
+      },
+      "EvalCaseResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "estimated_usd": {
+            "default": 0.0,
+            "title": "Estimated Usd",
+            "type": "number"
+          },
+          "fixture_index": {
+            "title": "Fixture Index",
+            "type": "integer"
+          },
+          "output": {
+            "title": "Output"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "scores": {
+            "items": {
+              "$ref": "#/components/schemas/EvalScore"
+            },
+            "title": "Scores",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fixture_index",
+          "status"
+        ],
+        "title": "EvalCaseResult",
+        "type": "object"
+      },
+      "EvalComparison": {
+        "properties": {
+          "baseline": {
+            "$ref": "#/components/schemas/EvalRun"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/EvalRun"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/EvalCaseDelta"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "pass_rate_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate Delta"
+          },
+          "score_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Delta"
+          }
+        },
+        "required": [
+          "baseline",
+          "candidate"
+        ],
+        "title": "EvalComparison",
+        "type": "object"
+      },
+      "EvalRun": {
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/EvalCaseResult"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "completed_at": {
+            "title": "Completed At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "default": 0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "estimated_usd": {
+            "default": 0.0,
+            "title": "Estimated Usd",
+            "type": "number"
+          },
+          "graph_id": {
+            "title": "Graph Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "partial": {
+            "default": false,
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "pass_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Id"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "suite_id": {
+            "title": "Suite Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "suite_id",
+          "graph_id",
+          "provider",
+          "started_at",
+          "completed_at"
+        ],
+        "title": "EvalRun",
+        "type": "object"
+      },
+      "EvalRunRequest": {
+        "description": "`target`: \"draft\" (the saved graph) or a release id (\"latest\" works).\nStub by default; another provider runs live and needs a key in public demo mode.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "default": "stub",
+            "title": "Provider",
+            "type": "string"
+          },
+          "target": {
+            "default": "draft",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "title": "EvalRunRequest",
+        "type": "object"
+      },
+      "EvalScore": {
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "scorer": {
+            "title": "Scorer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scorer",
+          "score",
+          "passed"
+        ],
+        "title": "EvalScore",
+        "type": "object"
+      },
       "ExtractSubgraphRequest": {
         "properties": {
           "draft": {
@@ -960,6 +1321,16 @@
       },
       "Fixture": {
         "properties": {
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixtureExpectation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "input": {
             "additionalProperties": true,
             "title": "Input",
@@ -972,6 +1343,46 @@
           }
         },
         "title": "Fixture",
+        "type": "object"
+      },
+      "FixtureExpectation": {
+        "description": "What a scored eval checks a fixture's run against (evals.py). Every\nfield is optional; a scorer with nothing to check skips the case.",
+        "properties": {
+          "contains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contains",
+            "type": "array"
+          },
+          "json_fields": {
+            "additionalProperties": true,
+            "title": "Json Fields",
+            "type": "object"
+          },
+          "output": {
+            "title": "Output"
+          },
+          "regex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regex"
+          },
+          "route": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Route",
+            "type": "object"
+          }
+        },
+        "title": "FixtureExpectation",
         "type": "object"
       },
       "GraphAnalytics": {
@@ -1675,7 +2086,7 @@
         "type": "object"
       },
       "GraphResources": {
-        "description": "The library resources a graph uses, by API kind (`prompts`, `tools`,\n`mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`):\nwhat its nodes and edges bind, the MCP servers its tools call, the\nagents built on it, and the datasets captured from it. Backs the\nResources pages' graph scope.",
+        "description": "The library resources a graph uses, by API kind (`prompts`, `tools`,\n`mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`,\n`eval-suites`): what its nodes and edges bind, the MCP servers its tools\ncall, the agents built on it, the datasets captured from it and the\neval suites that score it. Backs the\nResources pages' graph scope.",
         "properties": {
           "graph_id": {
             "title": "Graph Id",
@@ -5423,6 +5834,475 @@
         "summary": "Usages Datasets"
       }
     },
+    "/api/eval-runs/{baseline_id}/compare/{candidate_id}": {
+      "get": {
+        "description": "Per-case score changes from `baseline_id` to `candidate_id`.",
+        "operationId": "compare_eval_runs_endpoint_api_eval_runs__baseline_id__compare__candidate_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "baseline_id",
+            "required": true,
+            "schema": {
+              "title": "Baseline Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "candidate_id",
+            "required": true,
+            "schema": {
+              "title": "Candidate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalComparison"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Eval Runs Endpoint"
+      }
+    },
+    "/api/eval-runs/{run_id}": {
+      "get": {
+        "operationId": "get_eval_run_endpoint_api_eval_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Eval Run Endpoint"
+      }
+    },
+    "/api/eval-suites": {
+      "get": {
+        "operationId": "list_eval_suites",
+        "parameters": [
+          {
+            "description": "Page size. Omit for the full list.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Page size. Omit for the full list.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "`X-Next-Cursor` from the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`X-Next-Cursor` from the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Eval Suites",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Eval Suites"
+      },
+      "post": {
+        "operationId": "create_eval_suites",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Eval Suites",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Eval Suites"
+      }
+    },
+    "/api/eval-suites/{resource_id}": {
+      "delete": {
+        "operationId": "delete_eval_suites",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Delete Eval Suites",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Eval Suites"
+      },
+      "get": {
+        "operationId": "get_eval_suites",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Eval Suites",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Eval Suites"
+      },
+      "put": {
+        "operationId": "update_eval_suites",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Eval Suites",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Eval Suites"
+      }
+    },
+    "/api/eval-suites/{resource_id}/usages": {
+      "get": {
+        "operationId": "usages_eval_suites",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResourceUsage"
+                  },
+                  "title": "Response Usages Eval Suites",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Usages Eval Suites"
+      }
+    },
+    "/api/eval-suites/{suite_id}/runs": {
+      "get": {
+        "description": "A suite's stored runs, newest first.",
+        "operationId": "list_eval_runs_endpoint_api_eval_suites__suite_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_id",
+            "required": true,
+            "schema": {
+              "title": "Suite Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvalRun"
+                  },
+                  "title": "Response List Eval Runs Endpoint Api Eval Suites  Suite Id  Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Eval Runs Endpoint"
+      },
+      "post": {
+        "description": "Stub by default (never a live call). Another provider runs live: in\npublic demo mode only with a key in the request, elsewhere with the\nrequest's key or the server's.",
+        "operationId": "run_eval_suite_endpoint_api_eval_suites__suite_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suite_id",
+            "required": true,
+            "schema": {
+              "title": "Suite Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Eval Suite Endpoint"
+      }
+    },
     "/api/graph-releases/{release_id}/compare-draft": {
       "post": {
         "description": "STO-609: diff from a release to a draft graph (typically the live\ncanvas, unsaved edits included) of the same graph.",
@@ -7183,7 +8063,7 @@
     },
     "/api/graphs/{graph_id}/resources": {
       "get": {
-        "description": "Resources this graph uses (slice 4's graph scope): its bindings from\nthe graph catalog, the MCP servers behind its tools, the agents that\nrun it, and the datasets captured from it (slice 7).",
+        "description": "Resources this graph uses (slice 4's graph scope): its bindings from\nthe graph catalog, the MCP servers behind its tools, the agents that\nrun it, the datasets captured from it (slice 7) and its eval suites.",
         "operationId": "graph_resources_endpoint_api_graphs__graph_id__resources_get",
         "parameters": [
           {
