@@ -90,6 +90,36 @@ export function buildNoteNodes(notes: GraphNote[], selectedNoteId: string | null
   }));
 }
 
+export type NoteMeasured = ReadonlyMap<string, { width: number; height: number }>;
+
+/**
+ * STO-630: cache a note's measured dimensions from a React Flow `dimensions`
+ * change. Runtime-only (never persisted, never undoable): without it, every
+ * drag rebuilds the derived note node unmeasured and React Flow hides it
+ * (`visibility: hidden`) until re-measured, so the note flickers mid-drag.
+ * Returns the input map unchanged when there is nothing new to store.
+ */
+export function cacheNoteMeasured(current: NoteMeasured, noteId: string, dimensions: { width?: number; height?: number } | undefined): NoteMeasured {
+  const width = dimensions?.width;
+  const height = dimensions?.height;
+  if (typeof width !== "number" || typeof height !== "number") return current;
+  const prev = current.get(noteId);
+  if (prev && prev.width === width && prev.height === height) return current;
+  return new Map(current).set(noteId, { width, height });
+}
+
+/**
+ * STO-630: re-attach cached measured dimensions to derived note nodes so a
+ * drag (which rebuilds them every frame) doesn't render them unmeasured.
+ */
+export function withNoteMeasured<T extends { id: string }>(noteNodes: T[], measured: NoteMeasured): T[] {
+  if (measured.size === 0) return noteNodes;
+  return noteNodes.map((node) => {
+    const dims = measured.get(noteIdFromNode(node.id));
+    return dims ? { ...node, measured: dims } : node;
+  });
+}
+
 /** Short relative time for note headers ("just now", "5m", "3h", "2d", else the date). */
 export function relativeTime(iso: string | null | undefined, now = Date.now()): string {
   if (!iso) return "";
