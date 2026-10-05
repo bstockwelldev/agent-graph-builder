@@ -78,9 +78,10 @@ describe("NodePalette", () => {
     );
     expect(screen.queryByRole("button", { name: /^Transform/ })).toBeNull();
     expect(screen.getByRole("button", { name: /^Classifier/ })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Nodes" }).textContent).toContain(
-      "No matches.",
-    );
+    // The decision node's summary ("Classify and route…") matches too.
+    expect(
+      screen.getByRole("region", { name: "Nodes" }).textContent,
+    ).toContain("Decision");
   });
 
   it("sets the kind for new edges, and folds to an icon strip", () => {
@@ -124,6 +125,6 @@ describe("filterPaletteItems", () => {
     const found = filterPaletteItems(nodeTypeItems(), "chat model");
     expect(found.map((item) => item.nodeType)).toEqual(["llm"]);
     expect(found[0].group).toBeUndefined();
-    expect(filterPaletteItems(nodeTypeItems(), "")).toHaveLength(14);
+    expect(filterPaletteItems(nodeTypeItems(), "")).toHaveLength(15);
   });
 });

@@ -121,6 +121,9 @@ _DEFAULT_PORT_CATALOG: dict[NodeType, dict[str, list[GraphPort]]] = {
     NodeType.BRANCH: _router_like_io(PortKind.MESSAGE),
     # Output kind depends on the configured transform (`_transform_output_kind`).
     NodeType.TRANSFORM: _single_io(PortKind.STRUCTURED_JSON, PortKind.STRUCTURED_JSON),
+    # Constrained classifier that routes like router/branch: passthrough
+    # (default) + decision output ports.
+    NodeType.DECISION: _router_like_io(PortKind.MESSAGE),
 }
 
 
