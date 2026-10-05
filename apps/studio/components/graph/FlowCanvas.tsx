@@ -544,6 +544,16 @@ function FlowCanvasInner({
           // Not a palette payload.
         }
       }}
+      // STO-631: safety net for snap guides. They are cleared on
+      // onNodeDragStop, but an interrupted drag (pointer released outside,
+      // touch cancel, error mid-drag) can skip that callback and leave a
+      // guide painted on the canvas. A pane-level pointerup/cancel catches it.
+      onPointerUp={() => {
+        if (guides.length > 0) setGuides([]);
+      }}
+      onPointerCancel={() => {
+        if (guides.length > 0) setGuides([]);
+      }}
     >
       <div
         aria-live="polite"
