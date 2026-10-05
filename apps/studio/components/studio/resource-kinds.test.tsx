@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api-client", () => ({ client: { prompts: {}, tools: {}, agents: {}, mcpServers: {}, llmProfiles: {}, transforms: {}, datasets: {} } }));
+vi.mock("@/lib/api-client", () => ({ client: { prompts: {}, tools: {}, agents: {}, mcpServers: {}, llmProfiles: {}, transforms: {}, datasets: {}, evals: { suites: {} } } }));
 
 import {
   RESOURCE_KINDS,
   agentKind,
   datasetKind,
+  evalSuiteKind,
   llmProfileKind,
   mcpKind,
   normalizeParametersJson,
@@ -19,9 +20,20 @@ import {
 // carry each page's former validation, moved verbatim.
 describe("resource kinds", () => {
   it("covers every CRUD registry once, with human nouns for dialog copy", () => {
-    expect(RESOURCE_KINDS.map((kind) => kind.id)).toEqual(["agents", "prompts", "tools", "mcp", "llmProfiles", "transforms", "datasets"]);
+    expect(RESOURCE_KINDS.map((kind) => kind.id)).toEqual(["agents", "prompts", "tools", "mcp", "llmProfiles", "transforms", "datasets", "evalSuites"]);
     expect(mcpKind.noun).toBe("MCP server");
     expect(llmProfileKind.noun).toBe("LLM profile");
+  });
+
+  it("requires an eval suite's graph, dataset, a scorer and a pass mark", () => {
+    const form = { id: "e", name: " Quality ", graph_id: "g", dataset_id: "d", scorers: [{ kind: "contains" as const, weight: 1, args: {} }], threshold_text: "80" };
+    expect(evalSuiteKind.issues({ ...form, dataset_id: "", scorers: [], threshold_text: "200" })).toEqual([
+      "Pick a dataset.",
+      "Pick at least one scorer.",
+      "Set a pass mark from 0 to 100.",
+    ]);
+    expect(evalSuiteKind.normalize(form)).toMatchObject({ id: "e", name: "Quality", graph_id: "g", dataset_id: "d", pass_threshold: 0.8 });
+    expect(evalSuiteKind.toForm!({ ...form, pass_threshold: 0.5 } as never)).toMatchObject({ threshold_text: "50" });
   });
 
   it("keeps only the field a transform's type uses, and requires it", () => {

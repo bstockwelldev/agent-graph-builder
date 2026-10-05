@@ -28,6 +28,8 @@ const UNTYPED_ON_BACKEND = new Set([
   "chatRunRefSchema",
   "chatSessionSchema",
   "deletedSchema",
+  "evalScorerSchema",
+  "evalSuiteSchema",
   "fixtureDatasetSchema",
   "knowledgeDeleteResponseSchema",
   "knowledgeDocumentSchema",

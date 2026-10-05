@@ -59,6 +59,7 @@ def test_graph_resources_lists_bindings_mcp_servers_and_agents(api: TestClient) 
             "transforms": ["topic_line"],
             "agents": ["helper", "old"],
             "datasets": ["ds_mine"],
+            "eval-suites": [],
         },
     }
     assert api.get("/api/graphs/missing/resources").status_code == 404

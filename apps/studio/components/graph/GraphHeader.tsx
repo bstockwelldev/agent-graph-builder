@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
-import { Activity, AlertTriangle, CodeXml, Columns2, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, FileCode2, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
+import { Activity, AlertTriangle, ClipboardCheck, CodeXml, Columns2, BookOpen, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Download, FileCode2, Focus, GitBranch, HelpCircle, Layers, LayoutGrid, MoreHorizontal, Network, PauseCircle, Play, Plus, Save, Search, ShieldCheck, Sparkles, Tag, Upload, XCircle, Workflow } from "lucide-react";
 import type { Diagnostic, GraphHealth, GraphOrientation, RunSummary } from "@bstockwelldev/agent-graph-sdk";
 import type { GraphStructure } from "@/lib/graphAuthoring";
 import type { HeaderDensity } from "@/lib/canvasLayout";
@@ -271,6 +271,12 @@ export function GraphHeader({
       onClick: () => onTogglePanel("routingLab"),
     },
     {
+      label: "Evals",
+      icon: <ClipboardCheck size={14} />,
+      checked: activePanel === "evals",
+      onClick: () => onTogglePanel("evals"),
+    },
+    {
       label: "Knowledge",
       icon: <BookOpen size={14} />,
       checked: activePanel === "knowledge",
@@ -465,7 +471,7 @@ export function GraphHeader({
           icon={<MoreHorizontal size={18} />}
           aria-haspopup="menu"
           aria-expanded={menu?.id === "overflow"}
-          pressed={menu?.id === "overflow" || (tight && activePanel === "palette") || activePanel === "releases" || activePanel === "routingLab" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health" || activePanel === "graphConfig"}
+          pressed={menu?.id === "overflow" || (tight && activePanel === "palette") || activePanel === "releases" || activePanel === "routingLab" || activePanel === "evals" || activePanel === "knowledge" || activePanel === "policies" || activePanel === "health" || activePanel === "graphConfig"}
           onClick={() => openMenu("overflow", overflowMenuRef.current, "right")}
         />
       </div>

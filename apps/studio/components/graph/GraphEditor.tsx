@@ -13,7 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BookOpen, FlaskConical, Focus, HelpCircle, MoreHorizontal, Play, Plus, Search, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
+import { Activity, BookOpen, ClipboardCheck, FlaskConical, Focus, HelpCircle, MoreHorizontal, Play, Plus, Search, ShieldCheck, Sparkles, Tag, Workflow, X } from "lucide-react";
 import {
   fingerprintGraph,
   fingerprintGraphSemantics,
@@ -154,6 +154,7 @@ import { NotesPanel } from "./NotesPanel";
 import { useNoteAuthor } from "@/lib/noteAuthor";
 import { buildCanvasCommands, type CanvasCommand } from "./canvasCommands";
 import { KnowledgePanel } from "./KnowledgePanel";
+import { EvalsPanel } from "./EvalsPanel";
 import { PolicyPanel } from "./PolicyPanel";
 import { ReleasesPanel } from "./ReleasesPanel";
 import { RoutingLabPanel } from "./RoutingLabPanel";
@@ -246,6 +247,7 @@ const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
   "run",
   "releases",
   "routingLab",
+  "evals",
   "knowledge",
   "policies",
   "health",
@@ -3630,6 +3632,12 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               onClick: () => workbench.toggle("knowledge"),
             },
             {
+              label: "Evals",
+              icon: <ClipboardCheck size={14} />,
+              checked: workbench.activePanel === "evals",
+              onClick: () => workbench.toggle("evals"),
+            },
+            {
               label: "Policies",
               icon: <ShieldCheck size={14} />,
               checked: workbench.activePanel === "policies",
@@ -3725,6 +3733,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             focusNodeRef.current(nodeId, "run");
           }}
         />
+      </WorkbenchDrawer>
+      <WorkbenchDrawer panelId="evals" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
+        <EvalsPanel layout="rail" graphId={graphId} onOpenRun={(runId) => inspectRunRef.current(runId)} />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="policies" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <PolicyPanel layout="rail" graphId={graphId} onPoliciesChanged={refreshDiagnostics} />

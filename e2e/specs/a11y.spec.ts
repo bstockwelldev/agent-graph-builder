@@ -55,6 +55,23 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
     },
   ],
   [
+    "eval suites and an evals panel with results",
+    async (page, graph) => {
+      const stamp = Date.now();
+      await page.request.post(`${API_URL}/api/datasets`, {
+        data: { id: `ds_eval_a11y_${stamp}`, name: `A11y eval set ${stamp}`, fixtures: [{ input: { question: "how does a database index work" }, expected: { contains: ["index"] } }] },
+      });
+      await page.request.post(`${API_URL}/api/eval-suites`, {
+        data: { id: `eval_a11y_${stamp}`, name: `A11y suite ${stamp}`, graph_id: graph.id, dataset_id: `ds_eval_a11y_${stamp}` },
+      });
+      await page.request.post(`${API_URL}/api/eval-suites/eval_a11y_${stamp}/runs`, { data: {} });
+      await page.goto("/eval-suites");
+      await page.getByRole("button", { name: /^Edit eval suite A11y suite/ }).first().waitFor();
+      await openGraph(page, graph, "?panel=evals");
+      await page.getByRole("table", { name: "Eval cases" }).waitFor();
+    },
+  ],
+  [
     "policies",
     async (page, graph) => {
       const expires = new Date(Date.now() + 86_400_000).toISOString();

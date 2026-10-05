@@ -6,6 +6,7 @@ import {
   BarChart3,
   Bot,
   Boxes,
+  ClipboardCheck,
   Database,
   FileText,
   Layers,
@@ -38,6 +39,7 @@ export const RESOURCE_ITEMS: readonly NavItem[] = [
   { href: "/llm-profiles", label: "LLM Profiles", icon: SlidersHorizontal, description: "Named provider + model presets that LLM nodes and agents bind." },
   { href: "/transforms", label: "Transforms", icon: Shuffle, description: "Reusable data reshaping between steps: select, wrap, format, convert." },
   { href: "/datasets", label: "Datasets", icon: Database, description: "Saved fixture sets for the Routing Lab, captured from runs or written by hand." },
+  { href: "/eval-suites", label: "Eval suites", icon: ClipboardCheck, description: "Score a graph against a dataset's expected outputs, routes and fields." },
   { href: "/genui", label: "GenUI", icon: Layers, description: "Schema-driven UI surfaces for human-gate checkpoints." },
 ];
 

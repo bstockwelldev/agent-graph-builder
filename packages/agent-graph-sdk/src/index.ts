@@ -23,6 +23,7 @@ export type {
   CreateGraphRequest,
   CreatePolicyExceptionRequest,
   DatasetFromRunsRequest,
+  EvalRunRequest,
   ExtractSubgraphRequest,
   ImpactRequest,
   KnowledgeLineageRequest,
