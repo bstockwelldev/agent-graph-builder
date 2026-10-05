@@ -39,6 +39,10 @@ EventType = Literal[
     "node.failed",
     "node.paused",
     "edge.selected",
+    # Decision node (decision_models/): emitted alongside edge.selected with
+    # the validated outcome, confidence vs threshold, reason code, attempts,
+    # and rule hit (if a deterministic rule decided without the model).
+    "decision.made",
     # Wave 7c (STO-612): a subgraph node's nested child run finished.
     "subgraph.completed",
 ]
@@ -137,3 +141,4 @@ def now_iso() -> str:
 
 def monotonic_ms() -> float:
     return time.monotonic() * 1000
+

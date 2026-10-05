@@ -47,6 +47,11 @@ class NodeType(StrEnum):
     # A deterministic reshape step (transforms.py): select / wrap /
     # format_message / coerce, inline or bound to a Transforms library entry.
     TRANSFORM = "transform"
+    # Constrained decision node (decision_models/): a compact model (or
+    # deterministic rules) emits a schema-validated outcome with confidence,
+    # then routes by exact outcome match. Replaces the llm-classifier +
+    # substring-router pattern where calibration matters.
+    DECISION = "decision"
 
 
 class EdgeKind(StrEnum):
@@ -858,3 +863,4 @@ class LineageGraph(BaseModel):
     nodes: list[LineageGraphNode]
     edges: list[LineageGraphEdge]
     truncated: bool = False
+

@@ -31,6 +31,7 @@ from .knowledge import knowledge_hit_summary, retrieve_knowledge
 from .mcp.client import call_mcp_tool
 from .mcp.secrets import load_headers as load_mcp_headers
 from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode
+from .decision_models.base import DecisionModel, DecisionSchema
 from .ports import default_input_port, resolve_node_input
 from .providers.base import ChatModel
 from .resource_models import McpServerConfig, ToolDefinition
@@ -96,6 +97,11 @@ class ExecContext:
     graph: GraphDefinition
     bus: RunEventBus
     chat_model_factory: Callable[[str | None], ChatModel]
+    # Decision nodes resolve their own provider per node config (default stub,
+    # so the public demo and CI stay keyless). None means "no decision
+    # support" -- compute_decision falls back to the stub backend directly,
+    # so older construction sites keep working.
+    decision_model_factory: Callable[[GraphNode], DecisionModel] | None = None
     # Shadow copy of the LangGraph RunState, kept in sync by
     # runtime.py's `_make_node_runner` after every node completes.
     # Exists only so a `human_gate` pause (studio-consolidation Phase 2) can
@@ -400,6 +406,171 @@ async def compute_router(node: GraphNode, state: dict[str, Any], ctx: ExecContex
 async def compute_output(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
     upstream = get_upstream_output(node, state, ctx.graph)
     return upstream, upstream, {"result": upstream}
+
+
+def _default_decision_system_prompt(schema_cls: type[DecisionSchema]) -> str:
+    fields = ", ".join(schema_cls.model_fields)
+    return (
+        "You are a decision classifier, not a chatbot. Return ONLY a JSON object "
+        f"matching the decision schema (fields: {fields}). If the input is empty, "
+        "nonsensical, or too vague to decide, use the abstain outcome. "
+        "Do not invent facts. Keep confidence between 0 and 1."
+    )
+
+
+async def compute_decision(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Constrained decision + exact-match routing.
+
+    Reads the upstream text, runs deterministic config rules first, then a
+    schema-validated decision-model call, then selects the conditional
+    out-edge whose condition exactly equals the outcome value -- no substring
+    matching (the failure mode this node exists to replace). Low-confidence
+    or abstained outcomes take the default edge, or fail the run when
+    onLowConfidence is "fail" (for graphs whose downstream branches perform
+    state changes -- failing closed beats acting on an uncalibrated guess).
+    """
+    from .decision_models.base import (
+        DecisionSchemaError,
+        Rule,
+        RuleGate,
+        decide_with_rules,
+        get_decision_model,
+        resolve_action,
+    )
+    from .decision_models.schemas import resolve_decision_schema, rule_payload
+    from .node_configs import DecisionConfig
+
+    upstream = str(get_upstream_output(node, state, ctx.graph))
+    cfg = DecisionConfig.model_validate(node.config or {})
+    schema_cls, _ = resolve_decision_schema(cfg.schema, cfg.outcomeField)
+    outgoing = [e for e in ctx.graph.edges if e.source == node.id]
+    conditional_edges = [e for e in outgoing if e.kind == EdgeKind.CONDITIONAL]
+    default_edges = [e for e in outgoing if e.kind == EdgeKind.DEFAULT]
+
+    def _select(outcome: str) -> tuple[GraphEdge, str]:
+        for edge in conditional_edges:
+            if (edge.condition or "") == outcome:
+                return edge, "exact_match"
+        if default_edges:
+            return default_edges[0], "default_fallback"
+        raise ValueError(
+            f"decision node {node.id!r}: no edge matches outcome {outcome!r} "
+            "and no default edge"
+        )
+
+    forced = _forced_edge(ctx, node, outgoing)
+    if forced is not None:
+        # Counterfactual replay: pin the outcome without spending a model call.
+        selected, rationale = forced, "forced"
+        outcome_value: str | None = None
+        confidence: float | None = None
+        reason_code: str | None = None
+        attempts = 0
+        rule_hit: str | None = None
+        abstained = False
+    else:
+        gate = RuleGate(
+            [
+                Rule(
+                    name=r.name,
+                    matches=lambda text, m=r.match: m.lower() in text.lower(),
+                    decide=lambda r=r: rule_payload(schema_cls, r.verdict),
+                )
+                for r in cfg.rules
+            ]
+        )
+        if ctx.decision_model_factory is not None:
+            model = ctx.decision_model_factory(node)
+        else:
+            model = get_decision_model(model=cfg.model, provider=cfg.provider or "stub")
+        try:
+            result = await decide_with_rules(
+                gate,
+                model,
+                system_prompt=cfg.systemPrompt
+                or _default_decision_system_prompt(schema_cls),
+                user_prompt=upstream,
+                schema=schema_cls,
+                abstain_values=set(cfg.abstainValues),
+            )
+        except DecisionSchemaError as exc:
+            raise ValueError(f"decision node {node.id!r}: {exc}") from exc
+        action = resolve_action(result, threshold=cfg.threshold)
+        payload = result.payload
+        assert isinstance(payload, DecisionSchema)
+        outcome_value = payload.outcome_value()
+        confidence = result.confidence
+        reason_code = str(
+            getattr(payload, "reason_code", getattr(payload, "rationale_code", ""))
+            or ""
+        )
+        attempts = result.attempts
+        rule_hit = result.rule_hit
+        abstained = result.abstained
+        if action == "escalate":
+            if cfg.onLowConfidence == "fail":
+                raise ValueError(
+                    f"decision node {node.id!r}: confidence {confidence:.2f} below "
+                    f"threshold {cfg.threshold:.2f} (outcome {outcome_value!r}); "
+                    "failing closed per onLowConfidence='fail'"
+                )
+            if default_edges:
+                selected, rationale = default_edges[0], "low_confidence_default"
+            else:
+                raise ValueError(
+                    f"decision node {node.id!r}: low-confidence outcome "
+                    f"{outcome_value!r} and no default edge to escalate to"
+                )
+        else:
+            selected, rationale = _select(outcome_value)
+
+    matched = [e for e in conditional_edges if e.id == selected.id]
+    ctx.bus.emit(
+        "edge.selected",
+        {
+            "eligible": [
+                {"edgeId": e.id, "target": e.target, "condition": e.condition}
+                for e in matched
+            ],
+            "excluded": [
+                {"edgeId": e.id, "target": e.target, "condition": e.condition}
+                for e in conditional_edges
+                if e.id != selected.id
+            ],
+            "selectedEdgeId": selected.id,
+            "selectedTargetNodeId": selected.target,
+            "rationale": rationale,
+        },
+        node_id=node.id,
+    )
+    ctx.bus.emit(
+        "decision.made",
+        {
+            "outcome": outcome_value,
+            "confidence": confidence,
+            "reasonCode": reason_code,
+            "attempts": attempts,
+            "threshold": cfg.threshold,
+            "ruleHit": rule_hit,
+            "abstained": abstained,
+            "rationale": rationale,
+        },
+        node_id=node.id,
+    )
+
+    output = {
+        "outcome": outcome_value,
+        "confidence": confidence,
+        "reasonCode": reason_code,
+        "selectedTargetNodeId": selected.target,
+        "rationale": rationale,
+    }
+    route_decision = {
+        "nodeId": node.id,
+        "selectedEdgeId": selected.id,
+        "selectedTargetNodeId": selected.target,
+    }
+    return {"upstream": upstream}, output, {"route_decisions": [route_decision]}
 
 
 # ---------------------------------------------------------------------------
@@ -718,4 +889,6 @@ EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitabl
     "human_gate": compute_human_gate,
     "subgraph": compute_subgraph,
     "transform": compute_transform,
+    "decision": compute_decision,
 }
+
