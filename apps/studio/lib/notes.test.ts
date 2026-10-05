@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addReply, buildNoteNodes, createNote, filterNotes, followPinnedNodes, isNoteNodeId, noteIdFromNode, relativeTime, removeReply, unpinMissing } from "./notes";
+import { addReply, buildNoteNodes, cacheNoteMeasured, createNote, filterNotes, followPinnedNodes, isNoteNodeId, noteIdFromNode, relativeTime, removeReply, unpinMissing, withNoteMeasured } from "./notes";
 
 const NOW = "2026-10-01T12:00:00.000Z";
 
@@ -61,5 +61,35 @@ describe("sticky notes", () => {
     expect(filterNotes([a, b, c], "open").map((note) => note.id)).toEqual([c.id, a.id]);
     expect(filterNotes([a, b, c], "resolved").map((note) => note.id)).toEqual([b.id]);
     expect(filterNotes([a, b, c], "all")).toHaveLength(3);
+  });
+
+  // STO-630: measured dimensions are cached runtime-only so drag rebuilds
+  // don't render derived note nodes unmeasured (React Flow hides those).
+  it("caches note measured dimensions, returning the map unchanged when nothing new", () => {
+    const empty = new Map();
+    expect(cacheNoteMeasured(empty, "note_1", undefined)).toBe(empty);
+    expect(cacheNoteMeasured(empty, "note_1", { width: 200 })).toBe(empty);
+    const cached = cacheNoteMeasured(empty, "note_1", { width: 200, height: 120 });
+    expect(cached.get("note_1")).toEqual({ width: 200, height: 120 });
+    // Same dims: same map, so no re-render.
+    expect(cacheNoteMeasured(cached, "note_1", { width: 200, height: 120 })).toBe(cached);
+    // New dims: new map with both entries.
+    const updated = cacheNoteMeasured(cached, "note_2", { width: 200, height: 90 });
+    expect(updated.get("note_1")).toEqual({ width: 200, height: 120 });
+    expect(updated.get("note_2")).toEqual({ width: 200, height: 90 });
+  });
+
+  it("re-attaches cached measured dimensions to derived note nodes", () => {
+    const note = createNote([], { position: { x: 5, y: 6 }, author: "Ada", now: NOW });
+    const [node] = buildNoteNodes([note], null, () => null);
+    // No cache: nodes pass through untouched.
+    expect(withNoteMeasured([node], new Map())[0]).toBe(node);
+    expect("measured" in node).toBe(false);
+    // Cached: measured dims are attached without touching anything else.
+    const [measured] = withNoteMeasured([node], new Map([["note_1", { width: 200, height: 120 }]]));
+    expect(measured).toMatchObject({ id: "note:note_1", measured: { width: 200, height: 120 }, position: { x: 5, y: 6 } });
+    // Unknown note id: left alone.
+    const [other] = withNoteMeasured([node], new Map([["note_9", { width: 200, height: 120 }]]));
+    expect("measured" in other).toBe(false);
   });
 });
