@@ -45,6 +45,7 @@ import { DEFAULT_GRID, snapToGrid as roundToGrid, snapToGuides, type Box, type G
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
 import { flowInteraction, zoomAround, type CanvasTool } from "@/lib/canvasTools";
 import { PALETTE_DRAG_TYPE, type PaletteDrop } from "./paletteSections";
+import { cacheNoteMeasured, isNoteNodeId, noteIdFromNode, withNoteMeasured, type NoteMeasured } from "@/lib/notes";
 import { canvas, color, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { Button } from "./ui/Button";
 import { LabeledEdge } from "./edges/LabeledEdge";
@@ -417,6 +418,12 @@ function FlowCanvasInner({
   // edge or center of another node within a few pixels, ahead of the grid.
   // Holding Shift or Alt drags freely, grid included.
   const [guides, setGuides] = useState<Guide[]>([]);
+  // STO-630: runtime-only measured dimensions for derived sticky-note nodes,
+  // keyed by note id. Their `dimensions` changes never reach GraphEditor's
+  // `nodes` state (notes aren't in `nodes`), so without this cache every drag
+  // rebuilds the note unmeasured and React Flow hides it (`visibility: hidden`)
+  // until re-measured — the note flickers for the whole drag.
+  const [noteMeasured, setNoteMeasured] = useState<NoteMeasured>(() => new Map());
   const [freeDrag, setFreeDrag] = useState(false);
   useEffect(() => {
     const update = (event: KeyboardEvent) => setFreeDrag(event.shiftKey || event.altKey);
@@ -451,7 +458,18 @@ function FlowCanvasInner({
   const lastSnapRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const handleNodesChange = useCallback(
     (incoming: NodeChange<Node<GraphNodeData>>[]) => {
-      const changes = incoming.map((change) => {
+      // STO-630: cache measured dimensions for derived sticky-note nodes and
+      // keep the changes from flowing downstream (GraphEditor drops them —
+      // notes aren't in `nodes` — so forwarding is pointless).
+      const withoutNoteDimensions = incoming.filter((change) => {
+        if (change.type !== "dimensions" || !("id" in change) || !isNoteNodeId(change.id)) return true;
+        const noteId = noteIdFromNode(change.id);
+        setNoteMeasured((current) => cacheNoteMeasured(current, noteId, change.dimensions));
+        return false;
+      });
+      // A batch of only note measurements needs no downstream processing.
+      if (withoutNoteDimensions.length === 0) return;
+      const changes = withoutNoteDimensions.map((change) => {
         if (change.type !== "position" || change.dragging || !change.position) return change;
         const snapped = lastSnapRef.current.get(change.id);
         if (!snapped) return change;
@@ -522,6 +540,14 @@ function FlowCanvasInner({
     onPaneContextMenu?.(x, y, flowPosition.x, flowPosition.y);
   });
 
+  // STO-630: re-attach cached measured dimensions to derived sticky-note
+  // nodes. A drag rebuilds them every frame; without measured dims React Flow
+  // renders them `visibility: hidden` until re-measured (flicker).
+  const renderedNodes = useMemo(
+    () => withNoteMeasured(renderNodes ?? nodes, noteMeasured),
+    [renderNodes, nodes, noteMeasured],
+  );
+
   return (
     <div
       ref={paneRef}
@@ -563,7 +589,7 @@ function FlowCanvasInner({
         {liveAnnouncement}
       </div>
       <ReactFlow
-        nodes={renderNodes ?? nodes}
+        nodes={renderedNodes}
         edges={displayEdges}
         onNodesChange={handleNodesChange}
         onNodeDragStop={() => setGuides([])}
