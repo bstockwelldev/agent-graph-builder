@@ -40,6 +40,16 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { graphId: "", version: "latest" };
     case "transform":
       return { type: "format_message", template: "{value}" };
+    case "decision":
+      return {
+        schema: "route",
+        provider: "stub",
+        model: "",
+        systemPrompt: "",
+        threshold: 0.6,
+        onLowConfidence: "default",
+        rules: [],
+      };
   }
 }
 
@@ -160,6 +170,7 @@ export function summaryFor(type: NodeType, config: Record<string, unknown>, cont
     }
     case "router":
     case "branch":
+    case "decision":
       if (routeCount !== undefined && routeCount > 0) return `${routeCount} route${routeCount === 1 ? "" : "s"}`;
       return type === "branch" && hasUserLabel ? snippet(config.content) : null;
     case "input":
@@ -237,5 +248,7 @@ export function labelFor(type: NodeType, config: Record<string, unknown>): strin
       return String(boundId(config, "graphId") ?? "subgraph");
     case "transform":
       return boundId(config, "transformId") ?? transformSummary(config);
+    case "decision":
+      return `decision: ${String(config.schema ?? "route")}`;
   }
 }

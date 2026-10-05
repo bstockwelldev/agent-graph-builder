@@ -11,10 +11,10 @@ type Graph = Pick<GraphDefinition, "nodes" | "edges">;
 export type RouteChoice = { nodeId: string; targets: string[] };
 export type ModelChoice = { nodeId: string; recordedModel: string | null };
 
-/** Routers/branches and the targets each could be pinned to. */
+/** Routers/branches/decision nodes and the targets each could be pinned to. */
 export function routeChoices(graph: Graph): RouteChoice[] {
   return graph.nodes
-    .filter((node) => node.type === "router" || node.type === "branch")
+    .filter((node) => node.type === "router" || node.type === "branch" || node.type === "decision")
     .map((node) => ({
       nodeId: node.id,
       targets: [...new Set(graph.edges.filter((edge) => edge.source === node.id).map((edge) => edge.target))],

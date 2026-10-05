@@ -51,6 +51,7 @@ export const NODE_PORT_CATALOG: Record<NodeType, { input: GraphPort[]; output: G
   branch: routerLikeIo("message"),
   // Output kind depends on the configured transform (`transformOutputKind`).
   transform: singleIo("structured-json", "structured-json"),
+  decision: routerLikeIo("message"),
 };
 
 /** Mirror of backend ports.py `_transform_output_kind`: text-producing transforms emit a message. */

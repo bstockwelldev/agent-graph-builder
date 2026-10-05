@@ -11,6 +11,7 @@ import {
   Repeat,
   ShieldCheck,
   Shuffle,
+  Split,
   Workflow,
   Wrench,
   type LucideIcon,
@@ -34,4 +35,5 @@ export const NODE_TYPE_ICONS: Record<NodeType, LucideIcon> = {
   branch: GitFork,
   subgraph: Workflow,
   transform: Shuffle,
+  decision: Split,
 };

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { knowledgeHitsOf } from "@/lib/lineageGraph";
 import { EDGE_COLORS, EDGE_PATTERNS, EDGE_ROUTINGS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
-import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
+import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, PROVIDER_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import {
   declareFromInferred,
   declaredPorts,
@@ -61,6 +61,7 @@ import {
   status as statusColor,
   surface,
   text,
+  typeScale,
 } from "@/lib/graph-theme";
 import { client } from "@/lib/api-client";
 import { partitionDiagnosticsByField } from "@/lib/diagnostics";
@@ -79,7 +80,7 @@ import { SegmentedControl } from "./ui/SegmentedControl";
 import { GenuiSurfaceEditor } from "./GenuiSurfaceEditor";
 import { TemplateEditor } from "./ui/TemplateEditor";
 import { Toggle } from "./ui/Toggle";
-import { TextInput } from "./ui/fields";
+import { TextArea, TextInput } from "./ui/fields";
 import { formatEdgeRawConfig, parseEdgeRawConfig } from "@/lib/jsonEditor";
 import { RawConfigEditor } from "./ui/RawConfigEditor";
 import { TransformFields, type TransformType } from "./TransformFields";
@@ -110,6 +111,7 @@ const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   human_gate: ["content", "genuiCheckpointSurfaceJson"],
   subgraph: ["graphId", "version", "inputMapping"],
   transform: ["transformId", "type", "pointer", "field", "template", "targetType"],
+  decision: ["schema", "customSchema", "provider", "model", "systemPrompt", "threshold", "onLowConfidence", "rules"],
 };
 
 /** A transform node's camelCase config as the shared TransformFields value. */
@@ -431,6 +433,8 @@ export function NodeInspector({
           selectedTrace={selectedTrace}
           onOpenRunPanel={onOpenRunPanel}
           childGraphId={node.type === "subgraph" ? String(node.config.graphId ?? "") : undefined}
+          nodeType={node.type}
+          threshold={typeof node.config.threshold === "number" ? node.config.threshold : undefined}
         />
       )}
       {activeTab === "history" &&
@@ -675,7 +679,135 @@ function ConfigureTab({
         </Group>
       )}
 
-      {(node.type === "router" || node.type === "branch") && (
+      {node.type === "decision" && (
+        <>
+          <Group title="Decision schema">
+            <Field
+              label="Schema"
+              hint="The outcome vocabulary the model must choose from. Custom lets you paste your own JSON Schema."
+              issues={fieldIssues("schema")}
+            >
+              <SegmentedControl
+                aria-label="Decision schema"
+                value={str("schema", "route")}
+                onChange={(value) => set("schema", value)}
+                options={DECISION_SCHEMA_OPTIONS}
+              />
+            </Field>
+            {str("schema", "route") === "custom" && (
+              <Field
+                label="Custom JSON schema"
+                hint="Must declare an outcome field with an enum of allowed values."
+                issues={fieldIssues("customSchema")}
+              >
+                {(id) => (
+                  <TextArea
+                    id={id}
+                    aria-label="Custom JSON schema"
+                    value={str("customSchema")}
+                    onChange={(event) => set("customSchema", event.target.value)}
+                    rows={6}
+                    spellCheck={false}
+                    style={{ fontFamily: fontFamily.mono, fontSize: 12 }}
+                    placeholder={'{\n  "outcome": { "enum": ["a", "b"] }\n}'}
+                  />
+                )}
+              </Field>
+            )}
+          </Group>
+          <Group title="Model">
+            <Field
+              label="Provider"
+              hint="Stub is offline and deterministic — good for demos and tests. Ollama runs a local model."
+              issues={fieldIssues("provider")}
+            >
+              {(id) => (
+                <Combobox
+                  id={id}
+                  aria-label="Decision provider"
+                  value={str("provider", "stub")}
+                  options={DECISION_PROVIDER_OPTIONS}
+                  onChange={(value) => set("provider", value)}
+                  searchPlaceholder="Search providers…"
+                />
+              )}
+            </Field>
+            <Field
+              label="Model"
+              hint="Ollama model id, e.g. qwen3:8b. Empty keeps the provider default."
+              issues={fieldIssues("model")}
+            >
+              {(id) => (
+                <TextInput
+                  id={id}
+                  value={str("model")}
+                  onChange={(event) => set("model", event.target.value)}
+                  placeholder="qwen3:8b"
+                  style={{ fontFamily: fontFamily.mono }}
+                />
+              )}
+            </Field>
+            <Field label="System prompt" meta={`${str("systemPrompt").length} chars`} issues={fieldIssues("systemPrompt")}>
+              {(id) => (
+                <TemplateEditor
+                  id={id}
+                  aria-label="System prompt"
+                  title="System prompt"
+                  value={str("systemPrompt")}
+                  onChange={(value) => set("systemPrompt", value)}
+                  variables={vars}
+                  rows={4}
+                  placeholder="Optional — how the classifier should behave"
+                />
+              )}
+            </Field>
+          </Group>
+          <Group title="Confidence">
+            <Field
+              label="Threshold"
+              hint="Below this confidence the outcome escalates instead of routing."
+              issues={fieldIssues("threshold")}
+            >
+              {(id) => (
+                <NumberStepper
+                  id={id}
+                  aria-label="Confidence threshold"
+                  value={Number(node.config.threshold ?? 0.6)}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(value) => set("threshold", value)}
+                />
+              )}
+            </Field>
+            <Field
+              label="On low confidence"
+              hint="Default edge sends low-confidence outcomes to the fallback branch (human review). Fail stops the run."
+              issues={fieldIssues("onLowConfidence")}
+            >
+              <SegmentedControl
+                aria-label="On low confidence"
+                value={str("onLowConfidence", "default")}
+                onChange={(value) => set("onLowConfidence", value)}
+                options={[
+                  { value: "default", label: "Default edge" },
+                  { value: "fail", label: "Fail run" },
+                ]}
+              />
+            </Field>
+          </Group>
+          <Group title="Deterministic rules">
+            <DecisionRulesEditor
+              rules={decisionRulesOf(node.config)}
+              schema={str("schema", "route")}
+              onChange={(rules) => set("rules", rules)}
+            />
+            <FieldIssues issues={fieldIssues("rules")} />
+          </Group>
+        </>
+      )}
+
+      {(node.type === "router" || node.type === "branch" || node.type === "decision") && (
         <Group
           title={`Routes · ${outgoingEdges.length}`}
           action={
@@ -1169,11 +1301,15 @@ function RunTab({
   selectedTrace,
   onOpenRunPanel,
   childGraphId,
+  nodeType,
+  threshold,
 }: {
   selectedTrace: NodeTrace | null;
   onOpenRunPanel?: () => void;
   /** Wave 7c: a subgraph node's configured graph, for "Open child run". */
   childGraphId?: string | null;
+  nodeType?: string | null;
+  threshold?: number;
 }) {
   if (!selectedTrace) {
     return (
@@ -1204,6 +1340,9 @@ function RunTab({
           </span>
         }
       >
+        {nodeType === "decision" && selectedTrace.output !== null && typeof selectedTrace.output === "object" && !Array.isArray(selectedTrace.output) && (
+          <DecisionRunSummary output={selectedTrace.output as Record<string, unknown>} threshold={threshold ?? 0.6} />
+        )}
         <Field label="Input">
           <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
         </Field>
@@ -1396,6 +1535,216 @@ export function EdgeInspector({
         </Group>
       )}
     </PanelFrame>
+  );
+}
+
+/** Outcome vocabularies the backend DecisionConfig understands. */
+const DECISION_SCHEMA_OPTIONS: { value: string; label: string }[] = [
+  { value: "route", label: "Route" },
+  { value: "gate", label: "Gate" },
+  { value: "triage", label: "Triage" },
+  { value: "custom", label: "Custom" },
+];
+
+const DECISION_SCHEMA_OUTCOMES: Record<string, readonly string[]> = {
+  route: ["route_a", "route_b", "route_c", "needs_review"],
+  gate: ["allow", "deny", "needs_review"],
+  triage: ["support", "sales", "abuse", "needs_review"],
+};
+
+/** Decision providers the backend decision_models package supports. */
+const DECISION_PROVIDER_OPTIONS: ComboboxOption[] = (["stub", "ollama"] as const).map((value) => ({
+  value,
+  label: PROVIDER_TAXONOMY[value]?.title ?? value,
+  description: PROVIDER_TAXONOMY[value]?.summary,
+}));
+
+type DecisionRule = { name: string; match: string; outcome: string };
+
+/** Coerce the config's rules list into editable rows (never throws on junk). */
+function decisionRulesOf(config: Record<string, unknown>): DecisionRule[] {
+  const raw = config.rules;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((rule): rule is Record<string, unknown> => typeof rule === "object" && rule !== null)
+    .map((rule) => ({
+      name: String(rule.name ?? ""),
+      match: String(rule.match ?? ""),
+      outcome: String(rule.outcome ?? ""),
+    }));
+}
+
+/** Deterministic-rules-first editor: substring rules checked before the model runs. */
+function DecisionRulesEditor({
+  rules,
+  schema,
+  onChange,
+}: {
+  rules: DecisionRule[];
+  schema: string;
+  onChange: (rules: DecisionRule[]) => void;
+}) {
+  const outcomes = DECISION_SCHEMA_OUTCOMES[schema];
+  const setRule = (index: number, patch: Partial<DecisionRule>) =>
+    onChange(rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)));
+  return (
+    <div style={{ display: "grid", gap: spacing[2] }}>
+      {rules.length === 0 && (
+        <Muted>No rules — every input goes to the model. Rules run first and win on a substring match.</Muted>
+      )}
+      {rules.map((rule, index) => (
+        <div
+          key={index}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr auto",
+            gap: spacing[2],
+            alignItems: "end",
+            padding: spacing[2],
+            border: `1px solid ${border.subtle}`,
+            borderRadius: radius.md,
+          }}
+        >
+          <div>
+            <label style={{ ...typeScale.caption, color: text.secondary, display: "block", marginBottom: 4 }}>
+              Name
+              <TextInput
+                aria-label={`Rule ${index + 1} name`}
+                value={rule.name}
+                onChange={(event) => setRule(index, { name: event.target.value })}
+                placeholder="urgent-escalation"
+                style={{ marginTop: 4, fontFamily: fontFamily.mono, fontSize: 12 }}
+              />
+            </label>
+          </div>
+          <div>
+            <label style={{ ...typeScale.caption, color: text.secondary, display: "block", marginBottom: 4 }}>
+              Match text
+              <TextInput
+                aria-label={`Rule ${index + 1} match text`}
+                value={rule.match}
+                onChange={(event) => setRule(index, { match: event.target.value })}
+                placeholder="refund"
+                style={{ marginTop: 4, fontSize: 12 }}
+              />
+            </label>
+          </div>
+          <IconButton
+            label={`Remove rule ${index + 1}`}
+            icon={<Trash2 size={14} />}
+            onClick={() => onChange(rules.filter((_, i) => i !== index))}
+          />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ ...typeScale.caption, color: text.secondary, display: "block", marginBottom: 4 }}>
+              Outcome
+              {outcomes ? (
+                <Combobox
+                  aria-label={`Rule ${index + 1} outcome`}
+                  value={rule.outcome}
+                  options={outcomes.map((value) => ({ value, label: value }))}
+                  onChange={(value) => setRule(index, { outcome: value })}
+                  searchPlaceholder="Search outcomes…"
+                />
+              ) : (
+                <TextInput
+                  aria-label={`Rule ${index + 1} outcome`}
+                  value={rule.outcome}
+                  onChange={(event) => setRule(index, { outcome: event.target.value })}
+                  placeholder="outcome value"
+                  style={{ marginTop: 4, fontFamily: fontFamily.mono, fontSize: 12 }}
+                />
+              )}
+            </label>
+          </div>
+        </div>
+      ))}
+      <div>
+        <Button variant="secondary" onClick={() => onChange([...rules, { name: "", match: "", outcome: outcomes?.[0] ?? "" }])}>
+          Add rule
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Run-tab summary for a decision node: what it chose and how sure it was. */
+function DecisionRunSummary({
+  output,
+  threshold,
+}: {
+  output: Record<string, unknown>;
+  threshold: number;
+}) {
+  const outcome = typeof output.outcome === "string" ? output.outcome : "—";
+  const confidence = typeof output.confidence === "number" ? output.confidence : null;
+  const reasonCode = typeof output.reason_code === "string" ? output.reason_code : null;
+  const target = typeof output.selected_target_node_id === "string" ? output.selected_target_node_id : null;
+  const pct = confidence === null ? 0 : Math.round(confidence * 100);
+  const above = confidence === null ? null : confidence >= threshold;
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: spacing[2],
+        padding: spacing[3],
+        marginBottom: spacing[3],
+        border: `1px solid ${border.subtle}`,
+        borderRadius: radius.lg,
+        background: surface.inset,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: spacing[2] }}>
+        <code style={{ fontFamily: fontFamily.mono, fontSize: 14, fontWeight: 650, color: text.primary }}>{outcome}</code>
+        {above !== null && (
+          <span style={{ fontSize: 12, fontWeight: 600, color: above ? statusColor.succeeded : statusColor.running }}>
+            {above ? "routed" : "escalated"}
+          </span>
+        )}
+      </div>
+      {confidence !== null && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: text.secondary, marginBottom: 4 }}>
+            <span>confidence {pct}%</span>
+            <span>threshold {Math.round(threshold * 100)}%</span>
+          </div>
+          <div style={{ position: "relative", height: 8, borderRadius: 999, background: surface.card, border: `1px solid ${border.subtle}` }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: `${pct}%`,
+                borderRadius: 999,
+                background: above ? statusColor.succeeded : statusColor.running,
+                opacity: 0.8,
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: -3,
+                bottom: -3,
+                left: `${Math.round(threshold * 100)}%`,
+                width: 2,
+                background: text.primary,
+                borderRadius: 1,
+              }}
+            />
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: spacing[2], fontSize: 12, color: text.secondary }}>
+        {reasonCode && (
+          <span>
+            reason <code style={{ fontFamily: fontFamily.mono, color: text.primary }}>{reasonCode}</code>
+          </span>
+        )}
+        {target && (
+          <span>
+            → <code style={{ fontFamily: fontFamily.mono, color: text.primary }}>{target}</code>
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
