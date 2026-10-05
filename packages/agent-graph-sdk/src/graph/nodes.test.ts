@@ -113,6 +113,17 @@ describe("defaultConfig", () => {
     expect(config.maxToolIterations).toBeLessThanOrEqual(64);
   });
 
+  it("gives decision a valid threshold and fail-safe low-confidence default", () => {
+    const config = defaultConfig("decision");
+    expect(config.schema).toBe("route");
+    expect(config.provider).toBe("stub");
+    expect(config.threshold).toBeGreaterThanOrEqual(0);
+    expect(config.threshold).toBeLessThanOrEqual(1);
+    expect(config.onLowConfidence).toBe("default");
+    expect(config.rules).toEqual([]);
+    expect(labelFor("decision", config)).toBe("decision: route");
+  });
+
   it("summarizes library-bound nodes by resource name (Wave 4a)", () => {
     const names = { "prompts:p1": "Explain", "llm_profiles:lp": "Fast" };
     expect(summaryFor("prompt", { promptId: "p1", template: "{x}" }, { resourceNames: names })).toBe("Library prompt");

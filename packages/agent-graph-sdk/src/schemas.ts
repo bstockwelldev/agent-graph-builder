@@ -28,6 +28,9 @@ export const nodeTypeSchema = z.enum([
   "subgraph",
   // Deterministic reshape step (backend transforms.py).
   "transform",
+  // Constrained classifier that routes on a schema-validated outcome
+  // (backend/app/decision_models, DecisionConfig).
+  "decision",
 ]);
 
 export const edgeKindSchema = z.enum(["sequence", "conditional", "default"]);
