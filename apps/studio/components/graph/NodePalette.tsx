@@ -52,6 +52,7 @@ export const NODE_TYPES: NodeType[] = [
   "human_gate",
   "subgraph",
   "transform",
+  "decision",
 ];
 
 const EDGE_KINDS: EdgeKind[] = ["sequence", "conditional", "default"];
