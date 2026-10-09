@@ -50,6 +50,7 @@ from .models import (
 )
 from .ports import default_output_port
 from .provider_credentials import get_provider_credentials
+from .providers.availability import is_ollama_available
 from .providers.base import ChatModel, ChatProvider, get_chat_model
 from .releases import get_release
 
@@ -184,7 +185,10 @@ def _downstream(graph: GraphDefinition, starts: set[str]) -> set[str]:
 
 
 def _provider_usable(provider: str) -> bool:
-    """Stub/ollama need no key; the others need one configured."""
+    """Stub/ollama need no key; the others need one configured. Ollama also has to be
+    reachable (local dev only)."""
+    if provider == "ollama" and not is_ollama_available():
+        return False
     credentials = get_provider_credentials(provider)
     return not credentials["requires_api_key"] or bool(credentials["configured"])
 

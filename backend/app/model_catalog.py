@@ -21,6 +21,7 @@ from .provider_defaults import (
     default_model_for_provider,
     resolve_model_for_provider,
 )
+from .providers.availability import OLLAMA_UNAVAILABLE_MESSAGE, is_ollama_available
 from .providers.groq import GROQ_BASE_URL
 from .providers.ollama import OLLAMA_BASE_URL
 
@@ -222,6 +223,11 @@ def _rank_models(provider: str, live_models: list[str], graph_id: str | None) ->
 
 
 async def list_provider_models(provider: str, graph_id: str | None = None) -> dict[str, Any]:
+    if provider == "ollama" and not is_ollama_available():
+        return _catalog_entry(
+            provider, [], source="unavailable", message=OLLAMA_UNAVAILABLE_MESSAGE
+        )
+
     if provider == "google":
         static_models = PROVIDER_PREFERRED_MODELS.get("google") or [
             default_model_for_provider("google")

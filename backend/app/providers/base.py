@@ -13,6 +13,7 @@ from typing import Protocol
 
 from ..env_config import public_demo_mode_enabled
 from ..provider_defaults import resolve_model_for_provider
+from .availability import OLLAMA_UNAVAILABLE_MESSAGE, is_ollama_available
 
 PUBLIC_DEMO_PROVIDER_MESSAGE = (
     "Live providers on this public demo need your own API key. "
@@ -23,6 +24,11 @@ PUBLIC_DEMO_PROVIDER_MESSAGE = (
 class LiveProviderBlocked(PermissionError):
     """A live provider was asked to run on the server's own key in
     PUBLIC_DEMO_MODE. main.py maps it to 403."""
+
+
+class ProviderUnavailable(RuntimeError):
+    """The requested provider cannot be reached from this deployment (e.g. Ollama on
+    Vercel). main.py maps it to 409."""
 
 
 class ChatProvider(StrEnum):
@@ -63,16 +69,28 @@ def resolve_chat_provider(explicit: str | None = None) -> ChatProvider:
         return ChatProvider(explicit)
     for env_name in ("CHAT_PROVIDER", "AI_PROVIDER"):
         raw = os.environ.get(env_name, "").strip().lower()
-        if raw in _AI_PROVIDER_TO_CHAT:
-            return _AI_PROVIDER_TO_CHAT[raw]
-    return ChatProvider.OLLAMA
+        chosen = _AI_PROVIDER_TO_CHAT.get(raw)
+        if chosen is None:
+            continue
+        if chosen == ChatProvider.OLLAMA and not is_ollama_available():
+            continue  # env-selected Ollama is ignored where it can't be reached
+        return chosen
+    # Ollama is the local-dev default; elsewhere fall back to the deterministic Stub.
+    return ChatProvider.OLLAMA if is_ollama_available() else ChatProvider.STUB
 
 
 def require_live_provider_allowed(provider: str | None, api_key: str | None) -> None:
     """In PUBLIC_DEMO_MODE only Stub runs without a caller-supplied key.
     Every chat model is built through `get_chat_model`, which calls this, so
     no route can reach a server key; routes also call it up front to fail
-    with a clean 403 before a run starts."""
+    with a clean 403 before a run starts. An explicitly requested Ollama on a
+    deployment that can't reach it fails here too (409), before the demo-key check."""
+    try:
+        selected = resolve_chat_provider(provider)
+    except ValueError:
+        selected = None  # unknown provider id: let the caller's own validation report it
+    if selected == ChatProvider.OLLAMA and not is_ollama_available():
+        raise ProviderUnavailable(OLLAMA_UNAVAILABLE_MESSAGE)
     if not public_demo_mode_enabled():
         return
     if resolve_chat_provider(provider) == ChatProvider.STUB or (api_key or "").strip():

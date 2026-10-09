@@ -114,9 +114,11 @@ from .policies import (
 )
 from .fingerprint import document_fingerprint, semantic_fingerprint
 from .provider_credentials import get_provider_credentials
+from .providers.availability import OLLAMA_UNAVAILABLE_MESSAGE, is_ollama_available
 from .providers.base import (
     PUBLIC_DEMO_PROVIDER_MESSAGE,
     LiveProviderBlocked,
+    ProviderUnavailable,
     get_chat_model,
     require_live_provider_allowed,
 )
@@ -197,6 +199,14 @@ async def live_provider_blocked_handler(
     return JSONResponse(
         status_code=403,
         content={"detail": {"code": "live_provider_requires_api_key", "message": str(exc)}},
+    )
+
+
+@app.exception_handler(ProviderUnavailable)
+async def provider_unavailable_handler(_request: Request, exc: ProviderUnavailable) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"detail": {"code": "provider_unavailable", "message": str(exc)}},
     )
 
 
@@ -1357,6 +1367,10 @@ def get_node_history_route(graph_id: str, node_id: str, limit: int = 20) -> list
 
 @app.get("/api/providers/{provider}/ready")
 def provider_ready(provider: str) -> dict[str, bool | str]:
+    # Checked first: on a public demo the "paste an API key" message below would be wrong for
+    # Ollama, which takes no key and simply cannot be reached from Vercel.
+    if provider == "ollama" and not is_ollama_available():
+        return {"ready": False, "message": OLLAMA_UNAVAILABLE_MESSAGE}
     if public_demo_mode_enabled() and provider != "stub":
         return {"ready": False, "message": PUBLIC_DEMO_PROVIDER_MESSAGE}
     if provider == "groq":
