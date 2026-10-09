@@ -9,6 +9,7 @@ export type WorkbenchPanelId =
   | "run"
   | "releases"
   | "routingLab"
+  | "evals"
   | "knowledge"
   | "policies"
   | "health"
@@ -22,6 +23,7 @@ export type WorkbenchPanelId =
   | "llmProfiles"
   | "transforms"
   | "datasets"
+  | "evalSuites"
   | "analytics"
   | "console"
   | "help";
@@ -47,6 +49,8 @@ export const WORKBENCH_PANELS: Record<
   // current graph (or a comparison graph) and see the resulting
   // route-decision distribution.
   routingLab: { title: "Routing lab", hotkey: null, scope: "graph" },
+  // Scored evals: run an eval suite against this graph and compare runs.
+  evals: { title: "Evals", hotkey: null, scope: "graph" },
   // Phase 10 follow-up (docs/planning/features/studio-shell-ux-gap-analysis.md,
   // "Knowledge base has zero UI"): upload/remove the graph's RAG documents
   // and see which runs/nodes retrieved from them. Graph scope — the backend
@@ -70,6 +74,7 @@ export const WORKBENCH_PANELS: Record<
   llmProfiles: { title: "LLM Profiles", hotkey: null, scope: "global" },
   transforms: { title: "Transforms", hotkey: null, scope: "global" },
   datasets: { title: "Datasets", hotkey: null, scope: "global" },
+  evalSuites: { title: "Eval suites", hotkey: null, scope: "global" },
   // Phase 10 Slice A (docs/planning/features/studio-shell-ux-gap-analysis.md):
   // workspace-wide run totals/daily-trend/per-graph spend — spans every
   // graph, so global scope, same as the resource registries. Closes the

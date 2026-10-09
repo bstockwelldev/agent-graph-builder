@@ -27,6 +27,13 @@ const dataset: FixtureDataset = {
 };
 
 describe("fixturesFromText", () => {
+  it("keeps a fixture's expected fields for scored evals, and checks their shape", () => {
+    expect(fixturesFromText('[{"input": {"q": 1}, "expected": {"contains": ["a"]}}]')).toEqual([
+      { input: { q: 1 }, node_outputs: {}, expected: { contains: ["a"] } },
+    ]);
+    expect(() => fixturesFromText('[{"expected": "yes"}]')).toThrow("Fixture 1: expected must be a JSON object");
+  });
+
   it("treats empty text as an empty dataset", () => {
     expect(fixturesFromText("")).toEqual([]);
     expect(fixturesFromText("   ")).toEqual([]);

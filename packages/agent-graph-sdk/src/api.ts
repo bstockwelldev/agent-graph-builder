@@ -12,6 +12,9 @@ import {
   deletedSchema,
   effectivePolicyRuleSchema,
   fixtureDatasetSchema,
+  evalComparisonSchema,
+  evalRunSchema,
+  evalSuiteSchema,
   graphAnalyticsSchema,
   graphDefinitionSchema,
   graphHealthSchema,
@@ -121,6 +124,8 @@ export type RoutingCompareReleaseRequest = RoutingDatasetRequest & { releaseId: 
 
 export type KnowledgeLineageRequest = { documentId?: string };
 export type DatasetFromRunsRequest = { name: string; description?: string; runIds: string[]; includeNodeOutputs?: boolean };
+/** `client.evals.run`: "draft" or a release id ("latest" works); Stub unless `provider` says otherwise. */
+export type EvalRunRequest = { target?: string; provider?: string; model?: string; apiKey?: string };
 export type ChatMessageRequest = { content: string; context?: ChatContext };
 
 export type RunHandle = {
@@ -481,6 +486,23 @@ export function buildNamespaces(transport: Transport) {
           }),
           fixtureDatasetSchema,
         ),
+    },
+    /** Scored evals: suites (a graph + a dataset + scorers) and their stored runs. */
+    evals: {
+      suites: resourceNamespace(transport, "eval-suites", evalSuiteSchema),
+      /** Runs a suite (Stub by default) and stores the result. */
+      run: (suiteId: string, request: EvalRunRequest = {}) =>
+        transport.request(
+          path`/api/eval-suites/${suiteId}/runs`,
+          json({ target: request.target ?? "draft", provider: request.provider ?? "stub", model: request.model, api_key: request.apiKey }),
+          evalRunSchema,
+        ),
+      /** A suite's stored runs, newest first. */
+      runs: (suiteId: string) => transport.request(path`/api/eval-suites/${suiteId}/runs`, undefined, evalRunSchema.array()),
+      getRun: (runId: string) => transport.request(path`/api/eval-runs/${runId}`, undefined, evalRunSchema),
+      /** Per-case score changes from `baselineId` to `candidateId`. */
+      compare: (baselineId: string, candidateId: string) =>
+        transport.request(path`/api/eval-runs/${baselineId}/compare/${candidateId}`, undefined, evalComparisonSchema),
     },
     /** The direct-model scratchpad. */
     chatSessions: {

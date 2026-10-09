@@ -71,7 +71,9 @@ export function DatasetFields({
       />
       {issue ? null : (
         <p className="text-muted-foreground -mt-2 text-xs">
-          An array of <code>{'{"input": {…}, "node_outputs": {…}}'}</code>; node outputs freeze those nodes.
+          An array of <code>{'{"input": {…}, "node_outputs": {…}, "expected": {…}}'}</code>; node outputs freeze those nodes.
+          For scored evals, <code>expected</code> takes <code>output</code>, <code>contains</code>, <code>regex</code>,{" "}
+          <code>json_fields</code> and <code>route</code>.
         </p>
       )}
       {form.source === "runs" ? (

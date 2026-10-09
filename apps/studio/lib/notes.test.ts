@@ -1,1 +1,95 @@
-aW1wb3J0IHsgZGVzY3JpYmUsIGV4cGVjdCwgaXQgfSBmcm9tICJ2aXRlc3QiOwoKaW1wb3J0IHsgYWRkUmVwbHksIGJ1aWxkTm90ZU5vZGVzLCBjYWNoZU5vdGVNZWFzdXJlZCwgY3JlYXRlTm90ZSwgZmlsdGVyTm90ZXMsIGZvbGxvd1Bpbm5lZE5vZGVzLCBpc05vdGVOb2RlSWQsIG5vdGVJZEZyb21Ob2RlLCByZWxhdGl2ZVRpbWUsIHJlbW92ZVJlcGx5LCB1bnBpbk1pc3NpbmcsIHdpdGhOb3RlTWVhc3VyZWQgfSBmcm9tICIuL25vdGVzIjsKCmNvbnN0IE5PVyA9ICIyMDI2LTEwLTAxVDEyOjAwOjAwLjAwMFoiOwoKZGVzY3JpYmUoInN0aWNreSBub3RlcyIsICgpID0+IHsKICBpdCgiY3JlYXRlcyBub3RlcyB3aXRoIGZyZXNoIGlkcywgdGhlIGF1dGhvciBhbmQgYW4gb3B0aW9uYWwgcGlubmVkIG5vZGUiLCAoKSA9PiB7CiAgICBjb25zdCBmaXJzdCA9IGNyZWF0ZU5vdGUoW10sIHsgcG9zaXRpb246IHsgeDogMTAuNCwgeTogMjAuNiB9LCBhdXRob3I6ICJBZGEiLCBub3c6IE5PVyB9KTsKICAgIGV4cGVjdChmaXJzdCkudG9NYXRjaE9iamVjdCh7IGlkOiAibm90ZV8xIiwgdGV4dDogIiIsIHBvc2l0aW9uOiB7IHg6IDEwLCB5OiAyMSB9LCBjb2xvcjogInllbGxvdyIsIGF1dGhvcjogIkFkYSIsIGNyZWF0ZWRfYXQ6IE5PVywgbm9kZV9pZDogbnVsbCwgcmVzb2x2ZWQ6IGZhbHNlLCByZXBsaWVzOiBbXSB9KTsKICAgIGV4cGVjdChjcmVhdGVOb3RlKFtmaXJzdF0sIHsgcG9zaXRpb246IHsgeDogMCwgeTogMCB9LCBhdXRob3I6IG51bGwsIG5vZGVJZDogImxsbV8xIiwgbm93OiBOT1cgfSkpLnRvTWF0Y2hPYmplY3QoeyBpZDogIm5vdGVfMiIsIG5vZGVfaWQ6ICJsbG1fMSIgfSk7CiAgfSk7CgogIGl0KCJ0aHJlYWRzIGNvbW1lbnRzIGFuZCByZW1vdmVzIHRoZW0iLCAoKSA9PiB7CiAgICBjb25zdCBub3RlID0gY3JlYXRlTm90ZShbXSwgeyBwb3NpdGlvbjogeyB4OiAwLCB5OiAwIH0sIGF1dGhvcjogIkFkYSIsIG5vdzogTk9XIH0pOwogICAgY29uc3QgcmVwbGllZCA9IGFkZFJlcGx5KGFkZFJlcGx5KG5vdGUsICIgIExvb2tzIGdvb2QgICIsICJCb2IiLCBOT1cpLCAiVGhhbmtzIiwgIkFkYSIsICIyMDI2LTEwLTAxVDEzOjAwOjAwLjAwMFoiKTsKICAgIGV4cGVjdChyZXBsaWVkLnJlcGxpZXM/Lm1hcCgocmVwbHkpID0+IFtyZXBseS5pZCwgcmVwbHkuYXV0aG9yLCByZXBseS50ZXh0XSkpLnRvRXF1YWwoWwogICAgICBbInJlcGx5XzEiLCAiQm9iIiwgIkxvb2tzIGdvb2QiXSwKICAgICAgWyJyZXBseV8yIiwgIkFkYSIsICJUaGFua3MiXSwKICAgIF0pOwogICAgZXhwZWN0KHJlcGxpZWQudXBkYXRlZF9hdCkudG9CZSgiMjAyNi0xMC0wMVQxMzowMDowMC4wMDBaIik7CiAgICBleHBlY3QocmVtb3ZlUmVwbHkocmVwbGllZCwgInJlcGx5XzEiLCBOT1cpLnJlcGxpZXM/Lm1hcCgocmVwbHkpID0+IHJlcGx5LmlkKSkudG9FcXVhbChbInJlcGx5XzIiXSk7CiAgfSk7CgogIGl0KCJ1bnBpbnMgbm90ZXMgd2hvc2Ugbm9kZSBpcyBnb25lLCBrZWVwaW5nIHRoZSBub3RlIiwgKCkgPT4gewogICAgY29uc3QgcGlubmVkID0geyAuLi5jcmVhdGVOb3RlKFtdLCB7IHBvc2l0aW9uOiB7IHg6IDAsIHk6IDAgfSwgYXV0aG9yOiBudWxsLCBub2RlSWQ6ICJnb25lIiwgbm93OiBOT1cgfSkgfTsKICAgIGV4cGVjdCh1bnBpbk1pc3NpbmcoW3Bpbm5lZF0sIFsia2VwdCJdKVswXSkudG9NYXRjaE9iamVjdCh7IGlkOiAibm90ZV8xIiwgbm9kZV9pZDogbnVsbCB9KTsKICB9KTsKCiAgaXQoInJlbmRlcnMgYXMgZGVyaXZlZCBjYW52YXMgbm9kZXMiLCAoKSA9PiB7CiAgICBjb25zdCBub3RlID0gY3JlYXRlTm90ZShbXSwgeyBwb3NpdGlvbjogeyB4OiA1LCB5OiA2IH0sIGF1dGhvcjogIkFkYSIsIG5vZGVJZDogImxsbV8xIiwgbm93OiBOT1cgfSk7CiAgICBjb25zdCBbbm9kZV0gPSBidWlsZE5vdGVOb2Rlcyhbbm90ZV0sICJub3RlXzEiLCAoaWQpID0+IChpZCA9PT0gImxsbV8xIiA/ICJBbnN3ZXIiIDogbnVsbCkpOwogICAgZXhwZWN0KG5vZGUpLnRvTWF0Y2hPYmplY3QoeyBpZDogIm5vdGU6bm90ZV8xIiwgdHlwZTogInN0aWNreU5vdGUiLCBwb3NpdGlvbjogeyB4OiA1LCB5OiA2IH0sIHNlbGVjdGVkOiB0cnVlLCBkYXRhOiB7IHBpbm5lZExhYmVsOiAiQW5zd2VyIiB9IH0pOwogICAgZXhwZWN0KGlzTm90ZU5vZGVJZChub2RlLmlkKSkudG9CZSh0cnVlKTsKICAgIGV4cGVjdChub3RlSWRGcm9tTm9kZShub2RlLmlkKSkudG9CZSgibm90ZV8xIik7CiAgfSk7CgogIGl0KCJzaG93cyBzaG9ydCByZWxhdGl2ZSB0aW1lcyIsICgpID0+IHsKICAgIGNvbnN0IG5vdyA9IERhdGUucGFyc2UoTk9XKTsKICAgIGV4cGVjdChyZWxhdGl2ZVRpbWUoIjIwMjYtMTAtMDFUMTE6NTk6NDAuMDAwWiIsIG5vdykpLnRvQmUoImp1c3Qgbm93Iik7CiAgICBleHBlY3QocmVsYXRpdmVUaW1lKCIyMDI2LTEwLTAxVDExOjAwOjAwLjAwMFoiLCBub3cpKS50b0JlKCIxaCBhZ28iKTsKICAgIGV4cGVjdChyZWxhdGl2ZVRpbWUoIjIwMjYtMDktMjhUMTI6MDA6MDAuMDAwWiIsIG5vdykpLnRvQmUoIjNkIGFnbyIpOwogICAgZXhwZWN0KHJlbGF0aXZlVGltZShudWxsLCBub3cpKS50b0JlKCIiKTsKICB9KTsKCiAgaXQoIm1vdmVzIHBpbm5lZCBub3RlcyB3aXRoIHRoZWlyIG5vZGUsIGFuZCBsZWF2ZXMgdGhlIHJlc3QiLCAoKSA9PiB7CiAgICBjb25zdCBwaW5uZWQgPSBjcmVhdGVOb3RlKFtdLCB7IHBvc2l0aW9uOiB7IHg6IDEwMCwgeTogNTAgfSwgYXV0aG9yOiBudWxsLCBub2RlSWQ6ICJsbG1fMSIsIG5vdzogTk9XIH0pOwogICAgY29uc3QgbG9vc2UgPSBjcmVhdGVOb3RlKFtwaW5uZWRdLCB7IHBvc2l0aW9uOiB7IHg6IDAsIHk6IDAgfSwgYXV0aG9yOiBudWxsLCBub3c6IE5PVyB9KTsKICAgIGNvbnN0IG5vdGVzID0gW3Bpbm5lZCwgbG9vc2VdOwogICAgY29uc3QgYmVmb3JlID0gbmV3IE1hcChbWyJsbG1fMSIsIHsgeDogMTAsIHk6IDEwIH1dXSk7CiAgICBjb25zdCBtb3ZlZCA9IGZvbGxvd1Bpbm5lZE5vZGVzKG5vdGVzLCBiZWZvcmUsIG5ldyBNYXAoW1sibGxtXzEiLCB7IHg6IDQwLCB5OiAtNSB9XV0pKTsKICAgIGV4cGVjdChtb3ZlZC5tYXAoKG5vdGUpID0+IG5vdGUucG9zaXRpb24pKS50b0VxdWFsKFt7IHg6IDEzMCwgeTogMzUgfSwgeyB4OiAwLCB5OiAwIH1dKTsKICAgIC8vIE5vdGhpbmcgbW92ZWQ6IHRoZSBzYW1lIGFycmF5LCBzbyBubyByZS1yZW5kZXIuCiAgICBleHBlY3QoZm9sbG93UGlubmVkTm9kZXMobm90ZXMsIGJlZm9yZSwgbmV3IE1hcChiZWZvcmUpKSkudG9CZShub3Rlcyk7CiAgfSk7CgogIGl0KCJmaWx0ZXJzIG9wZW4gYW5kIHJlc29sdmVkIG5vdGVzLCBuZXdlc3QgZmlyc3QiLCAoKSA9PiB7CiAgICBjb25zdCBhID0geyAuLi5jcmVhdGVOb3RlKFtdLCB7IHBvc2l0aW9uOiB7IHg6IDAsIHk6IDAgfSwgYXV0aG9yOiBudWxsLCBub3c6ICIyMDI2LTEwLTAxVDEwOjAwOjAwLjAwMFoiIH0pIH07CiAgICBjb25zdCBiID0geyAuLi5jcmVhdGVOb3RlKFthXSwgeyBwb3NpdGlvbjogeyB4OiAwLCB5OiAwIH0sIGF1dGhvcjogbnVsbCwgbm93OiAiMjAyNi0xMC0wMVQxMTowMDowMC4wMDBaIiB9KSwgcmVzb2x2ZWQ6IHRydWUgfTsKICAgIGNvbnN0IGMgPSBjcmVhdGVOb3RlKFthLCBiXSwgeyBwb3NpdGlvbjogeyB4OiAwLCB5OiAwIH0sIGF1dGhvcjogbnVsbCwgbm93OiAiMjAyNi0xMC0wMVQxMjowMDowMC4wMDBaIiB9KTsKICAgIGV4cGVjdChmaWx0ZXJOb3RlcyhbYSwgYiwgY10sICJvcGVuIikubWFwKChub3RlKSA9PiBub3RlLmlkKSkudG9FcXVhbChbYy5pZCwgYS5pZF0pOwogICAgZXhwZWN0KGZpbHRlck5vdGVzKFthLCBiLCBjXSwgInJlc29sdmVkIikubWFwKChub3RlKSA9PiBub3RlLmlkKSkudG9FcXVhbChbYi5pZF0pOwogICAgZXhwZWN0KGZpbHRlck5vdGVzKFthLCBiLCBjXSwgImFsbCIpKS50b0hhdmVMZW5ndGgoMyk7CiAgfSk7CgogIC8vIFNUTy02MzA6IG1lYXN1cmVkIGRpbWVuc2lvbnMgYXJlIGNhY2hlZCBydW50aW1lLW9ubHkgc28gZHJhZyByZWJ1aWxkcwogIC8vIGRvbid0IHJlbmRlciBkZXJpdmVkIG5vdGUgbm9kZXMgdW5tZWFzdXJlZCAoUmVhY3QgRmxvdyBoaWRlcyB0aG9zZSkuCiAgaXQoImNhY2hlcyBub3RlIG1lYXN1cmVkIGRpbWVuc2lvbnMsIHJldHVybmluZyB0aGUgbWFwIHVuY2hhbmdlZCB3aGVuIG5vdGhpbmcgbmV3IiwgKCkgPT4gewogICAgY29uc3QgZW1wdHkgPSBuZXcgTWFwKCk7CiAgICBleHBlY3QoY2FjaGVOb3RlTWVhc3VyZWQoZW1wdHksICJub3RlXzEiLCB1bmRlZmluZWQpKS50b0JlKGVtcHR5KTsKICAgIGV4cGVjdChjYWNoZU5vdGVNZWFzdXJlZChlbXB0eSwgIm5vdGVfMSIsIHsgd2lkdGg6IDIwMCB9KSkudG9CZShlbXB0eSk7CiAgICBjb25zdCBjYWNoZWQgPSBjYWNoZU5vdGVNZWFzdXJlZChlbXB0eSwgIm5vdGVfMSIsIHsgd2lkdGg6IDIwMCwgaGVpZ2h0OiAxMjAgfSk7CiAgICBleHBlY3QoY2FjaGVkLmdldCgibm90ZV8xIikpLnRvRXF1YWwoeyB3aWR0aDogMjAwLCBoZWlnaHQ6IDEyMCB9KTsKICAgIC8vIFNhbWUgZGltczogc2FtZSBtYXAsIHNvIG5vIHJlLXJlbmRlci4KICAgIGV4cGVjdChjYWNoZU5vdGVNZWFzdXJlZChjYWNoZWQsICJub3RlXzEiLCB7IHdpZHRoOiAyMDAsIGhlaWdodDogMTIwIH0pKS50b0JlKGNhY2hlZCk7CiAgICAvLyBOZXcgZGltczogbmV3IG1hcCB3aXRoIGJvdGggZW50cmllcy4KICAgIGNvbnN0IHVwZGF0ZWQgPSBjYWNoZU5vdGVNZWFzdXJlZChjYWNoZWQsICJub3RlXzIiLCB7IHdpZHRoOiAyMDAsIGhlaWdodDogOTAgfSk7CiAgICBleHBlY3QodXBkYXRlZC5nZXQoIm5vdGVfMSIpKS50b0VxdWFsKHsgd2lkdGg6IDIwMCwgaGVpZ2h0OiAxMjAgfSk7CiAgICBleHBlY3QodXBkYXRlZC5nZXQoIm5vdGVfMiIpKS50b0VxdWFsKHsgd2lkdGg6IDIwMCwgaGVpZ2h0OiA5MCB9KTsKICB9KTsKCiAgaXQoInJlLWF0dGFjaGVzIGNhY2hlZCBtZWFzdXJlZCBkaW1lbnNpb25zIHRvIGRlcml2ZWQgbm90ZSBub2RlcyIsICgpID0+IHsKICAgIGNvbnN0IG5vdGUgPSBjcmVhdGVOb3RlKFtdLCB7IHBvc2l0aW9uOiB7IHg6IDUsIHk6IDYgfSwgYXV0aG9yOiAiQWRhIiwgbm93OiBOT1cgfSk7CiAgICBjb25zdCBbbm9kZV0gPSBidWlsZE5vdGVOb2Rlcyhbbm90ZV0sIG51bGwsICgpID0+IG51bGwpOwogICAgLy8gTm8gY2FjaGU6IG5vZGVzIHBhc3MgdGhyb3VnaCB1bnRvdWNoZWQuCiAgICBleHBlY3Qod2l0aE5vdGVNZWFzdXJlZChbbm9kZV0sIG5ldyBNYXAoKSlbMF0pLnRvQmUobm9kZSk7CiAgICBleHBlY3QoIm1lYXN1cmVkIiBpbiBub2RlKS50b0JlKGZhbHNlKTsKICAgIC8vIENhY2hlZDogbWVhc3VyZWQgZGltcyBhcmUgYXR0YWNoZWQgd2l0aG91dCB0b3VjaGluZyBhbnl0aGluZyBlbHNlLgogICAgY29uc3QgW21lYXN1cmVkXSA9IHdpdGhOb3RlTWVhc3VyZWQoW25vZGVdLCBuZXcgTWFwKFtbIm5vdGVfMSIsIHsgd2lkdGg6IDIwMCwgaGVpZ2h0OiAxMjAgfV1dKSk7CiAgICBleHBlY3QobWVhc3VyZWQpLnRvTWF0Y2hPYmplY3QoeyBpZDogIm5vdGU6bm90ZV8xIiwgbWVhc3VyZWQ6IHsgd2lkdGg6IDIwMCwgaGVpZ2h0OiAxMjAgfSwgcG9zaXRpb246IHsgeDogNSwgeTogNiB9IH0pOwogICAgLy8gVW5rbm93biBub3RlIGlkOiBsZWZ0IGFsb25lLgogICAgY29uc3QgW290aGVyXSA9IHdpdGhOb3RlTWVhc3VyZWQoW25vZGVdLCBuZXcgTWFwKFtbIm5vdGVfOSIsIHsgd2lkdGg6IDIwMCwgaGVpZ2h0OiAxMjAgfV1dKSk7CiAgICBleHBlY3QoIm1lYXN1cmVkIiBpbiBvdGhlcikudG9CZShmYWxzZSk7CiAgfSk7Cn0pOwo=
+import { describe, expect, it } from "vitest";
+
+import { addReply, buildNoteNodes, cacheNoteMeasured, createNote, filterNotes, followPinnedNodes, isNoteNodeId, noteIdFromNode, relativeTime, removeReply, unpinMissing, withNoteMeasured } from "./notes";
+
+const NOW = "2026-10-01T12:00:00.000Z";
+
+describe("sticky notes", () => {
+  it("creates notes with fresh ids, the author and an optional pinned node", () => {
+    const first = createNote([], { position: { x: 10.4, y: 20.6 }, author: "Ada", now: NOW });
+    expect(first).toMatchObject({ id: "note_1", text: "", position: { x: 10, y: 21 }, color: "yellow", author: "Ada", created_at: NOW, node_id: null, resolved: false, replies: [] });
+    expect(createNote([first], { position: { x: 0, y: 0 }, author: null, nodeId: "llm_1", now: NOW })).toMatchObject({ id: "note_2", node_id: "llm_1" });
+  });
+
+  it("threads comments and removes them", () => {
+    const note = createNote([], { position: { x: 0, y: 0 }, author: "Ada", now: NOW });
+    const replied = addReply(addReply(note, "  Looks good  ", "Bob", NOW), "Thanks", "Ada", "2026-10-01T13:00:00.000Z");
+    expect(replied.replies?.map((reply) => [reply.id, reply.author, reply.text])).toEqual([
+      ["reply_1", "Bob", "Looks good"],
+      ["reply_2", "Ada", "Thanks"],
+    ]);
+    expect(replied.updated_at).toBe("2026-10-01T13:00:00.000Z");
+    expect(removeReply(replied, "reply_1", NOW).replies?.map((reply) => reply.id)).toEqual(["reply_2"]);
+  });
+
+  it("unpins notes whose node is gone, keeping the note", () => {
+    const pinned = { ...createNote([], { position: { x: 0, y: 0 }, author: null, nodeId: "gone", now: NOW }) };
+    expect(unpinMissing([pinned], ["kept"])[0]).toMatchObject({ id: "note_1", node_id: null });
+  });
+
+  it("renders as derived canvas nodes", () => {
+    const note = createNote([], { position: { x: 5, y: 6 }, author: "Ada", nodeId: "llm_1", now: NOW });
+    const [node] = buildNoteNodes([note], "note_1", (id) => (id === "llm_1" ? "Answer" : null));
+    expect(node).toMatchObject({ id: "note:note_1", type: "stickyNote", position: { x: 5, y: 6 }, selected: true, data: { pinnedLabel: "Answer" } });
+    expect(isNoteNodeId(node.id)).toBe(true);
+    expect(noteIdFromNode(node.id)).toBe("note_1");
+  });
+
+  it("shows short relative times", () => {
+    const now = Date.parse(NOW);
+    expect(relativeTime("2026-10-01T11:59:40.000Z", now)).toBe("just now");
+    expect(relativeTime("2026-10-01T11:00:00.000Z", now)).toBe("1h ago");
+    expect(relativeTime("2026-09-28T12:00:00.000Z", now)).toBe("3d ago");
+    expect(relativeTime(null, now)).toBe("");
+  });
+
+  it("moves pinned notes with their node, and leaves the rest", () => {
+    const pinned = createNote([], { position: { x: 100, y: 50 }, author: null, nodeId: "llm_1", now: NOW });
+    const loose = createNote([pinned], { position: { x: 0, y: 0 }, author: null, now: NOW });
+    const notes = [pinned, loose];
+    const before = new Map([["llm_1", { x: 10, y: 10 }]]);
+    const moved = followPinnedNodes(notes, before, new Map([["llm_1", { x: 40, y: -5 }]]));
+    expect(moved.map((note) => note.position)).toEqual([{ x: 130, y: 35 }, { x: 0, y: 0 }]);
+    // Nothing moved: the same array, so no re-render.
+    expect(followPinnedNodes(notes, before, new Map(before))).toBe(notes);
+  });
+
+  it("filters open and resolved notes, newest first", () => {
+    const a = { ...createNote([], { position: { x: 0, y: 0 }, author: null, now: "2026-10-01T10:00:00.000Z" }) };
+    const b = { ...createNote([a], { position: { x: 0, y: 0 }, author: null, now: "2026-10-01T11:00:00.000Z" }), resolved: true };
+    const c = createNote([a, b], { position: { x: 0, y: 0 }, author: null, now: "2026-10-01T12:00:00.000Z" });
+    expect(filterNotes([a, b, c], "open").map((note) => note.id)).toEqual([c.id, a.id]);
+    expect(filterNotes([a, b, c], "resolved").map((note) => note.id)).toEqual([b.id]);
+    expect(filterNotes([a, b, c], "all")).toHaveLength(3);
+  });
+
+  // STO-630: measured dimensions are cached runtime-only so drag rebuilds
+  // don't render derived note nodes unmeasured (React Flow hides those).
+  it("caches note measured dimensions, returning the map unchanged when nothing new", () => {
+    const empty = new Map();
+    expect(cacheNoteMeasured(empty, "note_1", undefined)).toBe(empty);
+    expect(cacheNoteMeasured(empty, "note_1", { width: 200 })).toBe(empty);
+    const cached = cacheNoteMeasured(empty, "note_1", { width: 200, height: 120 });
+    expect(cached.get("note_1")).toEqual({ width: 200, height: 120 });
+    // Same dims: same map, so no re-render.
+    expect(cacheNoteMeasured(cached, "note_1", { width: 200, height: 120 })).toBe(cached);
+    // New dims: new map with both entries.
+    const updated = cacheNoteMeasured(cached, "note_2", { width: 200, height: 90 });
+    expect(updated.get("note_1")).toEqual({ width: 200, height: 120 });
+    expect(updated.get("note_2")).toEqual({ width: 200, height: 90 });
+  });
+
+  it("re-attaches cached measured dimensions to derived note nodes", () => {
+    const note = createNote([], { position: { x: 5, y: 6 }, author: "Ada", now: NOW });
+    const [node] = buildNoteNodes([note], null, () => null);
+    // No cache: nodes pass through untouched.
+    expect(withNoteMeasured([node], new Map())[0]).toBe(node);
+    expect("measured" in node).toBe(false);
+    // Cached: measured dims are attached without touching anything else.
+    const [measured] = withNoteMeasured([node], new Map([["note_1", { width: 200, height: 120 }]]));
+    expect(measured).toMatchObject({ id: "note:note_1", measured: { width: 200, height: 120 }, position: { x: 5, y: 6 } });
+    // Unknown note id: left alone.
+    const [other] = withNoteMeasured([node], new Map([["note_9", { width: 200, height: 120 }]]));
+    expect("measured" in other).toBe(false);
+  });
+});

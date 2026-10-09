@@ -22,6 +22,14 @@ import type {
   edgeKindSchema,
   edgeTransformSchema,
   fixtureDatasetSchema,
+  fixtureExpectationSchema,
+  evalScorerSchema,
+  evalSuiteSchema,
+  evalScoreSchema,
+  evalCaseResultSchema,
+  evalRunSchema,
+  evalCaseDeltaSchema,
+  evalComparisonSchema,
   fixtureSchema,
   graphAnalyticsSchema,
   graphDefinitionSchema,
@@ -155,6 +163,16 @@ export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 // P1 rollout plan, Slice B ("Fixture-based simulation and subgraph stubbing").
 export type Fixture = z.infer<typeof fixtureSchema>;
 export type FixtureDataset = z.infer<typeof fixtureDatasetSchema>;
+export type FixtureExpectation = z.infer<typeof fixtureExpectationSchema>;
+
+// Scored evals (backend/app/evals.py).
+export type EvalScorer = z.infer<typeof evalScorerSchema>;
+export type EvalSuite = z.infer<typeof evalSuiteSchema>;
+export type EvalScore = z.infer<typeof evalScoreSchema>;
+export type EvalCaseResult = z.infer<typeof evalCaseResultSchema>;
+export type EvalRun = z.infer<typeof evalRunSchema>;
+export type EvalCaseDelta = z.infer<typeof evalCaseDeltaSchema>;
+export type EvalComparison = z.infer<typeof evalComparisonSchema>;
 export type SimulateResult = z.infer<typeof simulateResultSchema>;
 // Counterfactual replay (STO-609).
 // SDK 3/7 (STO-616): request bodies come straight from the OpenAPI contract.

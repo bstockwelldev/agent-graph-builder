@@ -51,7 +51,7 @@ import { demoGraph, FIXED_TIME, makeEffectivePolicy, makePolicyCatalog, releaseI
 type Json = Record<string, unknown>;
 type RunRecord = { summary: RunSummary; traces: NodeTrace[]; events: PlatformEvent[]; snapshot: RunGraphSnapshot };
 
-export const RESOURCE_KINDS = ["prompts", "tools", "mcp-servers", "agents", "llm-profiles", "transforms", "datasets", "chat-sessions"] as const;
+export const RESOURCE_KINDS = ["prompts", "tools", "mcp-servers", "agents", "llm-profiles", "transforms", "datasets", "eval-suites", "chat-sessions"] as const;
 export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 const VERSIONED: ReadonlySet<ResourceKind> = new Set(["prompts", "tools", "mcp-servers", "agents", "llm-profiles", "transforms"]);
 
@@ -64,6 +64,12 @@ const RESOURCE_DEFAULTS: Record<ResourceKind, () => Json> = {
   "llm-profiles": () => ({}),
   transforms: () => ({}),
   datasets: () => ({ fixtures: [], source: "manual", source_run_ids: [], created_at: now(), updated_at: now() }),
+  "eval-suites": () => ({
+    scorers: ["exact", "contains", "regex", "json_field", "route"].map((kind) => ({ kind, weight: 1, args: {} })),
+    pass_threshold: 1,
+    created_at: now(),
+    updated_at: now(),
+  }),
   "chat-sessions": () => ({ messages: [], created_at: now(), updated_at: now() }),
 };
 
@@ -78,6 +84,8 @@ export type MockStore = {
   exceptions: Map<string, PolicyException>;
   knowledge: Map<string, { id: string; name: string; mime_type: string; uploaded_at: string; char_count: number }[]>;
   lineage: KnowledgeLineageEntry[];
+  /** Stored eval runs (the mock scores nothing: every case reads "unscored"). */
+  evalRuns: Map<string, Json>;
   /** MCP server id -> request headers (the API only returns names). */
   mcpHeaders: Map<string, Record<string, string>>;
   sequence: number;
@@ -106,6 +114,7 @@ export function createMockStore(seed: MockSeed = {}): MockStore {
     exceptions: new Map((seed.exceptions ?? []).map((exception) => [exception.id, exception])),
     knowledge: new Map(),
     lineage: [],
+    evalRuns: new Map(),
     mcpHeaders: new Map(),
     sequence: 0,
   };
@@ -879,6 +888,49 @@ export function mockRoutes(): Record<string, Handler> {
       store.resources["chat-sessions"].set(session.id, updated as unknown as Json);
       return HttpResponse.json(updated);
     },
+  };
+
+  // Scored evals: the mock runs nothing; each fixture becomes an unscored, succeeded case.
+  routes["POST /api/eval-suites/{suite_id}/runs"] = async ({ request, params, store }) => {
+    const suite = store.resources["eval-suites"].get(params.suite_id);
+    if (!suite) return notFound("eval suite");
+    const dataset = store.resources.datasets.get(String(suite.dataset_id));
+    if (!dataset) return HttpResponse.json({ detail: `dataset ${String(suite.dataset_id)} not found` }, { status: 422 });
+    const { target = "draft", provider = "stub", model = null } = (await body(request)) as { target?: string; provider?: string; model?: string | null };
+    const fixtures = (dataset.fixtures as unknown[]) ?? [];
+    const at = now();
+    const run = {
+      id: `evr_${++store.sequence}`,
+      suite_id: params.suite_id,
+      graph_id: suite.graph_id,
+      release_id: target === "draft" ? null : target,
+      provider,
+      model,
+      started_at: at,
+      completed_at: at,
+      cases: fixtures.map((_fixture, index) => ({ fixture_index: index, run_id: null, status: "succeeded", output: null, scores: [], score: null, passed: null, estimated_usd: 0, error: null })),
+      score: null,
+      pass_rate: null,
+      estimated_usd: 0,
+      duration_ms: 0,
+      partial: false,
+    };
+    store.evalRuns.set(run.id, run as unknown as Json);
+    return HttpResponse.json(run);
+  };
+  routes["GET /api/eval-suites/{suite_id}/runs"] = ({ params, store }) =>
+    store.resources["eval-suites"].has(params.suite_id)
+      ? HttpResponse.json([...store.evalRuns.values()].filter((run) => run.suite_id === params.suite_id).reverse())
+      : notFound("eval suite");
+  routes["GET /api/eval-runs/{run_id}"] = ({ params, store }) => {
+    const run = store.evalRuns.get(params.run_id);
+    return run ? HttpResponse.json(run) : notFound("eval run");
+  };
+  routes["GET /api/eval-runs/{baseline_id}/compare/{candidate_id}"] = ({ params, store }) => {
+    const baseline = store.evalRuns.get(params.baseline_id);
+    const candidate = store.evalRuns.get(params.candidate_id);
+    if (!baseline || !candidate) return notFound("eval run");
+    return HttpResponse.json({ baseline, candidate, score_delta: null, pass_rate_delta: null, cases: [] });
   };
 
   // Generic resource CRUD, usages and versions.

@@ -19,10 +19,12 @@ import { BUILTIN_TOOL_IDS } from "@/lib/builtinTools";
 import { isChatProvider } from "@/lib/providers";
 import { fixturePreview, fixturesFromText, fixturesTextIssue, fixturesToText, routingLabHref } from "@/lib/datasets";
 import { describeTransform } from "@/lib/transforms";
+import { DEFAULT_SCORERS, scorerLabel, suiteScorerKinds } from "@/lib/evals";
 import { cn } from "@/lib/utils";
 
 import { AgentFields } from "./agent-fields";
 import { DatasetFields, type DatasetForm } from "./dataset-fields";
+import { EvalSuiteFields, thresholdFromText, type EvalSuiteForm } from "./eval-suite-fields";
 import { HeadersField, McpDiscoverySection, TransportField, headerIssues, headersUpdate, type McpServerForm } from "./mcp-server-fields";
 import { ToolSourceFields, toolSource, type ToolForm } from "./tool-source-fields";
 import { ProviderModelFields } from "./provider-model-fields";
@@ -39,7 +41,7 @@ import { AreaField, CheckField, FieldLabel, NameIdFields, ReadOnlyId, TextField,
  * Copy (titles, descriptions, empty/delete text, card content) is each
  * page's existing wording, moved here verbatim.
  */
-export type ResourceKindId = "prompts" | "tools" | "agents" | "mcp" | "llmProfiles" | "transforms" | "datasets";
+export type ResourceKindId = "prompts" | "tools" | "agents" | "mcp" | "llmProfiles" | "transforms" | "datasets" | "evalSuites";
 
 export type ResourceLike = { id: string };
 
@@ -736,4 +738,100 @@ export const datasetKind: ResourceKindConfig<DatasetForm> = {
   ),
 };
 
-export const RESOURCE_KINDS: readonly AnyResourceKind[] = [agentKind, promptKind, toolKind, mcpKind, llmProfileKind, transformKind, datasetKind];
+/** Scored evals: a graph, a dataset of fixtures with expectations, and scorers (backend/app/evals.py). */
+export const evalSuiteKind: ResourceKindConfig<EvalSuiteForm> = {
+  id: "evalSuites",
+  panelId: "evalSuites",
+  routeHref: "/eval-suites",
+  client: {
+    list: () => client.evals.suites.list(),
+    create: (suite) => client.evals.suites.create(suite),
+    update: (suite) => client.evals.suites.update(suite),
+    delete: (id) => client.evals.suites.delete(id),
+  },
+  noun: "eval suite",
+  panelTitle: "Eval suites",
+  pageTitle: "Eval suites",
+  pageDescription:
+    "Score a graph against a dataset: each fixture's expected output, text, pattern, JSON fields or route. Run suites from a graph's Evals panel, on Stub or a live model.",
+  dialogDescription: "Pick the graph, the dataset whose fixtures are the cases, the scorers and the pass mark.",
+  emptyText: "No eval suites. Create one here or from a graph's Evals panel.",
+  listLayout: "grid",
+  itemLabel: (suite) => suite.name,
+  deleteDescription: (suite) => `Remove eval suite "${suite.name}"? Its stored runs stay readable by id.`,
+  renderCardHeader: (suite) => (
+    <>
+      <CardTitle className="text-base">{suite.name}</CardTitle>
+      {suite.description ? <CardDescription>{suite.description}</CardDescription> : null}
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        <Badge variant="outline" className="font-mono">
+          {suite.graph_id}
+        </Badge>
+        <Badge variant="secondary">pass at {Math.round((suite.pass_threshold ?? 1) * 100)}%</Badge>
+      </div>
+    </>
+  ),
+  renderCardBody: (suite) => (
+    <div className="space-y-2 text-sm">
+      <p className="text-muted-foreground text-xs">{suiteScorerKinds(suite).map(scorerLabel).join(" · ") || "No scorers"}</p>
+      <Link
+        href={`/graphs/${encodeURIComponent(suite.graph_id)}?panel=evals&suite=${encodeURIComponent(suite.id)}`}
+        className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+        aria-label={`Run ${suite.name}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        Run in the graph&apos;s Evals panel
+      </Link>
+    </div>
+  ),
+  emptyForm: () => ({
+    id: genId("eval"),
+    name: "",
+    description: "",
+    graph_id: "",
+    dataset_id: "",
+    scorers: DEFAULT_SCORERS.map((kind) => ({ kind, weight: 1, args: {} })),
+    threshold_text: "100",
+  }),
+  toForm: (suite) => ({ ...suite, threshold_text: String(Math.round((suite.pass_threshold ?? 1) * 100)) }),
+  issues: (form) => {
+    const issues = missing(form, [
+      ["name", "Add a name."],
+      ["graph_id", "Pick a graph."],
+      ["dataset_id", "Pick a dataset."],
+    ]);
+    if (suiteScorerKinds({ scorers: form.scorers }).length === 0) issues.push("Pick at least one scorer.");
+    if (thresholdFromText(form.threshold_text) === null) issues.push("Set a pass mark from 0 to 100.");
+    return issues;
+  },
+  normalize: (form) => {
+    if (evalSuiteKind.issues(form).length > 0) return null;
+    const now = new Date().toISOString();
+    return {
+      id: form.id!.trim(),
+      name: form.name!.trim(),
+      description: form.description?.trim() || null,
+      graph_id: form.graph_id!,
+      dataset_id: form.dataset_id!,
+      scorers: form.scorers ?? [],
+      pass_threshold: thresholdFromText(form.threshold_text)!,
+      created_at: form.created_at ?? now,
+      updated_at: now,
+    };
+  },
+  renderFields: (props) => (
+    <>
+      {nameIdFields(props, "eval")}
+      <AreaField
+        id={`${props.idPrefix}-description`}
+        label="Description"
+        value={props.form.description ?? ""}
+        onChange={(description) => props.setForm({ description })}
+        rows={2}
+      />
+      <EvalSuiteFields form={props.form} setForm={props.setForm} idPrefix={props.idPrefix} />
+    </>
+  ),
+};
+
+export const RESOURCE_KINDS: readonly AnyResourceKind[] = [agentKind, promptKind, toolKind, mcpKind, llmProfileKind, transformKind, datasetKind, evalSuiteKind];

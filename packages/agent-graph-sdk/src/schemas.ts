@@ -364,9 +364,21 @@ export const nodeTraceSchema = z.object({
 // backend/app/models.py's Fixture/SimulateResult. `node_outputs` maps a
 // node id to the raw mocked/recorded value that node's executor would
 // otherwise have produced — not yet port-projected.
+/** What a scored eval checks a fixture's run against (backend/app/evals.py). */
+export const fixtureExpectationSchema = z.object({
+  output: z.unknown().optional(),
+  contains: z.array(z.string()).optional(),
+  regex: z.string().nullish(),
+  /** JSON pointer ("/answer/label") -> expected value. */
+  json_fields: z.record(z.string(), z.unknown()).optional(),
+  /** Router/branch node id -> the node it should route to. */
+  route: z.record(z.string(), z.string()).optional(),
+});
+
 export const fixtureSchema = z.object({
   input: z.record(z.string(), z.unknown()),
   node_outputs: z.record(z.string(), z.unknown()),
+  expected: fixtureExpectationSchema.nullish(),
 });
 
 /**
@@ -384,6 +396,73 @@ export const fixtureDatasetSchema = z.object({
   source_run_ids: z.array(z.string()),
   created_at: z.string(),
   updated_at: z.string(),
+});
+
+// Scored evals (backend/app/evals.py, resource_models.py's EvalSuite).
+export const evalScorerKindSchema = z.enum(["exact", "contains", "regex", "json_field", "route", "rubric"]);
+export const evalScorerSchema = z.object({
+  kind: evalScorerKindSchema,
+  weight: z.number().optional(),
+  args: z.record(z.string(), z.unknown()).optional(),
+});
+export const evalSuiteSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  graph_id: z.string(),
+  dataset_id: z.string(),
+  scorers: z.array(evalScorerSchema).optional(),
+  pass_threshold: z.number().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+});
+export const evalScoreSchema = z.object({
+  scorer: z.string(),
+  score: z.number(),
+  passed: z.boolean(),
+  detail: z.string().optional(),
+});
+export const evalCaseResultSchema = z.object({
+  fixture_index: z.number(),
+  run_id: z.string().nullish(),
+  status: z.string(),
+  output: z.unknown().optional(),
+  scores: z.array(evalScoreSchema).optional(),
+  score: z.number().nullish(),
+  passed: z.boolean().nullish(),
+  estimated_usd: z.number().optional(),
+  error: z.string().nullish(),
+});
+export const evalRunSchema = z.object({
+  id: z.string(),
+  suite_id: z.string(),
+  graph_id: z.string(),
+  release_id: z.string().nullish(),
+  provider: z.string(),
+  model: z.string().nullish(),
+  started_at: z.string(),
+  completed_at: z.string(),
+  cases: z.array(evalCaseResultSchema).optional(),
+  score: z.number().nullish(),
+  pass_rate: z.number().nullish(),
+  estimated_usd: z.number().optional(),
+  duration_ms: z.number().optional(),
+  partial: z.boolean().optional(),
+});
+export const evalCaseDeltaSchema = z.object({
+  fixture_index: z.number(),
+  baseline_score: z.number().nullish(),
+  candidate_score: z.number().nullish(),
+  delta: z.number().nullish(),
+  baseline_passed: z.boolean().nullish(),
+  candidate_passed: z.boolean().nullish(),
+});
+export const evalComparisonSchema = z.object({
+  baseline: evalRunSchema,
+  candidate: evalRunSchema,
+  score_delta: z.number().nullish(),
+  pass_rate_delta: z.number().nullish(),
+  cases: z.array(evalCaseDeltaSchema).optional(),
 });
 
 export const simulateResultSchema = z.object({

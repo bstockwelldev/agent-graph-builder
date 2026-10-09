@@ -31,6 +31,7 @@ const SCOPE_KEY: Record<ResourceKindId, string> = {
   llmProfiles: "llm-profiles",
   transforms: "transforms",
   datasets: "datasets",
+  evalSuites: "eval-suites",
 };
 
 /** With a graph in scope: the ids of this kind it uses (null while loading). */

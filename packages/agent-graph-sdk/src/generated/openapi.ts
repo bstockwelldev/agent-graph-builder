@@ -285,6 +285,123 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/eval-runs/{baseline_id}/compare/{candidate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Eval Runs Endpoint
+         * @description Per-case score changes from `baseline_id` to `candidate_id`.
+         */
+        get: operations["compare_eval_runs_endpoint_api_eval_runs__baseline_id__compare__candidate_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/eval-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Eval Run Endpoint */
+        get: operations["get_eval_run_endpoint_api_eval_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/eval-suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Eval Suites */
+        get: operations["list_eval_suites"];
+        put?: never;
+        /** Create Eval Suites */
+        post: operations["create_eval_suites"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/eval-suites/{resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Eval Suites */
+        get: operations["get_eval_suites"];
+        /** Update Eval Suites */
+        put: operations["update_eval_suites"];
+        post?: never;
+        /** Delete Eval Suites */
+        delete: operations["delete_eval_suites"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/eval-suites/{resource_id}/usages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usages Eval Suites */
+        get: operations["usages_eval_suites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/eval-suites/{suite_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Eval Runs Endpoint
+         * @description A suite's stored runs, newest first.
+         */
+        get: operations["list_eval_runs_endpoint_api_eval_suites__suite_id__runs_get"];
+        put?: never;
+        /**
+         * Run Eval Suite Endpoint
+         * @description Stub by default (never a live call). Another provider runs live: in
+         *     public demo mode only with a key in the request, elsewhere with the
+         *     request's key or the server's.
+         */
+        post: operations["run_eval_suite_endpoint_api_eval_suites__suite_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/graph-releases/{release_id}/compare-draft": {
         parameters: {
             query?: never;
@@ -751,7 +868,7 @@ export type paths = {
          * Graph Resources Endpoint
          * @description Resources this graph uses (slice 4's graph scope): its bindings from
          *     the graph catalog, the MCP servers behind its tools, the agents that
-         *     run it, and the datasets captured from it (slice 7).
+         *     run it, the datasets captured from it (slice 7) and its eval suites.
          */
         get: operations["graph_resources_endpoint_api_graphs__graph_id__resources_get"];
         put?: never;
@@ -2082,6 +2199,131 @@ export type components = {
             };
             rule: components["schemas"]["PolicyRuleInfo"];
         };
+        /** EvalCaseDelta */
+        EvalCaseDelta: {
+            /** Baseline Passed */
+            baseline_passed?: boolean | null;
+            /** Baseline Score */
+            baseline_score?: number | null;
+            /** Candidate Passed */
+            candidate_passed?: boolean | null;
+            /** Candidate Score */
+            candidate_score?: number | null;
+            /** Delta */
+            delta?: number | null;
+            /** Fixture Index */
+            fixture_index: number;
+        };
+        /** EvalCaseResult */
+        EvalCaseResult: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Estimated Usd
+             * @default 0
+             */
+            estimated_usd?: number;
+            /** Fixture Index */
+            fixture_index: number;
+            /** Output */
+            output?: unknown;
+            /** Passed */
+            passed?: boolean | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Score */
+            score?: number | null;
+            /** Scores */
+            scores?: components["schemas"]["EvalScore"][];
+            /** Status */
+            status: string;
+        };
+        /** EvalComparison */
+        EvalComparison: {
+            baseline: components["schemas"]["EvalRun"];
+            candidate: components["schemas"]["EvalRun"];
+            /** Cases */
+            cases?: components["schemas"]["EvalCaseDelta"][];
+            /** Pass Rate Delta */
+            pass_rate_delta?: number | null;
+            /** Score Delta */
+            score_delta?: number | null;
+        };
+        /** EvalRun */
+        EvalRun: {
+            /** Cases */
+            cases?: components["schemas"]["EvalCaseResult"][];
+            /** Completed At */
+            completed_at: string;
+            /**
+             * Duration Ms
+             * @default 0
+             */
+            duration_ms?: number;
+            /**
+             * Estimated Usd
+             * @default 0
+             */
+            estimated_usd?: number;
+            /** Graph Id */
+            graph_id: string;
+            /** Id */
+            id: string;
+            /** Model */
+            model?: string | null;
+            /**
+             * Partial
+             * @default false
+             */
+            partial?: boolean;
+            /** Pass Rate */
+            pass_rate?: number | null;
+            /** Provider */
+            provider: string;
+            /** Release Id */
+            release_id?: string | null;
+            /** Score */
+            score?: number | null;
+            /** Started At */
+            started_at: string;
+            /** Suite Id */
+            suite_id: string;
+        };
+        /**
+         * EvalRunRequest
+         * @description `target`: "draft" (the saved graph) or a release id ("latest" works).
+         *     Stub by default; another provider runs live and needs a key in public demo mode.
+         */
+        EvalRunRequest: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Provider
+             * @default stub
+             */
+            provider?: string;
+            /**
+             * Target
+             * @default draft
+             */
+            target?: string;
+        };
+        /** EvalScore */
+        EvalScore: {
+            /**
+             * Detail
+             * @default
+             */
+            detail?: string;
+            /** Passed */
+            passed: boolean;
+            /** Score */
+            score: number;
+            /** Scorer */
+            scorer: string;
+        };
         /** ExtractSubgraphRequest */
         ExtractSubgraphRequest: {
             draft: components["schemas"]["GraphDefinition"];
@@ -2097,6 +2339,7 @@ export type components = {
         };
         /** Fixture */
         Fixture: {
+            expected?: components["schemas"]["FixtureExpectation"] | null;
             /** Input */
             input?: {
                 [key: string]: unknown;
@@ -2104,6 +2347,27 @@ export type components = {
             /** Node Outputs */
             node_outputs?: {
                 [key: string]: unknown;
+            };
+        };
+        /**
+         * FixtureExpectation
+         * @description What a scored eval checks a fixture's run against (evals.py). Every
+         *     field is optional; a scorer with nothing to check skips the case.
+         */
+        FixtureExpectation: {
+            /** Contains */
+            contains?: string[];
+            /** Json Fields */
+            json_fields?: {
+                [key: string]: unknown;
+            };
+            /** Output */
+            output?: unknown;
+            /** Regex */
+            regex?: string | null;
+            /** Route */
+            route?: {
+                [key: string]: string;
             };
         };
         /** GraphAnalytics */
@@ -2361,9 +2625,10 @@ export type components = {
         /**
          * GraphResources
          * @description The library resources a graph uses, by API kind (`prompts`, `tools`,
-         *     `mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`):
-         *     what its nodes and edges bind, the MCP servers its tools call, the
-         *     agents built on it, and the datasets captured from it. Backs the
+         *     `mcp-servers`, `llm-profiles`, `transforms`, `agents`, `datasets`,
+         *     `eval-suites`): what its nodes and edges bind, the MCP servers its tools
+         *     call, the agents built on it, the datasets captured from it and the
+         *     eval suites that score it. Backs the
          *     Resources pages' graph scope.
          */
         GraphResources: {
@@ -4102,6 +4367,344 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_eval_runs_endpoint_api_eval_runs__baseline_id__compare__candidate_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                baseline_id: string;
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_eval_run_endpoint_api_eval_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_eval_suites: {
+        parameters: {
+            query?: {
+                /** @description `X-Next-Cursor` from the previous page. */
+                cursor?: string | null;
+                /** @description Page size. Omit for the full list. */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_eval_suites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_eval_suites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_eval_suites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_eval_suites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usages_eval_suites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceUsage"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_eval_runs_endpoint_api_eval_suites__suite_id__runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRun"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_eval_suite_endpoint_api_eval_suites__suite_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvalRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRun"];
                 };
             };
             /** @description Validation Error */
