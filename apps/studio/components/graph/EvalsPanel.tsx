@@ -6,6 +6,7 @@ import { client } from "@/lib/api-client";
 import { errorDetail } from "@/lib/apiErrors";
 import { DEFAULT_SCORERS, caseVerdict, describeEvalRun, formatDelta, formatScore, formatUsd, scorerLabel } from "@/lib/evals";
 import { color, fontFamily, radius, shell, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { useOllamaAvailable, withoutUnavailableProviderIds } from "@/lib/providerAvailability";
 import { PROVIDER_ORDER, providerLabel } from "@/lib/providers";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
@@ -39,6 +40,7 @@ export function EvalsPanel({
   /** A case's run: open it in the Run panel. */
   onOpenRun?: (runId: string) => void;
 }) {
+  const ollamaAvailable = useOllamaAvailable();
   const [suites, setSuites] = useState<EvalSuite[] | null>(null);
   const [datasets, setDatasets] = useState<FixtureDataset[]>([]);
   const [releases, setReleases] = useState<ReleaseIndexEntry[]>([]);
@@ -213,7 +215,7 @@ export function EvalsPanel({
               <label style={labelStyle}>
                 Provider
                 <Select value={provider} onChange={(event) => setProvider(event.target.value)}>
-                  {PROVIDER_ORDER.map((item) => (
+                  {withoutUnavailableProviderIds(PROVIDER_ORDER, ollamaAvailable, provider).map((item) => (
                     <option key={item} value={item}>
                       {providerLabel(item)}
                     </option>

@@ -66,6 +66,7 @@ import {
 import { client } from "@/lib/api-client";
 import { partitionDiagnosticsByField } from "@/lib/diagnostics";
 import { ProviderModelPicker } from "./ProviderModelPicker";
+import { useOllamaAvailable, withoutUnavailableProviders } from "@/lib/providerAvailability";
 import { ResourceBindingField } from "./ResourceBindingField";
 import { TaxonomyTooltip } from "./Tooltip";
 import { Button } from "./ui/Button";
@@ -549,6 +550,7 @@ function ConfigureTab({
   templateVariables: readonly string[];
   onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
 }) {
+  const ollamaAvailable = useOllamaAvailable();
   const { byField, rest } = partitionDiagnosticsByField(
     issues.filter((issue) => !issue.edge_id),
     RENDERED_FIELDS[node.type],
@@ -726,7 +728,7 @@ function ConfigureTab({
                   id={id}
                   aria-label="Decision provider"
                   value={str("provider", "stub")}
-                  options={DECISION_PROVIDER_OPTIONS}
+                  options={withoutUnavailableProviders(DECISION_PROVIDER_OPTIONS, ollamaAvailable, str("provider", "stub"))}
                   onChange={(value) => set("provider", value)}
                   searchPlaceholder="Search providers…"
                 />

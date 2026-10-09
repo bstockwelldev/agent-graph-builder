@@ -1,4 +1,5 @@
 import { useModelCatalog } from "@/hooks/use-model-catalog";
+import { useOllamaAvailable, withoutUnavailableProviders } from "@/lib/providerAvailability";
 import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
 import { PROVIDER_LABEL, PROVIDER_ORDER, providerLabel } from "@/lib/providers";
 import { OFFLINE_EXPLANATION } from "@/lib/serverHealth";
@@ -24,6 +25,7 @@ export function ProviderModelPicker({
   disabled?: boolean;
 }) {
   const catalog = useModelCatalog({ provider, model, onModelChange, graphId });
+  const ollamaAvailable = useOllamaAvailable();
   const catalogProvider = catalog.enabled;
   const modelOptions = catalog.options;
   const modelCatalogMessage = catalog.message;
@@ -38,7 +40,7 @@ export function ProviderModelPicker({
             id={id}
             aria-label="Model provider"
             value={provider}
-            options={PROVIDER_OPTIONS}
+            options={withoutUnavailableProviders(PROVIDER_OPTIONS, ollamaAvailable, provider)}
             onChange={(value) => onProviderChange(value as ChatProvider)}
             disabled={disabled}
             searchPlaceholder="Search providers…"

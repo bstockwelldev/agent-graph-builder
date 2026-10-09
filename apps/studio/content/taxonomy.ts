@@ -48,7 +48,7 @@ export const PROVIDER_TAXONOMY: Record<string, { title: string; summary: string;
   ollama: {
     title: "Ollama",
     summary: "Local models",
-    details: "Lists models from the local Ollama daemon. No cloud API key; server must reach Ollama.",
+    details: "Lists models from the local Ollama daemon. No cloud API key. Local development only: hidden on deployments (e.g. Vercel) that cannot reach it.",
   },
   openai_compat: {
     title: "OpenAI-compatible HTTP",

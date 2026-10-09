@@ -13,6 +13,7 @@ import {
 } from "@bstockwelldev/agent-graph-sdk/graph";
 import { color, fontFamily, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { PROVIDER_OPTIONS } from "./ProviderModelPicker";
+import { useOllamaAvailable, withoutUnavailableProviders } from "@/lib/providerAvailability";
 import { Button } from "./ui/Button";
 import { Combobox } from "./ui/Combobox";
 import { TextInput } from "./ui/fields";
@@ -37,6 +38,7 @@ export function CounterfactualForm({
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<CounterfactualDraft>(EMPTY_DRAFT);
+  const ollamaAvailable = useOllamaAvailable();
   const routes = routeChoices(graph);
   const models = modelChoices(graph);
   const request = buildReplayRequest(draft);
@@ -75,7 +77,10 @@ export function CounterfactualForm({
               value={current.provider}
               disabled={busy}
               onChange={(provider) => set({ provider })}
-              options={[{ value: AS_RECORDED, label: "As recorded" }, ...PROVIDER_OPTIONS]}
+              options={[
+                { value: AS_RECORDED, label: "As recorded" },
+                ...withoutUnavailableProviders(PROVIDER_OPTIONS, ollamaAvailable, current.provider),
+              ]}
             />
             {current.provider && (
               <TextInput
