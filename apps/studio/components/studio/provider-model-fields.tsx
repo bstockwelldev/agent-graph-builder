@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROVIDER_TAXONOMY } from "@/content/taxonomy";
 import { useModelCatalog } from "@/hooks/use-model-catalog";
+import { useOllamaAvailable, withoutUnavailableProviderIds } from "@/lib/providerAvailability";
 import { PROVIDER_ORDER, isChatProvider, providerLabel } from "@/lib/providers";
 
 import { FieldLabel } from "./resource-fields";
@@ -29,6 +30,7 @@ export function ProviderModelFields({
   idPrefix: string;
 }) {
   const current = isChatProvider(provider) ? provider : null;
+  const ollamaAvailable = useOllamaAvailable();
   const catalog = useModelCatalog({ provider: current, model, onModelChange, replaceUnknown: false });
   const listId = `${idPrefix}-models`;
   const hint = current ? (catalog.message || PROVIDER_TAXONOMY[current]?.summary) : undefined;
@@ -44,7 +46,7 @@ export function ProviderModelFields({
             <SelectValue placeholder="Choose a provider">{(value: string) => providerLabel(value)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {PROVIDER_ORDER.map((value) => (
+            {withoutUnavailableProviderIds(PROVIDER_ORDER, ollamaAvailable, current ?? undefined).map((value) => (
               <SelectItem key={value} value={value}>
                 {providerLabel(value)}
               </SelectItem>

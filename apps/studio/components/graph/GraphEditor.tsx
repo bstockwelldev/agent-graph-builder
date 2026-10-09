@@ -1865,7 +1865,8 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       setCompiling(true);
       try {
         const needsServerKey = provider === "groq" || provider === "google" || provider === "azure";
-        if (needsServerKey && !apiKey?.trim()) {
+        // Ollama takes no key but is only reachable in local dev, so it is always checked.
+        if ((needsServerKey && !apiKey?.trim()) || provider === "ollama") {
           const readiness = await client.providers.ready(provider);
           if (!readiness.ready) {
             setProviderBlockMessage(readiness.message);
