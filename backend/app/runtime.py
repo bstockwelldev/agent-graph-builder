@@ -40,6 +40,7 @@ from .ports import default_input_port, default_output_port, project_node_output,
 from .transforms import materialize_transforms
 from .providers.base import get_chat_model, resolve_chat_provider
 from .decision_models.base import DecisionModel, get_decision_model
+from .extraction.base import Extractor, get_extractor
 from .releases import resolve_resource_snapshots
 from .telemetry.provider import get_server_telemetry
 from .telemetry.types import (
@@ -623,6 +624,18 @@ def _prepare_run(
             api_key=api_key,
         )
 
+    def extractor_factory(node: GraphNode) -> Extractor:
+        # Extract nodes resolve their own provider per node config; stub is
+        # the default so the public demo and CI stay keyless. Live backends
+        # (vision) go through the same PUBLIC_DEMO_MODE gating as chat models.
+        node_config = node.config or {}
+        return get_extractor(
+            model=node_config.get("model"),
+            provider=node_config.get("provider") or "stub",
+            stages=node_config.get("stages"),
+            api_key=api_key,
+        )
+
     seeded_node_outputs = _project_fixture_node_outputs(graph, fixture_node_outputs)
     graph = _with_library_transforms(graph, release_resource_snapshots)
 
@@ -632,6 +645,7 @@ def _prepare_run(
         bus=bus,
         chat_model_factory=chat_model_factory,
         decision_model_factory=decision_model_factory,
+        extractor_factory=extractor_factory,
         state_snapshot={
             "variables": {"__run_input__": run_input},
             "node_outputs": seeded_node_outputs,
@@ -818,12 +832,22 @@ def _prepare_resume(
             api_key=key,
         )
 
+    def extractor_factory(node: GraphNode) -> Extractor:
+        node_config = node.config or {}
+        return get_extractor(
+            model=node_config.get("model"),
+            provider=node_config.get("provider") or "stub",
+            stages=node_config.get("stages"),
+            api_key=key,
+        )
+
     ctx = ExecContext(
         run_id=run_id,
         graph=graph,
         bus=bus,
         chat_model_factory=chat_model_factory,
         decision_model_factory=decision_model_factory,
+        extractor_factory=extractor_factory,
         state_snapshot={
             "variables": {
                 **pause.variables,

@@ -31,6 +31,9 @@ export const nodeTypeSchema = z.enum([
   // Constrained classifier that routes on a schema-validated outcome
   // (backend/app/decision_models, DecisionConfig).
   "decision",
+  // Document ingestion: upload or variable -> text/OCR/vision pipeline ->
+  // structured JSON (backend/app/extraction, ExtractConfig).
+  "extract",
 ]);
 
 export const edgeKindSchema = z.enum(["sequence", "conditional", "default"]);
@@ -1018,6 +1021,19 @@ export const knowledgeUploadResponseSchema = z.object({
 export const knowledgeDeleteResponseSchema = z.object({
   ok: z.boolean(),
   ...knowledgeSummaryFields,
+});
+
+// POST /api/graphs/{id}/extract (multipart upload): stages the document
+// bytes an extract node consumes at run time. camelCase, like the
+// knowledge upload envelope above (the backend serializes this one
+// directly, not via model_dump).
+export const extractUploadResponseSchema = z.object({
+  documentId: z.string(),
+  graphId: z.string(),
+  fileName: z.string(),
+  mime: z.string(),
+  sizeBytes: z.number(),
+  pageCount: z.number(),
 });
 
 /**
