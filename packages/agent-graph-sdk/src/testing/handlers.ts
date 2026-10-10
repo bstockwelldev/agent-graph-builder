@@ -84,6 +84,8 @@ export type MockStore = {
   exceptions: Map<string, PolicyException>;
   knowledge: Map<string, { id: string; name: string; mime_type: string; uploaded_at: string; char_count: number }[]>;
   lineage: KnowledgeLineageEntry[];
+  /** documentId -> staged extraction upload (the mock stores bytes, not extracted fields). */
+  extractUploads: Map<string, { documentId: string; graphId: string; fileName: string; mime: string; sizeBytes: number; pageCount: number }>;
   /** Stored eval runs (the mock scores nothing: every case reads "unscored"). */
   evalRuns: Map<string, Json>;
   /** MCP server id -> request headers (the API only returns names). */
@@ -114,6 +116,7 @@ export function createMockStore(seed: MockSeed = {}): MockStore {
     exceptions: new Map((seed.exceptions ?? []).map((exception) => [exception.id, exception])),
     knowledge: new Map(),
     lineage: [],
+    extractUploads: new Map(),
     evalRuns: new Map(),
     mcpHeaders: new Map(),
     sequence: 0,
@@ -738,9 +741,25 @@ export function mockRoutes(): Record<string, Handler> {
     },
     "DELETE /api/graphs/{graph_id}/policy-exceptions/{exception_id}": ({ params, store }) => HttpResponse.json({ deleted: store.exceptions.delete(params.exception_id) }),
 
+    // Document extraction uploads (extract node staging)
+    "POST /api/graphs/{graph_id}/extract": async ({ request, params, store }) => {
+      const form = await request.formData();
+      const file = form.get("file") as File | null;
+      if (!file) return HttpResponse.json({ detail: "file is required" }, { status: 422 });
+      const upload = {
+        documentId: nextId(store, "extract"),
+        graphId: params.graph_id,
+        fileName: file.name,
+        mime: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        pageCount: 1,
+      };
+      store.extractUploads.set(upload.documentId, upload);
+      return HttpResponse.json(upload);
+    },
+
     // Knowledge
-    "GET /api/graphs/{graph_id}/knowledge": ({ params, store }) => HttpResponse.json({ graphId: params.graph_id, ...knowledgeSummary(store, params.graph_id) }),
-    "POST /api/graphs/{graph_id}/knowledge": async ({ request, params, store }) => {
+    "GET /api/graphs/{graph_id}/knowledge": ({ params, store }) => HttpResponse.json({ graphId: params.graph_id, ...knowledgeSummary(store, params.graph_id) }),    "POST /api/graphs/{graph_id}/knowledge": async ({ request, params, store }) => {
       const form = await request.formData();
       const file = form.get("file") as File | null;
       if (!file) return HttpResponse.json({ detail: "file is required" }, { status: 422 });
