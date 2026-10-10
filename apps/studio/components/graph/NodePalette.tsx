@@ -53,6 +53,7 @@ export const NODE_TYPES: NodeType[] = [
   "subgraph",
   "transform",
   "decision",
+  "extract",
 ];
 
 const EDGE_KINDS: EdgeKind[] = ["sequence", "conditional", "default"];

@@ -6,6 +6,26 @@ import type { NodeType } from "../types.js";
 // existed "only to keep this switch exhaustive" since nothing could reach
 // them without a palette entry. Phase 4d's NodePalette now creates all 12,
 // so every case here is reachable for real.
+
+/** The backend ExtractConfig's default `output_schema`: the document-facts
+ * shape the stub extractor returns. A fresh object per call -- callers
+ * mutate the config freely. */
+export function documentFactsSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      title: { type: "string" },
+      page_count: { type: "integer" },
+      total_chars: { type: "integer" },
+      source_file: { type: "string" },
+      has_embedded_text: { type: "boolean" },
+      extraction_method: { type: "string", enum: ["stub", "text", "ocr", "vision"] },
+      layout_preserved: { type: "boolean" },
+    },
+    required: ["title", "page_count", "total_chars", "source_file", "has_embedded_text", "extraction_method", "layout_preserved"],
+  };
+}
+
 export function defaultConfig(type: NodeType): Record<string, unknown> {
   switch (type) {
     case "input":
@@ -49,6 +69,17 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
         threshold: 0.6,
         onLowConfidence: "default",
         rules: [],
+      };
+    case "extract":
+      return {
+        source: "upload",
+        variableName: null,
+        stages: ["text", "ocr"],
+        outputSchema: documentFactsSchema(),
+        provider: "stub",
+        model: null,
+        threshold: 0.7,
+        pageLimit: 10,
       };
   }
 }
@@ -173,6 +204,11 @@ export function summaryFor(type: NodeType, config: Record<string, unknown>, cont
     case "decision":
       if (routeCount !== undefined && routeCount > 0) return `${routeCount} route${routeCount === 1 ? "" : "s"}`;
       return type === "branch" && hasUserLabel ? snippet(config.content) : null;
+    case "extract": {
+      const stages = Array.isArray(config.stages) ? config.stages.map(String).join("+") : "text+ocr";
+      const provider = String(config.provider ?? "stub");
+      return hasUserLabel ? `${provider} · ${stages}` : `via ${provider}`;
+    }
     case "input":
       return hasUserLabel ? `variable: ${String(config.variableName ?? "question")}` : null;
     case "output":
@@ -250,5 +286,7 @@ export function labelFor(type: NodeType, config: Record<string, unknown>): strin
       return boundId(config, "transformId") ?? transformSummary(config);
     case "decision":
       return `decision: ${String(config.schema ?? "route")}`;
+    case "extract":
+      return `extract: ${String(config.source ?? "upload")}`;
   }
 }

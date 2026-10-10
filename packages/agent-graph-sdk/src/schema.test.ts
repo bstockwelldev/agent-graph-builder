@@ -258,9 +258,10 @@ describe("NODE_TYPES (studio-consolidation Phase 1)", () => {
   const original: NodeType[] = ["input", "prompt", "llm", "tool", "router", "output"];
 
   it("includes both the original six and the six absorbed node types", () => {
-    // + subgraph (large-graph Wave 7c) + decision (constrained classifier).
-    expect(NODE_TYPES).toHaveLength(15);
-    for (const type of [...original, ...absorbed, "subgraph", "decision"]) {
+    // + subgraph (large-graph Wave 7c) + decision (constrained classifier)
+    // + extract (document ingestion).
+    expect(NODE_TYPES).toHaveLength(16);
+    for (const type of [...original, ...absorbed, "subgraph", "decision", "extract"]) {
       expect(NODE_TYPES).toContain(type);
     }
   });

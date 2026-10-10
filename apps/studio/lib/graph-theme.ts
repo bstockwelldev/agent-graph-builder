@@ -121,6 +121,9 @@ export const nodeType = {
   // Constrained classifier (decision node): coral, distinct from router's
   // magenta and guardrail's rose.
   decision: { bg: "#2b1c20", border: "#c25a72", accent: "#ee8ba3", label: "#f6c4d1" },
+  // Document ingestion (extract node): desaturated slate, distinct from
+  // decision's coral, code_exec's periwinkle and tool's gold.
+  extract: { bg: "#1e2126", border: "#566274", accent: "#93a5bd", label: "#cfdae8" },
 } as const;
 
 /** Blueprint-style canvas pane — subtle paper tone over dark base. */
