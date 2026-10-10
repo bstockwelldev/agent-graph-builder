@@ -43,6 +43,13 @@ EventType = Literal[
     # the validated outcome, confidence vs threshold, reason code, attempts,
     # and rule hit (if a deterministic rule decided without the model).
     "decision.made",
+    # Extraction node (extraction/): emitted when an extract node finishes
+    # extraction, carrying the document id, provider, rule hit, confidence
+    # vs threshold, attempts, latency, page count, and field names -- plus
+    # abstained=true when it abstained or fell below threshold. That path
+    # fails the run loudly right after emitting; no fields are ever emitted
+    # on it (never silently coerce).
+    "extract.completed",
     # Wave 7c (STO-612): a subgraph node's nested child run finished.
     "subgraph.completed",
 ]

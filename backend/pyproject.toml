@@ -12,6 +12,11 @@ dependencies = [
     "libsql>=0.1.4",
     "boto3>=1.35",
     "python-multipart>=0.0.12",
+    # Document extraction node (app/extraction/): pdfplumber is the primary
+    # embedded-text engine, pypdf the fallback (also used for page-limit
+    # truncation). Pillow arrives via pdfplumber (image probing).
+    "pdfplumber>=0.11",
+    "pypdf>=4",
 ]
 
 [project.optional-dependencies]

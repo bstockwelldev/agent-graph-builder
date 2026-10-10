@@ -15,6 +15,7 @@ export {
   boundResourceName,
   boundTitleFor,
   defaultConfig,
+  documentFactsSchema,
   labelFor,
   nodeLabel,
   summaryFor,

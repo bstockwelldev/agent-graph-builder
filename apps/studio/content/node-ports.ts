@@ -52,6 +52,8 @@ export const NODE_PORT_CATALOG: Record<NodeType, { input: GraphPort[]; output: G
   // Output kind depends on the configured transform (`transformOutputKind`).
   transform: singleIo("structured-json", "structured-json"),
   decision: routerLikeIo("message"),
+  // Document in, schema-validated fields out (backend/app/ports.py).
+  extract: singleIo("artifact", "structured-json"),
 };
 
 /** Mirror of backend ports.py `_transform_output_kind`: text-producing transforms emit a message. */
