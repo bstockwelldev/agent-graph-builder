@@ -56,6 +56,13 @@ from .releases import get_release
 
 _ROUTING_NODE_TYPES = frozenset({NodeType.ROUTER, NodeType.BRANCH, NodeType.DECISION})
 
+# Extraction nodes whose output is deterministic given their input bytes
+# (stub fixture, text/ocr engines) recompute in replay instead of freezing:
+# a replay then reflects the current extraction pipeline, not a stale
+# snapshot. Vision-provider extracts are non-deterministic and stay frozen
+# like any other model node.
+_EXTRACT_DETERMINISTIC_PROVIDERS = frozenset({"stub", "deterministic"})
+
 
 class ReplayNotFound(Exception):
     """The run, its graph snapshot, or (for a release-sourced run) the
@@ -80,6 +87,15 @@ def frozen_node_outputs(graph: GraphDefinition, traces: list[NodeTrace]) -> dict
     """
     nodes_by_id = {n.id: n for n in graph.nodes}
     routing_ids = {n.id for n in graph.nodes if n.type in _ROUTING_NODE_TYPES}
+    # Extraction is deterministic given the document bytes (see
+    # _EXTRACT_DETERMINISTIC_PROVIDERS) -- recompute those nodes in replay
+    # rather than freezing their recorded output.
+    recompute_ids = {
+        n.id
+        for n in graph.nodes
+        if n.type == NodeType.EXTRACT
+        and (n.config or {}).get("provider", "stub") in _EXTRACT_DETERMINISTIC_PROVIDERS
+    }
     # A node with no output port (only `output` today — see ports.py's
     # catalog) has nothing a fixture can faithfully freeze: its projected
     # `node_outputs` entry is always `{}` regardless of what its executor
@@ -94,6 +110,7 @@ def frozen_node_outputs(graph: GraphDefinition, traces: list[NodeTrace]) -> dict
         for trace in traces
         if trace.node_id in nodes_by_id
         and trace.node_id not in routing_ids
+        and trace.node_id not in recompute_ids
         and trace.status == "succeeded"
         and default_output_port(nodes_by_id[trace.node_id]) is not None
     }
