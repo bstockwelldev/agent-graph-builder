@@ -52,6 +52,11 @@ class NodeType(StrEnum):
     # then routes by exact outcome match. Replaces the llm-classifier +
     # substring-router pattern where calibration matters.
     DECISION = "decision"
+    # Document extraction node (extraction/): upload/variable -> text/OCR/
+    # vision pipeline -> schema-validated structured JSON for downstream
+    # nodes. Extraction is a run-time node input, not a knowledge-base
+    # document (see docs/planning/features/extraction-node-plan.md).
+    EXTRACT = "extract"
 
 
 class EdgeKind(StrEnum):

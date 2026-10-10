@@ -635,6 +635,57 @@ describe("createAgentGraphClient knowledge base", () => {
   });
 });
 
+// Extract document staging (POST /api/graphs/{id}/extract) — mirrors the
+// knowledge upload above: multipart form data, no JSON content type.
+describe("createAgentGraphClient extract", () => {
+  const baseUrl = "http://localhost:8000";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function jsonResponse(body: unknown, ok = true, status = 200) {
+    return {
+      ok,
+      status,
+      text: async () => JSON.stringify(body),
+      json: async () => body,
+    };
+  }
+
+  it("uploadExtractDocument POSTs multipart form data and validates the response", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ documentId: "d1", graphId: "g1", fileName: "scan.pdf", mime: "application/pdf", sizeBytes: 42, pageCount: 3 }),
+    );
+    const file = new File(["%PDF"], "scan.pdf", { type: "application/pdf" });
+
+    const result = await createAgentGraphClient({ baseUrl }).extract.upload("g1", file);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${baseUrl}/api/graphs/g1/extract`);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("file")).toBeInstanceOf(File);
+    expect(new Headers(init.headers).has("Content-Type")).toBe(false);
+    expect(result.documentId).toBe("d1");
+    expect(result.pageCount).toBe(3);
+  });
+
+  it("uploadExtractDocument rejects a response missing the document id", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ graphId: "g1" }));
+
+    await expect(
+      createAgentGraphClient({ baseUrl }).extract.upload("g1", new File(["x"], "scan.pdf", { type: "application/pdf" })),
+    ).rejects.toThrow(/unexpected shape/);
+  });
+});
+
 // Saved Routing Lab datasets (backend/app/resource_models.py FixtureDataset)
 // and capture-from-runs (backend/app/datasets.py).
 describe("createAgentGraphClient datasets", () => {
