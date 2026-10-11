@@ -1,0 +1,66 @@
+# hybrid retrieval eval set (Phase 0). Lines starting with # are comments; the loader skips them.
+# corpus: backend/tests/fixtures/rulebooks/*.md (primordia-survival, primordial-duel = 2 rulebooks; story-quest-gdd = distractor, never targeted)
+# chunk ids: chunk_id_for(sha256(file text), index) over knowledge.chunk_text (CHUNK_TARGET=900, CHUNK_OVERLAP=100)
+# labels: every chunk containing a verbatim answer anchor is relevant (overlap duplicates included)
+# mix: 28 exact / 24 semantic / 8 adversarial = 60
+# baseline (pure vector): PENDING Phase 0b
+{"query": "What is Nyquus used for?", "expected_chunk_ids": ["1b99be261db853bc", "35491d82221adb78"], "query_type": "exact"}
+{"query": "BrachiOutpost", "expected_chunk_ids": ["35491d82221adb78", "fdbbaa5b88e4d63b"], "query_type": "exact"}
+{"query": "Tsunami", "expected_chunk_ids": ["5e40569976331eff", "2df1f57036534d53"], "query_type": "exact"}
+{"query": "15 Dominance Points", "expected_chunk_ids": ["cf17aa7af20b047e", "29b77ca8105681cf"], "query_type": "exact"}
+{"query": "Hatchet (Metal) recipe cost", "expected_chunk_ids": ["f5a88f8fefce8629"], "query_type": "exact"}
+{"query": "Wound Card Supply", "expected_chunk_ids": ["2c0af1755b4996e7"], "query_type": "exact"}
+{"query": "Volcano icon on the round tracker", "expected_chunk_ids": ["5e40569976331eff"], "query_type": "exact"}
+{"query": "Compsognathus HP and Power", "expected_chunk_ids": ["fdbbaa5b88e4d63b"], "query_type": "exact"}
+{"query": "Brachiosaurus tame requirement 12 Food", "expected_chunk_ids": ["fdbbaa5b88e4d63b"], "query_type": "exact"}
+{"query": "Cataclysm Marker", "expected_chunk_ids": ["2c0af1755b4996e7", "ee08b281354b9409"], "query_type": "exact"}
+{"query": "Majestic Encounter", "expected_chunk_ids": ["2df1f57036534d53"], "query_type": "exact"}
+{"query": "Biome Tiles: 30", "expected_chunk_ids": ["7a8b644a91c20e41"], "query_type": "exact"}
+{"query": "Trial tokens on Tier 3 biomes", "expected_chunk_ids": ["a3a62ecc9d655a9e"], "query_type": "exact"}
+{"query": "High Tide", "expected_chunk_ids": ["5e40569976331eff"], "query_type": "exact"}
+{"query": "Tranq Arrows", "expected_chunk_ids": ["35491d82221adb78"], "query_type": "exact"}
+{"query": "Primordium", "expected_chunk_ids": ["f065e523ac721d90"], "query_type": "exact"}
+{"query": "Boon cards", "expected_chunk_ids": ["6887e5586b6a6713"], "query_type": "exact"}
+{"query": "Tribal Supremacy", "expected_chunk_ids": ["cf17aa7af20b047e"], "query_type": "exact"}
+{"query": "Gray Faction AI deck", "expected_chunk_ids": ["29b77ca8105681cf"], "query_type": "exact"}
+{"query": "Ankylo Stone each turn", "expected_chunk_ids": ["103c12c5aa90962b"], "query_type": "exact"}
+{"query": "Water Mill", "expected_chunk_ids": ["29b77ca8105681cf"], "query_type": "exact"}
+{"query": "Resolve <= Taming Effectiveness + Weapon Resolve + Die Roll / 2", "expected_chunk_ids": ["eae97c951f5ace62"], "query_type": "exact"}
+{"query": "Furnace cost Stone", "expected_chunk_ids": ["f5a88f8fefce8629"], "query_type": "exact"}
+{"query": "Wildfire", "expected_chunk_ids": ["5e40569976331eff", "2df1f57036534d53"], "query_type": "exact"}
+{"query": "Pteranodon", "expected_chunk_ids": ["fdbbaa5b88e4d63b"], "query_type": "exact"}
+{"query": "Rank III escape roll 5-6 Food cost 4", "expected_chunk_ids": ["eae97c951f5ace62"], "query_type": "exact"}
+{"query": "Drought", "expected_chunk_ids": ["2df1f57036534d53"], "query_type": "exact"}
+{"query": "Chieftain", "expected_chunk_ids": ["ee08b281354b9409"], "query_type": "exact"}
+{"query": "how do I get rid of injuries I took in a fight?", "expected_chunk_ids": ["103c12c5aa90962b", "cf17aa7af20b047e", "29b77ca8105681cf"], "query_type": "semantic"}
+{"query": "what happens if I lose a battle against an animal?", "expected_chunk_ids": ["01128e46b47e245a", "eae97c951f5ace62"], "query_type": "semantic"}
+{"query": "how can someone win instantly before the final turn?", "expected_chunk_ids": ["cf17aa7af20b047e", "29b77ca8105681cf"], "query_type": "semantic"}
+{"query": "why can't I gather stone in the mountains with my bare hands?", "expected_chunk_ids": ["f065e523ac721d90"], "query_type": "semantic"}
+{"query": "how many tamed animals can help when I attack a base?", "expected_chunk_ids": ["7dcc68356bfd474d", "2921a20052c76db8"], "query_type": "semantic"}
+{"query": "how can I do more than one thing on my turn?", "expected_chunk_ids": ["a9c9cca510e20035", "9e65af68a924e09f"], "query_type": "semantic"}
+{"query": "what makes a player get knocked out of the game entirely?", "expected_chunk_ids": ["11c25eb6c7390823"], "query_type": "semantic"}
+{"query": "how big should the map be for a small group?", "expected_chunk_ids": ["fdbf923589686d71"], "query_type": "semantic"}
+{"query": "which natural disasters stop me from getting food?", "expected_chunk_ids": ["5e40569976331eff", "2df1f57036534d53"], "query_type": "semantic"}
+{"query": "when do the catastrophe cards start appearing?", "expected_chunk_ids": ["5e40569976331eff"], "query_type": "semantic"}
+{"query": "how is it decided who goes first?", "expected_chunk_ids": ["a9c9cca510e20035", "a3a62ecc9d655a9e", "ee08b281354b9409"], "query_type": "semantic"}
+{"query": "how do I domesticate a wild dinosaur in the short card game?", "expected_chunk_ids": ["103c12c5aa90962b"], "query_type": "semantic"}
+{"query": "how do I make my base sturdier and worth more points?", "expected_chunk_ids": ["c8cbebf754602d03", "f8ed6378fa80f33b"], "query_type": "semantic"}
+{"query": "what limits how many injuries a player can pile up?", "expected_chunk_ids": ["cf17aa7af20b047e"], "query_type": "semantic"}
+{"query": "how do outposts give me free resources every round?", "expected_chunk_ids": ["c8cbebf754602d03", "d241f47652786d4f"], "query_type": "semantic"}
+{"query": "what do players begin the card game with in their supply?", "expected_chunk_ids": ["ee08b281354b9409"], "query_type": "semantic"}
+{"query": "how do the two kinds of goals differ in who gets rewarded?", "expected_chunk_ids": ["11c25eb6c7390823"], "query_type": "semantic"}
+{"query": "what happens when two tribes fight and nobody wins?", "expected_chunk_ids": ["6a22e9c4073939a5"], "query_type": "semantic"}
+{"query": "how many points is my headquarters worth?", "expected_chunk_ids": ["c09356c19d493a0d"], "query_type": "semantic"}
+{"query": "how does fleeing from a dangerous creature work?", "expected_chunk_ids": ["01128e46b47e245a", "eae97c951f5ace62", "7dcc68356bfd474d"], "query_type": "semantic"}
+{"query": "what do I do when the resource deck runs out?", "expected_chunk_ids": ["8bea2df2eb6c1b3d"], "query_type": "semantic"}
+{"query": "how do I work out how strong my attack is with troops, gear and pets?", "expected_chunk_ids": ["ded60f0b86d3e6c0", "103c12c5aa90962b"], "query_type": "semantic"}
+{"query": "which gear subdues a creature instead of killing it?", "expected_chunk_ids": ["35491d82221adb78"], "query_type": "semantic"}
+{"query": "how many cards does a player hold at the start of the quick game?", "expected_chunk_ids": ["ee08b281354b9409"], "query_type": "semantic"}
+{"query": "what happens to the structure when the attacker wins a raid on a defended base?", "expected_chunk_ids": ["6a22e9c4073939a5", "2921a20052c76db8"], "query_type": "adversarial"}
+{"query": "Rest to heal in the island survival game", "expected_chunk_ids": ["a9c9cca510e20035"], "query_type": "adversarial"}
+{"query": "Rest action discards Wound cards in the card duel", "expected_chunk_ids": ["cf17aa7af20b047e"], "query_type": "adversarial"}
+{"query": "Outpost cost in the crafting recipes table", "expected_chunk_ids": ["f5a88f8fefce8629"], "query_type": "adversarial"}
+{"query": "Famine as a variant card with a unique penalty in the duel game", "expected_chunk_ids": ["29b77ca8105681cf"], "query_type": "adversarial"}
+{"query": "Resolve Rating of the Club weapon", "expected_chunk_ids": ["35491d82221adb78"], "query_type": "adversarial"}
+{"query": "escape roll needed against a Trike", "expected_chunk_ids": ["eae97c951f5ace62"], "query_type": "adversarial"}
+{"query": "how much does Battle Armor reduce enemy Power", "expected_chunk_ids": ["35491d82221adb78"], "query_type": "adversarial"}
