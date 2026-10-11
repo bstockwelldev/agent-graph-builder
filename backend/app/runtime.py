@@ -184,11 +184,11 @@ def _build_langgraph(graph: GraphDefinition, ctx: ExecContext):
 
     builder.add_edge(START, graph.entry_node_id)
 
-    # ROUTER and BRANCH both pick exactly one outgoing edge at run time (see
+    # ROUTER, BRANCH and DECISION all pick exactly one outgoing edge at run time (see
     # nodes.py compute_router / compute_branch, generalized here in
     # studio-consolidation Phase 2) and so both need LangGraph conditional
     # edges rather than the straight edges every other node type gets.
-    branching_node_ids = {n.id for n in graph.nodes if n.type in (NodeType.ROUTER, NodeType.BRANCH)}
+    branching_node_ids = {n.id for n in graph.nodes if n.type in (NodeType.ROUTER, NodeType.BRANCH, NodeType.DECISION)}
     branching_targets: dict[str, list[str]] = {}
 
     for edge in graph.edges:
