@@ -9,6 +9,7 @@ import {
   PauseCircle,
   PenLine,
   Repeat,
+  ScanLine,
   ShieldCheck,
   Shuffle,
   Split,
@@ -36,4 +37,5 @@ export const NODE_TYPE_ICONS: Record<NodeType, LucideIcon> = {
   subgraph: Workflow,
   transform: Shuffle,
   decision: Split,
+  extract: ScanLine,
 };

@@ -595,6 +595,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/graphs/{graph_id}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Extract Document */
+        post: operations["upload_extract_document_api_graphs__graph_id__extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/graphs/{graph_id}/extract-subgraph": {
         parameters: {
             query?: never;
@@ -1999,6 +2016,11 @@ export type components = {
             /** Total Tokens */
             total_tokens: number;
         };
+        /** Body_upload_extract_document_api_graphs__graph_id__extract_post */
+        Body_upload_extract_document_api_graphs__graph_id__extract_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_graph_knowledge_api_graphs__graph_id__knowledge_post */
         Body_upload_graph_knowledge_api_graphs__graph_id__knowledge_post: {
             /** File */
@@ -3025,14 +3047,14 @@ export type components = {
          * NodeType
          * @enum {string}
          */
-        NodeType: "input" | "prompt" | "llm" | "tool" | "router" | "output" | "guardrail" | "rubric" | "human_gate" | "tool_loop" | "code_exec" | "branch" | "subgraph" | "transform";
+        NodeType: "input" | "prompt" | "llm" | "tool" | "router" | "output" | "guardrail" | "rubric" | "human_gate" | "tool_loop" | "code_exec" | "branch" | "subgraph" | "transform" | "decision" | "extract";
         /** PlatformEvent */
         PlatformEvent: {
             /**
              * Event Type
              * @enum {string}
              */
-            event_type: "run.started" | "run.completed" | "run.failed" | "run.paused" | "run.resumed" | "run.snapshot_created" | "node.started" | "node.completed" | "node.failed" | "node.paused" | "edge.selected" | "subgraph.completed";
+            event_type: "run.started" | "run.completed" | "run.failed" | "run.paused" | "run.resumed" | "run.snapshot_created" | "node.started" | "node.completed" | "node.failed" | "node.paused" | "edge.selected" | "decision.made" | "extract.completed" | "subgraph.completed";
             /** Node Id */
             node_id?: string | null;
             /** Occurred At */
@@ -5137,6 +5159,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompileResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_extract_document_api_graphs__graph_id__extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                graph_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_extract_document_api_graphs__graph_id__extract_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

@@ -48,6 +48,7 @@ from .knowledge import (
     upload_knowledge_document,
 )
 from .compiler import validate_graph
+from .extraction.documents import ExtractUploadError, store_upload as store_extract_upload
 from .graph_health import GraphHealth, compute_graph_health
 from .impact import NodeImpact, compute_node_impact
 from .model_catalog import list_provider_models
@@ -929,6 +930,32 @@ def get_graph_knowledge_lineage_graph(
     if storage.get_graph(graph_id) is None:
         raise HTTPException(status_code=404, detail="graph not found")
     return knowledge_lineage_graph(graph_id, run_id=run_id, document_id=document_id, limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# Extraction document uploads (see docs/planning/features/extraction-node-
+# plan.md and extraction/documents.py): upload PDF/image documents per
+# graph. Extraction is a run-time node input, not a knowledge-base
+# document, so this is a standalone route rather than an extension of the
+# knowledge upload. Extract nodes bind these uploads at run time
+# (source="upload" -> run input documentId, else latest upload;
+# source="variable" -> a run variable holding a documentId).
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/graphs/{graph_id}/extract")
+async def upload_extract_document(
+    graph_id: str,
+    file: UploadFile = File(...),  # noqa: B008 - FastAPI's own dependency idiom
+) -> dict[str, Any]:
+    _require_writable_graph(graph_id)
+    content = await file.read()
+    try:
+        return await store_extract_upload(
+            graph_id, file.filename or "upload.pdf", file.content_type or "", content
+        )
+    except ExtractUploadError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 # ---------------------------------------------------------------------------

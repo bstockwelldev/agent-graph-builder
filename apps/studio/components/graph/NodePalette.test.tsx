@@ -125,6 +125,6 @@ describe("filterPaletteItems", () => {
     const found = filterPaletteItems(nodeTypeItems(), "chat model");
     expect(found.map((item) => item.nodeType)).toEqual(["llm"]);
     expect(found[0].group).toBeUndefined();
-    expect(filterPaletteItems(nodeTypeItems(), "")).toHaveLength(15);
+    expect(filterPaletteItems(nodeTypeItems(), "")).toHaveLength(16);
   });
 });

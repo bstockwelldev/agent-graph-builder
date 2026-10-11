@@ -5,7 +5,7 @@ last_updated: 2026-10-04
 
 # Extraction node plan
 
-**Status:** planned (2026-10-04). Follows the decision-node rollout template: spike → backend → Studio (`spikes/decision-model`, PRs #151/#152).
+**Status:** implementing (2026-10-10). Backend slice in progress (uncommitted working tree): `backend/app/extraction/` package (base/schemas/stub/text/ocr/vision/documents), `NodeType.EXTRACT`, `ExtractConfig`, `compute_extract`, `extract.completed` event, ports entry, replay recompute rule, `extractor_factory` on both runtime sites, `POST /api/graphs/{id}/extract`, `backend/tests/test_extract_node.py` (38 tests). Studio slice in parallel. Follows the decision-node rollout template: spike → backend → Studio (`spikes/decision-model`, PRs #151/#152).
 
 ## Why
 

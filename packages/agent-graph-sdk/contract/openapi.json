@@ -288,6 +288,20 @@
         "title": "AnalyticsTotals",
         "type": "object"
       },
+      "Body_upload_extract_document_api_graphs__graph_id__extract_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_extract_document_api_graphs__graph_id__extract_post",
+        "type": "object"
+      },
       "Body_upload_graph_knowledge_api_graphs__graph_id__knowledge_post": {
         "properties": {
           "file": {
@@ -3185,7 +3199,9 @@
           "code_exec",
           "branch",
           "subgraph",
-          "transform"
+          "transform",
+          "decision",
+          "extract"
         ],
         "title": "NodeType",
         "type": "string"
@@ -3205,6 +3221,8 @@
               "node.failed",
               "node.paused",
               "edge.selected",
+              "decision.made",
+              "extract.completed",
               "subgraph.completed"
             ],
             "title": "Event Type",
@@ -6974,6 +6992,57 @@
           }
         },
         "summary": "Compile Graph Endpoint"
+      }
+    },
+    "/api/graphs/{graph_id}/extract": {
+      "post": {
+        "operationId": "upload_extract_document_api_graphs__graph_id__extract_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "graph_id",
+            "required": true,
+            "schema": {
+              "title": "Graph Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_extract_document_api_graphs__graph_id__extract_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Extract Document Api Graphs  Graph Id  Extract Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Extract Document"
       }
     },
     "/api/graphs/{graph_id}/extract-subgraph": {

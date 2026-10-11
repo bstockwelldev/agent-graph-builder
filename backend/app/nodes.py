@@ -32,6 +32,7 @@ from .mcp.client import call_mcp_tool
 from .mcp.secrets import load_headers as load_mcp_headers
 from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode
 from .decision_models.base import DecisionModel, DecisionSchema
+from .extraction.base import Extractor
 from .ports import default_input_port, resolve_node_input
 from .providers.base import ChatModel
 from .resource_models import McpServerConfig, ToolDefinition
@@ -102,6 +103,11 @@ class ExecContext:
     # support" -- compute_decision falls back to the stub backend directly,
     # so older construction sites keep working.
     decision_model_factory: Callable[[GraphNode], DecisionModel] | None = None
+    # Extract nodes resolve their own provider per node config (default stub,
+    # so the public demo and CI stay keyless). None means "no extraction
+    # support" -- compute_extract falls back to the stub backend directly,
+    # so older construction sites keep working.
+    extractor_factory: Callable[[GraphNode], Extractor] | None = None
     # Shadow copy of the LangGraph RunState, kept in sync by
     # runtime.py's `_make_node_runner` after every node completes.
     # Exists only so a `human_gate` pause (studio-consolidation Phase 2) can
@@ -573,6 +579,163 @@ async def compute_decision(node: GraphNode, state: dict[str, Any], ctx: ExecCont
     return {"upstream": upstream}, output, {"route_decisions": [route_decision]}
 
 
+def _resolve_extract_document(cfg, node: GraphNode, state: dict[str, Any], ctx: ExecContext):
+    """Run-time document binding for an extract node.
+
+    source="upload": the run input's "documentId" key selects the upload;
+    absent, the graph's latest upload wins. source="variable": variableName
+    names a run variable holding a documentId. Anything unbound is a clear
+    run error -- never a silent empty extraction.
+    """
+    from .extraction.documents import get_document, latest_document
+
+    variables = state.get("variables", {})
+    run_input = variables.get("__run_input__", {}) or {}
+    graph_id = ctx.graph.id
+    if cfg.source == "upload":
+        document_id = run_input.get("documentId")
+        if document_id:
+            doc = get_document(str(document_id))
+            if doc is None or doc.graph_id != graph_id:
+                raise ValueError(
+                    f"extract node {node.id!r}: run input documentId "
+                    f"{document_id!r} does not match an upload for this graph"
+                )
+            return doc
+        doc = latest_document(graph_id)
+        if doc is None:
+            raise ValueError(
+                f"extract node {node.id!r}: no document uploaded for this graph "
+                f"-- POST a PDF or image to /api/graphs/{graph_id}/extract, "
+                "or pass documentId in the run input"
+            )
+        return doc
+    document_id = variables.get(cfg.variableName)
+    if not document_id:
+        raise ValueError(
+            f"extract node {node.id!r}: run variable {cfg.variableName!r} is "
+            "not set (source='variable')"
+        )
+    doc = get_document(str(document_id))
+    if doc is None or doc.graph_id != graph_id:
+        raise ValueError(
+            f"extract node {node.id!r}: document {document_id!r} from variable "
+            f"{cfg.variableName!r} does not match an upload for this graph"
+        )
+    return doc
+
+
+async def compute_extract(node: GraphNode, state: dict[str, Any], ctx: ExecContext) -> NodeResult:
+    """Document extraction: upload/variable -> text/OCR/vision pipeline ->
+    schema-validated structured JSON.
+
+    Binds the run-time document (see _resolve_extract_document), runs the
+    deterministic RuleGate + backend, then resolve_extraction(threshold)
+    separates confidence from authority: an abstain or a below-threshold
+    confidence emits extract.completed (abstained=true) and then fails the
+    run loudly -- fields are never emitted on that path, never silently
+    coerced.
+    """
+    from .extraction.base import (
+        BackendUnavailableError,
+        ExtractionError,
+        get_extractor,
+        maybe_truncate_pdf,
+        resolve_extraction,
+    )
+    from .extraction.schemas import resolve_extraction_schema
+    from .node_configs import ExtractConfig
+
+    cfg = ExtractConfig.model_validate(node.config or {})
+    schema_cls = resolve_extraction_schema(cfg.outputSchema)
+    doc = _resolve_extract_document(cfg, node, state, ctx)
+
+    if ctx.extractor_factory is not None:
+        extractor = ctx.extractor_factory(node)
+    else:
+        extractor = get_extractor(
+            model=cfg.model, provider=cfg.provider or "stub", stages=cfg.stages
+        )
+
+    content = doc.content_bytes()
+    page_count = doc.page_count
+    if cfg.provider != "stub" and doc.mime == "application/pdf" and page_count > cfg.pageLimit:
+        content, page_count = maybe_truncate_pdf(content, doc.mime, cfg.pageLimit)
+
+    try:
+        result = await extractor.extract(
+            document_bytes=content,
+            mime=doc.mime,
+            schema=schema_cls,
+            file_name=doc.file_name,
+        )
+    except (BackendUnavailableError, ExtractionError) as exc:
+        raise ValueError(f"extract node {node.id!r}: extraction failed: {exc}") from exc
+
+    field_names = schema_cls.field_names()
+    base_payload = {
+        "documentId": doc.id,
+        "fileName": doc.file_name,
+        "mime": doc.mime,
+        "provider": result.provider_name,
+        "model": result.model,
+        "ruleHit": result.rule_hit,
+        "confidence": result.confidence,
+        "attempts": result.attempts,
+        "latencyMs": result.latency_ms,
+    }
+    resolved = resolve_extraction(result, threshold=cfg.threshold)
+    if resolved == "escalate":
+        ctx.bus.emit(
+            "extract.completed",
+            {
+                **base_payload,
+                "pageCount": page_count,
+                "fieldNames": field_names,
+                "abstained": True,
+            },
+            node_id=node.id,
+        )
+        reason = (
+            "abstained"
+            if result.abstained
+            else f"confidence {result.confidence:.2f} below threshold {cfg.threshold:.2f}"
+        )
+        raise ValueError(
+            f"extract node {node.id!r}: extraction {reason} "
+            f"(rule {result.rule_hit!r}); failing closed -- no fields emitted"
+        )
+
+    document = resolved
+    ctx.bus.emit(
+        "extract.completed",
+        {
+            **base_payload,
+            "pageCount": len(document.pages),
+            "fieldNames": field_names,
+            "abstained": False,
+        },
+        node_id=node.id,
+    )
+    output = {
+        "markdown": document.markdown,
+        "fields": document.fields.model_dump(),
+        "pages": [
+            {
+                "pageNumber": page.page_number,
+                "charCount": page.char_count,
+                "method": page.method,
+            }
+            for page in document.pages
+        ],
+        "documentId": doc.id,
+        "fileName": doc.file_name,
+        "mime": doc.mime,
+        "abstained": False,
+    }
+    return {"documentId": doc.id}, output, {}
+
+
 # ---------------------------------------------------------------------------
 # Studio-consolidation Phase 2 executors (see
 # docs/planning/features/studio-consolidation-plan.md). Node types absorbed
@@ -890,5 +1053,6 @@ EXECUTORS: dict[str, Callable[[GraphNode, dict[str, Any], ExecContext], Awaitabl
     "subgraph": compute_subgraph,
     "transform": compute_transform,
     "decision": compute_decision,
+    "extract": compute_extract,
 }
 

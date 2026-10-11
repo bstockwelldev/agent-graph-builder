@@ -13,7 +13,7 @@ import type { NodeContextMenuAction } from "./NodeContextMenu";
 export const NODE_TYPE_GROUPS: { label: string; types: NodeType[] }[] = [
   { label: "Flow", types: ["input", "output", "router", "branch", "subgraph", "decision"] },
   { label: "Model", types: ["prompt", "llm", "tool_loop"] },
-  { label: "Data and tools", types: ["tool", "transform", "code_exec"] },
+  { label: "Data and tools", types: ["tool", "transform", "code_exec", "extract"] },
   { label: "Checks and review", types: ["guardrail", "rubric", "human_gate"] },
 ];
 

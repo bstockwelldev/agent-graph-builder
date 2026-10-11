@@ -30,6 +30,7 @@ const UNTYPED_ON_BACKEND = new Set([
   "deletedSchema",
   "evalScorerSchema",
   "evalSuiteSchema",
+  "extractUploadResponseSchema",
   "fixtureDatasetSchema",
   "knowledgeDeleteResponseSchema",
   "knowledgeDocumentSchema",

@@ -124,6 +124,10 @@ _DEFAULT_PORT_CATALOG: dict[NodeType, dict[str, list[GraphPort]]] = {
     # Constrained classifier that routes like router/branch: passthrough
     # (default) + decision output ports.
     NodeType.DECISION: _router_like_io(PortKind.MESSAGE),
+    # Document in (uploaded artifact bound at run time), structured fields
+    # out. The input port is the canvas-visible document slot; the run-time
+    # binding (upload/variable -> documentId) lives in compute_extract.
+    NodeType.EXTRACT: _single_io(PortKind.ARTIFACT, PortKind.STRUCTURED_JSON),
 }
 
 

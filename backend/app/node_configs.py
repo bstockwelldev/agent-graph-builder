@@ -204,6 +204,54 @@ class DecisionConfig(BaseModel):
         return self
 
 
+class ExtractConfig(BaseModel):
+    """Document extraction node (extraction/).
+
+    ``source="upload"``: the run input's ``documentId`` key selects the
+    upload, falling back to the graph's latest upload.
+    ``source="variable"``: ``variableName`` names a run variable holding a
+    documentId. ``stages`` is the deterministic routing pipeline -- unknown
+    stage names fail at save time. ``provider="deterministic"`` runs the
+    RuleGate across the enabled stages, ``provider="vision"`` calls a
+    vision model directly, ``provider="stub"`` returns deterministic
+    fixture output (public-demo default). ``outputSchema`` is an inline
+    JSON Schema (restricted subset -- see
+    ``extraction.schemas.model_from_json_schema``); omitted, the built-in
+    document-facts schema applies.
+    """
+
+    source: Literal["upload", "variable"] = "upload"
+    variableName: str | None = None
+    stages: list[Literal["text", "ocr", "vision"]] = Field(
+        default_factory=lambda: ["text", "ocr"]
+    )
+    outputSchema: dict[str, Any] | None = None
+    provider: Literal["stub", "deterministic", "vision"] = "stub"
+    model: str | None = None
+    threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    pageLimit: int = Field(default=10, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def _check_extract(self) -> ExtractConfig:
+        # Literal["text", "ocr", "vision"] already rejects unknown stage
+        # names; an empty list would leave deterministic routing with no
+        # backend to route to.
+        if not self.stages:
+            raise ValueError(
+                "stages must name at least one of 'text', 'ocr', 'vision'"
+            )
+        if self.source == "variable" and not self.variableName:
+            raise ValueError("variableName is required when source='variable'")
+        if self.outputSchema is not None:
+            from .extraction.schemas import model_from_json_schema
+
+            try:
+                model_from_json_schema("CustomExtract", self.outputSchema)
+            except ValueError as exc:
+                raise ValueError(f"invalid outputSchema: {exc}") from exc
+        return self
+
+
 _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.GUARDRAIL: GuardrailConfig,
     NodeType.RUBRIC: RubricConfig,
@@ -214,6 +262,7 @@ _CONFIG_MODELS: dict[NodeType, type[BaseModel]] = {
     NodeType.SUBGRAPH: SubgraphConfig,
     NodeType.TRANSFORM: TransformNodeConfig,
     NodeType.DECISION: DecisionConfig,
+    NodeType.EXTRACT: ExtractConfig,
 }
 
 

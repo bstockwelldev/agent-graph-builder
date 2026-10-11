@@ -29,6 +29,7 @@ import {
   knowledgeSummarySchema,
   lineageGraphSchema,
   knowledgeUploadResponseSchema,
+  extractUploadResponseSchema,
   llmProfileSchema,
   transformDefinitionSchema,
   transformPreviewResponseSchema,
@@ -395,6 +396,16 @@ export function buildNamespaces(transport: Transport) {
           undefined,
           lineageGraphSchema,
         ),
+    },
+
+    /** Document bytes staged for an extract node (POST /api/graphs/{id}/extract). */
+    extract: {
+      upload: (graphId: string, file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        // Not a string body, so the runtime sets the multipart boundary.
+        return transport.request(path`/api/graphs/${graphId}/extract`, { method: "POST", body: form }, extractUploadResponseSchema);
+      },
     },
 
     analytics: {

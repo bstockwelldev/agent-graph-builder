@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { NodeType } from "../types.js";
 
-import { boundTitleFor, defaultConfig, labelFor, nodeLabel, summaryFor, templateVariables, versionLabel, withUserLabel } from "./nodes.js";
+import { boundTitleFor, defaultConfig, documentFactsSchema, labelFor, nodeLabel, summaryFor, templateVariables, versionLabel, withUserLabel } from "./nodes.js";
 
 describe("summaryFor", () => {
   it("shows the provider for llm and tool_loop nodes", () => {
@@ -122,6 +122,21 @@ describe("defaultConfig", () => {
     expect(config.onLowConfidence).toBe("default");
     expect(config.rules).toEqual([]);
     expect(labelFor("decision", config)).toBe("decision: route");
+  });
+
+  it("gives extract the stub pipeline defaults and the document-facts schema", () => {
+    const config = defaultConfig("extract");
+    expect(config.source).toBe("upload");
+    expect(config.variableName).toBeNull();
+    expect(config.stages).toEqual(["text", "ocr"]);
+    expect(config.provider).toBe("stub");
+    expect(config.model).toBeNull();
+    expect(config.threshold).toBe(0.7);
+    expect(config.pageLimit).toBe(10);
+    expect(config.outputSchema).toEqual(documentFactsSchema());
+    expect(labelFor("extract", config)).toBe("extract: upload");
+    expect(summaryFor("extract", config)).toBe("via stub");
+    expect(summaryFor("extract", config, { hasUserLabel: true })).toBe("stub · text+ocr");
   });
 
   it("summarizes library-bound nodes by resource name (Wave 4a)", () => {

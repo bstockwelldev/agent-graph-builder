@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -51,6 +51,7 @@ import type {
   ToolDefinition,
   PortKind,
 } from "@bstockwelldev/agent-graph-sdk";
+import { documentFactsSchema } from "@bstockwelldev/agent-graph-sdk/graph";
 import {
   border,
   color,
@@ -113,6 +114,7 @@ const RENDERED_FIELDS: Record<NodeType, readonly string[]> = {
   subgraph: ["graphId", "version", "inputMapping"],
   transform: ["transformId", "type", "pointer", "field", "template", "targetType"],
   decision: ["schema", "customSchema", "provider", "model", "systemPrompt", "threshold", "onLowConfidence", "rules"],
+  extract: ["source", "variableName", "stages", "outputSchema", "provider", "model", "threshold", "pageLimit"],
 };
 
 /** A transform node's camelCase config as the shared TransformFields value. */
@@ -809,6 +811,131 @@ function ConfigureTab({
         </>
       )}
 
+      {node.type === "extract" && (
+        <>
+          <Group title="Document source">
+            <Field
+              label="Source"
+              hint="Upload stages a file for this graph; variable reads the document bytes from a run variable."
+              issues={fieldIssues("source")}
+            >
+              <SegmentedControl
+                aria-label="Document source"
+                value={str("source", "upload")}
+                onChange={(value) => set("source", value)}
+                options={EXTRACT_SOURCE_OPTIONS}
+              />
+            </Field>
+            {str("source", "upload") === "variable" && (
+              <Field
+                label="Variable name"
+                hint="The run variable holding the document bytes."
+                issues={fieldIssues("variableName")}
+              >
+                {(id) => (
+                  <TextInput
+                    id={id}
+                    aria-label="Variable name"
+                    value={str("variableName")}
+                    onChange={(event) => set("variableName", event.target.value.trim() ? event.target.value : null)}
+                    style={{ fontFamily: fontFamily.mono }}
+                    placeholder="document_bytes"
+                  />
+                )}
+              </Field>
+            )}
+          </Group>
+          <Group title="Pipeline stages">
+            <Muted style={{ marginBottom: spacing[2] }}>Stages run in order; each page records which stage produced it.</Muted>
+            {EXTRACT_STAGE_OPTIONS.map((stage) => (
+              <Toggle
+                key={stage.value}
+                label={stage.label}
+                description={stage.description}
+                checked={extractStagesOf(node.config).includes(stage.value)}
+                onChange={() => toggleExtractStage(node.config, stage.value, set)}
+              />
+            ))}
+            <FieldIssues issues={fieldIssues("stages")} />
+          </Group>
+          <Group title="Output schema">
+            <ExtractSchemaEditor
+              value={node.config.outputSchema}
+              onChange={(value) => set("outputSchema", value)}
+              issues={fieldIssues("outputSchema")}
+            />
+          </Group>
+          <Group title="Model">
+            <Field
+              label="Provider"
+              hint="Stub is offline and deterministic — good for demos and tests. Deterministic runs the text/OCR stages without a model; vision calls a vision model."
+              issues={fieldIssues("provider")}
+            >
+              <SegmentedControl
+                aria-label="Extract provider"
+                value={str("provider", "stub")}
+                onChange={(value) => set("provider", value)}
+                options={EXTRACT_PROVIDER_OPTIONS}
+              />
+            </Field>
+            {str("provider", "stub") === "vision" && (
+              <Field
+                label="Model"
+                hint="Vision model name, e.g. qwen2.5vl:7b. Empty keeps the provider default."
+                issues={fieldIssues("model")}
+              >
+                {(id) => (
+                  <TextInput
+                    id={id}
+                    aria-label="Vision model"
+                    value={str("model")}
+                    onChange={(event) => set("model", event.target.value.trim() ? event.target.value : null)}
+                    placeholder="qwen2.5vl:7b"
+                    style={{ fontFamily: fontFamily.mono }}
+                  />
+                )}
+              </Field>
+            )}
+          </Group>
+          <Group title="Limits">
+            <Field
+              label="Confidence threshold"
+              hint="Below this confidence the extractor abstains instead of guessing."
+              issues={fieldIssues("threshold")}
+            >
+              {(id) => (
+                <NumberStepper
+                  id={id}
+                  aria-label="Confidence threshold"
+                  value={Number(node.config.threshold ?? 0.7)}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(value) => set("threshold", value)}
+                />
+              )}
+            </Field>
+            <Field
+              label="Page limit"
+              hint="Maximum pages processed per document."
+              issues={fieldIssues("pageLimit")}
+            >
+              {(id) => (
+                <NumberStepper
+                  id={id}
+                  aria-label="Page limit"
+                  value={Number(node.config.pageLimit ?? 10)}
+                  min={1}
+                  max={100}
+                  step={1}
+                  onChange={(value) => set("pageLimit", Math.round(value))}
+                />
+              )}
+            </Field>
+          </Group>
+        </>
+      )}
+
       {(node.type === "router" || node.type === "branch" || node.type === "decision") && (
         <Group
           title={`Routes · ${outgoingEdges.length}`}
@@ -1345,6 +1472,9 @@ function RunTab({
         {nodeType === "decision" && selectedTrace.output !== null && typeof selectedTrace.output === "object" && !Array.isArray(selectedTrace.output) && (
           <DecisionRunSummary output={selectedTrace.output as Record<string, unknown>} threshold={threshold ?? 0.6} />
         )}
+        {nodeType === "extract" && selectedTrace.output !== null && typeof selectedTrace.output === "object" && !Array.isArray(selectedTrace.output) && (
+          <ExtractRunSummary output={selectedTrace.output as Record<string, unknown>} threshold={threshold ?? 0.7} />
+        )}
         <Field label="Input">
           <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
         </Field>
@@ -1561,6 +1691,110 @@ const DECISION_PROVIDER_OPTIONS: ComboboxOption[] = (["stub", "ollama"] as const
   description: PROVIDER_TAXONOMY[value]?.summary,
 }));
 
+/** Extract providers the backend extraction package supports. */
+const EXTRACT_PROVIDER_OPTIONS: { value: string; label: string }[] = [
+  { value: "stub", label: "Stub" },
+  { value: "deterministic", label: "Deterministic" },
+  { value: "vision", label: "Vision" },
+];
+
+const EXTRACT_SOURCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "upload", label: "Upload" },
+  { value: "variable", label: "Variable" },
+];
+
+/** Extraction pipeline stages, in run order. */
+const EXTRACT_STAGES = ["text", "ocr", "vision"] as const;
+
+const EXTRACT_STAGE_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: "text", label: "Embedded text", description: "Fast and exact for born-digital PDFs." },
+  { value: "ocr", label: "OCR", description: "Reads scanned pages and photos." },
+  { value: "vision", label: "Vision model", description: "Layout-aware extraction via a vision model." },
+];
+
+/** Coerce the config's stages list into stage names (never throws on junk). */
+function extractStagesOf(config: Record<string, unknown>): string[] {
+  const raw = config.stages;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((stage): stage is string => typeof stage === "string");
+}
+
+/** Toggle one stage, keeping the canonical stage order on write-back. */
+function toggleExtractStage(config: Record<string, unknown>, stage: string, set: (key: string, value: unknown) => void): void {
+  const current = extractStagesOf(config);
+  const next = current.includes(stage) ? current.filter((s) => s !== stage) : [...current, stage];
+  set("stages", EXTRACT_STAGES.filter((s) => next.includes(s)));
+}
+
+/** JSON editor for the extract node's output schema, with a restore-default action. */
+function ExtractSchemaEditor({
+  value,
+  onChange,
+  issues,
+}: {
+  value: unknown;
+  onChange: (value: Record<string, unknown>) => void;
+  issues: Diagnostic[];
+}) {
+  const defaultText = useMemo(() => JSON.stringify(documentFactsSchema(), null, 2), []);
+  const [text, setText] = useState(() =>
+    typeof value === "object" && value !== null ? JSON.stringify(value, null, 2) : defaultText,
+  );
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <Field
+        label="Output JSON schema"
+        hint="Fields the extractor must fill. Restore default brings back the document-facts schema."
+        issues={issues}
+        footer={
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setText(defaultText);
+              setError(null);
+              onChange(documentFactsSchema());
+            }}
+          >
+            Restore default
+          </Button>
+        }
+      >
+        {(id) => (
+          <TextArea
+            id={id}
+            aria-label="Output JSON schema"
+            value={text}
+            onChange={(event) => {
+              const next = event.target.value;
+              setText(next);
+              try {
+                const parsed: unknown = JSON.parse(next);
+                if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+                  setError("Schema must be a JSON object.");
+                } else {
+                  setError(null);
+                  onChange(parsed as Record<string, unknown>);
+                }
+              } catch {
+                setError("Not valid JSON — the last valid schema is kept.");
+              }
+            }}
+            rows={10}
+            spellCheck={false}
+            style={{ fontFamily: fontFamily.mono, fontSize: 12 }}
+          />
+        )}
+      </Field>
+      {error && (
+        <div role="alert" style={{ fontSize: 12, color: color.warning[500], marginTop: spacing[1] }}>
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
+
 type DecisionRule = { name: string; match: string; outcome: string };
 
 /** Coerce the config's rules list into editable rows (never throws on junk). */
@@ -1746,6 +1980,111 @@ function DecisionRunSummary({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+const EXTRACT_EXCERPT_MAX = 400;
+const EXTRACT_FIELD_VALUE_MAX = 80;
+
+function truncateMiddle(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+/** Run-tab summary for an extract node: the document, a markdown excerpt,
+ * the extracted fields, and whether it abstained. The node output carries
+ * no confidence value (only the trace event does), so the threshold shows
+ * as configuration context next to the abstained state. */
+function ExtractRunSummary({
+  output,
+  threshold,
+}: {
+  output: Record<string, unknown>;
+  threshold: number;
+}) {
+  const fileName = typeof output.fileName === "string" && output.fileName ? output.fileName : "—";
+  const mime = typeof output.mime === "string" ? output.mime : null;
+  const abstained = output.abstained === true;
+  const markdown = typeof output.markdown === "string" ? output.markdown : "";
+  const fields =
+    typeof output.fields === "object" && output.fields !== null && !Array.isArray(output.fields)
+      ? (output.fields as Record<string, unknown>)
+      : {};
+  const pages = Array.isArray(output.pages) ? output.pages : [];
+  const methods = [
+    ...new Set(
+      pages
+        .map((page) =>
+          typeof page === "object" && page !== null ? String((page as Record<string, unknown>).method ?? "") : "",
+        )
+        .filter(Boolean),
+    ),
+  ];
+  const entries = Object.entries(fields);
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: spacing[2],
+        padding: spacing[3],
+        marginBottom: spacing[3],
+        border: `1px solid ${border.subtle}`,
+        borderRadius: radius.lg,
+        background: surface.inset,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: spacing[2] }}>
+        <code style={{ fontFamily: fontFamily.mono, fontSize: 13, fontWeight: 650, color: text.primary, overflowWrap: "anywhere" }}>
+          {fileName}
+        </code>
+        <span style={{ fontSize: 12, fontWeight: 600, color: abstained ? statusColor.running : statusColor.succeeded }}>
+          {abstained ? "abstained" : "extracted"}
+        </span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: spacing[2], fontSize: 12, color: text.secondary }}>
+        {mime && <span>{mime}</span>}
+        <span>
+          {pages.length} page{pages.length === 1 ? "" : "s"}
+        </span>
+        {methods.length > 0 && <span>via {methods.join(", ")}</span>}
+        <span>threshold {Math.round(threshold * 100)}%</span>
+      </div>
+      {abstained && (
+        <Muted>Confidence fell below the threshold — fields are empty and downstream nodes see abstained.</Muted>
+      )}
+      {markdown && (
+        <pre
+          style={{
+            margin: 0,
+            fontSize: 12,
+            lineHeight: "18px",
+            fontFamily: fontFamily.mono,
+            color: text.secondary,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            maxHeight: 120,
+            overflowY: "auto",
+          }}
+        >
+          {truncateMiddle(markdown, EXTRACT_EXCERPT_MAX)}
+        </pre>
+      )}
+      {entries.length > 0 && (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <tbody>
+            {entries.map(([key, value]) => (
+              <tr key={key} style={{ borderTop: `1px solid ${border.subtle}` }}>
+                <td style={{ padding: "4px 8px 4px 0", fontFamily: fontFamily.mono, color: text.primary, verticalAlign: "top", whiteSpace: "nowrap" }}>
+                  {key}
+                </td>
+                <td style={{ padding: "4px 0", color: text.secondary, overflowWrap: "anywhere" }}>
+                  {truncateMiddle(JSON.stringify(value) ?? "", EXTRACT_FIELD_VALUE_MAX)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
