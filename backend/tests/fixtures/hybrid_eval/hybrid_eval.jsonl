@@ -8,6 +8,10 @@
 #   ndcg@5  all=0.6230 exact=0.6330 semantic=0.6469 adversarial=0.5164
 #   ndcg@10 all=0.6481 exact=0.6564 semantic=0.6691 adversarial=0.5558
 #   retrieval p95 = 14.5 ms (cosine scan only; query embedding excluded). Reproduce: pytest tests/test_hybrid_eval.py -s
+# hybrid (BM25 rank-bm25 + RRF k=60, retrieval.mode="hybrid", 2026-10-11):
+#   ndcg@5  all=0.7412 exact=0.8342 semantic=0.6634 adversarial=0.6491
+#   ndcg@10 all=0.7626 exact=0.8624 semantic=0.6840 adversarial=0.6491
+#   retrieval p95 = 7.2 ms (BM25+RRF; query embedding excluded). Reproduce: pytest tests/test_hybrid_eval.py -s
 {"query": "The Crimson Band", "expected_chunk_ids": ["36ffdb212421399a", "f65f134636b45e6c"], "query_type": "exact"}
 {"query": "Magnate guild rank", "expected_chunk_ids": ["8e2b4247e307bec2"], "query_type": "exact"}
 {"query": "Iron-rimmed Wheels", "expected_chunk_ids": ["5f05b3f226f5bee5"], "query_type": "exact"}

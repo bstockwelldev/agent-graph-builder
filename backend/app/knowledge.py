@@ -23,11 +23,12 @@ import hashlib
 import math
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from rank_bm25 import BM25Okapi
 
 from . import storage
 from .embedding_model import (
@@ -76,12 +77,23 @@ class KnowledgeChunk(BaseModel):
     index: int | None = None
 
 
+class RetrievalConfig(BaseModel):
+    """Per-graph retrieval mode (hybrid retrieval, Phase 1). `mode="vector"`
+    is the pre-existing behavior; `mode="hybrid"` fuses BM25 and vector
+    rankings with RRF. `rrf_k` is the RRF smoothing constant. Old entries
+    saved without this block load as mode="vector" and behave identically."""
+
+    mode: Literal["vector", "hybrid"] = "vector"
+    rrf_k: int = 60
+
+
 class KnowledgeEntry(BaseModel):
     id: str  # graph_id — the resource key, matching every other stored resource kind
     embedding_provider: EmbeddingProvider
     embedding_model_id: str
     documents: list[KnowledgeDocument] = []
     chunks: list[KnowledgeChunk] = []
+    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
 
 
 def chunk_text(text: str, max_len: int = CHUNK_TARGET, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -147,6 +159,114 @@ def top_k_chunks_by_embedding(
     ]
     scored.sort(key=lambda item: item["score"], reverse=True)
     return scored[:k]
+
+
+# --- Hybrid retrieval: BM25 + vector fused with RRF (Phase 1) -------------
+
+#: Bump when `tokenize` changes; the in-memory BM25 cache keys on it so a
+#: tokenizer change can never silently reuse an index built the old way.
+TOKENIZER_VERSION = 1
+
+#: Word-ish tokens, internal hyphens kept: "Iron-rimmed", "T-Rex-style",
+#: "3d6" and "6" survive; table pipes, `\*` escapes and apostrophes split.
+_TOKEN_RE = re.compile(r"[^\W_]+(?:-[^\W_]+)*")
+
+
+def tokenize(text: str) -> list[str]:
+    """Lowercase word tokenization for the BM25 index. No stemming in this
+    slice — exact-term recall is the point of the BM25 leg."""
+    return _TOKEN_RE.findall(text.lower())
+
+
+#: In-memory BM25 indexes, rebuilt per entry and never pickled into storage:
+#: at per-graph scale rebuilding is cheap and avoids a stored-index
+#: migration. Keyed by chunk ids (stable content hashes) plus
+#: TOKENIZER_VERSION.
+_BM25_CACHE: dict[tuple[tuple[str, ...], int], BM25Okapi] = {}
+
+
+def _bm25_index(chunks: list[KnowledgeChunk]) -> BM25Okapi:
+    key = (tuple(chunk.id for chunk in chunks), TOKENIZER_VERSION)
+    index = _BM25_CACHE.get(key)
+    if index is None:
+        index = BM25Okapi([tokenize(chunk.text) for chunk in chunks])
+        _BM25_CACHE[key] = index
+    return index
+
+
+def bm25_top_k(query: str, chunks: list[KnowledgeChunk], k: int = 50) -> list[tuple[str, float]]:
+    """Top-k chunk ids with raw BM25 scores, best first. Empty token stream
+    (e.g. a punctuation-only query) ranks nothing."""
+    if not chunks:
+        return []
+    tokens = tokenize(query)
+    if not tokens:
+        return []
+    scores = _bm25_index(chunks).get_scores(tokens)
+    ranked = sorted(
+        ((chunk.id, float(score)) for chunk, score in zip(chunks, scores, strict=True)),
+        key=lambda pair: pair[1],
+        reverse=True,
+    )
+    return ranked[:k]
+
+
+def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
+    """Reciprocal-rank fusion over ranked id lists: score(id) =
+    sum(1 / (k + rank)). Pure function. Ties break deterministically: higher
+    fused score, then the best single rank across the input lists, then id."""
+    fused: dict[str, float] = {}
+    best_rank: dict[str, int] = {}
+    for ranking in rankings:
+        for rank, chunk_id in enumerate(ranking, start=1):
+            fused[chunk_id] = fused.get(chunk_id, 0.0) + 1.0 / (k + rank)
+            if chunk_id not in best_rank or rank < best_rank[chunk_id]:
+                best_rank[chunk_id] = rank
+    return sorted(fused.items(), key=lambda item: (-item[1], best_rank[item[0]], item[0]))
+
+
+def top_k_chunks_hybrid(
+    query: str, query_vector: list[float], entry: KnowledgeEntry, k: int
+) -> list[dict[str, Any]]:
+    """BM25 top-50 fused with vector top-50 via RRF (`entry.retrieval.rrf_k`),
+    returning the top k. Hit shape matches `top_k_chunks_by_embedding` plus
+    `bm25Rank` / `vectorRank` (1-based, None when absent from that leg) and
+    `fusedScore`. `score` stays the cosine similarity so lineage and trace
+    summaries keep their existing meaning."""
+    names = {doc.id: doc.name for doc in entry.documents}
+    vector_hits = top_k_chunks_by_embedding(query_vector, entry.chunks, names, 50)
+    vector_rank = {hit["chunkId"]: rank for rank, hit in enumerate(vector_hits, start=1)}
+    vector_score = {hit["chunkId"]: hit["score"] for hit in vector_hits}
+    bm25_ranked = bm25_top_k(query, entry.chunks, k=50)
+    bm25_rank = {chunk_id: rank for rank, (chunk_id, _score) in enumerate(bm25_ranked, start=1)}
+    chunks_by_id = {chunk.id: chunk for chunk in entry.chunks}
+    hits: list[dict[str, Any]] = []
+    for chunk_id, fused_score in rrf_fuse(
+        [
+            [hit["chunkId"] for hit in vector_hits],
+            [chunk_id for chunk_id, _score in bm25_ranked],
+        ],
+        k=entry.retrieval.rrf_k,
+    ):
+        chunk = chunks_by_id[chunk_id]
+        score = vector_score.get(chunk_id)
+        if score is None:
+            # In the BM25 leg but outside the vector top-50: score on demand
+            # so every hit keeps the existing shape.
+            score = cosine_similarity(query_vector, chunk.vector)
+        hits.append(
+            {
+                "chunkId": chunk_id,
+                "documentId": chunk.document_id,
+                "documentName": names.get(chunk.document_id, chunk.document_id),
+                "text": chunk.text,
+                "score": score,
+                "bm25Rank": bm25_rank.get(chunk_id),
+                "vectorRank": vector_rank.get(chunk_id),
+                "fusedScore": fused_score,
+            }
+        )
+    return hits[:k]
 
 
 def format_knowledge_augmentation(hits: list[dict[str, Any]]) -> str:
@@ -423,18 +543,35 @@ async def retrieve_knowledge(
         query_vector = await embed_query(model, query)
         names = {doc.id: doc.name for doc in entry.documents}
         versions = {doc.id: doc.version for doc in entry.documents}
-        hits = [
-            {**hit, "rank": rank, "documentVersion": versions.get(hit["documentId"])}
-            for rank, hit in enumerate(
-                (
-                    hit
-                    for hit in top_k_chunks_by_embedding(query_vector, entry.chunks, names, TOP_K)
-                    if hit["score"] > SCORE_THRESHOLD
-                ),
-                start=1,
-            )
-        ]
+        if entry.retrieval.mode == "hybrid":
+            # SCORE_THRESHOLD is a cosine-similarity threshold; RRF fused
+            # scores live on a different scale, so hybrid drops the
+            # threshold and takes the fused top TOP_K.
+            hits = [
+                {**hit, "rank": rank, "documentVersion": versions.get(hit["documentId"])}
+                for rank, hit in enumerate(
+                    top_k_chunks_hybrid(query, query_vector, entry, TOP_K), start=1
+                )
+            ]
+        else:
+            hits = [
+                {**hit, "rank": rank, "documentVersion": versions.get(hit["documentId"])}
+                for rank, hit in enumerate(
+                    (
+                        hit
+                        for hit in top_k_chunks_by_embedding(
+                            query_vector, entry.chunks, names, TOP_K
+                        )
+                        if hit["score"] > SCORE_THRESHOLD
+                    ),
+                    start=1,
+                )
+            ]
         if hits and run_id is not None and node_id is not None:
+            # Follow-up (hybrid Phase 2): KnowledgeLineageEntry has no fields
+            # for bm25Rank / vectorRank / fusedScore, so they are not
+            # persisted here — carrying them needs a lineage schema
+            # migration. `score` keeps its existing cosine meaning.
             _record_lineage(
                 graph_id,
                 run_id,
