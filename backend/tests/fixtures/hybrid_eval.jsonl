@@ -3,7 +3,10 @@
 # chunk ids: chunk_id_for(sha256(file text), index) over knowledge.chunk_text (CHUNK_TARGET=900, CHUNK_OVERLAP=100)
 # labels: every chunk containing a verbatim answer anchor is relevant (overlap duplicates included)
 # mix: 28 exact / 24 semantic / 8 adversarial = 60
-# baseline (pure vector): PENDING Phase 0b
+# baseline (pure vector, ollama/nomic-embed-text, 56 chunks, 60 queries, cached vectors, 2026-10-11):
+#   ndcg@5  all=0.6256 exact=0.6109 semantic=0.5486 adversarial=0.9077
+#   ndcg@10 all=0.6634 exact=0.6425 semantic=0.6063 adversarial=0.9077
+#   retrieval p95 = 17.1 ms (cosine scan only; query embedding excluded). Reproduce: pytest tests/test_hybrid_eval.py -s
 {"query": "What is Nyquus used for?", "expected_chunk_ids": ["1b99be261db853bc", "35491d82221adb78"], "query_type": "exact"}
 {"query": "BrachiOutpost", "expected_chunk_ids": ["35491d82221adb78", "fdbbaa5b88e4d63b"], "query_type": "exact"}
 {"query": "Tsunami", "expected_chunk_ids": ["5e40569976331eff", "2df1f57036534d53"], "query_type": "exact"}
