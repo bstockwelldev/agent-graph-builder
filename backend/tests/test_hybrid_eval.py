@@ -1,8 +1,10 @@
-"""Hybrid-retrieval eval harness, Phase 0: pure-vector baseline.
+"""Hybrid-retrieval eval harness: pure-vector baseline vs BM25+RRF hybrid.
 
-Runs a labeled query set through the CURRENT retrieval path and reports
-ndcg@5 / ndcg@10 by query type plus p95 latency. No fusion code lives here:
-Phase 1 adds a hybrid column next to this one.
+Runs a labeled query set through BOTH retrieval paths and reports
+ndcg@5 / ndcg@10 by query type plus p95 latency, side by side. The hybrid
+column (Phase 1) fuses BM25 (rank-bm25) and vector top-50s with RRF (k=60)
+behind a per-graph ``retrieval.mode="hybrid"`` flag; the vector column is
+the shipped default path, unchanged.
 
 Two eval sets share this harness:
 
@@ -27,6 +29,7 @@ import math
 import os
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -39,8 +42,10 @@ from app.knowledge import (
     KnowledgeChunk,
     KnowledgeDocument,
     KnowledgeEntry,
+    RetrievalConfig,
     retrieve_knowledge,
     top_k_chunks_by_embedding,
+    top_k_chunks_hybrid,
 )
 from scripts.build_hybrid_eval_vectors import (
     PUBLIC_EVAL_DIR,
@@ -138,24 +143,66 @@ def test_cached_vectors_match_corpus_and_queries(
     assert set(vectors["queries"]) == {q["query"] for q in eval_queries}
 
 
-# --- baseline --------------------------------------------------------------
+# --- ranking functions -----------------------------------------------------
 
 
-def _rank(query_vec: list[float], chunks: list[KnowledgeChunk], k: int) -> list[str]:
-    hits = top_k_chunks_by_embedding(query_vec, chunks, {"corpus": "corpus"}, k)
-    return [h["chunkId"] for h in hits]
+def _make_rank_vector(
+    chunks: list[KnowledgeChunk],
+) -> Callable[[str, list[float], int], list[str]]:
+    def _rank(query: str, query_vec: list[float], k: int) -> list[str]:
+        hits = top_k_chunks_by_embedding(query_vec, chunks, {"corpus": "corpus"}, k)
+        return [h["chunkId"] for h in hits]
+
+    return _rank
 
 
-def measure_baseline(eval_queries: list[dict], vectors: dict, chunks: list[KnowledgeChunk]) -> dict:
+def _make_rank_hybrid(
+    chunks: list[KnowledgeChunk],
+) -> Callable[[str, list[float], int], list[str]]:
+    entry = KnowledgeEntry(
+        id="hybrid_eval_graph",
+        embedding_provider="openai",
+        embedding_model_id="text-embedding-3-small",
+        documents=[
+            KnowledgeDocument(
+                id="corpus",
+                name="corpus",
+                mime_type="text/markdown",
+                uploaded_at="now",
+                char_count=1,
+            )
+        ],
+        chunks=chunks,
+        retrieval=RetrievalConfig(mode="hybrid"),
+    )
+
+    def _rank(query: str, query_vec: list[float], k: int) -> list[str]:
+        return [h["chunkId"] for h in top_k_chunks_hybrid(query, query_vec, entry, k)]
+
+    return _rank
+
+
+# --- measurement -----------------------------------------------------------
+
+
+def measure_baseline(
+    eval_queries: list[dict],
+    vectors: dict,
+    chunks: list[KnowledgeChunk],
+    rank_fn: Callable[[str, list[float], int], list[str]],
+) -> dict:
     scores: dict[str, dict[int, list[float]]] = defaultdict(lambda: {5: [], 10: []})
     latencies_ms: list[float] = []
+    per_query: list[dict] = []
     for q in eval_queries:
         qvec = vectors["queries"][q["query"]]
         relevant = set(q["expected_chunk_ids"])
         for _ in range(LATENCY_REPS):
             started = time.perf_counter()
-            ranked = _rank(qvec, chunks, 10)
+            ranked = rank_fn(q["query"], qvec, 10)
             latencies_ms.append((time.perf_counter() - started) * 1000)
+        ndcg5 = ndcg_at_k(ranked, relevant, 5)
+        per_query.append({"query": q["query"], "query_type": q["query_type"], "ndcg5": ndcg5})
         for k in (5, 10):
             for bucket in (q["query_type"], "all"):
                 scores[bucket][k].append(ndcg_at_k(ranked, relevant, k))
@@ -169,13 +216,14 @@ def measure_baseline(eval_queries: list[dict], vectors: dict, chunks: list[Knowl
         "chunks": len(chunks),
         "ndcg": {b: {k: round(mean(v), 4) for k, v in by_k.items()} for b, by_k in scores.items()},
         "p95_ms": round(percentile(latencies_ms, 95), 3),
+        "per_query": per_query,
     }
 
 
 def test_pure_vector_baseline(
     eval_dir: Path, eval_queries: list[dict], vectors: dict, chunks: list[KnowledgeChunk]
 ) -> None:
-    report = measure_baseline(eval_queries, vectors, chunks)
+    report = measure_baseline(eval_queries, vectors, chunks, _make_rank_vector(chunks))
     print(f"\nPURE-VECTOR BASELINE [{eval_dir.name}]", json.dumps(report, indent=2))
     for bucket in (*QUERY_TYPES, "all"):
         for k in (5, 10):
@@ -185,6 +233,58 @@ def test_pure_vector_baseline(
     assert report["ndcg"]["all"][10] > 0.5
     # Loose ceiling (CI noise): a brute-force cosine scan over ~50 chunks.
     assert report["p95_ms"] < 250
+
+
+# --- hybrid column ---------------------------------------------------------
+
+
+def _printable(report: dict) -> dict:
+    return {k: v for k, v in report.items() if k != "per_query"}
+
+
+def test_hybrid_matches_or_beats_vector(
+    eval_dir: Path, eval_queries: list[dict], vectors: dict, chunks: list[KnowledgeChunk]
+) -> None:
+    vector_report = measure_baseline(eval_queries, vectors, chunks, _make_rank_vector(chunks))
+    hybrid_report = measure_baseline(eval_queries, vectors, chunks, _make_rank_hybrid(chunks))
+
+    v_ndcg, h_ndcg = vector_report["ndcg"], hybrid_report["ndcg"]
+    deltas = {
+        bucket: {k: round(h_ndcg[bucket][k] - v_ndcg[bucket][k], 4) for k in (5, 10)}
+        for bucket in (*QUERY_TYPES, "all")
+    }
+    v_by_q = {p["query"]: p["ndcg5"] for p in vector_report["per_query"]}
+    worse = sorted(
+        (
+            {
+                "query": p["query"],
+                "query_type": p["query_type"],
+                "vector_ndcg5": round(v_by_q[p["query"]], 4),
+                "hybrid_ndcg5": round(p["ndcg5"], 4),
+                "delta": round(p["ndcg5"] - v_by_q[p["query"]], 4),
+            }
+            for p in hybrid_report["per_query"]
+            if p["ndcg5"] < v_by_q[p["query"]]
+        ),
+        key=lambda row: row["delta"],
+    )
+    print(f"\nHYBRID vs VECTOR [{eval_dir.name}]")
+    print("vector:", json.dumps(_printable(vector_report), indent=2))
+    print("hybrid:", json.dumps(_printable(hybrid_report), indent=2))
+    print("deltas (hybrid - vector):", json.dumps(deltas, indent=2))
+    print(f"queries where hybrid ranks worse than vector (ndcg@5): {len(worse)}")
+    for row in worse:
+        print(f"  {row['delta']:+.4f} [{row['query_type']}] {row['query']!r}")
+
+    # Hybrid must not regress the set's own vector baseline, measured in the
+    # same run (never hard-code the private set's numbers in this repo).
+    assert h_ndcg["all"][5] >= v_ndcg["all"][5]
+    for bucket in QUERY_TYPES:
+        assert h_ndcg[bucket][5] >= v_ndcg[bucket][5] - 0.02, bucket
+    # The BM25 leg + RRF must stay cheap: at most 3x the cosine scan, and
+    # under the same 250 ms ceiling as the vector path.
+    assert hybrid_report["p95_ms"] <= 3 * vector_report["p95_ms"]
+    assert hybrid_report["p95_ms"] < 250
 
 
 # --- the harness measures the shipped path, not just its inner function ----

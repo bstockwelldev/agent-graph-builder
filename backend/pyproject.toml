@@ -20,6 +20,8 @@ dependencies = [
     "pdfplumber>=0.11",
     "pypdf>=4",
     "pytesseract>=0.3",
+    # Hybrid retrieval (Phase 1): BM25 leg of the BM25+vector RRF fusion.
+    "rank-bm25>=0.2",
 ]
 
 [project.optional-dependencies]
