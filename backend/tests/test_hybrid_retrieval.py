@@ -17,11 +17,13 @@ from app.knowledge import (
     KnowledgeEntry,
     RetrievalConfig,
     bm25_top_k,
+    get_knowledge_entry,
     retrieve_knowledge,
     rrf_fuse,
     tokenize,
     top_k_chunks_by_embedding,
     top_k_chunks_hybrid,
+    upload_knowledge_document,
 )
 
 
@@ -166,6 +168,52 @@ def test_top_k_chunks_hybrid_hit_shape() -> None:
         assert isinstance(hit["fusedScore"], float)
     fused = [h["fusedScore"] for h in hits]
     assert fused == sorted(fused, reverse=True)
+
+
+# --- default mode for new graphs -------------------------------------------
+
+
+async def _fake_embed_texts(resolution, texts, *, task="document"):
+    return [[float(len(t) % 7), 1.0] for t in texts]
+
+
+def _configure_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_embedding(monkeypatch, [1.0, 0.0])
+    monkeypatch.setattr("app.knowledge.embed_texts", _fake_embed_texts)
+
+
+async def test_new_upload_defaults_to_hybrid_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_embeddings(monkeypatch)
+    graph_id = "hybrid_default_new"
+    storage.delete_resource("knowledge", graph_id)
+    await upload_knowledge_document(
+        graph_id, "notes.txt", "text/plain", b"Notes about Iron-rimmed Wheels. " * 40
+    )
+    entry = get_knowledge_entry(graph_id)
+    assert entry is not None
+    assert entry.retrieval.mode == "hybrid"
+    assert entry.retrieval.rrf_k == 60
+
+
+async def test_existing_vector_entry_keeps_mode_on_reupload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A graph indexed before the hybrid default keeps vector mode when a
+    document is added — the new default only applies to new entries."""
+    _configure_embeddings(monkeypatch)
+    graph_id = "hybrid_default_existing"
+    payload = _entry(_chunks()).model_dump()
+    payload.pop("retrieval")  # pre-hybrid entry shape
+    payload["id"] = graph_id
+    storage.save_resource("knowledge", graph_id, payload)
+    await upload_knowledge_document(
+        graph_id, "more.txt", "text/plain", b"More notes about Ghost Wagon. " * 40
+    )
+    entry = get_knowledge_entry(graph_id)
+    assert entry is not None
+    assert entry.retrieval.mode == "vector"
 
 
 # --- RetrievalConfig back-compat -----------------------------------------

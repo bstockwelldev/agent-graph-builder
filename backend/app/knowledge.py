@@ -79,9 +79,12 @@ class KnowledgeChunk(BaseModel):
 
 class RetrievalConfig(BaseModel):
     """Per-graph retrieval mode (hybrid retrieval, Phase 1). `mode="vector"`
-    is the pre-existing behavior; `mode="hybrid"` fuses BM25 and vector
-    rankings with RRF. `rrf_k` is the RRF smoothing constant. Old entries
-    saved without this block load as mode="vector" and behave identically."""
+    is the pre-hybrid behavior; `mode="hybrid"` fuses BM25 and vector
+    rankings with RRF. `rrf_k` is the RRF smoothing constant. Entries saved
+    before this block existed load as mode="vector" and behave identically;
+    newly created entries default to mode="hybrid" (see
+    upload_knowledge_document). The field default stays "vector" so stored
+    history can never silently change meaning."""
 
     mode: Literal["vector", "hybrid"] = "vector"
     rrf_k: int = 60
@@ -693,6 +696,12 @@ async def upload_knowledge_document(
             id=graph_id,
             embedding_provider=resolution.provider,
             embedding_model_id=resolution.model_id,
+            # New knowledge bases default to hybrid retrieval: the eval
+            # (public + private sets) shows it beating pure vector on every
+            # bucket with no latency regression. Graphs indexed before this
+            # default keep their stored mode — the field default stays
+            # "vector" so existing entries never move.
+            retrieval=RetrievalConfig(mode="hybrid"),
         )
 
     # Uploading a name again replaces that document: same id, next version.

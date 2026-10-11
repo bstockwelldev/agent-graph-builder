@@ -52,3 +52,9 @@ Retrieval today is pure vector cosine similarity (`backend/app/knowledge.py`: `t
 - Who labels the eval query set, and how big (50? 200?)?
 - Cross-encoder model choice: which one, and where does it run (backend container vs sidecar)?
 - Should hybrid become the default for new graphs after the eval proves it?
+  Decided 2026-10-11: yes. Hybrid beat pure vector on every bucket on both
+  eval sets (public: ndcg@5 all +0.1182; private set: hybrid best by a small
+  margin) with no latency regression. New knowledge entries are created with
+  `retrieval.mode="hybrid"`; entries stored before the default keep their
+  mode (the `RetrievalConfig` field default stays `"vector"`), so existing
+  graphs do not move.
