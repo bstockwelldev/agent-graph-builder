@@ -1,11 +1,13 @@
 ---
 title: Extraction node — document ingestion (OCR, vision) as a node type
-last_updated: 2026-10-04
+last_updated: 2026-10-10
 ---
 
 # Extraction node plan
 
-**Status:** implementing (2026-10-10). Backend slice in progress (uncommitted working tree): `backend/app/extraction/` package (base/schemas/stub/text/ocr/vision/documents), `NodeType.EXTRACT`, `ExtractConfig`, `compute_extract`, `extract.completed` event, ports entry, replay recompute rule, `extractor_factory` on both runtime sites, `POST /api/graphs/{id}/extract`, `backend/tests/test_extract_node.py` (38 tests). Studio slice in parallel. Follows the decision-node rollout template: spike → backend → Studio (`spikes/decision-model`, PRs #151/#152).
+**Status:** shipped 2026-10-10 (backend + SDK + Studio, PR #159; CI fixes #160). Live-verified the same day for the deterministic text → OCR path: a scanned (image-only) PDF routes via the `scanned_pdf` rule to Tesseract and returns correct text at 0.95 confidence. Not yet live-verified: the `vision` stage (needs Ollama or Groq) and the schema-validated `fields` output. Adding `pytesseract` to `pyproject.toml` was required for this — it was missing, so OCR was unavailable on any fresh install.
+
+**Design drift from this plan:** the shipped chain is a `deterministic` provider (text → ocr → optional vision, selected by `stages`) with `stub` as the keyless default — not the vision-only chain described under *Pipeline* below. Tesseract was kept as the scanned-page fallback.
 
 ## Why
 
@@ -71,5 +73,5 @@ Eval fixture set (10 docs): clean PDF, scanned PDF, phone photo of a page, table
 ## Open questions
 
 - Vision provider priority: Ollama-first (local, free) with Groq as the hosted fallback?
-- Page limit / size caps for uploads (DoS surface on the public demo)?
+- Page limit / size caps for uploads (DoS surface on the public demo)? Partly answered: `EXTRACT_MAX_UPLOAD_BYTES` (default 25 MB) caps uploads and a `page_limit` truncates PDFs; whether the public demo needs tighter values is still open.
 - Should extraction feed the knowledge base directly (extract → index in one graph)?

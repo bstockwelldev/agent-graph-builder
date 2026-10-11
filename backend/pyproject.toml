@@ -14,9 +14,12 @@ dependencies = [
     "python-multipart>=0.0.12",
     # Document extraction node (app/extraction/): pdfplumber is the primary
     # embedded-text engine, pypdf the fallback (also used for page-limit
-    # truncation). Pillow arrives via pdfplumber (image probing).
+    # truncation). Pillow arrives via pdfplumber (image probing). pytesseract
+    # is the thin wrapper for the OCR stage; the tesseract/pdftoppm binaries
+    # stay optional (BackendUnavailableError names them when missing).
     "pdfplumber>=0.11",
     "pypdf>=4",
+    "pytesseract>=0.3",
 ]
 
 [project.optional-dependencies]

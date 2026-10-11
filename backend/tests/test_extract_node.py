@@ -746,3 +746,19 @@ def test_replay_recomputes_deterministic_extract_nodes() -> None:
     # Vision is non-deterministic -> frozen like any other model node.
     frozen_vision = frozen_node_outputs(vision_graph, traces)
     assert "extract_1" in frozen_vision
+
+
+def test_ocr_python_dependency_is_declared() -> None:
+    """The OCR stage imports pytesseract lazily; if it is missing from
+    pyproject a scanned PDF can never be extracted in a fresh install (the
+    binaries are optional, the wrapper is not)."""
+    import importlib.util
+    import tomllib
+    from pathlib import Path
+
+    assert importlib.util.find_spec("pytesseract") is not None
+    pyproject = tomllib.loads(
+        (Path(__file__).parent.parent / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    deps = [d.split(">")[0].split("=")[0].strip() for d in pyproject["project"]["dependencies"]]
+    assert "pytesseract" in deps
