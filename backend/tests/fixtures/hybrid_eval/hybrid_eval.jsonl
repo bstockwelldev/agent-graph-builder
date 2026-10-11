@@ -1,0 +1,70 @@
+# hybrid retrieval eval set, PUBLIC synthetic corpus (Phase 0). Lines starting with # are comments; loaders skip them.
+# corpus: rulebooks/*.md. Invented games (saltroad, lanternfall) plus a distractor supplement and playtest notes. Safe to publish.
+# private real-rulebook sets use the same layout via HYBRID_EVAL_DIR and must never be committed here.
+# chunk ids: chunk_id_for(sha256(file text), index) over knowledge.chunk_text (CHUNK_TARGET=900, CHUNK_OVERLAP=100)
+# labels: every chunk containing a verbatim answer anchor is relevant (overlap duplicates included)
+# mix: 28 exact / 24 semantic / 8 adversarial = 60
+# baseline (pure vector, ollama/nomic-embed-text, 47 chunks, 60 queries, cached vectors, 2026-10-11):
+#   ndcg@5  all=0.6230 exact=0.6330 semantic=0.6469 adversarial=0.5164
+#   ndcg@10 all=0.6481 exact=0.6564 semantic=0.6691 adversarial=0.5558
+#   retrieval p95 = 14.5 ms (cosine scan only; query embedding excluded). Reproduce: pytest tests/test_hybrid_eval.py -s
+{"query": "The Crimson Band", "expected_chunk_ids": ["36ffdb212421399a", "f65f134636b45e6c"], "query_type": "exact"}
+{"query": "Magnate guild rank", "expected_chunk_ids": ["8e2b4247e307bec2"], "query_type": "exact"}
+{"query": "Iron-rimmed Wheels", "expected_chunk_ids": ["5f05b3f226f5bee5"], "query_type": "exact"}
+{"query": "Master of the Salt Road", "expected_chunk_ids": ["9cf01c53b7374769"], "query_type": "exact"}
+{"query": "Ghost Wagon", "expected_chunk_ids": ["9cf01c53b7374769"], "query_type": "exact"}
+{"query": "Storm Warning", "expected_chunk_ids": ["bb15a434839c3c3f"], "query_type": "exact"}
+{"query": "Festival at Dunmarket", "expected_chunk_ids": ["e895c93a3b094d0e", "bb15a434839c3c3f"], "query_type": "exact"}
+{"query": "Sand Stripping", "expected_chunk_ids": ["a60b2b51b4d95957"], "query_type": "exact"}
+{"query": "The Queen's Silks", "expected_chunk_ids": ["ea33f141c6976fbc"], "query_type": "exact"}
+{"query": "Wind at Our Backs", "expected_chunk_ids": ["a60b2b51b4d95957"], "query_type": "exact"}
+{"query": "Syndic", "expected_chunk_ids": ["8e2b4247e307bec2"], "query_type": "exact"}
+{"query": "Eight-sided Dice: 4", "expected_chunk_ids": ["3fa44a92eece952c"], "query_type": "exact"}
+{"query": "Permit Tiles: 12", "expected_chunk_ids": ["3fa44a92eece952c"], "query_type": "exact"}
+{"query": "Order Token", "expected_chunk_ids": ["adab8ddd1d7263df", "4f2a7f53d281e0c2"], "query_type": "exact"}
+{"query": "Strongbox", "expected_chunk_ids": ["5f05b3f226f5bee5"], "query_type": "exact"}
+{"query": "Heron's Shadow", "expected_chunk_ids": ["d06f2ae36922129c"], "query_type": "exact"}
+{"query": "Snapped Pole", "expected_chunk_ids": ["d06f2ae36922129c"], "query_type": "exact"}
+{"query": "Boatwright", "expected_chunk_ids": ["d06f2ae36922129c"], "query_type": "exact"}
+{"query": "Kind Current", "expected_chunk_ids": ["d06f2ae36922129c"], "query_type": "exact"}
+{"query": "Embargo tiles Hard game", "expected_chunk_ids": ["6648207890f438eb"], "query_type": "exact"}
+{"query": "Lanterns Home", "expected_chunk_ids": ["844b30b117baa125"], "query_type": "exact"}
+{"query": "Dye Press", "expected_chunk_ids": ["5f05b3f226f5bee5"], "query_type": "exact"}
+{"query": "The Salt Monopoly", "expected_chunk_ids": ["f791e182ba77b758"], "query_type": "exact"}
+{"query": "Mule Team", "expected_chunk_ids": ["5f05b3f226f5bee5"], "query_type": "exact"}
+{"query": "Guild Audit", "expected_chunk_ids": ["e895c93a3b094d0e", "bb15a434839c3c3f"], "query_type": "exact"}
+{"query": "Strength 6 Bandit demand", "expected_chunk_ids": ["36ffdb212421399a", "f65f134636b45e6c"], "query_type": "exact"}
+{"query": "Dry Wells", "expected_chunk_ids": ["a60b2b51b4d95957", "f5e49f58f95150fd"], "query_type": "exact"}
+{"query": "Bridge Out", "expected_chunk_ids": ["e895c93a3b094d0e", "bb15a434839c3c3f"], "query_type": "exact"}
+{"query": "what happens if I can't pay my crew's upkeep?", "expected_chunk_ids": ["c3dc4e2fa26b3c63", "99e1587fe8704073"], "query_type": "semantic"}
+{"query": "how do I decide who moves first each round?", "expected_chunk_ids": ["4f2a7f53d281e0c2"], "query_type": "semantic"}
+{"query": "what do I do if two wagons meet on the same stretch of road?", "expected_chunk_ids": ["a280448e55b925c7"], "query_type": "semantic"}
+{"query": "how does being robbed on the road get resolved?", "expected_chunk_ids": ["36ffdb212421399a"], "query_type": "semantic"}
+{"query": "can I make my wagon carry more goods?", "expected_chunk_ids": ["6defd87d3db4cb96", "5f05b3f226f5bee5"], "query_type": "semantic"}
+{"query": "which rank lets me win bid ties?", "expected_chunk_ids": ["4f2a7f53d281e0c2", "8e2b4247e307bec2"], "query_type": "semantic"}
+{"query": "what happens when a good becomes worthless?", "expected_chunk_ids": ["4eac8593e7846e49"], "query_type": "semantic"}
+{"query": "when does a sale pay twice as much?", "expected_chunk_ids": ["4eac8593e7846e49"], "query_type": "semantic"}
+{"query": "how do I score the leftover goods at the end?", "expected_chunk_ids": ["bb15a434839c3c3f", "9cf01c53b7374769"], "query_type": "semantic"}
+{"query": "what is the penalty for missing a contract deadline?", "expected_chunk_ids": ["4eac8593e7846e49"], "query_type": "semantic"}
+{"query": "how much money does each player begin with?", "expected_chunk_ids": ["94c836e4604337e1"], "query_type": "semantic"}
+{"query": "how do I hire protection against highwaymen?", "expected_chunk_ids": ["36ffdb212421399a"], "query_type": "semantic"}
+{"query": "how do two players team up in a big game?", "expected_chunk_ids": ["a60b2b51b4d95957"], "query_type": "semantic"}
+{"query": "how can the season be made shorter?", "expected_chunk_ids": ["8c7f2104e85a8497"], "query_type": "semantic"}
+{"query": "how can I swap a contract I don't want?", "expected_chunk_ids": ["b9ec7147eb6fadcf"], "query_type": "semantic"}
+{"query": "how do the ferrymen lose together?", "expected_chunk_ids": ["844b30b117baa125", "6648207890f438eb"], "query_type": "semantic"}
+{"query": "what makes a boat go down?", "expected_chunk_ids": ["844b30b117baa125"], "query_type": "semantic"}
+{"query": "how many things can each boat person do per turn?", "expected_chunk_ids": ["1733642fa509f8d0"], "query_type": "semantic"}
+{"query": "how does a player pass help to a teammate?", "expected_chunk_ids": ["1733642fa509f8d0"], "query_type": "semantic"}
+{"query": "what is the price for crossing the dangerous swirling water?", "expected_chunk_ids": ["844b30b117baa125"], "query_type": "semantic"}
+{"query": "what changes in the harder version of the river game?", "expected_chunk_ids": ["6648207890f438eb"], "query_type": "semantic"}
+{"query": "how does the computer opponent behave in the river game's solo mode?", "expected_chunk_ids": ["6648207890f438eb"], "query_type": "semantic"}
+{"query": "what score does a solo trader need to win?", "expected_chunk_ids": ["9cf01c53b7374769"], "query_type": "semantic"}
+{"query": "how do I clear water from my boat?", "expected_chunk_ids": ["1733642fa509f8d0"], "query_type": "semantic"}
+{"query": "Toll on a Whirl: unload a lantern or take Water", "expected_chunk_ids": ["844b30b117baa125"], "query_type": "adversarial"}
+{"query": "Toll Marker cost when entering a road segment", "expected_chunk_ids": ["a280448e55b925c7"], "query_type": "adversarial"}
+{"query": "Embargo tile blocks a Whirl space for the round", "expected_chunk_ids": ["6648207890f438eb"], "query_type": "adversarial"}
+{"query": "Embargo Disc closes a town to wagons", "expected_chunk_ids": ["e895c93a3b094d0e"], "query_type": "adversarial"}
+{"query": "Reserve of four Pip cards in the standard game", "expected_chunk_ids": ["6648207890f438eb"], "query_type": "adversarial"}
+{"query": "what the Ghost Wagon does each round in solo play", "expected_chunk_ids": ["9cf01c53b7374769"], "query_type": "adversarial"}
+{"query": "Strongbox keeps your Permit Tile when Bankrupt", "expected_chunk_ids": ["5f05b3f226f5bee5"], "query_type": "adversarial"}
+{"query": "Standoff: how much does the lower Permit house pay", "expected_chunk_ids": ["a280448e55b925c7"], "query_type": "adversarial"}
