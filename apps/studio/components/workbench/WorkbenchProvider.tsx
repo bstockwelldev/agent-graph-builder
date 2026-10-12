@@ -1,6 +1,7 @@
 "use client";
 
 import type { CanvasCommand } from "@/components/graph/canvasCommands";
+import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GraphDefinition } from "@bstockwelldev/agent-graph-sdk";
 import { useShellLayout } from "@/hooks/useShellLayout";
@@ -99,8 +100,20 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
         : lastOutsideFocusRef.current;
   };
 
+  // The route a panel was opened on. App-wide panels (chat, resources,
+  // analytics, console) are mounted once in StudioShell, so without this they
+  // followed the user to every page they navigated to. A panel opened as part
+  // of a navigation (a `?panel=` deep link, ChatPanel's "View run") is opened
+  // by the new page's effects, after the URL changed, so it records the new
+  // route and stays.
+  const openedOnRef = useRef<string | null>(null);
+  const markOpened = () => {
+    openedOnRef.current = typeof window === "undefined" ? null : window.location.pathname;
+  };
+
   const open = useCallback((panel: WorkbenchPanelId, context?: unknown) => {
     rememberOpener();
+    markOpened();
     setActivePanel(panel);
     setPanelContext(context ?? null);
   }, []);
@@ -110,10 +123,22 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   }, []);
   const toggle = useCallback((panel: WorkbenchPanelId) => {
     setActivePanel((current) => {
-      if (current !== panel) rememberOpener();
+      if (current !== panel) {
+        rememberOpener();
+        markOpened();
+      }
       return current === panel ? null : panel;
     });
   }, []);
+
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!activePanel || pathname === null || openedOnRef.current === null) return;
+    if (WORKBENCH_PANELS[activePanel].scope === "global" && openedOnRef.current !== pathname) {
+      setActivePanel(null);
+      setPanelContext(null);
+    }
+  }, [activePanel, pathname]);
 
   // Focus return: once a panel closes and its content unmounts, focus has
   // fallen to <body> -- put it back on the opener if it's still there.

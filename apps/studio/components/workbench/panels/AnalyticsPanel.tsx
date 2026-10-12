@@ -184,7 +184,7 @@ export function AnalyticsPanel() {
     <div className="space-y-4 p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold">Analytics</h2>
+          {/* Titled by the drawer's title bar. */}
           <p className="text-muted-foreground text-xs">
             {graphScoped
               ? `${graphContext.graphName || graphContext.graphId} — recent runs, per node.`

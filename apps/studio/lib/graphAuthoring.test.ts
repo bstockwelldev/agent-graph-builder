@@ -50,10 +50,11 @@ describe("contract round-trip", () => {
 });
 
 describe("copyGraphDefinition", () => {
-  it("keeps the graph under a fresh backend-shaped id and a copy name", () => {
+  it("keeps the graph under a fresh backend-shaped id and a copy name, without the demo suffix", () => {
     const graph = { id: "demo_classify_and_route", name: "Classify & Route (demo)", entry_node_id: "input_1", nodes: [], edges: [] };
     const copy = copyGraphDefinition(graph, () => "0123456789ab");
-    expect(copy).toEqual({ ...graph, id: "graph_0123456789ab", name: "Classify & Route (demo) (copy)" });
+    expect(copy).toEqual({ ...graph, id: "graph_0123456789ab", name: "Classify & Route (copy)" });
+    expect(copyGraphDefinition({ ...graph, name: "My graph" }, () => "0123456789ab").name).toBe("My graph (copy)");
   });
 
   it("mints a different id each time by default", () => {

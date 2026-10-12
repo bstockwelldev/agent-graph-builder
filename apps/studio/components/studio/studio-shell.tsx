@@ -173,9 +173,12 @@ export function StudioShell({
           needs a definite ancestor height to resolve against for its own
           internal scroll region to work (the exact ambiguity flagged in the
           Phase 8 run-panel scrolling bug fix notes). */}
-      <WorkbenchDrawer panelId="chat" side="right" dockedClassName="right-4 top-20 flex h-[70vh] w-96 flex-col overflow-hidden">
-        <ChatPanel />
-      </WorkbenchDrawer>
+      {/* The graph canvas docks its own chat column (GraphEditor.tsx). */}
+      {!graphCanvas && (
+        <WorkbenchDrawer panelId="chat" side="right" dockedClassName="right-4 top-20 flex h-[70vh] w-96 flex-col overflow-hidden">
+          <ChatPanel />
+        </WorkbenchDrawer>
+      )}
       {RESOURCE_KINDS.map((kind) => (
         <WorkbenchDrawer key={kind.id} panelId={kind.panelId} side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
           <ResourceBrowserPanel kind={kind} />

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GraphSummary, SeededDemoSummary } from "@bstockwelldev/agent-graph-sdk";
 import { summarizeGraph } from "@bstockwelldev/agent-graph-sdk/graph";
 
@@ -11,7 +11,6 @@ import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
 import {
   StudioCardDeleteIconButton,
-  studioCardEditHint,
   studioResourceCardInteractiveClass,
 } from "@/components/studio/studio-resource-card-actions";
 import { Button } from "@/components/ui/button";
@@ -23,41 +22,48 @@ export default function GraphsPage() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
   const [demos, setDemos] = useState<SeededDemoSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // `loadError` replaces the list (there is nothing to show); `actionError`
+  // (a failed create or delete) sits above it, so the list stays usable.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GraphSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    setError(null);
-    try {
-      setGraphs(await client.graphs.summaries.list());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-    // The gallery is additive: a demos failure never blocks the graph list.
-    try {
-      setDemos(await client.demos.list());
-    } catch {
-      setDemos([]);
-    }
+    setLoadError(null);
+    setActionError(null);
+    // Fetched together, so the list never renders before it knows which
+    // graphs are demos. The gallery is additive: a demos failure never
+    // blocks the graph list.
+    const [summaries, gallery] = await Promise.allSettled([client.graphs.summaries.list(), client.demos.list()]);
+    setDemos(gallery.status === "fulfilled" ? gallery.value : []);
+    if (summaries.status === "fulfilled") setGraphs(summaries.value);
+    else setLoadError(summaries.reason instanceof Error ? summaries.reason.message : String(summaries.reason));
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     void refetch();
   }, [refetch]);
 
-  async function handleCreate(template: "blank" | "demo") {
+  // Seeded demos are stored graphs too, so the summaries list returns them
+  // as well as the gallery. Show each once, in the gallery: they're
+  // read-only, so they don't belong next to delete buttons.
+  const ownGraphs = useMemo(() => {
+    const demoIds = new Set(demos.map((demo) => demo.id));
+    return graphs.filter((graph) => !demoIds.has(graph.id));
+  }, [demos, graphs]);
+
+  async function handleCreate() {
     setCreating(true);
+    setActionError(null);
     try {
-      const name = template === "demo" ? "Demo graph" : `New graph ${new Date().toLocaleTimeString()}`;
-      const created = await client.graphs.create({ name, template });
+      const created = await client.graphs.create({ name: `New graph ${new Date().toLocaleTimeString()}`, template: "blank" });
       setGraphs((prev) => [summarizeGraph(created), ...prev]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
@@ -66,105 +72,121 @@ export default function GraphsPage() {
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
+    setActionError(null);
     try {
       await client.graphs.delete(deleteTarget.id);
       setGraphs((prev) => prev.filter((graph) => graph.id !== deleteTarget.id));
-      setDeleteTarget(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
+      setDeleteTarget(null);
       setDeleting(false);
     }
   }
 
   return (
-    <StudioPage>
-      <StudioPageHeader
-        title="Graphs"
-        description="Agent workflows compiled to LangGraph and run node-by-node."
-        loading={loading}
-        onRefresh={refetch}
-      />
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="synth" disabled={creating} onClick={() => void handleCreate("blank")}>
-          New blank graph
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled={creating} onClick={() => void handleCreate("demo")}>
-          New from demo template
-        </Button>
-      </div>
-      {error && !loading ? (
-        <div className="glass-panel ring-destructive/30 mb-4 space-y-2 rounded-lg p-4 ring-1" role="alert">
-          <p className="text-destructive text-sm">{error}</p>
-          <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
-            Try again
+    // `viewport` plus the inner `overflow-y-auto`: StudioShell clamps /graphs
+    // to the viewport height, so the page has to scroll inside itself.
+    <StudioPage viewport>
+      <div className="shrink-0 space-y-4">
+        <StudioPageHeader
+          title="Graphs"
+          description="Agent workflows compiled to LangGraph and run node-by-node."
+          loading={loading}
+          onRefresh={refetch}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="synth" disabled={creating} onClick={() => void handleCreate()}>
+            New blank graph
           </Button>
         </div>
-      ) : null}
-      {!loading && !error ? (
-        <>
-          {demos.length > 0 ? (
-            <section aria-label="Seeded demos" className="mb-8">
-              <h2 className="mb-1 text-sm font-semibold tracking-tight">Seeded demos</h2>
-              <p className="text-muted-foreground mb-4 text-sm">
-                Read-only gallery workflows. Open one to run it — saving your edits forks it into your own copy.
-              </p>
+      </div>
+      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-6" data-testid="graphs-scroll">
+        {loadError && !loading ? (
+          <div className="glass-panel ring-destructive/30 mb-4 space-y-2 rounded-lg p-4 ring-1" role="alert">
+            <p className="text-destructive text-sm">{loadError}</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : null}
+        {actionError ? (
+          <div className="glass-panel ring-destructive/30 mb-4 flex items-center gap-3 rounded-lg p-3 ring-1" role="alert">
+            <p className="text-destructive flex-1 text-sm">{actionError}</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => setActionError(null)}>
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
+        {!loading && !loadError ? (
+          <>
+            {demos.length > 0 ? (
+              <section aria-label="Seeded demos" className="mb-8">
+                <h2 className="mb-1 text-sm font-semibold tracking-tight">Seeded demos</h2>
+                <p className="text-muted-foreground mb-4 text-sm">
+                  Read-only gallery workflows. Open one to run it — saving your edits forks it into your own copy.
+                </p>
+                <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                  {demos.map((demo) => (
+                    <li key={demo.id}>
+                      <Card className={cn(studioResourceCardInteractiveClass, "p-0")}>
+                        <Link href={`/graphs/${demo.id}`} className="block p-6">
+                          <CardHeader className="p-0">
+                            <CardTitle className="text-base">{demo.title}</CardTitle>
+                            <CardDescription className="pt-1 text-sm">{demo.tagline}</CardDescription>
+                            <div className="flex flex-wrap gap-1 pt-2">
+                              {demo.node_types.map((nodeType) => (
+                                <Badge key={nodeType} variant="outline">
+                                  {nodeType}
+                                </Badge>
+                              ))}
+                            </div>
+                          </CardHeader>
+                        </Link>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <section aria-label="Your graphs">
+              <h2 className="mb-4 text-sm font-semibold tracking-tight">Your graphs</h2>
               <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                {demos.map((demo) => (
-                  <li key={demo.id}>
+                {ownGraphs.map((graph) => (
+                  <li key={graph.id}>
                     <Card className={cn(studioResourceCardInteractiveClass, "p-0")}>
-                      <Link href={`/graphs/${demo.id}`} className="block p-6">
+                      <Link href={`/graphs/${graph.id}`} className="block p-6">
                         <CardHeader className="p-0">
-                          <CardTitle className="text-base">{demo.title}</CardTitle>
-                          <CardDescription className="pt-1 text-sm">{demo.tagline}</CardDescription>
-                          <div className="flex flex-wrap gap-1 pt-2">
-                            {demo.node_types.map((nodeType) => (
-                              <Badge key={nodeType} variant="outline">
-                                {nodeType}
-                              </Badge>
-                            ))}
-                          </div>
+                          <CardTitle className="text-base">{graph.name}</CardTitle>
+                          <CardDescription className="flex flex-wrap items-center gap-2 font-mono text-xs">
+                            {graph.id}
+                            <Badge variant="outline">{graph.node_count} nodes</Badge>
+                            <Badge variant="outline">{graph.edge_count} edges</Badge>
+                          </CardDescription>
                         </CardHeader>
                       </Link>
+                      <CardContent className="pt-0">
+                        <div className="flex items-center gap-1">
+                          <StudioCardDeleteIconButton
+                            label={graph.name}
+                            disabled={deleting}
+                            onClick={() => setDeleteTarget(graph)}
+                          />
+                        </div>
+                      </CardContent>
                     </Card>
                   </li>
                 ))}
               </ul>
+              {ownGraphs.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  No graphs yet — create a blank one above, or open a demo and save your edits.
+                </p>
+              ) : null}
             </section>
-          ) : null}
-          <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {graphs.map((graph) => (
-              <li key={graph.id}>
-                <Card className={cn(studioResourceCardInteractiveClass, "p-0")}>
-                  <Link href={`/graphs/${graph.id}`} className="block p-6">
-                    <CardHeader className="p-0">
-                      <CardTitle className="text-base">{graph.name}</CardTitle>
-                      <CardDescription className="flex flex-wrap items-center gap-2 font-mono text-xs">
-                        {graph.id}
-                        <Badge variant="outline">{graph.node_count} nodes</Badge>
-                        <Badge variant="outline">{graph.edge_count} edges</Badge>
-                      </CardDescription>
-                      <p className="text-muted-foreground pt-1 text-[11px]">{studioCardEditHint}</p>
-                    </CardHeader>
-                  </Link>
-                  <CardContent className="pt-0">
-                    <div className="flex items-center gap-1">
-                      <StudioCardDeleteIconButton
-                        label={graph.name}
-                        disabled={deleting}
-                        onClick={() => setDeleteTarget(graph)}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </li>
-            ))}
-          </ul>
-          {graphs.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No graphs yet — create one above.</p>
-          ) : null}
-        </>
-      ) : null}
+          </>
+        ) : null}
+      </div>
 
       <StudioConfirmDialog
         open={deleteTarget !== null}
