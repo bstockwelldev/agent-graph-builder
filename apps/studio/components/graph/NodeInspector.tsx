@@ -20,6 +20,7 @@ import {
   Palette,
 } from "lucide-react";
 import { knowledgeHitsOf } from "@/lib/lineageGraph";
+import { recordedModelLine, recordedModelOf } from "@/lib/recordedModel";
 import { EDGE_COLORS, EDGE_PATTERNS, EDGE_ROUTINGS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, PROVIDER_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import {
@@ -36,7 +37,6 @@ import {
 } from "@/content/node-ports";
 import type {
   BindableResourceKind,
-  ChatProvider,
   DataClassification,
   EdgeTransform,
   GraphDefinition,
@@ -66,7 +66,9 @@ import {
 } from "@/lib/graph-theme";
 import { client } from "@/lib/api-client";
 import { partitionDiagnosticsByField } from "@/lib/diagnostics";
-import { ProviderModelPicker } from "./ProviderModelPicker";
+import { ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
+import { useRunSelection } from "./RunSelectionContext";
+import { sendsRunModel } from "@/lib/modelCatalog";
 import { useOllamaAvailable, withoutUnavailableProviders } from "@/lib/providerAvailability";
 import { ResourceBindingField } from "./ResourceBindingField";
 import { TaxonomyTooltip } from "./Tooltip";
@@ -553,6 +555,7 @@ function ConfigureTab({
   onOpenResource?: (kind: BindableResourceKind, resourceId: string) => void;
 }) {
   const ollamaAvailable = useOllamaAvailable();
+  const runProvider = useRunSelection()?.provider ?? null;
   const { byField, rest } = partitionDiagnosticsByField(
     issues.filter((issue) => !issue.edge_id),
     RENDERED_FIELDS[node.type],
@@ -611,14 +614,36 @@ function ConfigureTab({
               onOpen={onOpenResource}
               issues={fieldIssues("llmProfileId")}
             >
-              <ProviderModelPicker
-                graphId={graphId}
-                provider={(node.config.provider as ChatProvider) ?? "ollama"}
-                model={str("model", "qwen2.5:3b")}
-                onProviderChange={(provider) => set("provider", provider)}
-                onModelChange={(model) => set("model", model)}
-              />
-              <FieldIssues issues={[...fieldIssues("provider"), ...fieldIssues("model")]} />
+              <Muted style={{ marginBottom: spacing[2] }}>
+                <span data-testid="runs-on">
+                  Runs on {runProvider ? providerLabel(runProvider) : "the Run panel's provider"}, set in the Run panel.
+                </span>{" "}
+                The model below is a pin: a model chosen in the Run panel overrides it.
+              </Muted>
+              {runProvider && sendsRunModel(runProvider) ? (
+                <ProviderModelPicker
+                  graphId={graphId}
+                  provider={runProvider}
+                  model={str("model")}
+                  hideProvider
+                  onProviderChange={() => {}}
+                  onModelChange={(model) => set("model", model)}
+                />
+              ) : (
+                <Field label="Model pin" hint="Optional. Empty uses the provider's default model.">
+                  {(id) => (
+                    <TextInput
+                      id={id}
+                      aria-label="Model pin"
+                      value={str("model")}
+                      onChange={(event) => set("model", event.target.value)}
+                      placeholder="provider default"
+                      style={{ fontFamily: fontFamily.mono }}
+                    />
+                  )}
+                </Field>
+              )}
+              <FieldIssues issues={fieldIssues("model")} />
             </ResourceBindingField>
           </Group>
           <Group title="Instructions">
@@ -722,7 +747,7 @@ function ConfigureTab({
           <Group title="Model">
             <Field
               label="Provider"
-              hint="Stub is offline and deterministic — good for demos and tests. Ollama runs a local model."
+              hint="Uses its own provider; the Run panel's provider does not apply here. Stub is offline and deterministic — good for demos and tests. Ollama runs a local model."
               issues={fieldIssues("provider")}
             >
               {(id) => (
@@ -868,7 +893,7 @@ function ConfigureTab({
           <Group title="Model">
             <Field
               label="Provider"
-              hint="Stub is offline and deterministic — good for demos and tests. Deterministic runs the text/OCR stages without a model; vision calls a vision model."
+              hint="Uses its own provider; the Run panel's provider does not apply here. Stub is offline and deterministic — good for demos and tests. Deterministic runs the text/OCR stages without a model; vision calls a vision model."
               issues={fieldIssues("provider")}
             >
               <SegmentedControl
@@ -1455,6 +1480,7 @@ function RunTab({
 
   const duration = formatTraceDuration(selectedTrace);
   const hits = knowledgeHitsOf(selectedTrace.input);
+  const ranOn = nodeType === "llm" || nodeType === "tool_loop" ? recordedModelOf(selectedTrace.input) : null;
   const tone = statusColor[selectedTrace.status];
   const childRun = childGraphId !== undefined ? childRunHref(selectedTrace, childGraphId) : null;
   return (
@@ -1474,6 +1500,11 @@ function RunTab({
         )}
         {nodeType === "extract" && selectedTrace.output !== null && typeof selectedTrace.output === "object" && !Array.isArray(selectedTrace.output) && (
           <ExtractRunSummary output={selectedTrace.output as Record<string, unknown>} threshold={threshold ?? 0.7} />
+        )}
+        {ranOn && (
+          <Muted style={{ marginBottom: spacing[2] }}>
+            <span data-testid="ran-on">Ran on {recordedModelLine(ranOn)}</span>
+          </Muted>
         )}
         <Field label="Input">
           <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>

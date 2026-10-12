@@ -2,12 +2,13 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { RunSelectionProvider, type RunSelectionValue } from "../RunSelectionContext";
 import { GraphNodeView, type GraphNodeData } from "./GraphNodeView";
 import { NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
 
 afterEach(() => cleanup());
 
-function renderNode(data: Partial<GraphNodeData>, selected = false) {
+function renderNode(data: Partial<GraphNodeData>, selected = false, runSelection?: Pick<RunSelectionValue, "provider" | "selectedModel">) {
   const props = {
     id: "llm_1",
     type: "llm",
@@ -22,10 +23,17 @@ function renderNode(data: Partial<GraphNodeData>, selected = false) {
     deletable: true,
     draggable: true,
   } as unknown as NodeProps;
-  render(
+  const card = (
     <ReactFlowProvider>
       <GraphNodeView {...props} />
-    </ReactFlowProvider>,
+    </ReactFlowProvider>
+  );
+  render(
+    runSelection ? (
+      <RunSelectionProvider value={{ ...runSelection, setProvider: () => {}, setSelectedModel: () => {} }}>{card}</RunSelectionProvider>
+    ) : (
+      card
+    ),
   );
   return screen.getByTestId("graph-node-card");
 }
@@ -44,6 +52,18 @@ describe("GraphNodeView", () => {
     expect(screen.getByText("via ollama")).toBeTruthy();
     expect(screen.getByText("in: message")).toBeTruthy();
     expect(screen.getByText("out: message")).toBeTruthy();
+  });
+
+  it("shows what the node would run on under the Run panel's selection, not its saved provider", () => {
+    // Saved config says ollama; the run provider is Stub, and the placeholder pin is not a real pin.
+    renderNode({}, false, { provider: "stub", selectedModel: "" });
+    expect(screen.getByText("stub · default model")).toBeTruthy();
+    expect(screen.queryByText("via ollama")).toBeNull();
+  });
+
+  it("marks a model the run supplies", () => {
+    renderNode({ config: { model: "pin-m" } }, false, { provider: "groq", selectedModel: "run-m" });
+    expect(screen.getByText("groq · run-m (run)")).toBeTruthy();
   });
 
   it("uses the user's name as the title and moves the model into the summary", () => {

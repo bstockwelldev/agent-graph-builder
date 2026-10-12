@@ -31,7 +31,7 @@ import {
 import { client } from "@/lib/api-client";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
-import { showModelCatalog } from "@/lib/modelCatalog";
+import { runModelArg, sendsRunModel } from "@/lib/modelCatalog";
 import { expiryFromNow, formatRunInputs, recentInputValues, WAIVE_DURATIONS_DAYS } from "@bstockwelldev/agent-graph-sdk/graph";
 import {
   INSPECT_LOAD_FAIL,
@@ -58,6 +58,7 @@ import { accentSurface, border, color, fontFamily, radius, spacing, surface, tex
 import { CounterfactualForm, CounterfactualResultView } from "./CounterfactualForm";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
 import { OfflineBadge, ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
+import { useRunSelectionOrLocal } from "./RunSelectionContext";
 import { isOfflineRun, useStorageBackend } from "@/lib/serverHealth";
 import { RunCheckpoint, type Checkpoint, type ResumeDecision } from "./RunCheckpoint";
 import { RunWaterfall } from "./RunWaterfall";
@@ -262,6 +263,7 @@ export function RunPanel({
   inspectionRunId,
   onExitInspection,
   onCompile,
+  modelNodeCounts,
   onRun,
   onRunFromNode,
   onValidate,
@@ -300,6 +302,8 @@ export function RunPanel({
   inspectionRunId?: string | null;
   onExitInspection?: () => void;
   onCompile: (selection: RunSelection) => Promise<void> | void;
+  /** How many nodes the run's model applies to (LLM / tool_loop) and how many pick their own provider. */
+  modelNodeCounts?: { llm: number; ownProvider: number };
   onRun: (input: RunInput, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
   /** Phase 10 Slice C, "Run from selected node" — mocks every ancestor of
    * `nodeId` with a null placeholder so the run skips straight to it. */
@@ -377,17 +381,17 @@ export function RunPanel({
   const [recentMenu, setRecentMenu] = useState<{ variable: string; x: number; y: number } | null>(null);
 
   // ---- provider / model -----------------------------------------------------
-  const [provider, setProvider] = useState<ChatProvider>("stub");
-  const [selectedModel, setSelectedModel] = useState<string>("");
+  // Shared with the canvas so node cards show what each LLM node would run on.
+  const { provider, selectedModel, setProvider, setSelectedModel } = useRunSelectionOrLocal();
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const storageBackend = useStorageBackend();
   const [apiKeyLabel, setApiKeyLabel] = useState("API key");
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const sendsModel = showModelCatalog(provider) || provider === "openai_compat";
+  const sendsModel = sendsRunModel(provider);
+  const modelArg = runModelArg(provider, selectedModel);
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
-  const modelArg = sendsModel ? selectedModel || undefined : undefined;
   const apiKeyArg = showApiKeyField ? apiKey.trim() || undefined : undefined;
 
   useEffect(() => {
@@ -671,7 +675,7 @@ export function RunPanel({
             aria-expanded={modelSettingsOpen}
             aria-controls="run-model-settings"
             aria-label={`Model: ${providerLabel(provider)}${sendsModel && selectedModel ? ` · ${selectedModel}` : ""}. Change model settings`}
-            title="Model settings for this run"
+            title="Model for this run: overrides node model pins"
             onClick={() => setModelSettingsOpen((open) => !open)}
             className="agb-focus-ring agb-hoverable"
             style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, maxWidth: 170, padding: "0 8px 0 10px", borderRadius: 999, border: `1px solid ${modelSettingsOpen ? border.focus : border.default}`, background: surface.inset, color: text.primary, fontSize: 12, fontWeight: 550, cursor: "pointer" }}
@@ -759,11 +763,20 @@ export function RunPanel({
       {modelSettingsOpen && (
         <div id="run-model-settings">
           <Group
-            title="Model"
+            title="Model for this run"
             icon={<ProviderDot provider={provider} />}
             action={<IconButton label="Close model settings" icon={<X size={14} />} onClick={() => setModelSettingsOpen(false)} style={{ width: 26, height: 26 }} />}
           >
-            <Muted style={{ marginBottom: spacing[2] }}>Overrides every LLM node for this run. Each LLM node keeps its own default.</Muted>
+            <Muted style={{ marginBottom: spacing[2] }}>
+              Overrides node model pins for this run only; nothing is saved to the graph.
+              {modelNodeCounts
+                ? ` Applies to ${modelNodeCounts.llm} LLM node${modelNodeCounts.llm === 1 ? "" : "s"}.${
+                    modelNodeCounts.ownProvider > 0
+                      ? ` ${modelNodeCounts.ownProvider} decision/extract node${modelNodeCounts.ownProvider === 1 ? " uses" : "s use"} their own provider.`
+                      : ""
+                  }`
+                : ""}
+            </Muted>
             <ProviderModelPicker
               graphId={graphId}
               provider={provider}

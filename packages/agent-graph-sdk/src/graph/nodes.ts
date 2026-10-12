@@ -114,7 +114,70 @@ export type SummaryContext = {
   routeCount?: number;
   /** Wave 4a: `"<kind>:<id>"` → registry resource name, for bound nodes. */
   resourceNames?: Readonly<Record<string, string>>;
+  /**
+   * The Run panel's current selection. When given, `llm` / `tool_loop` summaries show the
+   * provider and model the node would actually run on (see `effectiveModelFor`) instead of
+   * the node's own saved provider, which the runtime ignores.
+   */
+  runSelection?: RunSelectionSummary;
 };
+
+/** What the Run panel will send: the run provider, and a model only when one is selected. */
+export type RunSelectionSummary = { provider: string; model?: string };
+
+/** Which scope supplied a node's model (mirrors backend `resolve_requested_model`). */
+export type ModelSource = "run" | "profile" | "pin" | "default";
+
+export type EffectiveModel = {
+  provider: string;
+  /** The model asked for, or null when the provider's default model applies. */
+  requestedModel: string | null;
+  source: ModelSource;
+};
+
+/**
+ * Placeholder model names are not real pins: the backend swaps them for the provider's
+ * default. Must equal `PLACEHOLDER_MODELS` in backend `provider_defaults.py`
+ * (`contract/model-resolution.json`).
+ */
+const PLACEHOLDER_MODELS: ReadonlySet<string> = new Set(["qwen2.5:3b", "stub"]);
+
+/**
+ * The provider and model an `llm` / `tool_loop` node would run on, and why. Order, matching the
+ * runtime: run model, then a bound profile's model, then the node's own `model`; a placeholder or
+ * nothing means the provider default. The provider is always the run's: the backend never reads
+ * a node's own `provider` for these nodes. `profileModel` is optional because the node card
+ * only knows a profile's name; a bound profile with an unknown model reports source `profile`.
+ */
+export function effectiveModelFor(
+  config: Record<string, unknown>,
+  runSelection: RunSelectionSummary,
+  profile: { bound: boolean; model?: string | null } = { bound: false },
+): EffectiveModel {
+  const { provider } = runSelection;
+  const runModel = runSelection.model || null;
+  const pin = typeof config.model === "string" && config.model ? config.model : null;
+  if (runModel) return resolved(provider, runModel, "run");
+  if (profile.bound && profile.model === undefined) return { provider, requestedModel: null, source: "profile" };
+  if (profile.bound && profile.model) return resolved(provider, profile.model, "profile");
+  if (pin) return resolved(provider, pin, "pin");
+  return { provider, requestedModel: null, source: "default" };
+}
+
+function resolved(provider: string, model: string, source: ModelSource): EffectiveModel {
+  return PLACEHOLDER_MODELS.has(model)
+    ? { provider, requestedModel: null, source: "default" }
+    : { provider, requestedModel: model, source };
+}
+
+/** `groq · llama-3.3-70b (run)`, `stub · default model`, `ollama · profile Fast`. */
+function effectiveModelLine(effective: EffectiveModel, profileName: string | null): string {
+  const { provider, requestedModel, source } = effective;
+  if (source === "profile" && requestedModel === null) return `${provider} · profile ${profileName ?? ""}`.trim();
+  const model = requestedModel ?? "default model";
+  const suffix = source === "run" ? " (run)" : source === "pin" ? " (pinned)" : source === "profile" ? " (profile)" : "";
+  return `${provider} · ${model}${suffix}`;
+}
 
 function boundId(config: Record<string, unknown>, field: string): string | null {
   const value = config[field];
@@ -168,10 +231,13 @@ export function boundTitleFor(
 }
 
 export function summaryFor(type: NodeType, config: Record<string, unknown>, context: SummaryContext = {}): string | null {
-  const { hasUserLabel = false, routeCount, resourceNames } = context;
+  const { hasUserLabel = false, routeCount, resourceNames, runSelection } = context;
   switch (type) {
     case "llm": {
       const profile = boundResourceName(config, "llmProfileId", "llm_profiles", resourceNames);
+      if (runSelection) {
+        return effectiveModelLine(effectiveModelFor(config, runSelection, { bound: profile !== null }), profile);
+      }
       if (profile) return hasUserLabel ? `profile · ${profile}` : "LLM profile";
       const provider = String(config.provider ?? "ollama");
       return hasUserLabel ? `${provider} · ${String(config.model ?? "model")}` : `via ${provider}`;
@@ -179,6 +245,10 @@ export function summaryFor(type: NodeType, config: Record<string, unknown>, cont
     case "tool_loop": {
       const iterations = `max ${String(config.maxToolIterations ?? 4)} iterations`;
       const profile = boundResourceName(config, "llmProfileId", "llm_profiles", resourceNames);
+      if (runSelection) {
+        const line = effectiveModelLine(effectiveModelFor(config, runSelection, { bound: profile !== null }), profile);
+        return `${line} · ${iterations}`;
+      }
       if (profile) return hasUserLabel ? `profile · ${profile} · ${iterations}` : `LLM profile · ${iterations}`;
       return hasUserLabel
         ? `${String(config.model ?? "model")} · ${iterations}`

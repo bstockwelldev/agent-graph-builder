@@ -101,7 +101,6 @@ import {
   withUserLabel,
   type FocusDirection,
 } from "@bstockwelldev/agent-graph-sdk/graph";
-import { applyRunSelectionToLlmNodes } from "@/lib/modelCatalog";
 import { RESOURCE_PANEL, ResourceNamesProvider, useResourceNamesMap } from "./resourceBindings";
 import {
   GROUP_COLORS,
@@ -142,7 +141,8 @@ import { copyNodes, freshId, pasteNodes, type CanvasClipboard } from "@/lib/canv
 import { MOBILE_TAB_BAR_HEIGHT, MobileTabBar } from "@/components/navigation/mobile-tab-bar";
 import { EmptyGraphCoach } from "./EmptyGraphCoach";
 import { FlowCanvas } from "./FlowCanvas";
-import { RunPanel, type RunAgentOption, type RunSelection } from "./RunPanel";
+import { RunPanel, type RunAgentOption } from "./RunPanel";
+import { RunSelectionProvider, useRunSelectionState } from "./RunSelectionContext";
 import { FindBar } from "./FindBar";
 import { HealthPanel } from "./HealthPanel";
 import { GraphConfigPanel } from "./GraphConfigPanel";
@@ -439,11 +439,21 @@ function routeCounts(edges: Edge[]): Map<string, number> {
 
 export function GraphEditor({ graphId }: { graphId: string }) {
   const router = useRouter();
+  const runSelection = useRunSelectionState();
   const [graphName, setGraphName] = useState("");
   const [graphOrientation, setGraphOrientation] = useState<GraphOrientation>("auto");
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const modelNodeCounts = useMemo(() => {
+    let llm = 0;
+    let ownProvider = 0;
+    for (const node of nodes) {
+      if (node.data.nodeType === "llm" || node.data.nodeType === "tool_loop") llm += 1;
+      else if (node.data.nodeType === "decision" || node.data.nodeType === "extract") ownProvider += 1;
+    }
+    return { llm, ownProvider };
+  }, [nodes]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   // Phase 10 Slice D ("Focus mode" -- docs/planning/features/
   // studio-shell-ux-gap-analysis.md). Off by default and restrained per
@@ -1649,39 +1659,27 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // as loaded: the server accepts it when it matches the demo (layout aside)
   // and the run-level provider/model still apply. Real edits fork instead;
   // null means the editor is moving to the copy.
-  const persistForRun = useCallback(
-    async (synced: Node<GraphNodeData>[]): Promise<GraphDefinition | null> => {
-      dismissForkNotice();
-      const graph = buildGraphDefinition(synced);
-      try {
-        await client.graphs.update(graph);
-        if (synced !== nodes) setNodes(synced);
-        setSavedFingerprint(fingerprintGraph(graph));
-        return graph;
-      } catch (err: unknown) {
-        if (!isReadOnlyGraphError(err)) throw err;
-      }
-      const asLoaded = buildGraphDefinition(nodes);
-      try {
-        await client.graphs.update(asLoaded);
-        setSavedFingerprint(fingerprintGraph(asLoaded));
-        return asLoaded;
-      } catch (err: unknown) {
-        if (!isReadOnlyGraphError(err)) throw err;
-      }
-      if (synced !== nodes) setNodes(synced);
-      await forkToCopy(graph);
-      return null;
-    },
-    [buildGraphDefinition, dismissForkNotice, forkToCopy, nodes, setNodes],
-  );
+  // Saves the graph as the user edited it. The Run panel's provider/model is a run override: it
+  // is sent with the run and never written into the graph's nodes.
+  const persistForRun = useCallback(async (): Promise<GraphDefinition | null> => {
+    dismissForkNotice();
+    const graph = buildGraphDefinition(nodes);
+    try {
+      await client.graphs.update(graph);
+      setSavedFingerprint(fingerprintGraph(graph));
+      return graph;
+    } catch (err: unknown) {
+      if (!isReadOnlyGraphError(err)) throw err;
+    }
+    await forkToCopy(graph);
+    return null;
+  }, [buildGraphDefinition, dismissForkNotice, forkToCopy, nodes]);
 
   const handleCompile = useCallback(
-    async (selection: RunSelection) => {
+    async () => {
       setCompiling(true);
       try {
-        const synced = applyRunSelectionToLlmNodes(nodes, selection.provider, selection.model);
-        const graph = await persistForRun(synced);
+        const graph = await persistForRun();
         if (!graph) return;
         const result = await client.graphs.compile(graph.id);
         setDiagnostics(result.diagnostics);
@@ -1690,7 +1688,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [focusDiagnostics, nodes, persistForRun],
+    [focusDiagnostics, persistForRun],
   );
 
   // Phase 10 Slice C ("Run from selected node" —
@@ -1877,10 +1875,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         // Full runs go through the selected agent; a run from a node stays
         // graph-only (the agent route has no node mocks).
         const agent = nodeOutputs ? null : runAgent;
-        // An agent with an LLM profile picks the run's model, so the run
-        // selection isn't written onto the graph's LLM nodes.
-        const synced = agent?.llm_profile_id ? nodes : applyRunSelectionToLlmNodes(nodes, provider, model);
-        const graph = await persistForRun(synced);
+        const graph = await persistForRun();
         if (!graph) return;
         const compileResult = await client.graphs.compile(graph.id);
         setDiagnostics(compileResult.diagnostics);
@@ -1934,7 +1929,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         setCompiling(false);
       }
     },
-    [focusDiagnostics, followRun, graphId, nodes, persistForRun, runAgent],
+    [focusDiagnostics, followRun, graphId, persistForRun, runAgent],
   );
 
   // Slice 1 (resource-forms-consistency-plan.md): approve or reject the
@@ -3115,6 +3110,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   };
 
   return (
+    <RunSelectionProvider value={runSelection}>
     <ResourceNamesProvider value={resourceNames}>
     <div ref={surfaceRef} data-graph-surface="" className="relative flex min-h-0 flex-1 overflow-hidden">
       {/* Node palette — reserved-space docked column (fixing a real reported
@@ -3683,6 +3679,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           inspectionRunId={inspectionRunId}
           onExitInspection={exitInspection}
           onCompile={handleCompile}
+          modelNodeCounts={modelNodeCounts}
           onRun={handleRun}
           onRunFromNode={handleRunFromNode}
           onValidate={refreshDiagnostics}
@@ -3849,6 +3846,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
       )}
     </div>
     </ResourceNamesProvider>
+    </RunSelectionProvider>
   );
 }
 

@@ -1,6 +1,6 @@
 ---
 title: Agent Graph Builder POC — product roadmap
-last_updated: 2026-10-10
+last_updated: 2026-10-12
 ---
 
 # Product roadmap
@@ -78,6 +78,8 @@ Prioritized backlog for the Agent Graph Builder POC **after** the next-set trilo
 | ~~**P2**~~ | ~~**Studio consolidation Phase 5 — hardening**~~ | Medium | High | **Shipped 2026-09-16.** Telemetry (Langfuse, opt-in, fails open), per-graph RAG knowledge base, Supabase durable storage backend + studio OAuth, run analytics/spend estimation with a real dashboard — all ported from micro-ui-agent-builder with 57 new backend tests (226 total) and live end-to-end verification per area. |
 | ~~**P2**~~ | ~~**Studio consolidation Phase 6 — cutover**~~ | High | High | **Done 2026-09-25.** `apps/playground` no longer exists on disk, and `vercel.json`/root `package.json` have zero references to it — confirmed by inspection 2026-09-22. The docs caught up on 2026-09-25: `README.md` and root `AGENTS.md` now describe the Studio (see the resolved rows in "Documentation Contradictions to Resolve" below). |
 | ~~**P0**~~ | ~~**P0 graph foundation (Slices A-D) + Studio releases UI**~~ | High | Foundation | **Shipped 2026-09-20.** Canonical typed ports + contract validation (`ports.py`, `contracts.py`), immutable `GraphRelease`s with LangGraph capability reports (`releases.py`, `adapters.py`), version-pinned `RunGraphSnapshot` run identity, and the Studio `ReleasesPanel`/run-history UI. See [p0-graph-foundation-design-plan.md](features/p0-graph-foundation-design-plan.md). |
+| **P1** | **Model selection clarity (Phases 1-2)** | High | Users can tell what each node, the Run panel and chat will run on, and why | **Planned 2026-10-12** — [model-selection-clarity-plan.md](features/model-selection-clarity-plan.md). Stop persisting run selection into nodes, show the effective model with its source, record requested model + source on runs. Provider = "Run on" (environment); run override stays default-on. |
+| **P3** | **Mixed providers per graph (model-selection Phase 3)** | Medium | Cheap classifier on one provider, answer on another | **Deferred 2026-10-12** by decision; not needed yet. Per-node provider honoured by the runtime (reuse replay `node_chat_models`), graph-level default, per-node gating, provider-qualified model ids. See plan section 6. |
 
 ---
 

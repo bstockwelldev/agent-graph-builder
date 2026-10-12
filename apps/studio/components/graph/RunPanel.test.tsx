@@ -76,3 +76,13 @@ describe("RunPanel (Run console v2)", () => {
     expect(observeTabForSection("run-simulate")).toBeNull();
   });
 });
+
+describe("RunPanel model settings copy", () => {
+  it("says the selection is a run-only override and how many nodes it applies to", () => {
+    renderPanel({ modelNodeCounts: { llm: 2, ownProvider: 1 } });
+    fireEvent.click(screen.getByRole("button", { name: /Change model settings/ }));
+    expect(screen.getByText("Model for this run")).toBeTruthy();
+    expect(screen.getByText(/Overrides node model pins for this run only; nothing is saved to the graph\./)).toBeTruthy();
+    expect(screen.getByText(/Applies to 2 LLM nodes\. 1 decision\/extract node uses their own provider\./)).toBeTruthy();
+  });
+});

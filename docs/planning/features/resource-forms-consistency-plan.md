@@ -68,7 +68,7 @@ config per kind), `backend/app/resource_models.py`, `backend/app/bindings.py`
   - Actions: "Test connection", and "Discover tools", which can one-click create registry tools.
 
 ### LLM profiles (`LlmProfile`: id, name, model, model_provider, description)
-- **Canvas use:** `llm/tool_loop.llmProfileId`, which overrides the node's provider/model at run time.
+- **Canvas use:** `llm/tool_loop.llmProfileId`, whose model overrides the node's own `model` at run time (the run-level model still wins; the profile's `model_provider` is not used on nodes). Corrected 2026-10-12; see [model-resolution.md](../../model-resolution.md).
 - **Gaps:**
   - Provider and model are free text (C2, C3, C5). A typo only fails at run time.
   - There are no generation parameters (temperature, max tokens), though the nav promises "parameter presets". The node doesn't carry them either, so add them to both, or drop the promise.

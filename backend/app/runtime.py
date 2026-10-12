@@ -38,6 +38,7 @@ from .models import (
 from .nodes import EXECUTORS, ExecContext, RunPaused
 from .ports import default_input_port, default_output_port, project_node_output, resolve_node_input
 from .transforms import materialize_transforms
+from .provider_defaults import resolve_requested_model
 from .providers.base import get_chat_model, resolve_chat_provider
 from .decision_models.base import DecisionModel, get_decision_model
 from .extraction.base import Extractor, get_extractor
@@ -610,7 +611,7 @@ def _prepare_run(
     bus.emit("run.snapshot_created", {"source": source, "graphFingerprint": graph_fp})
 
     def chat_model_factory(node_model: str | None):
-        effective_model = model or node_model
+        effective_model, _source = resolve_requested_model(model, None, node_model)
         return get_chat_model(effective_model, provider=resolved_provider.value, api_key=api_key)
 
     def decision_model_factory(node: GraphNode) -> DecisionModel:
@@ -821,7 +822,7 @@ def _prepare_resume(
     _start_telemetry_trace(run_id, graph.id)
 
     def chat_model_factory(node_model: str | None):
-        effective_model = pause.model or node_model
+        effective_model, _source = resolve_requested_model(pause.model, None, node_model)
         return get_chat_model(effective_model, provider=pause.provider, api_key=key)
 
     def decision_model_factory(node: GraphNode) -> DecisionModel:

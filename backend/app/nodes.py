@@ -34,6 +34,7 @@ from .models import EdgeKind, GraphDefinition, GraphEdge, GraphNode
 from .decision_models.base import DecisionModel, DecisionSchema
 from .extraction.base import Extractor
 from .ports import default_input_port, resolve_node_input
+from .provider_defaults import resolve_requested_model
 from .providers.base import ChatModel
 from .resource_models import McpServerConfig, ToolDefinition
 from .rubric import analyze_prompt
@@ -197,6 +198,23 @@ def _node_model(ctx: ExecContext, node: GraphNode) -> str | None:
     return bound if bound else node.config.get("model")
 
 
+def _model_resolution(ctx: ExecContext, node: GraphNode) -> dict[str, Any]:
+    """Which model this node asked for and which scope supplied it, for the node's trace.
+
+    `requestedModel` is the pin the provider was asked for, or None when the provider's
+    default applied; `modelSource` is `run`, `profile`, `pin`, `default`, or `override`
+    (a counterfactual replay supplied its own chat model). The trace's `provider` / `model`
+    are what the provider actually reported. Order matches `resolve_requested_model`.
+    """
+    if ctx.node_chat_models and node.id in ctx.node_chat_models:
+        return {"requestedModel": None, "modelSource": "override"}
+    profile_model = _bound_field(ctx, node, "llmProfileId", "llm_profiles", "model")
+    requested, source = resolve_requested_model(
+        ctx.requested_model, profile_model, node.config.get("model")
+    )
+    return {"requestedModel": requested, "modelSource": source}
+
+
 def _chat_model(ctx: ExecContext, node: GraphNode) -> ChatModel:
     """The node's chat model: a counterfactual override when one is set,
     otherwise the run's factory with the node's (or bound profile's) model."""
@@ -279,6 +297,7 @@ async def compute_llm(node: GraphNode, state: dict[str, Any], ctx: ExecContext) 
     input_repr = {
         "provider": chat_model.provider_name,
         "model": chat_model.model,
+        **_model_resolution(ctx, node),
         "systemPrompt": system_prompt,
         "userPrompt": upstream,
         # The chunks that augmented the prompt (the Run tab's "Sources").
@@ -912,6 +931,7 @@ async def compute_tool_loop(node: GraphNode, state: dict[str, Any], ctx: ExecCon
     input_repr = {
         "provider": chat_model.provider_name,
         "model": chat_model.model,
+        **_model_resolution(ctx, node),
         "systemPrompt": base_system_prompt,
         "userPrompt": upstream,
         "maxToolIterations": max_iterations,
