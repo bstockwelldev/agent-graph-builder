@@ -1,6 +1,6 @@
 # Canvas-first landing: plan
 
-Status: **Draft 2026-10-12, for review.** Stacked on #173 (panel close, `/graphs` scroll, demo de-duplication).
+Status: **Approved 2026-10-12, §9 defaults accepted as written. Phase 1 next.** Builds on #173 (panel close, `/graphs` scroll, demo de-duplication).
 Supersedes the navigation parts of [studio-graph-workbench-redesign-plan.md](studio-graph-workbench-redesign-plan.md) Wave 2 (the 72px rail and the `/resources` hub). Everything else in that plan stands.
 
 ## 1. Goal
@@ -101,7 +101,7 @@ Phases 1–2 can ship with no visible regression. Phase 3 is the only one that r
 - **e2e:** 21 direct `page.goto` calls to resource, policies, analytics and genui pages (plus the a11y `PAGES` loop over nine more), across `a11y`, `agents`, `datasets`, `demo` (the `/policies` read-only check), `genui`, `mcp`, `panels`, `resource-forms`, `scope` and `transforms`. Each moves to `/?panel=…` or to opening the panel from the canvas.
 - **Unit:** `resource-page.test.tsx` moves to the panel; `studio-nav.test.tsx` and `mobile-tab-bar.test.tsx` shrink or go; `policies/page.test.tsx` and `tools/page.test.tsx` move to their panels; `graphs/page.mock-api.test.tsx` becomes the picker test.
 
-## 9. Decisions (defaults; change at review)
+## 9. Decisions (accepted 2026-10-12)
 
 | Question | Default | Why |
 | --- | --- | --- |
