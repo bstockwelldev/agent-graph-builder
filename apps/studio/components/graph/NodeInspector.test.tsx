@@ -10,6 +10,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 import { NodeInspector } from "./NodeInspector";
+import { RunSelectionProvider } from "./RunSelectionContext";
 
 afterEach(() => cleanup());
 
@@ -144,5 +145,58 @@ describe("NodeInspector (v2)", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "output classification" }));
     fireEvent.mouseDown(screen.getByRole("option", { name: /^Unclassified/ }));
     expect(onPortsChange.mock.calls.at(-1)![0].output_ports[0].contract).toEqual({ kind: "message", classification: null });
+  });
+});
+
+describe("NodeInspector model section", () => {
+  const llm = { id: "llm_1", type: "llm" as const, position: { x: 0, y: 0 }, config: { provider: "ollama", model: "pin-m" } };
+  const props = {
+    onConfigChange: vi.fn(),
+    onDelete: vi.fn(),
+    onDuplicate: vi.fn(),
+    userLabel: "",
+    derivedLabel: "LLM",
+    onLabelChange: vi.fn(),
+    templateVariables: [],
+  };
+
+  it("has no provider picker on an LLM node: the run provider decides where it runs", () => {
+    render(
+      <RunSelectionProvider value={{ provider: "stub", selectedModel: "", setProvider: () => {}, setSelectedModel: () => {} }}>
+        <NodeInspector node={llm} {...props} />
+      </RunSelectionProvider>,
+    );
+    expect(screen.queryByLabelText("Model provider")).toBeNull();
+    expect(screen.getByTestId("runs-on").textContent).toContain("Runs on Stub");
+    expect((screen.getByLabelText("Model pin") as HTMLInputElement).value).toBe("pin-m");
+  });
+
+  it("writes a typed model pin to config.model and never touches config.provider", () => {
+    const onConfigChange = vi.fn();
+    render(
+      <RunSelectionProvider value={{ provider: "stub", selectedModel: "", setProvider: () => {}, setSelectedModel: () => {} }}>
+        <NodeInspector node={llm} {...props} onConfigChange={onConfigChange} />
+      </RunSelectionProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Model pin"), { target: { value: "other-m" } });
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    const next = onConfigChange.mock.calls[0][0] as Record<string, unknown>;
+    expect(next.model).toBe("other-m");
+    expect(next.provider).toBe("ollama");
+  });
+
+  it("falls back to generic wording outside a graph editor", () => {
+    render(<NodeInspector node={llm} {...props} />);
+    expect(screen.getByTestId("runs-on").textContent).toContain("the Run panel's provider");
+  });
+
+  it("tells decision nodes they ignore the Run panel's provider", async () => {
+    const decision = { id: "d_1", type: "decision" as const, position: { x: 0, y: 0 }, config: { provider: "stub" } };
+    render(<NodeInspector node={decision} {...props} />);
+    // The hint is a focus/hover tooltip on the Provider field's info glyph.
+    const info = screen.getByText("Provider").parentElement?.querySelector('[aria-label="More info"]');
+    expect(info).toBeTruthy();
+    fireEvent.focus(info as Element);
+    expect((await screen.findByRole("tooltip")).textContent).toContain("Uses its own provider; the Run panel's provider does not apply here.");
   });
 });
