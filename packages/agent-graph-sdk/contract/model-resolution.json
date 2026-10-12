@@ -1,0 +1,16 @@
+{
+  "description": "Which model an LLM node asks its provider for, and which scope supplied it. Order: run model, then bound profile model, then the node's own model; a placeholder or nothing means 'default'. Asserted by backend/tests/test_provider_defaults.py (resolve_requested_model) and packages/agent-graph-sdk/src/graph/modelResolution.test.ts (effectiveModelFor).",
+  "placeholderModels": ["qwen2.5:3b", "stub"],
+  "cases": [
+    { "name": "run model beats profile and pin", "run_model": "run-m", "profile_model": "profile-m", "node_model": "pin-m", "expect": { "requested_model": "run-m", "source": "run" } },
+    { "name": "run model beats pin", "run_model": "run-m", "profile_model": null, "node_model": "pin-m", "expect": { "requested_model": "run-m", "source": "run" } },
+    { "name": "profile beats pin", "run_model": null, "profile_model": "profile-m", "node_model": "pin-m", "expect": { "requested_model": "profile-m", "source": "profile" } },
+    { "name": "pin alone", "run_model": null, "profile_model": null, "node_model": "pin-m", "expect": { "requested_model": "pin-m", "source": "pin" } },
+    { "name": "nothing set", "run_model": null, "profile_model": null, "node_model": null, "expect": { "requested_model": null, "source": "default" } },
+    { "name": "placeholder pin is not a pin (demo seed)", "run_model": null, "profile_model": null, "node_model": "qwen2.5:3b", "expect": { "requested_model": null, "source": "default" } },
+    { "name": "stub placeholder pin is not a pin", "run_model": null, "profile_model": null, "node_model": "stub", "expect": { "requested_model": null, "source": "default" } },
+    { "name": "placeholder run model wins, then resolves to default (runtime quirk)", "run_model": "stub", "profile_model": null, "node_model": "pin-m", "expect": { "requested_model": null, "source": "default" } },
+    { "name": "placeholder profile model wins, then resolves to default", "run_model": null, "profile_model": "qwen2.5:3b", "node_model": "pin-m", "expect": { "requested_model": null, "source": "default" } },
+    { "name": "empty strings count as unset", "run_model": "", "profile_model": "", "node_model": "pin-m", "expect": { "requested_model": "pin-m", "source": "pin" } }
+  ]
+}
