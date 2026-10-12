@@ -1,6 +1,6 @@
 # Model selection clarity: assessment and plan (v2, for review)
 
-Status: **decisions 1-3 recorded; Phase 0 reproduced; Phase 1 PR 1 open (#167), PR 2 in progress.** Supersedes the v1 change set; v1's C1-C6 survive as Phase 1 below.
+Status: **decisions 1-3 recorded; Phase 0 reproduced; Phase 1 PRs open (#167, #169); Phase 2 built on `feat/model-selection-recording`.** Supersedes the v1 change set; v1's C1-C6 survive as Phase 1 below.
 Only code change so far: the ChatPanel readiness guard (the 403 fix).
 
 ## 1. Summary
@@ -97,11 +97,11 @@ PR 2 (fixes D1, D5-D6, D8):
 - **1.8** Chat header chip `provider · model` ("fixed at creation; `/run` uses it").
 - **1.9** Docs: one "Model resolution" reference (the table in section 2, kept current); correct `resource-forms-consistency-plan.md:71` and the `canvas-authoring-literacy-plan.md:310` copy.
 
-### Phase 2: make existing layers real and recorded (small backend)
-- **2.1** Record the requested model and a `model_source` (`run|profile|pin|default`) on each LLM node trace; add requested model to `RunSummary`. Naming aligned with OTel GenAI (`request.model`, `provider.name`).
-- **2.2** Pre-run diagnostic when a bound profile's `model_provider` differs from the run provider ("Profile 'Fast' targets Groq; this run is on Stub, the run provider wins"). Surfaces D7 instead of dropping it silently.
-- **2.3** Pre-run diagnostic when a pinned model is not valid for the run provider.
-- **2.4** Optional "Override node models" toggle on the Run panel, **default on** (preserves demo/CI safety). Off = pins win where the provider matches.
+### Phase 2: make existing layers real and recorded (built; changed from the first draft)
+- **2.1 (done)** Each LLM / tool_loop trace records `requestedModel` and `modelSource` (`run|profile|pin|default|override`) beside the provider's reported `provider` / `model`; the node's Run tab shows "Ran on ...". **Dropped:** adding the requested model to `RunSummary`. It needs a new column and migration across the sqlite and remote stores for little gain, since the per-node trace already answers "what did this node ask for, and why".
+- **2.2 (done, simplified)** Compile warning `PROFILE_PROVIDER_IGNORED` when a node is bound to a profile that sets `model_provider`. The first draft compared the profile's provider with the run's, which compile cannot know; a node never uses a profile's provider, so the static warning is exact.
+- **2.3 (dropped)** Warning for a pinned model invalid on the run provider. There is no cheap, reliable validity check: model catalogs need a network call and a key, and a static list gives false positives. The failure already surfaces as a provider error on the run.
+- **2.4 (deferred)** "Override node models" toggle. Run override stays always-on (decision 3); add the toggle only if someone needs pins to win.
 
 ### Phase 3: deferred to the roadmap (decided 2026-10-12; not part of this effort)
 Per-node provider honoured by the runtime (reuse the replay `node_chat_models` mechanism), graph-level default field, per-node ready/gating checks, provider-qualified model ids. Tracked in `roadmap.md`; revisit when mixed-provider graphs are actually needed.

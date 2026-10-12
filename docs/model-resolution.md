@@ -29,6 +29,22 @@ Notes:
 - Node cards show the result: `stub · default model`, `groq · llama-3.3-70b (run)`,
   `groq · pin-m (pinned)`, `stub · profile Fast`.
 
+## What a run records
+
+Each `llm` / `tool_loop` node's trace input carries:
+
+- `provider`, `model`: what the provider reported actually using.
+- `requestedModel`: the model the node asked for, or `null` when the provider's default applied.
+- `modelSource`: `run`, `profile`, `pin`, `default`, or `override` (a counterfactual replay supplied its own
+  chat model). Traces recorded before this was added lack the last two fields.
+
+The node's Run tab shows it as "Ran on groq · llama-3.3-70b: set in the Run panel".
+
+## Compile warning: `PROFILE_PROVIDER_IGNORED`
+
+A node bound to an LLM profile that sets `model_provider` gets a non-blocking warning on its profile field:
+nodes run on the run's provider and take only the profile's model. (Agent runs do use the profile's provider.)
+
 ## Other places a model is chosen
 
 | Place | Rule |
