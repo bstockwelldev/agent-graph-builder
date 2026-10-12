@@ -271,6 +271,18 @@ def test_demo_graph_converging_output_edges_are_exempt_as_branch_exclusive() -> 
     assert not any(d.code == "NODE_INPUT_PORT_AMBIGUOUS_BINDING" for d in diagnostics)
 
 
+def test_decider_demo_converging_output_edges_are_exempt_as_branch_exclusive() -> None:
+    """The Decider demo converges four decision-node branches on output_1.
+    A decision node selects exactly one outgoing edge per run (exact outcome
+    match, else the default edge), so its branches are mutually exclusive by
+    construction -- the same exemption routers and branch nodes get."""
+    from app.demo_graph import build_decider_demo
+
+    graph = build_decider_demo()
+    diagnostics = validate_contracts(graph)
+    assert not any(d.code == "NODE_INPUT_PORT_AMBIGUOUS_BINDING" for d in diagnostics)
+
+
 def test_contract_schema_unknown_warns_when_source_has_no_schema() -> None:
     graph = build_demo_graph()
     llm_node = next(n for n in graph.nodes if n.type == NodeType.LLM)

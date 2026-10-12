@@ -311,3 +311,28 @@ def test_rejecting_clears_the_paused_gate(
     assert body["status"] == "failed"
     assert body["error"] == "Too risky"
     assert body["paused_node_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_paused_run_summary_carries_route_decisions() -> None:
+    """Decisions made before a gate pauses the run are settled facts: the
+    paused summary must carry them (Run tab, eval route scorer), not just
+    the pause checkpoint. Uses the Decider demo: a human_review request
+    pauses at the gate with decide_1 -> human_gate_1 recorded."""
+    from app.demo_graph import build_decider_demo
+
+    graph = build_decider_demo()
+    compiled = compile_graph(graph, "cwf_decider_pause")
+    assert compiled.ok, compiled.diagnostics
+    COMPILED_WORKFLOWS["cwf_decider_pause"] = graph
+
+    run_id, _bus = await start_run_inline(
+        "cwf_decider_pause",
+        {"request": "Give me a refund for my tournament entry fee"},
+        provider="stub",
+    )
+    summary = get_run_summary(run_id)
+    assert summary.status == "paused"
+    assert summary.paused_node_id == "human_gate_1"
+    taken = {d.node_id: d.selected_target_node_id for d in summary.route_decisions}
+    assert taken.get("decide_1") == "human_gate_1", taken
