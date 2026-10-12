@@ -1,7 +1,5 @@
 "use client";
 
-import { PANEL_ARTICLE } from "@/lib/kb";
-import { PanelHelpButton } from "./PanelHelpButton";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
@@ -46,10 +44,9 @@ export function ResourceBrowserPanel({ kind }: { kind: AnyResourceKind }) {
 
   return (
     <div className="p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold">{kind.panelTitle}</div>
+      {/* The title, help and close buttons live in the drawer's title bar. */}
+      <div className="mb-2 flex items-center justify-end gap-2">
         <div className="flex items-center gap-2">
-          <PanelHelpButton articleId={PANEL_ARTICLE[kind.panelId]} />
           <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={loading || saving} onClick={editor.openCreate}>
             New
           </Button>

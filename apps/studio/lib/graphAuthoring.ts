@@ -266,9 +266,10 @@ export function edgeContract(e: GraphEdge): EdgeContract | undefined {
 }
 
 /** A copy of `graph` under a fresh id (same `graph_<12 hex>` shape the
- * backend mints) -- where edits to a read-only demo are saved. */
+ * backend mints) -- where edits to a read-only demo are saved. The copy is
+ * the visitor's own graph, so a seeded demo's " (demo)" suffix is dropped. */
 export function copyGraphDefinition(graph: GraphDefinition, randomHex: () => string = randomGraphIdSuffix): GraphDefinition {
-  return { ...graph, id: `graph_${randomHex()}`, name: `${graph.name} (copy)` };
+  return { ...graph, id: `graph_${randomHex()}`, name: `${graph.name.replace(/ \(demo\)$/, "")} (copy)` };
 }
 
 function randomGraphIdSuffix(): string {

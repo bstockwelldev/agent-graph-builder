@@ -131,6 +131,7 @@ import { cacheRun, getCachedRun, listCachedRuns, mergeRunHistory } from "@/lib/r
 import { useUndoStack } from "@/hooks/useUndoStack";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
+import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
 import type { WorkbenchPanelId } from "@/components/workbench/panels";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { NodePalette } from "./NodePalette";
@@ -237,12 +238,8 @@ function isDesktopViewport(): boolean {
 
 // The node/edge inspector (and, when nothing is selected, the workflow
 // summary) shares its HUD slot with these panels (see showSelectionDock
-// below), gating the dock's own render. "chat" is included even though it
-// renders outside this dock slot (mounted app-wide in studio-shell.tsx as a
-// `floating` WorkbenchDrawer, fixed at `right-4 top-20`) — without it, the
-// docked-reserve workflow-summary/inspector column stayed rendered
-// underneath the fixed-position chat panel, and since both sit flush
-// against the viewport's right edge, their content visibly overlapped.
+// below), gating the dock's own render. "chat" docks in this column on the
+// canvas (it floats app-wide everywhere else, from studio-shell.tsx).
 const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
   "run",
   "releases",
@@ -3194,7 +3191,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         onOpenRunSection={openRunSection}
         focusMode={focusMode}
         onToggleFocusMode={() => setFocusMode((value) => !value)}
-        onOpenChat={() => workbench.open("chat")}
+        onOpenChat={() => workbench.toggle("chat")}
         structure={structure}
         recentRuns={runHistory.slice(0, 3)}
         onSelectRun={(runId) => {
@@ -3585,7 +3582,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               label: "Chat",
               icon: <Sparkles />,
               active: workbench.activePanel === "chat",
-              onClick: () => workbench.open("chat"),
+              onClick: () => workbench.toggle("chat"),
             },
             {
               id: "more",
@@ -3712,6 +3709,11 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             if (runId) void handleSelectHistoricalRun(runId);
           }}
         />
+      </WorkbenchDrawer>
+      {/* Chat floats over other pages; here it reserves the column like the
+          run panel, so it never covers nodes. */}
+      <WorkbenchDrawer panelId="chat" side="right" mode="docked-reserve" titleBar dockedClassName="flex w-96 flex-col overflow-hidden border-l">
+        <ChatPanel />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} getDraftGraph={buildGraphDefinition} />

@@ -12,8 +12,7 @@ export const studioResourceCardInteractiveClass = cn(
   "focus-visible:ring-primary/60 focus-visible:ring-2 focus-visible:outline-none",
 );
 
-export const studioCardEditHint =
-  "Hover + lift indicates readiness. Click the card to edit details.";
+export const studioCardEditHint = "Click the card to edit details.";
 
 export function StudioCardEditIconButton({
   onClick,
