@@ -1,7 +1,7 @@
-# Model selection clarity: assessment and plan (v2, for review)
+# Model selection clarity: assessment and plan (v2, shipped)
 
-Status: **decisions 1-3 recorded; Phase 0 reproduced; Phase 1 PRs open (#167, #169); Phase 2 built on `feat/model-selection-recording`.** Supersedes the v1 change set; v1's C1-C6 survive as Phase 1 below.
-Only code change so far: the ChatPanel readiness guard (the 403 fix).
+Status: **Phases 0-2 shipped 2026-10-12 (#167, #169, #170); Phase 3 deferred to the roadmap.** Supersedes the v1 change set; v1's C1-C6 survive as Phase 1 below.
+Shipped alongside: the ChatPanel readiness guard (the 403 fix). Reference: [../../model-resolution.md](../../model-resolution.md).
 
 ## 1. Summary
 
@@ -83,7 +83,7 @@ Run in the browser against the real backend (non-demo mode, Stub chip), seeded d
 
 Consequences for the plan: D4 as first written was wrong (corrected above); the visible "via stub" mismatch needs an *editable* graph; the fix (1.1) is unchanged because the persisting sync is the cause either way. Also: a clean checkout needs `pnpm install --frozen-lockfile` before the Studio compiles (missing `@codemirror/*`), which also clears the `tsc` errors seen earlier.
 
-### Phase 1: make the UI truthful (no semantic change; two PRs)
+### Phase 1: make the UI truthful (no semantic change; two PRs; shipped as #167 and #169)
 PR 1 (fixes D2-D3):
 - **1.1** Stop persisting the run selection (`GraphEditor.tsx` ~L1683, ~L1882; delete `applyRunSelectionToLlmNodes`).
 - **1.2** `RunSelectionContext` (provider/model, in memory, initial Stub); `RunPanel` reads it.
@@ -121,11 +121,11 @@ Per-node provider honoured by the runtime (reuse the replay `node_chat_models` m
 2. **Mixed providers per graph: deferred.** Phase 3 moves to the roadmap (P3, deferred) and is out of scope for this effort.
 3. **Run override stays default-on** (protects the public demo and CI).
 
-**Still open (defaults I will use unless told otherwise):**
+**Resolved or left as defaults:**
 
-4. **New-node defaults** (`ollama` / `qwen2.5:3b`): leave unchanged because of the "LLM model not pinned" policy rule.
-5. **Release snapshots**: check whether any release/export consumer reads a node's saved `provider` before 1.1 lands (none found in the runtime).
-6. **Public demo gating (1.7)**: in scope; it prevents the original 403.
+4. **New-node defaults** (`ollama` / `qwen2.5:3b`): left unchanged because of the "LLM model not pinned" policy rule. Still true.
+5. **Release snapshots**: checked after shipping. No release, export or fingerprint code reads a node's saved `provider`; the readers are the decision/extract executors (their own provider), trace-based analytics, and the SDK's legacy summary fallback (used only when no run selection is supplied). Stale `provider` values in saved graphs are therefore inert.
+6. **Public demo gating (1.7)**: shipped in #169, for chat only (it has no API-key field); the Run panel keeps accepting a pasted key. Seen only in unit tests, since every provider reports ready on the dev machine; not exercised against a demo-mode backend.
 
 ## 9. Risks and what I'd cut
 
