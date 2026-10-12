@@ -4492,6 +4492,37 @@
         "title": "RunSummary",
         "type": "object"
       },
+      "SeededDemoSummary": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "node_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Node Types",
+            "type": "array"
+          },
+          "tagline": {
+            "title": "Tagline",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "tagline",
+          "node_types"
+        ],
+        "title": "SeededDemoSummary",
+        "type": "object"
+      },
       "SimulateResult": {
         "properties": {
           "run": {
@@ -5850,6 +5881,29 @@
           }
         },
         "summary": "Usages Datasets"
+      }
+    },
+    "/api/demos": {
+      "get": {
+        "description": "The public demo gallery: seeded, read-only workflows visitors can run and fork.",
+        "operationId": "list_seeded_demos_api_demos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeededDemoSummary"
+                  },
+                  "title": "Response List Seeded Demos Api Demos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Seeded Demos"
       }
     },
     "/api/eval-runs/{baseline_id}/compare/{candidate_id}": {
