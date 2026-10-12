@@ -1,6 +1,6 @@
 # Model selection clarity: assessment and plan (v2, for review)
 
-Status: **decisions 1-3 recorded; Phase 0 reproduced; awaiting go-ahead for Phase 1; nothing implemented.** Supersedes the v1 change set; v1's C1-C6 survive as Phase 1 below.
+Status: **decisions 1-3 recorded; Phase 0 reproduced; Phase 1 PR 1 open (#167), PR 2 in progress.** Supersedes the v1 change set; v1's C1-C6 survive as Phase 1 below.
 Only code change so far: the ChatPanel readiness guard (the 403 fix).
 
 ## 1. Summary

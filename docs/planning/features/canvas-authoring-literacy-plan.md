@@ -307,7 +307,7 @@ If no answer by lock, implement per section 6.
 - Coach title: “Build this graph” not “Start from the blank template” once a node is added
 - Legend: Always / Match text / Fallback mapped to sequence / conditional / default
 - Tool blurb: “Local keyword lookup (`lookup_topic`). Does not call the web.”
-- LLM blurb: “Node default provider/model. Execute panel overrides all LLM nodes when you Compile or Run.”
+- LLM blurb: “Node default provider/model. Execute panel overrides all LLM nodes when you Compile or Run.” *(Superseded 2026-10-12: the Run panel's choice is a run-only override that is not saved into nodes, and a node's own provider is ignored; see [model-resolution.md](../../model-resolution.md).)*
 - Loops: “This playground only allows acyclic graphs (no loops).”
 
 ---
