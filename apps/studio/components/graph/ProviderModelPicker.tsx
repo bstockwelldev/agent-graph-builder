@@ -16,6 +16,8 @@ export function ProviderModelPicker({
   onProviderChange,
   onModelChange,
   disabled = false,
+  hideProvider = false,
+  providerNotes,
 }: {
   graphId?: string | null;
   provider: ChatProvider;
@@ -23,6 +25,10 @@ export function ProviderModelPicker({
   onProviderChange: (provider: ChatProvider) => void;
   onModelChange: (model: string) => void;
   disabled?: boolean;
+  /** Show only the model field; `provider` still decides which model catalog is listed. */
+  hideProvider?: boolean;
+  /** Providers that cannot be used here, with the reason; they are listed but not selectable. */
+  providerNotes?: Partial<Record<string, string>>;
 }) {
   const catalog = useModelCatalog({ provider, model, onModelChange, graphId });
   const ollamaAvailable = useOllamaAvailable();
@@ -32,21 +38,27 @@ export function ProviderModelPicker({
   const modelCatalogLoading = catalog.loading;
 
   const providerMeta = PROVIDER_TAXONOMY[provider];
+  const providerOptions = withoutUnavailableProviders(PROVIDER_OPTIONS, ollamaAvailable, provider).map((option) => {
+    const note = providerNotes?.[option.value];
+    return note && option.value !== provider ? { ...option, disabled: true, description: note } : option;
+  });
   return (
     <>
-      <Field label="Provider" hint={providerMeta?.details}>
-        {(id) => (
-          <Combobox
-            id={id}
-            aria-label="Model provider"
-            value={provider}
-            options={withoutUnavailableProviders(PROVIDER_OPTIONS, ollamaAvailable, provider)}
-            onChange={(value) => onProviderChange(value as ChatProvider)}
-            disabled={disabled}
-            searchPlaceholder="Search providers…"
-          />
-        )}
-      </Field>
+      {hideProvider ? null : (
+        <Field label="Provider" hint={providerMeta?.details}>
+          {(id) => (
+            <Combobox
+              id={id}
+              aria-label="Model provider"
+              value={provider}
+              options={providerOptions}
+              onChange={(value) => onProviderChange(value as ChatProvider)}
+              disabled={disabled}
+              searchPlaceholder="Search providers…"
+            />
+          )}
+        </Field>
+      )}
 
       {catalogProvider || provider === "openai_compat" ? (
         <Field label="Model" hint={modelCatalogMessage || undefined}>

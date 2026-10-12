@@ -6,6 +6,7 @@ import { Play } from "lucide-react";
 import type { ChatContext, ChatMessage, ChatRunRef, ChatSession, GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
+import { PROVIDER_ORDER } from "@/lib/providers";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -54,6 +55,8 @@ export function ChatPanel() {
 
   const [newProvider, setNewProvider] = useState<ChatProvider>("stub");
   const [newModel, setNewModel] = useState("stub");
+  // Providers this deployment cannot serve for chat (which has no API-key field), with the reason.
+  const [providerNotes, setProviderNotes] = useState<Partial<Record<string, string>>>({});
 
   // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596).
   // On by default; the user can opt out per-panel-session via the strip
@@ -90,6 +93,25 @@ export function ChatPanel() {
       .finally(() => {
         if (!cancelled) setSessionsLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      PROVIDER_ORDER.filter((id) => id !== "stub").map(async (id) => {
+        try {
+          const readiness = await client.providers.ready(id);
+          return readiness.ready ? null : ([id, readiness.message] as const);
+        } catch {
+          return null; // fail soft: createSession re-checks before a session is made
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setProviderNotes(Object.fromEntries(entries.filter((entry) => entry !== null)));
+    });
     return () => {
       cancelled = true;
     };
@@ -336,6 +358,7 @@ export function ChatPanel() {
             model={newModel}
             onProviderChange={setNewProvider}
             onModelChange={setNewModel}
+            providerNotes={providerNotes}
           />
           <ConversationEmptyState
             title="No session open"
@@ -345,6 +368,12 @@ export function ChatPanel() {
         </div>
       ) : (
         <>
+          <div
+            className="text-muted-foreground border-b px-3 py-1.5 text-xs"
+            title="Fixed when the session was created. A /run from this chat uses this selection for the graph run."
+          >
+            Model: {activeSession.provider} · {activeSession.model}
+          </div>
           {graphContext && (
             <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
               <span className="text-muted-foreground min-w-0 flex-1 truncate">

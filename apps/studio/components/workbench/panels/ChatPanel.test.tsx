@@ -58,10 +58,19 @@ const api = vi.hoisted(() => {
 vi.mock("@/lib/api-client", () => ({ client: api.client, waitForRun: vi.fn(() => new Promise(() => undefined)) }));
 
 vi.mock("@/components/graph/ProviderModelPicker", () => ({
-  ProviderModelPicker: ({ onProviderChange }: { onProviderChange: (p: string) => void }) => (
-    <button type="button" onClick={() => onProviderChange("groq")}>
-      pick groq
-    </button>
+  ProviderModelPicker: ({
+    onProviderChange,
+    providerNotes,
+  }: {
+    onProviderChange: (p: string) => void;
+    providerNotes?: Record<string, string>;
+  }) => (
+    <>
+      <button type="button" onClick={() => onProviderChange("groq")}>
+        pick groq
+      </button>
+      <span data-testid="provider-notes">{JSON.stringify(providerNotes ?? {})}</span>
+    </>
   ),
 }));
 
@@ -160,7 +169,8 @@ describe("ChatPanel sessions", () => {
 
   it("refuses to create a session on a provider that is not ready, instead of 403ing every message", async () => {
     const message = "Live providers on this public demo need your own API key. Paste one in the Run panel, or run with Stub.";
-    api.client.providers.ready.mockResolvedValueOnce({ ready: false, message });
+    // Every non-Stub provider is not ready (the picker's mount-time check also reads this).
+    api.client.providers.ready.mockImplementation(async () => ({ ready: false, message }));
     render(
       <WorkbenchProvider>
         <ChatPanel />
@@ -171,5 +181,26 @@ describe("ChatPanel sessions", () => {
     expect(await screen.findByText(message)).toBeTruthy();
     expect(api.client.providers.ready).toHaveBeenCalledWith("groq");
     expect(api.client.chatSessions.create).not.toHaveBeenCalled();
+    api.client.providers.ready.mockImplementation(async () => ({ ready: true, message: "" }));
+  });
+});
+
+describe("ChatPanel provider availability and session model", () => {
+  it("passes providers the deployment cannot serve to the picker, with the reason", async () => {
+    api.client.providers.ready.mockImplementation(async (id: string) =>
+      id === "groq" ? { ready: false, message: "needs your own key" } : { ready: true, message: "" },
+    );
+    render(
+      <WorkbenchProvider>
+        <ChatPanel />
+      </WorkbenchProvider>,
+    );
+    await vi.waitFor(() => expect(screen.getByTestId("provider-notes").textContent).toBe('{"groq":"needs your own key"}'));
+    api.client.providers.ready.mockImplementation(async () => ({ ready: true, message: "" }));
+  });
+
+  it("shows the active session's provider and model", async () => {
+    await renderChat();
+    expect(screen.getByText("Model: stub · stub")).toBeTruthy();
   });
 });
