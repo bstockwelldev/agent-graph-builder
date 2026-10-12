@@ -285,6 +285,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/demos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Seeded Demos
+         * @description The public demo gallery: seeded, read-only workflows visitors can run and fork.
+         */
+        get: operations["list_seeded_demos_api_demos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/eval-runs/{baseline_id}/compare/{candidate_id}": {
         parameters: {
             query?: never;
@@ -3475,6 +3495,17 @@ export type components = {
              */
             status: "queued" | "running" | "succeeded" | "failed" | "paused";
         };
+        /** SeededDemoSummary */
+        SeededDemoSummary: {
+            /** Id */
+            id: string;
+            /** Node Types */
+            node_types: string[];
+            /** Tagline */
+            tagline: string;
+            /** Title */
+            title: string;
+        };
         /** SimulateResult */
         SimulateResult: {
             run: components["schemas"]["RunSummary"];
@@ -4398,6 +4429,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_seeded_demos_api_demos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeededDemoSummary"][];
                 };
             };
         };
