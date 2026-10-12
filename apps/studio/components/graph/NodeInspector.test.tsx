@@ -200,3 +200,41 @@ describe("NodeInspector model section", () => {
     expect((await screen.findByRole("tooltip")).textContent).toContain("Uses its own provider; the Run panel's provider does not apply here.");
   });
 });
+
+describe("NodeInspector Run tab model line", () => {
+  const llm = { id: "llm_1", type: "llm" as const, position: { x: 0, y: 0 }, config: { model: "pin-m" } };
+  const trace = (input: unknown) => ({
+    node_id: "llm_1",
+    node_type: "llm" as const,
+    status: "succeeded" as const,
+    input,
+    output: "ok",
+    started_at: "2026-10-12T00:00:00Z",
+  });
+  const render_ = (selectedTrace: ReturnType<typeof trace>) => {
+    render(
+      <NodeInspector
+        node={llm}
+        selectedTrace={selectedTrace}
+        onConfigChange={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        userLabel=""
+        derivedLabel="LLM"
+        onLabelChange={vi.fn()}
+        templateVariables={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Run" }));
+  };
+
+  it("says what the node ran on and where the model came from", () => {
+    render_(trace({ provider: "groq", model: "llama-x", modelSource: "run" }));
+    expect(screen.getByTestId("ran-on").textContent).toBe("Ran on groq · llama-x: set in the Run panel");
+  });
+
+  it("omits the line for a trace with no recorded model", () => {
+    render_(trace({ userPrompt: "hi" }));
+    expect(screen.queryByTestId("ran-on")).toBeNull();
+  });
+});
