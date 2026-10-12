@@ -762,3 +762,29 @@ def test_ocr_python_dependency_is_declared() -> None:
     )
     deps = [d.split(">")[0].split("=")[0].strip() for d in pyproject["project"]["dependencies"]]
     assert "pytesseract" in deps
+
+
+def test_stub_starlight_demo_fixture_opt_in_by_file_name():
+    """The Starlight Bazaar demo rulebook selects the demo fixture; every
+    other file name keeps the Monopoly baseline untouched."""
+
+    async def go():
+        ext = StubExtractor()
+        demo = await ext.extract(
+            document_bytes=b"RULEBOOK",
+            mime="text/markdown",
+            schema=DocumentFacts,
+            file_name="starlight-bazaar-rulebook.md",
+        )
+        baseline = await ext.extract(
+            document_bytes=b"RULEBOOK",
+            mime="text/markdown",
+            schema=DocumentFacts,
+            file_name="starlight-bazaar-rulebook.md".replace("starlight-bazaar", "other"),
+        )
+        return demo, baseline
+
+    demo, baseline = run(go())
+    assert demo.document.fields.title == "Starlight Bazaar -- Rulebook"
+    assert "12 or more starlight shards" in demo.document.markdown
+    assert baseline.document.fields.title == "Monopoly -- Fixture Rulebook"

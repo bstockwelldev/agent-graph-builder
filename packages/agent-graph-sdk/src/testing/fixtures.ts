@@ -12,6 +12,7 @@ import type {
   PromptTemplate,
   ReleaseIndexEntry,
   RunSummary,
+  SeededDemoSummary,
 } from "../types.js";
 import { documentFingerprint, semanticFingerprint } from "../schema.js";
 
@@ -83,6 +84,47 @@ export function makeGraph(overrides: Partial<GraphDefinition> = {}): GraphDefini
     ],
     ...overrides,
   };
+}
+
+/**
+ * Demo gallery metadata. Test double for GET /api/demos -- keep in sync with
+ * backend/app/demo_graph.py SEEDED_DEMOS.
+ */
+export function seededDemos(): SeededDemoSummary[] {
+  return [
+    {
+      id: "demo_classify_and_route",
+      title: "Classify & Route",
+      tagline:
+        "The classic: classify a question, then route to a deterministic tool lookup or a free-form answer.",
+      node_types: ["input", "prompt", "llm", "router", "tool", "output"],
+    },
+    {
+      id: "demo_decider",
+      title: "The Decider",
+      tagline:
+        "A decision model routes every request to its tier: typed outcome, calibrated confidence, exact-match routing.",
+      node_types: ["input", "decision", "prompt", "llm", "human_gate", "transform", "output"],
+    },
+    {
+      id: "demo_rulebook_qa",
+      title: "Rulebook Q&A",
+      tagline: "Extract a rulebook, then answer questions about it.",
+      node_types: ["input", "extract", "transform", "prompt", "llm", "output"],
+    },
+    {
+      id: "demo_content_studio",
+      title: "Content Studio",
+      tagline: "From brief to publish-ready draft: quality gates, safety checks, human approval.",
+      node_types: ["input", "rubric", "branch", "prompt", "llm", "guardrail", "human_gate", "transform", "output"],
+    },
+    {
+      id: "demo_research_agent",
+      title: "Research Agent",
+      tagline: "An agentic tool loop, then a nested demo run: composition in action.",
+      node_types: ["input", "tool_loop", "transform", "subgraph", "output"],
+    },
+  ];
 }
 
 export function makeRun(overrides: Partial<RunSummary> = {}): RunSummary {

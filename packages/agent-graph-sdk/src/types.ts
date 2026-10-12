@@ -73,6 +73,7 @@ import type {
   subgraphExtractResponseSchema,
   graphSummarySchema,
   graphUsedBySchema,
+  seededDemoSummarySchema,
   policyEnforcementSchema,
   policyExceptionSchema,
   policyParamSpecSchema,
@@ -288,6 +289,7 @@ export type NodeImpact = z.infer<typeof nodeImpactSchema>;
 export type SubgraphExtractResponse = z.infer<typeof subgraphExtractResponseSchema>;
 export type GraphSummary = z.infer<typeof graphSummarySchema>;
 export type GraphUsedBy = z.infer<typeof graphUsedBySchema>;
+export type SeededDemoSummary = z.infer<typeof seededDemoSummarySchema>;
 export type GraphGroup = z.infer<typeof graphGroupSchema>;
 export type GraphLayer = z.infer<typeof graphLayerSchema>;
 export type GraphNote = z.infer<typeof graphNoteSchema>;

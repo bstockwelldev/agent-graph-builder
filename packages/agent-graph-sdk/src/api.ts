@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 import { listReader, type IterateRequest, type PageRequest } from "./pagination.js";
 import { streamRun, waitForRun, type RunStreamOptions, type WaitForRunOptions } from "./runs.js";
@@ -21,6 +21,7 @@ import {
   graphReleaseSchema,
   graphSummarySchema,
   graphUsedBySchema,
+  seededDemoSummarySchema,
   kbArticleSchema,
   kbArticleSummarySchema,
   graphResourcesSchema,
@@ -245,6 +246,11 @@ export function buildNamespaces(transport: Transport) {
       /** Runs the draft with no live tool/LLM calls (`fixture.node_outputs` stubs nodes). */
       simulate: (graphId: string, fixture: Fixture) =>
         transport.request(path`/api/graphs/${graphId}/simulate`, json(fixture), simulateResultSchema),
+    },
+
+    /** Demo gallery: seeded, read-only workflows visitors can run and fork. */
+    demos: {
+      list: () => transport.request("/api/demos", undefined, z.array(seededDemoSummarySchema)),
     },
 
     runs: {
