@@ -20,6 +20,7 @@ import {
   Palette,
 } from "lucide-react";
 import { knowledgeHitsOf } from "@/lib/lineageGraph";
+import { recordedModelLine, recordedModelOf } from "@/lib/recordedModel";
 import { EDGE_COLORS, EDGE_PATTERNS, EDGE_ROUTINGS, EDGE_WEIGHTS, readEdgeStyle, withEdgeStyle, type EdgeStyle } from "@/lib/edgeStyle";
 import { EDGE_KIND_TAXONOMY, NODE_TYPE_TAXONOMY, PROVIDER_TAXONOMY, ROUTER_RULES_TAXONOMY } from "@/content/taxonomy";
 import {
@@ -1479,6 +1480,7 @@ function RunTab({
 
   const duration = formatTraceDuration(selectedTrace);
   const hits = knowledgeHitsOf(selectedTrace.input);
+  const ranOn = nodeType === "llm" || nodeType === "tool_loop" ? recordedModelOf(selectedTrace.input) : null;
   const tone = statusColor[selectedTrace.status];
   const childRun = childGraphId !== undefined ? childRunHref(selectedTrace, childGraphId) : null;
   return (
@@ -1498,6 +1500,11 @@ function RunTab({
         )}
         {nodeType === "extract" && selectedTrace.output !== null && typeof selectedTrace.output === "object" && !Array.isArray(selectedTrace.output) && (
           <ExtractRunSummary output={selectedTrace.output as Record<string, unknown>} threshold={threshold ?? 0.7} />
+        )}
+        {ranOn && (
+          <Muted style={{ marginBottom: spacing[2] }}>
+            <span data-testid="ran-on">Ran on {recordedModelLine(ranOn)}</span>
+          </Muted>
         )}
         <Field label="Input">
           <pre style={preStyle}>{JSON.stringify(selectedTrace.input, null, 2)}</pre>
