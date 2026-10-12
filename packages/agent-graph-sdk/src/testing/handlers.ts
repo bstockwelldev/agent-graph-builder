@@ -26,7 +26,7 @@ import type {
   RunGraphSnapshot,
   RunSummary,
 } from "../types.js";
-import { demoGraph, FIXED_TIME, makeEffectivePolicy, makePolicyCatalog, releaseIndexEntry } from "./fixtures.js";
+import { demoGraph, seededDemos, FIXED_TIME, makeEffectivePolicy, makePolicyCatalog, releaseIndexEntry } from "./fixtures.js";
 
 /**
  * MSW handlers for every API route (SDK 5/7, STO-620), backed by an
@@ -449,6 +449,7 @@ export function mockRoutes(): Record<string, Handler> {
     },
 
     // Graphs
+    "GET /api/demos": () => HttpResponse.json(seededDemos()),
     "GET /api/graphs": ({ request, store }) => listResponse(request, [...store.graphs.values()]),
     "GET /api/graph-summaries": ({ request, store }) =>
       listResponse(request, [...store.graphs.values()].map(summarizeGraph)),

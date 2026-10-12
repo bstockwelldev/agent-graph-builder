@@ -1093,6 +1093,15 @@ export const graphSummarySchema = z.object({
   subgraph_ids: z.array(z.string()),
 });
 
+/** GET /api/demos -- the public demo gallery: seeded, read-only workflows
+ * visitors can run and fork. Keep in sync with backend/app/demo_graph.py. */
+export const seededDemoSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  tagline: z.string(),
+  node_types: z.array(z.string()),
+});
+
 /** Wave 7c: GET /api/graphs/{id}/used-by -- parents referencing this graph. */
 /** `GET /api/graphs/{id}/resources`: library resources the graph uses, by API kind. */
 export const graphResourcesSchema = z.object({
