@@ -48,11 +48,22 @@ const api = vi.hoisted(() => {
         list: vi.fn(async () => [{ id: "agent_help", name: "Helper", graph_id: "demo", llm_profile_id: "fast", tool_ids: [] }]),
         run: vi.fn(async () => ({ run_id: "run_a", graph_id: "demo", status: "queued", agent_id: "agent_help" })),
       },
-      providers: { models: vi.fn(async () => ({ models: [], message: "" })) },
+      providers: {
+        models: vi.fn(async () => ({ models: [], message: "" })),
+        ready: vi.fn(async () => ({ ready: true, message: "" })),
+      },
     },
   };
 });
 vi.mock("@/lib/api-client", () => ({ client: api.client, waitForRun: vi.fn(() => new Promise(() => undefined)) }));
+
+vi.mock("@/components/graph/ProviderModelPicker", () => ({
+  ProviderModelPicker: ({ onProviderChange }: { onProviderChange: (p: string) => void }) => (
+    <button type="button" onClick={() => onProviderChange("groq")}>
+      pick groq
+    </button>
+  ),
+}));
 
 import { WorkbenchProvider, useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { ChatPanel } from "./ChatPanel";
@@ -145,5 +156,20 @@ describe("ChatPanel sessions", () => {
     const created = api.client.chatSessions.create.mock.calls[0][0] as { id: string; title: string };
     expect(created.title).toMatch(/^Scratchpad .+ · [0-9a-f]{4}$/);
     expect(created.title.endsWith(created.id.slice(-4))).toBe(true);
+  });
+
+  it("refuses to create a session on a provider that is not ready, instead of 403ing every message", async () => {
+    const message = "Live providers on this public demo need your own API key. Paste one in the Run panel, or run with Stub.";
+    api.client.providers.ready.mockResolvedValueOnce({ ready: false, message });
+    render(
+      <WorkbenchProvider>
+        <ChatPanel />
+      </WorkbenchProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "pick groq" }));
+    fireEvent.click(screen.getByRole("button", { name: "New session" }));
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(api.client.providers.ready).toHaveBeenCalledWith("groq");
+    expect(api.client.chatSessions.create).not.toHaveBeenCalled();
   });
 });

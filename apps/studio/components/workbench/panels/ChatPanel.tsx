@@ -114,6 +114,20 @@ export function ChatPanel() {
 
   async function createSession() {
     setError(null);
+    // Chat has no API-key field, so a non-Stub provider must be ready server-side;
+    // otherwise (e.g. public demo) every message in the new session would 403.
+    if (newProvider !== "stub") {
+      try {
+        const readiness = await client.providers.ready(newProvider);
+        if (!readiness.ready) {
+          setError(readiness.message);
+          return;
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        return;
+      }
+    }
     const id = `chat_${crypto.randomUUID().slice(0, 8)}`;
     const session: ChatSession = {
       id,
@@ -327,6 +341,7 @@ export function ChatPanel() {
             title="No session open"
             description="Select an existing session above, or create a new one."
           />
+          {error && <div className="text-destructive text-xs">{error}</div>}
         </div>
       ) : (
         <>
