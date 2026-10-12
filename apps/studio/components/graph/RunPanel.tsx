@@ -263,6 +263,7 @@ export function RunPanel({
   inspectionRunId,
   onExitInspection,
   onCompile,
+  modelNodeCounts,
   onRun,
   onRunFromNode,
   onValidate,
@@ -301,6 +302,8 @@ export function RunPanel({
   inspectionRunId?: string | null;
   onExitInspection?: () => void;
   onCompile: (selection: RunSelection) => Promise<void> | void;
+  /** How many nodes the run's model applies to (LLM / tool_loop) and how many pick their own provider. */
+  modelNodeCounts?: { llm: number; ownProvider: number };
   onRun: (input: RunInput, provider: ChatProvider, model?: string, apiKey?: string) => Promise<void> | void;
   /** Phase 10 Slice C, "Run from selected node" — mocks every ancestor of
    * `nodeId` with a null placeholder so the run skips straight to it. */
@@ -672,7 +675,7 @@ export function RunPanel({
             aria-expanded={modelSettingsOpen}
             aria-controls="run-model-settings"
             aria-label={`Model: ${providerLabel(provider)}${sendsModel && selectedModel ? ` · ${selectedModel}` : ""}. Change model settings`}
-            title="Model settings for this run"
+            title="Model for this run: overrides node model pins"
             onClick={() => setModelSettingsOpen((open) => !open)}
             className="agb-focus-ring agb-hoverable"
             style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, maxWidth: 170, padding: "0 8px 0 10px", borderRadius: 999, border: `1px solid ${modelSettingsOpen ? border.focus : border.default}`, background: surface.inset, color: text.primary, fontSize: 12, fontWeight: 550, cursor: "pointer" }}
@@ -760,11 +763,20 @@ export function RunPanel({
       {modelSettingsOpen && (
         <div id="run-model-settings">
           <Group
-            title="Model"
+            title="Model for this run"
             icon={<ProviderDot provider={provider} />}
             action={<IconButton label="Close model settings" icon={<X size={14} />} onClick={() => setModelSettingsOpen(false)} style={{ width: 26, height: 26 }} />}
           >
-            <Muted style={{ marginBottom: spacing[2] }}>Overrides every LLM node for this run. Each LLM node keeps its own default.</Muted>
+            <Muted style={{ marginBottom: spacing[2] }}>
+              Overrides node model pins for this run only; nothing is saved to the graph.
+              {modelNodeCounts
+                ? ` Applies to ${modelNodeCounts.llm} LLM node${modelNodeCounts.llm === 1 ? "" : "s"}.${
+                    modelNodeCounts.ownProvider > 0
+                      ? ` ${modelNodeCounts.ownProvider} decision/extract node${modelNodeCounts.ownProvider === 1 ? " uses" : "s use"} their own provider.`
+                      : ""
+                  }`
+                : ""}
+            </Muted>
             <ProviderModelPicker
               graphId={graphId}
               provider={provider}

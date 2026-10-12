@@ -445,6 +445,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const modelNodeCounts = useMemo(() => {
+    let llm = 0;
+    let ownProvider = 0;
+    for (const node of nodes) {
+      if (node.data.nodeType === "llm" || node.data.nodeType === "tool_loop") llm += 1;
+      else if (node.data.nodeType === "decision" || node.data.nodeType === "extract") ownProvider += 1;
+    }
+    return { llm, ownProvider };
+  }, [nodes]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   // Phase 10 Slice D ("Focus mode" -- docs/planning/features/
   // studio-shell-ux-gap-analysis.md). Off by default and restrained per
@@ -3670,6 +3679,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           inspectionRunId={inspectionRunId}
           onExitInspection={exitInspection}
           onCompile={handleCompile}
+          modelNodeCounts={modelNodeCounts}
           onRun={handleRun}
           onRunFromNode={handleRunFromNode}
           onValidate={refreshDiagnostics}
