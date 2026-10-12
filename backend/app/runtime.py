@@ -463,6 +463,13 @@ async def _execute(ctx: ExecContext, compiled_app, run_input: dict[str, Any]) ->
     except RunPaused as exc:
         RUN_STORE[run_id].status = "paused"
         RUN_STORE[run_id].paused_node_id = exc.node_id
+        # Decisions made before the pause are settled facts: surface them on
+        # the paused summary (Run tab, eval route scorer) like a completed
+        # run does, instead of leaving them only in the pause checkpoint.
+        RUN_STORE[run_id].route_decisions = [
+            RouteDecision.model_validate(decision)
+            for decision in ctx.state_snapshot.get("route_decisions") or []
+        ]
         RUN_PAUSES[run_id] = pause = RunPauseState(
             run_id=run_id,
             graph_id=graph.id,

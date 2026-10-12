@@ -385,7 +385,11 @@ def _branch_exclusivity(graph: GraphDefinition) -> dict[str, dict[str, str]]:
 
     membership: dict[str, dict[str, str]] = {}
     for node in graph.nodes:
-        if node.type not in (NodeType.ROUTER, NodeType.BRANCH):
+        # A decision node selects exactly one outgoing edge per run (exact
+        # outcome match, else the default edge), so its branches are mutually
+        # exclusive by construction -- just like router/branch. Its port
+        # taxonomy already models it as router-like (node-ports.ts).
+        if node.type not in (NodeType.ROUTER, NodeType.BRANCH, NodeType.DECISION):
             continue
         branches = [e for e in graph.edges if e.source == node.id]
         reach_by_branch: dict[str, set[str]] = {}
