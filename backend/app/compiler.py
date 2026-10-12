@@ -243,6 +243,38 @@ def validate_graph(
                 )
             )
 
+    # An LLM profile's `model_provider` only sets the default provider of an *agent* run
+    # (agents.py). A node bound to the profile runs on the run's provider and takes only the
+    # profile's model, so say so instead of letting the setting silently do nothing.
+    for node in graph.nodes:
+        if node.type not in (NodeType.LLM, NodeType.TOOL_LOOP):
+            continue
+        profile_id = node.config.get("llmProfileId")
+        if not isinstance(profile_id, str) or not profile_id.strip():
+            continue
+        profile = storage.get_resource("llm_profiles", profile_id)
+        profile_provider = profile.get("model_provider") if profile else None
+        if not profile_provider:
+            continue
+        diagnostics.append(
+            Diagnostic(
+                severity="warning",
+                code="PROFILE_PROVIDER_IGNORED",
+                node_id=node.id,
+                category="capability",
+                message=(
+                    f"{node.type.value} node {node.id!r}: llmProfileId: profile {profile_id!r} "
+                    f"sets provider {profile_provider!r}, but nodes run on the provider chosen "
+                    "for the run; only the profile's model is used"
+                ),
+                blocking=False,
+                remediation=(
+                    "Choose the provider in the Run panel, or run the graph through an agent "
+                    "that uses this profile."
+                ),
+            )
+        )
+
     # Transforms library references on edges: resolve them inline so the
     # contract pass below checks the real transform, and flag missing ones.
     graph, missing_transforms = materialize_transforms(
