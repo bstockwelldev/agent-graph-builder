@@ -31,7 +31,7 @@ import {
 import { client } from "@/lib/api-client";
 import { logConsoleEntry } from "@/lib/consoleLog";
 import { validationSummary } from "@/lib/diagnostics";
-import { showModelCatalog } from "@/lib/modelCatalog";
+import { runModelArg, sendsRunModel } from "@/lib/modelCatalog";
 import { expiryFromNow, formatRunInputs, recentInputValues, WAIVE_DURATIONS_DAYS } from "@bstockwelldev/agent-graph-sdk/graph";
 import {
   INSPECT_LOAD_FAIL,
@@ -58,6 +58,7 @@ import { accentSurface, border, color, fontFamily, radius, spacing, surface, tex
 import { CounterfactualForm, CounterfactualResultView } from "./CounterfactualForm";
 import { NodeContextMenu, menuAnchorFor, type NodeContextMenuAction } from "./NodeContextMenu";
 import { OfflineBadge, ProviderDot, ProviderModelPicker, providerLabel } from "./ProviderModelPicker";
+import { useRunSelectionOrLocal } from "./RunSelectionContext";
 import { isOfflineRun, useStorageBackend } from "@/lib/serverHealth";
 import { RunCheckpoint, type Checkpoint, type ResumeDecision } from "./RunCheckpoint";
 import { RunWaterfall } from "./RunWaterfall";
@@ -377,17 +378,17 @@ export function RunPanel({
   const [recentMenu, setRecentMenu] = useState<{ variable: string; x: number; y: number } | null>(null);
 
   // ---- provider / model -----------------------------------------------------
-  const [provider, setProvider] = useState<ChatProvider>("stub");
-  const [selectedModel, setSelectedModel] = useState<string>("");
+  // Shared with the canvas so node cards show what each LLM node would run on.
+  const { provider, selectedModel, setProvider, setSelectedModel } = useRunSelectionOrLocal();
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const storageBackend = useStorageBackend();
   const [apiKeyLabel, setApiKeyLabel] = useState("API key");
   const [apiKeyEnvVar, setApiKeyEnvVar] = useState("");
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const sendsModel = showModelCatalog(provider) || provider === "openai_compat";
+  const sendsModel = sendsRunModel(provider);
+  const modelArg = runModelArg(provider, selectedModel);
   const showApiKeyField = API_KEY_PROVIDERS.includes(provider);
-  const modelArg = sendsModel ? selectedModel || undefined : undefined;
   const apiKeyArg = showApiKeyField ? apiKey.trim() || undefined : undefined;
 
   useEffect(() => {

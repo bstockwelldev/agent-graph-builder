@@ -23,3 +23,21 @@ test("runs the demo graph on the stub provider and streams node results", async 
   expect(run.status).toBe("succeeded");
   expect(run.provider).toBe("stub");
 });
+
+test("a run's provider is an override: it is not written into the graph's nodes", async ({ page, api }) => {
+  const graph = await api.createDemoGraph("E2E run override");
+  const llmConfigs = async () =>
+    Object.fromEntries((await api.getGraph(graph.id)).nodes.filter((n) => n.type === "llm").map((n) => [n.id, n.config]));
+  const before = await llmConfigs();
+  expect(Object.keys(before).length).toBeGreaterThan(0);
+
+  await openGraph(page, graph, "?panel=run");
+  // Before any run the card already says what it would run on (the run chip defaults to Stub).
+  await expect(page.locator('.react-flow__node[data-id="llm_classify"]')).toContainText("stub · default model");
+
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByText("Succeeded").first()).toBeVisible();
+
+  // Previously the run wrote `provider: "stub"` into every LLM node and saved it.
+  expect(await llmConfigs()).toEqual(before);
+});

@@ -33,6 +33,7 @@ import { NODE_TYPE_TAXONOMY } from "@/content/taxonomy";
 import { boundTitleFor, summaryFor } from "@bstockwelldev/agent-graph-sdk/graph";
 import { nodeBindings } from "@bstockwelldev/agent-graph-sdk";
 import { useResourceNames } from "../resourceBindings";
+import { useRunSelectionSummary } from "../RunSelectionContext";
 import { NODE_CARD_MAX_HEIGHT, NODE_CARD_WIDTH } from "@/layout/nodeGeometry";
 import { useCanvasActions } from "../canvasActions";
 import { NODE_TYPE_ICONS } from "../nodeTypeIcons";
@@ -145,10 +146,12 @@ export function GraphNodeView({ id, data, selected, sourcePosition = Position.Ri
   const Icon = ICONS[type];
   const tokens = nodeTypeTokens[type];
   const resourceNames = useResourceNames();
+  const runSelection = useRunSelectionSummary();
   const summary = summaryFor(type, nodeData.config, {
     hasUserLabel: Boolean(nodeData.userLabel),
     routeCount: nodeData.routeCount,
     resourceNames,
+    runSelection,
   });
   // Wave 4a: a node bound to a library resource is titled by that
   // resource's name (unless the user named the node) and carries a glyph.
