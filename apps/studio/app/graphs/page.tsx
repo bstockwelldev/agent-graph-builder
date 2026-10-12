@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
+import type { GraphSummary, SeededDemoSummary } from "@bstockwelldev/agent-graph-sdk";
 import { summarizeGraph } from "@bstockwelldev/agent-graph-sdk/graph";
 
 import { client } from "@/lib/api-client";
@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 export default function GraphsPage() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
+  const [demos, setDemos] = useState<SeededDemoSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -36,6 +37,12 @@ export default function GraphsPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+    // The gallery is additive: a demos failure never blocks the graph list.
+    try {
+      setDemos(await client.demos.list());
+    } catch {
+      setDemos([]);
     }
   }, []);
 
@@ -96,6 +103,35 @@ export default function GraphsPage() {
       ) : null}
       {!loading && !error ? (
         <>
+          {demos.length > 0 ? (
+            <section aria-label="Seeded demos" className="mb-8">
+              <h2 className="mb-1 text-sm font-semibold tracking-tight">Seeded demos</h2>
+              <p className="text-muted-foreground mb-4 text-sm">
+                Read-only gallery workflows. Open one to run it — saving your edits forks it into your own copy.
+              </p>
+              <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {demos.map((demo) => (
+                  <li key={demo.id}>
+                    <Card className={cn(studioResourceCardInteractiveClass, "p-0")}>
+                      <Link href={`/graphs/${demo.id}`} className="block p-6">
+                        <CardHeader className="p-0">
+                          <CardTitle className="text-base">{demo.title}</CardTitle>
+                          <CardDescription className="pt-1 text-sm">{demo.tagline}</CardDescription>
+                          <div className="flex flex-wrap gap-1 pt-2">
+                            {demo.node_types.map((nodeType) => (
+                              <Badge key={nodeType} variant="outline">
+                                {nodeType}
+                              </Badge>
+                            ))}
+                          </div>
+                        </CardHeader>
+                      </Link>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {graphs.map((graph) => (
               <li key={graph.id}>

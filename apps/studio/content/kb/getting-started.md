@@ -9,7 +9,7 @@ related: ["canvas-basics", "runs-and-traces", "providers"]
 A graph is a set of steps (nodes) joined by edges. A run starts at the input node, follows the edges, and returns whatever reaches the output node.
 
 ## How do I…
-- **Start:** open **Classify & Route (demo)** from the Graphs page, or create a new graph there.
+- **Start:** open a seeded demo (e.g. **Classify & Route**) from the Graphs page's **Seeded demos** section, or create a new graph there.
 - **Add a step:** press **Add node** (or right-click the canvas ▸ Add node) and pick a type. Drag from one node's handle to another's to connect them.
 - **Configure a step:** click it. The inspector shows its settings; problems show on the node and in the Issues list.
 - **Run it:** open **Run**, fill in the input, and press **Run**. The Stub provider needs no API key.
