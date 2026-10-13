@@ -1,16 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
-import { Menu, MessageSquare } from "lucide-react";
 
-import { StudioAuthSection } from "@/components/studio/studio-auth-section";
-import { isRailItemActive, isResourceRoute, ResourceTabs, STUDIO_RAIL_ITEMS, StudioNav, StudioRail } from "@/components/studio/studio-nav";
-import { MobileTabBar, type MobileTab } from "@/components/navigation/mobile-tab-bar";
-import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
-import { StudioNavProvider } from "@/components/studio/studio-nav-context";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
@@ -18,20 +9,29 @@ import { RESOURCE_KINDS } from "@/components/studio/resource-kinds";
 import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
 import { AnalyticsPanel } from "@/components/workbench/panels/AnalyticsPanel";
 import { ConsolePanel } from "@/components/workbench/panels/ConsolePanel";
+import { GenuiPanel } from "@/components/workbench/panels/GenuiPanel";
+import { WorkspacePoliciesPanel } from "@/components/workbench/panels/WorkspacePoliciesPanel";
+import { GraphPicker } from "@/components/graph/GraphPicker";
 import { CommandPalette } from "@/components/workbench/CommandPalette";
 import { HelpOverlay } from "@/components/workbench/HelpOverlay";
 
 /**
  * Single-segment graph canvas route: /graphs/:id (not /graphs, not
  * .../edit). Ported from MUI's isFlowCanvasRoute, renamed to match AGB's
- * "graph" noun. The canvas itself lands in Phase 4d — for now this only
- * controls the full-bleed layout (sidebar hidden) so 4d can drop the real
- * editor in without a shell change.
+ * "graph" noun. It decides where the app-wide panels render: the canvas
+ * docks its own columns (GraphEditor.tsx), everywhere else they float.
  */
 export function isGraphCanvasRoute(pathname: string) {
   return /^\/graphs\/[^/]+$/.test(pathname);
 }
 
+/**
+ * The app shell. Since the canvas-first landing plan (Phase 3) the studio is
+ * the canvas: no rail, no page layouts, no mobile tab bar. `/` (the empty
+ * canvas) and `/graphs/:id` fill the viewport; `/login` brings its own layout.
+ * Navigation lives in the graph header's menu (GraphEditor.tsx), the command
+ * palette and the graph picker.
+ */
 export function StudioShell({
   children,
   className,
@@ -40,159 +40,74 @@ export function StudioShell({
   className?: string;
 }) {
   const pathname = usePathname();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const safePathname = pathname ?? "";
   const graphCanvas = isGraphCanvasRoute(safePathname);
-  const isGraphsListPage = safePathname === "/graphs";
-
-  const openStudioNav = useCallback(() => {
-    setMobileNavOpen(true);
-  }, []);
-
-  const navContextValue = useMemo(() => ({ openStudioNav }), [openStudioNav]);
-
-  // Mobile bottom tab bar (STO-607): the rail's destinations plus Chat and
-  // More (the full nav sheet: resource types, account). Below md only --
-  // the same breakpoint where the rail gives way to the mobile header.
-  const workbench = useWorkbench();
-  const mobileTabs: MobileTab[] = [
-    ...STUDIO_RAIL_ITEMS.filter((item) => item.mobileTab !== false).map(({ href, label, icon: Icon, matches }) => ({
-      id: href,
-      label,
-      icon: <Icon />,
-      href,
-      active: isRailItemActive(safePathname, matches),
-    })),
-    {
-      id: "chat",
-      label: "Chat",
-      icon: <MessageSquare />,
-      active: workbench.activePanel === "chat",
-      onClick: () => workbench.toggle("chat"),
-    },
-    {
-      id: "more",
-      label: "More",
-      icon: <Menu />,
-      hasPopup: "dialog",
-      active: mobileNavOpen,
-      onClick: () => setMobileNavOpen(true),
-    },
-  ];
+  // `/` is the empty canvas: full-bleed like a graph, but with no
+  // GraphEditor, so the app-wide panels still float there.
+  const fullBleed = graphCanvas || safePathname === "/";
 
   return (
-    <StudioNavProvider value={navContextValue}>
+    <>
       <div
         className={cn(
           "bg-background text-foreground flex min-h-dvh",
-          // `min-h-dvh` alone is a floor, not a ceiling — the shell root can
-          // grow taller than the viewport to fit content, which defeats
-          // every `h-full`/`flex-1`/`min-h-0`/`overflow-y-auto` pairing
-          // downstream (they all resolve against a height that's already
-          // grown past the viewport) and produces page-level scroll instead
-          // of the intended panel-internal scroll. The graphs list page
-          // already gets a hard clamp for this reason; the graph canvas
-          // route needs the identical clamp for the same reason — its
-          // docked run/palette panels and node/edge inspector all depend on
-          // a genuinely bounded ancestor height to scroll internally.
-          (isGraphsListPage || graphCanvas) && "h-dvh max-h-dvh min-h-0 overflow-hidden",
+          // `min-h-dvh` alone is a floor, not a ceiling: the shell root can
+          // grow taller than the viewport to fit content, which defeats every
+          // `h-full`/`flex-1`/`min-h-0`/`overflow-y-auto` pairing downstream
+          // (they all resolve against a height that's already grown past the
+          // viewport) and produces page-level scroll instead of the intended
+          // panel-internal scroll. The canvas's docked run/palette panels and
+          // node/edge inspector all depend on a genuinely bounded ancestor.
+          fullBleed && "h-dvh max-h-dvh min-h-0 overflow-hidden",
           className,
         )}
       >
-        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-          <SheetContent
-            side="left"
-            className="bg-sidebar text-sidebar-foreground w-[17rem] border-sidebar-border gap-0 p-0"
-            showCloseButton={false}
-          >
-            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-6">
-              <StudioNav pathname={safePathname} onNavigate={() => setMobileNavOpen(false)} />
-              <StudioAuthSection />
-            </div>
-          </SheetContent>
-        </Sheet>
-        {/* Wave 2 (studio-graph-workbench-redesign-plan.md): a 72px icon
-            rail -- Graphs · Resources · Analytics -- replaces the 240px
-            sidebar of nine items. The graph canvas still hides it entirely
-            (the graph header's back button is its way out). */}
-        <aside
-          className={cn(
-            "bg-sidebar text-sidebar-foreground shrink-0 flex-col items-center gap-4 border-r border-sidebar-border py-4",
-            // Graph canvas: keep aside fully hidden at all breakpoints — base `md:flex` would
-            // otherwise override `hidden` at md+ and duplicate the Sheet nav.
-            graphCanvas ? "hidden" : "hidden w-[72px] md:flex",
-          )}
-          aria-label="Studio navigation"
-          aria-hidden={graphCanvas}
-        >
-          <StudioRail pathname={safePathname} footer={<StudioAuthSection compact />} />
-        </aside>
         <div className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header
-            className={cn(
-              // `pt-[env(safe-area-inset-top)]`: the root viewport uses
-              // `viewport-fit=cover` (see app/layout.tsx), so without the
-              // inset this sticky header would slide up under the notch /
-              // Dynamic Island on iPhones. `env()` is 0 on desktop.
-              "border-outline-variant/15 bg-surface-container-low/90 sticky top-0 z-40 flex h-[calc(3rem+env(safe-area-inset-top))] items-center justify-between border-b px-3 pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden",
-              graphCanvas && "hidden",
-            )}
-          >
-            <Link
-              href="/graphs"
-              className="text-sidebar-foreground text-sm font-semibold tracking-tight"
-            >
-              Agent Graph Studio
-            </Link>
-          </header>
-          <main
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-              // Room for the mobile tab bar (64px + safe area) so it never covers content.
-              !graphCanvas && "pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0",
-            )}
-          >
-            <div
-              className={cn(
-                graphCanvas
-                  ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-                  : isGraphsListPage
-                    ? "mx-auto flex w-full max-w-6xl min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-5 sm:py-6 md:px-6"
-                    : "mx-auto w-full max-w-6xl px-4 py-4 sm:px-5 sm:py-6 md:px-6",
-              )}
-            >
-              {isResourceRoute(safePathname) && <ResourceTabs pathname={safePathname} />}
-              {children}
-            </div>
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
           </main>
-          {!graphCanvas && <MobileTabBar aria-label="Studio tabs" tabs={mobileTabs} className="md:hidden" />}
         </div>
       </div>
 
       {/* App-wide workbench panels (studio-consolidation Phase 8) — mounted
           once here so they're reachable from every route, not just the
-          graph canvas. The resource panels share ResourcePage's config-driven
-          editor (resource-kinds.tsx, Wave 4b). */}
+          graph canvas. The resource panels use the config-driven editor
+          (resource-kinds.tsx, Wave 4b). */}
       {/* `h-[70vh]`, not `max-h-*` — ChatPanel's inner `h-full` flex column
           needs a definite ancestor height to resolve against for its own
           internal scroll region to work (the exact ambiguity flagged in the
           Phase 8 run-panel scrolling bug fix notes). */}
-      <WorkbenchDrawer panelId="chat" side="right" dockedClassName="right-4 top-20 flex h-[70vh] w-96 flex-col overflow-hidden">
-        <ChatPanel />
-      </WorkbenchDrawer>
-      {RESOURCE_KINDS.map((kind) => (
-        <WorkbenchDrawer key={kind.id} panelId={kind.panelId} side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-          <ResourceBrowserPanel kind={kind} />
+      {/* The graph canvas docks its own chat column (GraphEditor.tsx). */}
+      {!graphCanvas && (
+        <WorkbenchDrawer panelId="chat" side="right" dockedClassName="right-4 top-20 flex h-[70vh] w-96 flex-col overflow-hidden">
+          <ChatPanel />
         </WorkbenchDrawer>
-      ))}
+      )}
+      {/* The graph canvas docks the resource panels and workspace policies
+          in its own column (GraphEditor.tsx), like chat. */}
+      {!graphCanvas &&
+        RESOURCE_KINDS.map((kind) => (
+          <WorkbenchDrawer key={kind.id} panelId={kind.panelId} side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+            <ResourceBrowserPanel kind={kind} />
+          </WorkbenchDrawer>
+        ))}
+      {!graphCanvas && (
+        <WorkbenchDrawer panelId="workspacePolicies" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[28rem] overflow-y-auto">
+          <WorkspacePoliciesPanel />
+        </WorkbenchDrawer>
+      )}
+      <WorkbenchDrawer panelId="genui" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
+        <GenuiPanel />
+      </WorkbenchDrawer>
       <WorkbenchDrawer panelId="analytics" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
         <AnalyticsPanel />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="console" side="right" dockedClassName="right-4 bottom-4 flex h-96 w-[32rem] flex-col overflow-hidden">
         <ConsolePanel />
       </WorkbenchDrawer>
+      <GraphPicker />
       <CommandPalette />
       <HelpOverlay />
-    </StudioNavProvider>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { GraphPickerProvider } from "@/components/graph/GraphPicker";
 import { StudioDataProvider } from "@/components/studio/StudioDataProvider";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { WorkbenchProvider } from "@/components/workbench/WorkbenchProvider";
@@ -35,7 +36,9 @@ export default function RootLayout({
       <body>
         <StudioDataProvider>
           <WorkbenchProvider>
-            <StudioShell>{children}</StudioShell>
+            <GraphPickerProvider>
+              <StudioShell>{children}</StudioShell>
+            </GraphPickerProvider>
           </WorkbenchProvider>
         </StudioDataProvider>
       </body>
