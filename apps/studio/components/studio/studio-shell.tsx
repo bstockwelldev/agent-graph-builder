@@ -18,6 +18,8 @@ import { RESOURCE_KINDS } from "@/components/studio/resource-kinds";
 import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
 import { AnalyticsPanel } from "@/components/workbench/panels/AnalyticsPanel";
 import { ConsolePanel } from "@/components/workbench/panels/ConsolePanel";
+import { GenuiPanel } from "@/components/workbench/panels/GenuiPanel";
+import { WorkspacePoliciesPanel } from "@/components/workbench/panels/WorkspacePoliciesPanel";
 import { CommandPalette } from "@/components/workbench/CommandPalette";
 import { HelpOverlay } from "@/components/workbench/HelpOverlay";
 
@@ -179,11 +181,22 @@ export function StudioShell({
           <ChatPanel />
         </WorkbenchDrawer>
       )}
-      {RESOURCE_KINDS.map((kind) => (
-        <WorkbenchDrawer key={kind.id} panelId={kind.panelId} side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
-          <ResourceBrowserPanel kind={kind} />
+      {/* The graph canvas docks the resource panels and workspace policies
+          in its own column (GraphEditor.tsx), like chat. */}
+      {!graphCanvas &&
+        RESOURCE_KINDS.map((kind) => (
+          <WorkbenchDrawer key={kind.id} panelId={kind.panelId} side="right" dockedClassName="right-4 top-20 max-h-[70vh] w-80 overflow-y-auto">
+            <ResourceBrowserPanel kind={kind} />
+          </WorkbenchDrawer>
+        ))}
+      {!graphCanvas && (
+        <WorkbenchDrawer panelId="workspacePolicies" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[28rem] overflow-y-auto">
+          <WorkspacePoliciesPanel />
         </WorkbenchDrawer>
-      ))}
+      )}
+      <WorkbenchDrawer panelId="genui" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
+        <GenuiPanel />
+      </WorkbenchDrawer>
       <WorkbenchDrawer panelId="analytics" side="right" titleBar dockedClassName="right-4 top-20 max-h-[70vh] w-[32rem] overflow-y-auto">
         <AnalyticsPanel />
       </WorkbenchDrawer>

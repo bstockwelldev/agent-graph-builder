@@ -25,6 +25,8 @@ export type WorkbenchPanelId =
   | "datasets"
   | "evalSuites"
   | "analytics"
+  | "workspacePolicies"
+  | "genui"
   | "console"
   | "help";
 
@@ -80,6 +82,13 @@ export const WORKBENCH_PANELS: Record<
   // graph, so global scope, same as the resource registries. Closes the
   // gap analysis's Tier 1 finding that /analytics had no HUD door at all.
   analytics: { title: "Analytics", hotkey: null, scope: "global" },
+  // Canvas-first landing plan, Phase 2: the bodies of the /policies and
+  // /genui pages as panels, so those pages can redirect here in Phase 3.
+  // Workspace defaults + every graph's exceptions; the graph-level
+  // "policies" panel above edits one graph's overrides.
+  workspacePolicies: { title: "Workspace policies", hotkey: null, scope: "global" },
+  // The read-only catalog of GenUI surfaces a human gate can show.
+  genui: { title: "GenUI catalog", hotkey: null, scope: "global" },
   // App-wide console/log drawer (studio-config-editor-and-console-plan.md
   // §7): logs/warnings/errors — including client-side errors that
   // previously only reached the browser devtools console — plus live run

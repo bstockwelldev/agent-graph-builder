@@ -1,10 +1,27 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/graphs/g" }));
+
+window.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})) as typeof window.matchMedia;
 vi.mock("@/lib/api-client", () => ({
   client: {
     analytics: {
+      dashboard: vi.fn(async () => ({
+        totals: { invocations: 7, input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_usd: 0.5, avg_duration_ms: 10 },
+        daily: [],
+        by_graph: [],
+      })),
       graph: vi.fn(async () => ({
       graph_id: "g",
       run_window: 4,
@@ -33,7 +50,8 @@ vi.mock("@/lib/api-client", () => ({
   },
 }));
 
-import { GraphAnalyticsView } from "./AnalyticsPanel";
+import { WorkbenchProvider, useWorkbench } from "../WorkbenchProvider";
+import { AnalyticsPanel, GraphAnalyticsView } from "./AnalyticsPanel";
 
 afterEach(() => cleanup());
 
@@ -64,5 +82,40 @@ describe("GraphAnalyticsView", () => {
     expect(focusNode).toHaveBeenCalledWith("slow_llm", "history");
     fireEvent.click(screen.getByRole("button", { name: "run" }));
     expect(inspectRun).toHaveBeenCalledWith("r4");
+  });
+});
+
+function OpenAnalytics({ scope }: { scope?: string }) {
+  const workbench = useWorkbench();
+  useEffect(() => {
+    workbench.setGraphContext(context);
+    workbench.open("analytics", scope ? { scope } : undefined);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+// Canvas-first landing plan, Phase 2 (§4 item 5): ?panel=analytics&scope=workspace.
+describe("AnalyticsPanel scope", () => {
+  it("defaults to the open graph", async () => {
+    render(
+      <WorkbenchProvider>
+        <OpenAnalytics />
+        <AnalyticsPanel />
+      </WorkbenchProvider>,
+    );
+    expect(await screen.findByText("75%")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "This graph" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("opens on the workspace when the panel context asks for it", async () => {
+    render(
+      <WorkbenchProvider>
+        <OpenAnalytics scope="workspace" />
+        <AnalyticsPanel />
+      </WorkbenchProvider>,
+    );
+    expect(await screen.findByText("Invocations")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Workspace" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("75%")).toBeNull();
   });
 });

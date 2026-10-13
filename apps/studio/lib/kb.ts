@@ -52,6 +52,8 @@ export const PANEL_ARTICLE: Record<WorkbenchPanelId, string> = {
   datasets: "datasets",
   evalSuites: "scored-evals",
   analytics: "analytics",
+  workspacePolicies: "workspace-policies",
+  genui: "genui",
   console: "console",
   help: "help",
 };
