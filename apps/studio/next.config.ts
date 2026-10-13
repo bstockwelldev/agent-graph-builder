@@ -2,6 +2,8 @@ import path from "node:path";
 
 import type { NextConfig } from "next";
 
+import { LEGACY_REDIRECTS } from "./lib/legacyRoutes";
+
 // Mirrors apps/playground/vite.config.ts's dev proxy: the SDK client's
 // default baseUrl ("") issues same-origin /api/* requests, and this rewrite
 // forwards them to the FastAPI backend in dev. In production both apps
@@ -18,6 +20,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     // Monorepo lives here; avoids picking a parent-folder lockfile as workspace root.
     root: path.join(__dirname, "..", ".."),
+  },
+  // Retired pages, now panels (lib/legacyRoutes.ts).
+  async redirects() {
+    return LEGACY_REDIRECTS;
   },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiProxyTarget}/api/:path*` }];

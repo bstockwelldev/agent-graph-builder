@@ -15,8 +15,8 @@ test("previews an edge transform with Try it", async ({ page, api }) => {
 
 test("creates a library transform, binds it to an edge and runs it", async ({ page, api, request }) => {
   const name = `Topic line ${Date.now()}`;
-  await page.goto("/transforms");
-  await page.getByRole("button", { name: /New transform/i }).first().click();
+  await page.goto("/?panel=transforms");
+  await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByLabel("Name").fill(name);
   await page.getByLabel(/Message template/).fill("Topic line: {value}");
   await page.getByRole("button", { name: /^(Save|Create)/ }).last().click();

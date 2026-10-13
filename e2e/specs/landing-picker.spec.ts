@@ -91,7 +91,8 @@ test("you can delete your own graphs from the picker, behind a confirm, and demo
   await expect(picker.getByRole("button", { name: /^Delete Classify & Route/ })).toHaveCount(0);
 
   await picker.getByRole("button", { name: `Delete ${graph.name}` }).click();
-  await page.getByRole("dialog", { name: "Delete graph" }).getByRole("button", { name: "Delete", exact: true }).click();
+  // The confirm is inline in the row, not a second dialog.
+  await picker.getByRole("button", { name: `Confirm delete ${graph.name}` }).click();
   await expect(picker.getByText(graph.name)).toHaveCount(0);
   await expect.poll(async () => (await page.request.get(`${API_URL}/api/graphs/${graph.id}`)).status()).toBe(404);
 });

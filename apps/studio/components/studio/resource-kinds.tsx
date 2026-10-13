@@ -11,16 +11,12 @@ import type {
   TransformDefinition,
 } from "@bstockwelldev/agent-graph-sdk";
 
-import { Badge } from "@/components/ui/badge";
-import { CardDescription, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { client } from "@/lib/api-client";
 import { BUILTIN_TOOL_IDS } from "@/lib/builtinTools";
 import { isChatProvider } from "@/lib/providers";
-import { fixturePreview, fixturesFromText, fixturesTextIssue, fixturesToText, routingLabHref } from "@/lib/datasets";
-import { describeTransform } from "@/lib/transforms";
-import { DEFAULT_SCORERS, scorerLabel, suiteScorerKinds } from "@/lib/evals";
-import { cn } from "@/lib/utils";
+import { fixturesFromText, fixturesTextIssue, fixturesToText, routingLabHref } from "@/lib/datasets";
+import { DEFAULT_SCORERS, suiteScorerKinds } from "@/lib/evals";
 
 import { AgentFields } from "./agent-fields";
 import { DatasetFields, type DatasetForm } from "./dataset-fields";
@@ -70,26 +66,17 @@ export type ResourceKindConfig<T extends ResourceLike> = {
   id: ResourceKindId;
   /** The workbench panel that browses this registry (components/workbench/panels.ts). */
   panelId: ResourceKindId;
-  routeHref: string;
   client: ResourceKindClient<T>;
   /** Singular, for "New …" / "Edit …" / "Delete …": "prompt", "MCP server". */
   noun: string;
   /** Plural, for the panel header: "Prompts", "MCP Servers". */
   panelTitle: string;
-  pageTitle: string;
-  pageDescription: string;
   dialogDescription: ReactNode;
   emptyText: string;
-  listLayout: "stack" | "grid";
   /** How an item is named in labels (tools are named by id). */
   itemLabel: (item: T) => string;
   deleteDescription: (item: T) => string;
-  /** Card header content below the title row (title, badges, description). */
-  renderCardHeader: (item: T) => ReactNode;
-  /** Optional card body under the actions (a prompt's body, a tool's params). */
-  renderCardBody?: (item: T) => ReactNode;
-  /** Optional compact line under an item in the workbench panel: the card's
-   * links and key facts, without its card-sized previews (those live in the editor). */
+  /** Optional compact line under an item in the workbench panel: links and key facts. */
   renderPanelDetail?: (item: T) => ReactNode;
   emptyForm: () => Partial<T>;
   /** Editor state for an existing item (defaults to the item itself). */
@@ -136,32 +123,18 @@ function nameIdFields<T extends ResourceLike & { name?: string | null }>(props: 
 
 const panelLinkClass = "text-primary text-xs font-medium underline-offset-4 hover:underline";
 
-const preClass =
-  "bg-surface-container-lowest/90 overflow-auto rounded-lg font-mono whitespace-pre-wrap ring-1 ring-outline-variant/20";
-
 // ---------------------------------------------------------------- prompts
 
 export const promptKind: ResourceKindConfig<PromptTemplate> = {
   id: "prompts",
   panelId: "prompts",
-  routeHref: "/prompts",
   client: client.prompts,
   noun: "prompt",
   panelTitle: "Prompts",
-  pageTitle: "Prompt Lab",
-  pageDescription: "Versioned prompt templates that prompt and LLM nodes bind by id.",
   dialogDescription: "Prompt and LLM nodes bind a prompt by its id. Use {variable} placeholders for run inputs.",
   emptyText: "No prompt templates.",
-  listLayout: "stack",
   itemLabel: (prompt) => prompt.name,
   deleteDescription: (prompt) => `Remove "${prompt.name}" (${prompt.id})?`,
-  renderCardHeader: (prompt) => (
-    <>
-      <CardTitle className="text-base">{prompt.name}</CardTitle>
-      <CardDescription className="font-mono text-xs">{prompt.id}</CardDescription>
-    </>
-  ),
-  renderCardBody: (prompt) => <pre className={cn(preClass, "max-h-48 p-3 text-xs")}>{prompt.body}</pre>,
   emptyForm: () => ({ id: genId("prompt"), name: "", body: "" }),
   issues: (form) => missing(form, [["name", "Add a name."], ["body", "Add a body."]]),
   normalize: (form) => {
@@ -199,28 +172,13 @@ export function normalizeParametersJson(raw: string | undefined): string {
 export const toolKind: ResourceKindConfig<ToolForm> = {
   id: "tools",
   panelId: "tools",
-  routeHref: "/tools",
   client: client.tools,
   noun: "tool",
   panelTitle: "Tools",
-  pageTitle: "Tool registry",
-  pageDescription: "Catalog definitions exposed to graphs. Tool nodes bind to a registry entry by id.",
   dialogDescription: "A tool node calls a tool by its name. Built-in tools (lookup_topic, web_search, calculator) need no entry here.",
   emptyText: "No tools configured.",
-  listLayout: "grid",
   itemLabel: (tool) => tool.id,
   deleteDescription: (tool) => `Remove tool "${tool.id}"? Graph nodes may reference it.`,
-  renderCardHeader: (tool) => (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <CardTitle className="font-mono text-base">{tool.id}</CardTitle>
-        {tool.requires_approval ? <Badge variant="outline">Approval</Badge> : null}
-        {tool.mcp_server_id ? <Badge variant="outline">MCP</Badge> : null}
-      </div>
-      <CardDescription>{tool.description}</CardDescription>
-    </>
-  ),
-  renderCardBody: (tool) => <pre className={cn(preClass, "max-h-36 p-2 text-[11px]")}>{tool.parameters_json}</pre>,
   emptyForm: () => ({ id: "", description: "", parameters_json: "{}", requires_approval: false }),
   toForm: (tool) => ({ ...tool, parameters_json: tool.parameters_json || "{}" }),
   issues: (form) => {
@@ -302,42 +260,13 @@ export const toolKind: ResourceKindConfig<ToolForm> = {
 export const agentKind: ResourceKindConfig<AgentProfile> = {
   id: "agents",
   panelId: "agents",
-  routeHref: "/agents",
   client: client.agents,
   noun: "agent",
   panelTitle: "Agents",
-  pageTitle: "Agents",
-  pageDescription:
-    "A graph plus an LLM profile, system instructions, and a tool allow-list. Run one from its graph's Run panel or with /run @agent in chat.",
   dialogDescription: "Pick the graph this agent runs and what it layers on top: a default model, instructions, and the tools it may call.",
   emptyText: "No agents.",
-  listLayout: "grid",
   itemLabel: (agent) => agent.name,
   deleteDescription: (agent) => `Remove agent "${agent.name}"?`,
-  renderCardHeader: (agent) => (
-    <>
-      <CardTitle className="text-base">{agent.name}</CardTitle>
-      <CardDescription>{agent.description || "No description."}</CardDescription>
-    </>
-  ),
-  renderCardBody: (agent) => (
-    <div className="space-y-2 text-sm">
-      <div className="flex flex-wrap gap-1.5">
-        <Badge variant="secondary" className="font-mono">
-          {agent.graph_id}
-        </Badge>
-        {agent.llm_profile_id ? <Badge variant="outline">profile: {agent.llm_profile_id}</Badge> : null}
-        <Badge variant="outline">{agent.tool_ids.length === 0 ? "any tool" : `${agent.tool_ids.length} tool${agent.tool_ids.length === 1 ? "" : "s"}`}</Badge>
-      </div>
-      <Link
-        href={`/graphs/${encodeURIComponent(agent.graph_id)}?panel=run&agent=${encodeURIComponent(agent.id)}`}
-        className="text-primary text-sm font-medium underline-offset-4 hover:underline"
-        aria-label={`Run ${agent.name}`}
-      >
-        Run
-      </Link>
-    </div>
-  ),
   renderPanelDetail: (agent) => (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <span className="text-muted-foreground font-mono text-[11px]">{agent.graph_id}</span>
@@ -393,28 +322,13 @@ function urlIssue(url: string): string | null {
 export const mcpKind: ResourceKindConfig<McpServerForm> = {
   id: "mcp",
   panelId: "mcp",
-  routeHref: "/mcp",
   client: client.mcpServers,
   noun: "MCP server",
   panelTitle: "MCP Servers",
-  pageTitle: "MCP servers",
-  pageDescription:
-    "Remote tool servers. Only http transport is currently dispatched by tool nodes; sse/stdio validate but don't execute yet.",
   dialogDescription: "A remote tool server. Add its tools to the registry from Test connection, or bind one from a tool's MCP source.",
   emptyText: "No MCP servers configured.",
-  listLayout: "grid",
   itemLabel: (server) => server.name,
   deleteDescription: (server) => `Remove MCP server "${server.name}"?`,
-  renderCardHeader: (server) => (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <CardTitle className="text-base">{server.name}</CardTitle>
-        <Badge variant="outline">{server.transport}</Badge>
-        {!server.enabled ? <Badge variant="outline">Disabled</Badge> : null}
-      </div>
-      <CardDescription className="font-mono text-xs">{server.url}</CardDescription>
-    </>
-  ),
   emptyForm: () => ({ id: genId("mcp"), name: "", url: "", transport: "http", enabled: true }),
   issues: (form) => {
     const issues = missing(form, [["name", "Add a name."], ["url", "Add the server URL."]]);
@@ -464,27 +378,13 @@ export const mcpKind: ResourceKindConfig<McpServerForm> = {
 export const llmProfileKind: ResourceKindConfig<LlmProfile> = {
   id: "llmProfiles",
   panelId: "llmProfiles",
-  routeHref: "/llm-profiles",
   client: client.llmProfiles,
   noun: "LLM profile",
   panelTitle: "LLM Profiles",
-  pageTitle: "LLM profiles",
-  pageDescription:
-    "Named provider + model presets. LLM nodes and agents bind a profile instead of hard-coding a model.",
   dialogDescription: "A named provider + model. A node or agent bound to it runs on this model.",
   emptyText: "No LLM profiles.",
-  listLayout: "grid",
   itemLabel: (profile) => profile.name,
   deleteDescription: (profile) => `Remove LLM profile "${profile.name}"?`,
-  renderCardHeader: (profile) => (
-    <>
-      <CardTitle className="text-base">{profile.name}</CardTitle>
-      <CardDescription className="font-mono text-xs">
-        {profile.model_provider ? `${profile.model_provider} · ` : ""}
-        {profile.model}
-      </CardDescription>
-    </>
-  ),
   emptyForm: () => ({ id: genId("llm"), name: "", model: "", model_provider: "stub", description: "" }),
   issues: (form) => {
     const issues = missing(form, [["name", "Add a name."], ["model", "Pick a model."]]);
@@ -535,25 +435,13 @@ const TRANSFORM_FIELD_ISSUE = {
 export const transformKind: ResourceKindConfig<TransformDefinition> = {
   id: "transforms",
   panelId: "transforms",
-  routeHref: "/transforms",
   client: client.transforms,
   noun: "transform",
   panelTitle: "Transforms",
-  pageTitle: "Transforms",
-  pageDescription:
-    "Reusable, deterministic data reshaping between steps: select a field, wrap a value, format a message, or convert a type. Bind one from an edge or a Transform node.",
   dialogDescription: "A named transform. No code and no model call: a transform that can't apply fails the step.",
   emptyText: "No transforms.",
-  listLayout: "grid",
   itemLabel: (transform) => transform.name,
   deleteDescription: (transform) => `Remove transform "${transform.name}"? Edges and nodes that use it will fail validation.`,
-  renderCardHeader: (transform) => (
-    <>
-      <CardTitle className="text-base">{transform.name}</CardTitle>
-      <CardDescription className="font-mono text-xs">{describeTransform(transform)}</CardDescription>
-      {transform.description && <CardDescription>{transform.description}</CardDescription>}
-    </>
-  ),
   emptyForm: () => ({ id: genId("tf"), name: "", type: "format_message", template: "{value}", description: "" }),
   issues: (form) => {
     const issues = missing(form, [["name", "Add a name."]]);
@@ -646,13 +534,11 @@ export const transformKind: ResourceKindConfig<TransformDefinition> = {
 };
 
 /** Every CRUD registry, in nav order (studio-nav.tsx RESOURCE_ITEMS). */
-const PREVIEW_FIXTURES = 3;
 
 /** Slice 7: saved Routing Lab datasets, browsable outside a graph panel. */
 export const datasetKind: ResourceKindConfig<DatasetForm> = {
   id: "datasets",
   panelId: "datasets",
-  routeHref: "/datasets",
   // Datasets aren't bound by graph nodes and have no publish history, so no Usage or History tab.
   client: {
     list: () => client.datasets.list(),
@@ -662,57 +548,10 @@ export const datasetKind: ResourceKindConfig<DatasetForm> = {
   },
   noun: "dataset",
   panelTitle: "Datasets",
-  pageTitle: "Datasets",
-  pageDescription:
-    "Saved fixture sets for the Routing Lab: inputs, optionally with frozen node outputs, captured from runs or written by hand. Any graph can run any dataset.",
   dialogDescription: "Rename it, fix its fixtures, or point it at a graph. Runs stay on the offline stub provider.",
   emptyText: "No datasets. Save one from a graph's Routing Lab, or capture runs from its Run history.",
-  listLayout: "grid",
   itemLabel: (dataset) => dataset.name,
   deleteDescription: (dataset) => `Remove dataset "${dataset.name}"? Graphs don't reference datasets, so nothing else changes.`,
-  renderCardHeader: (dataset) => (
-    <>
-      <CardTitle className="text-base">{dataset.name}</CardTitle>
-      {dataset.description ? <CardDescription>{dataset.description}</CardDescription> : null}
-      <div className="flex flex-wrap gap-1.5 pt-1">
-        <Badge variant="secondary">
-          {dataset.fixtures.length} fixture{dataset.fixtures.length === 1 ? "" : "s"}
-        </Badge>
-        <Badge variant="outline">{dataset.source === "runs" ? `from ${dataset.source_run_ids.length} run${dataset.source_run_ids.length === 1 ? "" : "s"}` : "manual"}</Badge>
-        {dataset.graph_id ? (
-          <Badge variant="outline" className="font-mono">
-            {dataset.graph_id}
-          </Badge>
-        ) : null}
-      </div>
-    </>
-  ),
-  renderCardBody: (dataset) => (
-    <div className="space-y-2 text-sm">
-      {dataset.fixtures.length > 0 ? (
-        <ul className="text-muted-foreground space-y-0.5 font-mono text-[11px]" aria-label={`${dataset.name} fixtures`}>
-          {dataset.fixtures.slice(0, PREVIEW_FIXTURES).map((fixture, index) => (
-            <li key={index} className="truncate">
-              {fixturePreview(fixture)}
-            </li>
-          ))}
-          {dataset.fixtures.length > PREVIEW_FIXTURES ? <li>+{dataset.fixtures.length - PREVIEW_FIXTURES} more</li> : null}
-        </ul>
-      ) : null}
-      {dataset.graph_id ? (
-        <Link
-          href={routingLabHref(dataset.graph_id, dataset.id)}
-          className="text-primary text-sm font-medium underline-offset-4 hover:underline"
-          aria-label={`Open ${dataset.name} in routing lab`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          Open in routing lab
-        </Link>
-      ) : (
-        <p className="text-muted-foreground text-xs">Pick a graph to open it in the Routing Lab.</p>
-      )}
-    </div>
-  ),
   renderPanelDetail: (dataset) => (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <span className="text-muted-foreground text-[11px]">
@@ -767,7 +606,6 @@ export const datasetKind: ResourceKindConfig<DatasetForm> = {
 export const evalSuiteKind: ResourceKindConfig<EvalSuiteForm> = {
   id: "evalSuites",
   panelId: "evalSuites",
-  routeHref: "/eval-suites",
   client: {
     list: () => client.evals.suites.list(),
     create: (suite) => client.evals.suites.create(suite),
@@ -776,39 +614,10 @@ export const evalSuiteKind: ResourceKindConfig<EvalSuiteForm> = {
   },
   noun: "eval suite",
   panelTitle: "Eval suites",
-  pageTitle: "Eval suites",
-  pageDescription:
-    "Score a graph against a dataset: each fixture's expected output, text, pattern, JSON fields or route. Run suites from a graph's Evals panel, on Stub or a live model.",
   dialogDescription: "Pick the graph, the dataset whose fixtures are the cases, the scorers and the pass mark.",
   emptyText: "No eval suites. Create one here or from a graph's Evals panel.",
-  listLayout: "grid",
   itemLabel: (suite) => suite.name,
   deleteDescription: (suite) => `Remove eval suite "${suite.name}"? Its stored runs stay readable by id.`,
-  renderCardHeader: (suite) => (
-    <>
-      <CardTitle className="text-base">{suite.name}</CardTitle>
-      {suite.description ? <CardDescription>{suite.description}</CardDescription> : null}
-      <div className="flex flex-wrap gap-1.5 pt-1">
-        <Badge variant="outline" className="font-mono">
-          {suite.graph_id}
-        </Badge>
-        <Badge variant="secondary">pass at {Math.round((suite.pass_threshold ?? 1) * 100)}%</Badge>
-      </div>
-    </>
-  ),
-  renderCardBody: (suite) => (
-    <div className="space-y-2 text-sm">
-      <p className="text-muted-foreground text-xs">{suiteScorerKinds(suite).map(scorerLabel).join(" · ") || "No scorers"}</p>
-      <Link
-        href={`/graphs/${encodeURIComponent(suite.graph_id)}?panel=evals&suite=${encodeURIComponent(suite.id)}`}
-        className="text-primary text-sm font-medium underline-offset-4 hover:underline"
-        aria-label={`Run ${suite.name}`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        Run in the graph&apos;s Evals panel
-      </Link>
-    </div>
-  ),
   renderPanelDetail: (suite) => (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <span className="text-muted-foreground font-mono text-[11px]">{suite.graph_id}</span>

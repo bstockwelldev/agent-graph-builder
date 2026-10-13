@@ -9,8 +9,8 @@ const FAKE_MCP_URL = "http://127.0.0.1:8124/mcp";
 test("an MCP server keeps its headers secret, discovers tools, and a graph runs one", async ({ page, api, request }) => {
   const stamp = Date.now();
   const name = `E2E MCP ${stamp}`;
-  await page.goto("/mcp");
-  await page.getByRole("button", { name: /New MCP server/i }).first().click();
+  await page.goto("/?panel=mcp");
+  await page.getByRole("button", { name: "New", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New MCP server" });
   await dialog.getByLabel("Name").fill(name);
   await dialog.getByLabel("URL").fill(FAKE_MCP_URL);
@@ -33,7 +33,7 @@ test("an MCP server keeps its headers secret, discovers tools, and a graph runs 
   expect(await (await request.get(`${API_URL}/api/mcp-servers/${server.id}`)).text()).not.toContain("e2e-key");
 
   // Reopened, the stored value stays hidden; Test connection uses it.
-  await page.getByRole("button", { name: `Edit MCP server ${name}` }).click();
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Edit MCP server" });
   await expect(edit.getByLabel("Header X-Api-Key value")).toHaveValue("");
   await expect(edit.getByLabel("Header X-Api-Key value")).toHaveAttribute("placeholder", "Stored; type to replace");
@@ -64,8 +64,8 @@ test("a tool sourced from an MCP server picks the server's tool and its schema",
   expect((await request.put(`${API_URL}/api/mcp-servers/${serverId}/headers`, { data: { headers: { "X-Api-Key": "e2e-key" } } })).ok()).toBe(true);
 
   const toolName = `orders_${stamp}`;
-  await page.goto("/tools");
-  await page.getByRole("button", { name: /New tool/i }).first().click();
+  await page.goto("/?panel=tools");
+  await page.getByRole("button", { name: "New", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New tool" });
   await dialog.getByLabel("Tool name").fill(toolName);
   await dialog.getByRole("radio", { name: "MCP server" }).click();
@@ -87,7 +87,7 @@ test("a tool sourced from an MCP server picks the server's tool and its schema",
   expect(tool).toMatchObject({ mcp_server_id: serverId, mcp_tool_name: "order_status" });
 
   // Built-in tool names are taken.
-  await page.getByRole("button", { name: /New tool/i }).first().click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
   const again = page.getByRole("dialog", { name: "New tool" });
   await again.getByLabel("Tool name").fill("calculator");
   await expect(again.getByText("That's a built-in tool; pick another name.")).toBeVisible();
@@ -98,8 +98,8 @@ test("Test connection reports a server that refuses the request", async ({ page,
   const serverId = `e2e_mcp_nokey_${Date.now()}`;
   const name = `No key ${serverId}`;
   expect((await request.post(`${API_URL}/api/mcp-servers`, { data: { id: serverId, name, url: FAKE_MCP_URL } })).ok()).toBe(true);
-  await page.goto("/mcp");
-  await page.getByRole("button", { name: `Edit MCP server ${name}` }).click();
+  await page.goto("/?panel=mcp");
+  await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Edit MCP server" });
   await edit.getByRole("button", { name: "Test connection" }).click();
   await expect(edit.getByRole("alert")).toContainText(/Couldn't connect: .*401/);

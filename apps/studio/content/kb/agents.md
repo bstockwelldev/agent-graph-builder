@@ -10,4 +10,4 @@ An agent is a graph plus an LLM profile (the run's default model), a system prom
 
 ## How do I…
 - **Create one:** **Resources ▸ Agents** ▸ New, then pick its graph and profile.
-- **Run as an agent:** choose it under **Run as** in the graph's Run panel, use **Run** on the Agents page, or type `/run @agent …` in Chat.
+- **Run as an agent:** choose it under **Run as** in the graph's Run panel, use **Run** on the agent in the Agents panel, or type `/run @agent …` in Chat.

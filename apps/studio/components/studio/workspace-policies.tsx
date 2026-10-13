@@ -5,8 +5,6 @@ import Link from "next/link";
 import type { EffectivePolicyRule, GraphSummary, PolicyEnforcement, PolicyException, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
 
 import { ScopeSelect } from "@/components/studio/scope-select";
-import { StudioPage } from "@/components/studio/studio-page";
-import { StudioPageHeader } from "@/components/studio/studio-page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,8 +55,7 @@ const STATE_BADGE: Record<ExceptionState, { label: string; className: string }> 
 
 type ExceptionFilter = "all" | "open" | "expired";
 
-export function WorkspacePolicies({ layout }: { layout: "page" | "panel" }) {
-  const panel = layout === "panel";
+export function WorkspacePolicies() {
   const scope = useGraphScope();
   const graphId = scope.graphId;
   const [rules, setRules] = useState<EffectivePolicyRule[]>([]);
@@ -156,25 +153,19 @@ export function WorkspacePolicies({ layout }: { layout: "page" | "panel" }) {
   const description = graph
             ? `${graph.name}'s overrides of the workspace rules. A rule left on Inherit follows the workspace, which follows the built-in default.`
             : "Workspace defaults for the security, reliability, cost and governance checks every graph runs. A graph can override a rule from its own Policies panel, or here with the graph in scope.";
-  const Wrapper = panel ? PanelWrapper : PageWrapper;
-
   return (
-    <Wrapper>
-      {panel ? (
-        <div className="mb-3 space-y-2">
-          <p className="text-muted-foreground text-xs">{description}</p>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <ScopeSelect scope={scope} />
-            {/* Not disabled while loading: a disabled button fades back in when the load ends, and a scan
-                that lands mid-fade sees low contrast. */}
-            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" aria-busy={loading} onClick={() => void load()}>
-              Refresh
-            </Button>
-          </div>
+    <div className="space-y-4 p-3">
+      <div className="mb-3 space-y-2">
+        <p className="text-muted-foreground text-xs">{description}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ScopeSelect scope={scope} />
+          {/* Not disabled while loading: a disabled button fades back in when the load ends, and a scan
+              that lands mid-fade sees low contrast. */}
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" aria-busy={loading} onClick={() => void load()}>
+            Refresh
+          </Button>
         </div>
-      ) : (
-        <StudioPageHeader title="Policies" description={description} loading={loading} onRefresh={() => void load()} actions={<ScopeSelect scope={scope} />} />
-      )}
+      </div>
       {error ? (
         <p role="alert" className="text-destructive text-sm">
           {error}
@@ -190,7 +181,7 @@ export function WorkspacePolicies({ layout }: { layout: "page" | "panel" }) {
               : "Using built-in defaults"}
       </p>
 
-      <div className={cn("grid gap-4", !panel && "lg:grid-cols-2")}>
+      <div className="grid gap-4">
         {CATEGORIES.map((category) => {
           const categoryRules = rules.filter((rule) => rule.rule.category === category);
           if (categoryRules.length === 0) return null;
@@ -308,17 +299,8 @@ export function WorkspacePolicies({ layout }: { layout: "page" | "panel" }) {
           )}
         </CardContent>
       </Card>
-    </Wrapper>
+    </div>
   );
-}
-
-function PageWrapper({ children }: { children: React.ReactNode }) {
-  return <StudioPage>{children}</StudioPage>;
-}
-
-/** The panel body: the drawer supplies the title and the scroll. */
-function PanelWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-4 p-3">{children}</div>;
 }
 
 function RuleRow({

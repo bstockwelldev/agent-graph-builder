@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { ResourceEditorDialog, isResourceEditorTab } from "@/components/studio/resource-editor-dialog";
@@ -21,7 +20,7 @@ import { useWorkbench } from "./WorkbenchProvider";
  * Workbench-drawer browser for one resource registry. Since Wave 4b
  * (studio-graph-workbench-redesign-plan.md, STO-605) it's driven by the same
  * `ResourceKindConfig` and `ResourceEditorDialog` (Overview / Usage /
- * History) as the full page -- no second copy of any form. Opened from a
+ * History) -- one editor for every registry. Opened from a
  * bound graph node with `{ resourceId }` it goes straight to that
  * resource's editor (Wave 4a).
  *
@@ -51,8 +50,6 @@ export function ResourceBrowserPanel({ kind }: { kind: AnyResourceKind }) {
   }, [allItems, loading, requestedId, workbench.panelContext]);
 
   const label = (item: ResourceLike) => kind.itemLabel(item) || item.id;
-  // "Open full page" deep-links to the resource being edited (ResourcePage `?id=`).
-  const fullPageHref = editor.editorOpen && editor.editing ? `${kind.routeHref}?id=${encodeURIComponent(editor.editing.id)}` : kind.routeHref;
 
   return (
     <div className="p-3">
@@ -74,9 +71,6 @@ export function ResourceBrowserPanel({ kind }: { kind: AnyResourceKind }) {
           <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={loading || saving} onClick={editor.openCreate}>
             New
           </Button>
-          <Link href={fullPageHref} className="text-muted-foreground text-xs hover:underline">
-            Open full page &rarr;
-          </Link>
         </div>
       </div>
       <div className="mb-2">

@@ -37,7 +37,7 @@ test.describe("public demo mode", () => {
   });
 
   test("workspace policies are read-only", async ({ page, request, demoModeApi: _ }) => {
-    await page.goto("/policies");
+    await page.goto("/?panel=workspacePolicies");
     const rule = page.getByRole("combobox", { name: "LLM model not pinned enforcement" });
     await expect(rule).toContainText("Default (Warn)");
     await rule.click();

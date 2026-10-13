@@ -9,8 +9,25 @@ import { LAST_GRAPH_KEY } from "@/lib/lastGraph";
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace, push: nav.push }), usePathname: () => "/" }));
 
-import { GraphPicker, GraphPickerProvider } from "@/components/studio/graph-picker";
+import { GraphPicker, GraphPickerProvider } from "@/components/graph/GraphPicker";
+import { WorkbenchProvider, useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import HomePage from "./page";
+
+window.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})) as typeof window.matchMedia;
+
+function ActivePanel() {
+  const workbench = useWorkbench();
+  return <output data-testid="active-panel">{`${workbench.activePanel ?? "none"}|${JSON.stringify(workbench.panelContext)}`}</output>;
+}
 
 const store = createMockStore({ graphs: [demoGraph(), makeGraph({ id: "support", name: "Support flow" })] });
 const server = setupServer(...createHandlers({ store }));
@@ -31,10 +48,13 @@ afterAll(() => server.close());
 
 const renderHome = () =>
   render(
-    <GraphPickerProvider>
-      <HomePage />
-      <GraphPicker />
-    </GraphPickerProvider>,
+    <WorkbenchProvider>
+      <GraphPickerProvider>
+        <HomePage />
+        <GraphPicker />
+        <ActivePanel />
+      </GraphPickerProvider>
+    </WorkbenchProvider>,
   );
 
 // canvas-first-landing-plan.md §3 and §7 AC 1-2.
@@ -100,5 +120,37 @@ describe("/ landing", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("down");
     expect(nav.replace).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(LAST_GRAPH_KEY)).toBe("support");
+  });
+
+  // Phase 3: the retired pages redirect to /?panel=..., which the editor opens when there is a
+  // graph to reopen, and this page opens on the empty canvas.
+  it("opens a ?panel= global panel on the empty canvas, with its id and tab, instead of the picker", async () => {
+    window.history.replaceState(null, "", "/?panel=prompts&id=p_1&tab=usage");
+    renderHome();
+    await waitFor(() => expect(screen.getByTestId("active-panel").textContent).toBe('prompts|{"resourceId":"p_1","tab":"usage"}'));
+    expect(screen.getByTestId("empty-canvas")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Open graph" })).toBeNull();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("passes the analytics scope to the panel", async () => {
+    window.history.replaceState(null, "", "/?panel=analytics&scope=workspace");
+    renderHome();
+    await waitFor(() => expect(screen.getByTestId("active-panel").textContent).toBe('analytics|{"scope":"workspace"}'));
+  });
+
+  it("ignores a graph-only ?panel=, and shows the picker as usual", async () => {
+    window.history.replaceState(null, "", "/?panel=releases");
+    renderHome();
+    expect(await screen.findByRole("dialog", { name: "Open graph" })).toBeTruthy();
+    expect(screen.getByTestId("active-panel").textContent).toBe("none|null");
+  });
+
+  it("still reopens the last graph for a ?panel= link, leaving the panel to the editor", async () => {
+    window.localStorage.setItem(LAST_GRAPH_KEY, "support");
+    window.history.replaceState(null, "", "/?panel=workspacePolicies");
+    renderHome();
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/graphs/support?panel=workspacePolicies"));
+    expect(screen.getByTestId("active-panel").textContent).toBe("none|null");
   });
 });

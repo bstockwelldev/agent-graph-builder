@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { ChatSession } from "@bstockwelldev/agent-graph-sdk";
 import {
   CommandDialog,
@@ -13,8 +12,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import type { CanvasCommand, CanvasCommandGroup } from "@/components/graph/canvasCommands";
-import { useOptionalGraphPicker } from "@/components/studio/graph-picker";
-import { studioNavGroups } from "@/components/studio/studio-nav";
+import { useOptionalGraphPicker } from "@/components/graph/GraphPicker";
 import { client } from "@/lib/api-client";
 import { KB_ARTICLES } from "@/lib/kb";
 import { isEditableKeyboardTarget } from "@/lib/graphAuthoring";
@@ -34,7 +32,6 @@ export function CommandPalette() {
   // Canvas actions (align, views, save, ...) from the open graph, read once
   // per opening so they reflect the selection at that moment.
   const [canvasCommands, setCanvasCommands] = useState<CanvasCommand[]>([]);
-  const router = useRouter();
   const picker = useOptionalGraphPicker();
   const workbench = useWorkbench();
   // Studio-config-editor-and-console-plan.md §7's "HUD toggle shows a
@@ -80,11 +77,6 @@ export function CommandPalette() {
     };
   }, [open]);
 
-  const goToRoute = (href: string) => {
-    setOpen(false);
-    router.push(href);
-  };
-
   const openPanel = (id: WorkbenchPanelId) => {
     setOpen(false);
     workbench.open(id);
@@ -118,7 +110,7 @@ export function CommandPalette() {
         if (!next) setSearch("");
       }}
     >
-      <CommandInput placeholder="Jump to a page, run a canvas action, or search help…" value={search} onValueChange={setSearch} />
+      <CommandInput placeholder="Open a panel, run a canvas action, or search help…" value={search} onValueChange={setSearch} />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         {CANVAS_GROUPS.map((group) => {
@@ -160,15 +152,6 @@ export function CommandPalette() {
             </CommandItem>
           </CommandGroup>
         )}
-        {studioNavGroups.map((group) => (
-          <CommandGroup key={group.label} heading={group.label}>
-            {group.items.map((item) => (
-              <CommandItem key={item.href} value={item.label} onSelect={() => goToRoute(item.href)}>
-                {item.label}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
         <CommandGroup heading="Workbench">
           {globalPanels.map(([id, meta]) => {
             const unreadSuffix =

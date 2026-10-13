@@ -29,7 +29,8 @@ test("analytics summarizes the graph's runs per node", async ({ page, api }) => 
   await workspace.click();
   await expect(workspace).toHaveAttribute("aria-pressed", "true");
   await expect.poll(async () => Number((await stat("Invocations").textContent())?.replace(/,/g, ""))).toBeGreaterThanOrEqual(1);
-  await expect(page.getByRole("row", { name: `${graph.name} 1 $0.00` })).toBeVisible();
+  // The by-graph row: name, runs, tokens, estimated spend.
+  await expect(page.getByRole("row", { name: new RegExp(`${graph.name} 1 [\\d,]+ \\$0\\.00`) })).toBeVisible();
 });
 
 test("routing lab runs a dataset, compares against a release, and saves the dataset", async ({ page, api, request }) => {
@@ -125,9 +126,9 @@ test("publishes versions of a library prompt from its history tab", async ({ pag
   const id = `e2e_prompt_${Date.now()}`;
   const name = `E2E prompt ${id}`;
   expect((await request.post(`${API_URL}/api/prompts`, { data: { id, name, body: "Answer: {question}" } })).ok()).toBe(true);
-  await page.goto("/prompts");
+  await page.goto("/?panel=prompts");
   const openEditor = async () => {
-    await page.getByRole("button", { name: new RegExp(`^Edit prompt ${name}`) }).click();
+    await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Edit prompt" });
     await dialog.getByRole("tab", { name: "History" }).click();
     return dialog;
