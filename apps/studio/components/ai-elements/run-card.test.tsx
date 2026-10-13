@@ -30,7 +30,7 @@ describe("ToolStep", () => {
     const big = { rows: Array.from({ length: 200 }, (_, i) => ({ id: i, text: "x".repeat(20) })) };
     render(<ToolStep name="tool_1" status="succeeded" output={big} defaultOpen />);
     const block = screen.getByTestId("json-output");
-    expect(block.className).toContain("max-h-40");
+    expect(block.style.maxHeight).toBe("160px");
     expect(block.textContent!.endsWith("…")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: /Show all/ }));
     expect(screen.getByTestId("json-output").textContent!.endsWith("…")).toBe(false);
