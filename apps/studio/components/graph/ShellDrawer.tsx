@@ -82,7 +82,11 @@ export function ShellDrawer({
         }}
         style={panelStyle}
         className={cn(
-          "glass-panel ghost-border fixed top-0 bottom-0 z-50 flex max-w-full flex-col border outline-none",
+          // Safe-area insets: the root viewport uses `viewport-fit=cover`
+          // (see app/layout.tsx), so without these the drawer would slide up
+          // under the notch and down under the home indicator on iPhones.
+          // `env()` is 0 on desktop, so this is a no-op there.
+          "glass-panel ghost-border fixed top-0 bottom-0 z-50 flex max-w-full flex-col border pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] outline-none",
           side === "left" ? "agb-drawer-left left-0 border-r" : "agb-drawer-right right-0 border-l",
         )}
         {...closingAttr}

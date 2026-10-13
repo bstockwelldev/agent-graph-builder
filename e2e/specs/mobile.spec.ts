@@ -24,3 +24,14 @@ test("on a phone the graph runs from the drawer and nodes can be added", async (
   // The phone header shows only a dot; the state is still announced.
   await expect(page.getByRole("status").first()).toHaveText("Unsaved");
 });
+
+test("the viewport opts into viewport-fit=cover so the bottom tray clears the home indicator", async ({ page, api }) => {
+  // Regression test for the "tray not selectable" iPhone report: without
+  // `viewport-fit=cover` iOS Safari reports zero safe-area insets, the
+  // tray's `pb-[env(safe-area-inset-bottom)]` collapses to 0, and the tabs
+  // land inside the home-indicator gesture zone where taps never reach them.
+  const graph = await api.createDemoGraph("E2E mobile viewport");
+  await page.goto(`/graphs/${graph.id}`);
+  const content = await page.locator('meta[name="viewport"]').getAttribute("content");
+  expect(content).toContain("viewport-fit=cover");
+});
