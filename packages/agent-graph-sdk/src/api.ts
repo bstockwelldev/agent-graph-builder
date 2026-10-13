@@ -1,4 +1,4 @@
-import { z } from "zod";
+import type { z } from "zod";
 
 import { listReader, type IterateRequest, type PageRequest } from "./pagination.js";
 import { streamRun, waitForRun, type RunStreamOptions, type WaitForRunOptions } from "./runs.js";
@@ -21,7 +21,6 @@ import {
   graphReleaseSchema,
   graphSummarySchema,
   graphUsedBySchema,
-  seededDemoSummarySchema,
   kbArticleSchema,
   kbArticleSummarySchema,
   graphResourcesSchema,
@@ -128,7 +127,7 @@ export type KnowledgeLineageRequest = { documentId?: string };
 export type DatasetFromRunsRequest = { name: string; description?: string; runIds: string[]; includeNodeOutputs?: boolean };
 /** `client.evals.run`: "draft" or a release id ("latest" works); Stub unless `provider` says otherwise. */
 export type EvalRunRequest = { target?: string; provider?: string; model?: string; apiKey?: string };
-export type ChatMessageRequest = { content: string; context?: ChatContext };
+export type ChatMessageRequest = { content: string; context?: ChatContext; apiKey?: string };
 
 export type RunHandle = {
   /** The run as the start call returned it (usually queued or running). */
@@ -246,11 +245,6 @@ export function buildNamespaces(transport: Transport) {
       /** Runs the draft with no live tool/LLM calls (`fixture.node_outputs` stubs nodes). */
       simulate: (graphId: string, fixture: Fixture) =>
         transport.request(path`/api/graphs/${graphId}/simulate`, json(fixture), simulateResultSchema),
-    },
-
-    /** Demo gallery: seeded, read-only workflows visitors can run and fork. */
-    demos: {
-      list: () => transport.request("/api/demos", undefined, z.array(seededDemoSummarySchema)),
     },
 
     runs: {
@@ -525,7 +519,7 @@ export function buildNamespaces(transport: Transport) {
     chatSessions: {
       ...resourceNamespace(transport, "chat-sessions", chatSessionSchema),
       send: (sessionId: string, request: ChatMessageRequest) =>
-        transport.request(path`/api/chat-sessions/${sessionId}/messages`, json({ content: request.content, context: request.context }), chatSessionSchema),
+        transport.request(path`/api/chat-sessions/${sessionId}/messages`, json({ content: request.content, context: request.context, ...(request.apiKey ? { api_key: request.apiKey } : {}) }), chatSessionSchema),
     },
   };
 }

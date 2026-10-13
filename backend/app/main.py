@@ -23,7 +23,7 @@ from .bindings import resource_usages
 from .chat_context import ChatContext, build_chat_prompt
 from .kb import KbArticle, KbArticleSummary, get_article, load_articles, search_articles
 from .datasets import DatasetBuildError, build_dataset_from_runs
-from .demo_graph import SEEDED_DEMOS, SEEDED_DOCUMENTS, SEEDED_RESOURCES, protected_graph
+from .demo_graph import build_demo_graph, protected_graph
 from .env_config import (
     load_app_env,
     public_demo_mode_enabled,
@@ -165,55 +165,15 @@ from .spa_cache import SpaCacheControlMiddleware
 logger = logging.getLogger(__name__)
 
 
-def _seed_demo_graphs() -> None:
-    """Writes each seeded demo when it is missing or differs from its builder --
-    restoring edits made before it was read-only and picking up changes to
-    demo_graph.py on the next cold start. Demo-supporting resources (datasets,
-    eval suites) seed the same way; volatile timestamps are ignored in the
-    comparison."""
-    for demo in SEEDED_DEMOS:
-        graph = demo.build()
-        stored = storage.get_graph(graph.id)
-        if stored is None or document_fingerprint(stored) != document_fingerprint(graph):
-            graph.updated_at = datetime.now(UTC).isoformat()
-            storage.save_graph(graph)
-    for kind, resource_id, build in SEEDED_RESOURCES:
-        payload = build().model_dump(mode="json")  # type: ignore[union-attr]
-        stored = storage.get_resource(kind, resource_id)
-        if stored is None or _without_timestamps(stored) != _without_timestamps(payload):
-            storage.save_resource(kind, resource_id, payload)
-
-
-def _without_timestamps(payload: dict[str, object]) -> dict[str, object]:
-    return {k: v for k, v in payload.items() if k not in ("created_at", "updated_at")}
-
-
-def _seed_demo_documents() -> None:
-    """Seeds the extraction documents demo graphs need (public demo mode
-    disables uploads, so the Rulebook Q&A demo ships its rulebook)."""
-    import base64
-
-    from .extraction.documents import list_documents
-
-    for graph_id, doc_id, file_name, mime, markdown, page_count in SEEDED_DOCUMENTS:
-        existing = [d for d in list_documents(graph_id) if d.file_name == file_name]
-        if existing:
-            continue
-        content = markdown.encode("utf-8")
-        storage.save_resource(
-            "extract_documents",
-            doc_id,
-            {
-                "id": doc_id,
-                "graph_id": graph_id,
-                "file_name": file_name,
-                "mime": mime,
-                "size_bytes": len(content),
-                "page_count": page_count,
-                "uploaded_at": datetime.now(UTC).isoformat(),
-                "content_b64": base64.b64encode(content).decode("ascii"),
-            },
-        )
+def _seed_demo_graph() -> None:
+    """Writes the canonical demo when it is missing or differs from
+    `build_demo_graph()` -- restoring edits made before it was read-only and
+    picking up changes to demo_graph.py on the next cold start."""
+    demo = build_demo_graph()
+    stored = storage.get_graph(demo.id)
+    if stored is None or document_fingerprint(stored) != document_fingerprint(demo):
+        demo.updated_at = datetime.now(UTC).isoformat()
+        storage.save_graph(demo)
 
 
 @asynccontextmanager
@@ -224,10 +184,9 @@ async def lifespan(_app: FastAPI):
     # FUNCTION_INVOCATION_FAILED instead of a diagnosable error response.
     try:
         if storage.storage_is_healthy():
-            _seed_demo_graphs()
-            _seed_demo_documents()
+            _seed_demo_graph()
     except Exception:
-        logger.warning("Demo seed skipped: storage backend unavailable", exc_info=True)
+        logger.warning("Demo graph seed skipped: storage backend unavailable", exc_info=True)
     yield
 
 
@@ -367,27 +326,6 @@ def list_graphs(page: Page) -> list[GraphDefinition]:
     page_ids = paginate(storage.list_graph_ids(), page, key=lambda graph_id: (graph_id,))
     graphs = [storage.get_graph(graph_id) for graph_id in page_ids]
     return [graph for graph in graphs if graph is not None]
-
-
-class SeededDemoSummary(BaseModel):
-    id: str
-    title: str
-    tagline: str
-    node_types: list[str]
-
-
-@app.get("/api/demos", response_model=list[SeededDemoSummary])
-def list_seeded_demos() -> list[SeededDemoSummary]:
-    """The public demo gallery: seeded, read-only workflows visitors can run and fork."""
-    return [
-        SeededDemoSummary(
-            id=demo.id,
-            title=demo.title,
-            tagline=demo.tagline,
-            node_types=list(demo.node_types),
-        )
-        for demo in SEEDED_DEMOS
-    ]
 
 
 @app.get("/api/graph-summaries")
@@ -1369,6 +1307,10 @@ class ChatSessionMessageRequest(BaseModel):
     # optional, so an old client (or a request with nothing selected) still
     # gets exactly the pre-existing behavior.
     context: ChatContext | None = None
+    # Bring-your-own key (public demo mode): lets a chat session use a live
+    # provider with the caller's key, the same way runs already accept
+    # `api_key`. Held in memory client-side, never persisted.
+    api_key: str | None = None
 
 
 @app.post(
@@ -1391,7 +1333,7 @@ async def send_chat_session_message_route(
     session.messages.append(ChatMessage(role="user", content=body.content))
 
     system_prompt = build_chat_prompt(body.context, body.content)
-    chat_model = get_chat_model(model=session.model, provider=session.provider)
+    chat_model = get_chat_model(model=session.model, provider=session.provider, api_key=body.api_key)
     reply = await chat_model.generate(
         system_prompt=system_prompt, user_prompt=body.content, history=history
     )
