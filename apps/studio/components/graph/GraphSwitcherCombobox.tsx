@@ -103,6 +103,8 @@ export function GraphSwitcherCombobox({
         <IconButton
           label="Switch graph"
           icon={<ChevronsUpDown size={16} aria-hidden="true" />}
+          // 28px, not the kit's 32: the header's identity group has no pixels to spare.
+          style={{ minWidth: 28, width: 28, height: 28 }}
           aria-haspopup="listbox"
           aria-expanded={open}
           onClick={() => setOpenAndNotify(!open)}
@@ -112,7 +114,18 @@ export function GraphSwitcherCombobox({
           aria-haspopup="listbox"
           aria-expanded={open}
           onClick={() => setOpenAndNotify(!open)}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: spacing[2], maxWidth: 224 }}
+          // The old shadcn `sm` footprint (h-7, px-2.5, 0.8rem), not the kit's roomier default: the
+          // header's identity group clips its content, so extra pixels push Save into the next control.
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: spacing[2],
+            maxWidth: 224,
+            padding: "4px 10px",
+            fontSize: "0.8rem",
+            lineHeight: "20px",
+          }}
         >
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{triggerLabel}</span>
           <ChevronsUpDown size={14} aria-hidden="true" style={{ flexShrink: 0, color: text.secondary }} />

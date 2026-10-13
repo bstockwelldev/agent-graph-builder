@@ -88,7 +88,9 @@ test("you can delete your own graphs from the picker, behind a confirm, and demo
   await page.goto("/?open=picker");
   const picker = page.getByRole("dialog", { name: "Open graph" });
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("button", { name: /^Delete Classify & Route/ })).toHaveCount(0);
+  // Demos are read-only: nothing in that section can be deleted. (A fork of one, made by another
+  // spec in this shared database, is one of your own graphs and rightly has a Delete button.)
+  await expect(picker.getByRole("region", { name: "Seeded demos" }).getByRole("button")).toHaveCount(0);
 
   await picker.getByRole("button", { name: `Delete ${graph.name}` }).click();
   // The confirm is inline in the row, not a second dialog.

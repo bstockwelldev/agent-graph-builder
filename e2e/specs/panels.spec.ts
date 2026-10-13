@@ -14,7 +14,8 @@ test("analytics summarizes the graph's runs per node", async ({ page, api }) => 
   const runs = stat("Runs (recent)");
   await expect(runs).toHaveText("1");
   await expect(stat("Success rate")).toHaveText("100%");
-  const rows = page.getByRole("table").getByRole("row");
+  // The per-node table, by name: graph scope also shows the daily and by-model tables below it.
+  const rows = page.getByRole("table", { name: "Nodes, slowest first" }).getByRole("row");
   // Header plus the six nodes the "technical" branch ran.
   await expect(rows).toHaveCount(7);
   await expect(rows.filter({ hasText: "llm_classify · llm" })).toContainText("100%");

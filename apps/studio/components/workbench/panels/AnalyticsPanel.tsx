@@ -138,7 +138,7 @@ function AnalyticsDashboard({ graphId, onOpenGraph }: { graphId?: string; onOpen
               ) : null}
               {payload && payload.daily.length > 0 ? (
                 <Scroller>
-                  <table style={table}>
+                  <table aria-label="Runs per day" style={table}>
                     <thead>
                       <tr>
                         <th style={th}>Date</th>
@@ -176,7 +176,7 @@ function AnalyticsDashboard({ graphId, onOpenGraph }: { graphId?: string; onOpen
                 <div style={stack}>
                   <GenuiChart kind="bar" title="Model calls" rows={modelRows(payload.by_model)} x="model" y={["calls"]} height={180} />
                   <Scroller>
-                    <table style={table}>
+                    <table aria-label="Model usage" style={table}>
                       <thead>
                         <tr>
                           <th style={th}>Provider / model</th>
@@ -212,7 +212,7 @@ function AnalyticsDashboard({ graphId, onOpenGraph }: { graphId?: string; onOpen
             <Card title="By graph">
               {payload && payload.by_graph.length > 0 ? (
                 <Scroller>
-                  <table style={table}>
+                  <table aria-label="Runs by graph" style={table}>
                     <thead>
                       <tr>
                         <th style={th}>Graph</th>
@@ -370,7 +370,7 @@ export function GraphAnalyticsView({
 
       <Card title="Nodes (slowest first)">
         <Scroller>
-          <table style={table}>
+          <table aria-label="Nodes, slowest first" style={table}>
             <thead>
               <tr>
                 <th style={th}>Node</th>
