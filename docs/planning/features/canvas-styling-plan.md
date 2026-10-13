@@ -45,7 +45,7 @@ A primitive joins the kit only when two surfaces need it.
 | --- | --- | --- |
 | **1. Kit + dialogs + forms** | The primitives from §3, `ResourceEditorDialog` onto `Modal` + `IconTabs`, `resource-fields` and every field file that composes it, `provider-model-fields`, `studio-confirm-dialog`, `resource-version-history`, `scope-select` | Most of the `Select` → `Combobox` churn lands here (§6) |
 | **2. Panels** | `ResourceBrowserPanel`, `workspace-policies`, `genui-library` + `GenuiPanel`, the Analytics cards, `WorkbenchDrawer`'s title bar, `PanelHelpButton`, `GraphSwitcherCombobox` | The surfaces the user actually looks at |
-| **3. Palette + chrome** | `CommandPalette`, and Tier B if decision 1 includes it | `cmdk` is restyled in place |
+| **3. Palette + chrome** | `CommandPalette` (Tier B is out of scope, decision 1) | `cmdk` is restyled in place |
 
 PR 2 is the one that fixes what the user sees day to day. If only one ships soon, it is that one, with just the kit pieces it needs.
 
