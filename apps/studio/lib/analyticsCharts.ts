@@ -1,6 +1,6 @@
 import type { AnalyticsDailyPoint, AnalyticsLatencyBucket, AnalyticsModelRow } from "@bstockwelldev/agent-graph-sdk";
 
-// Row builders for the Analytics page's GenUI charts (resource-forms-
+// Row builders for the Analytics panel's GenUI charts (resource-forms-
 // consistency-plan.md, slice 5 follow-up): runs by status, the run duration
 // distribution and the provider/model mix. Pure, so they're unit-tested
 // without rendering a chart.

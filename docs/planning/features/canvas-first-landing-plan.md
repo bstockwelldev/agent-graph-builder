@@ -1,6 +1,6 @@
 # Canvas-first landing: plan
 
-Status: **Approved 2026-10-12, §9 defaults accepted as written. Phases 1 ([#177](https://github.com/bstockwelldev/agent-graph-builder/pull/177)) and 2 ([#176](https://github.com/bstockwelldev/agent-graph-builder/pull/176)) shipped; Phase 3 (redirect + delete) in review ([#178](https://github.com/bstockwelldev/agent-graph-builder/pull/178)); Phase 4 is the final docs pass.** Builds on #173 (panel close, `/graphs` scroll, demo de-duplication).
+Status: **Approved 2026-10-12, §9 defaults accepted as written. Shipped 2026-10-13: Phase 2 ([#176](https://github.com/bstockwelldev/agent-graph-builder/pull/176)), Phase 1 ([#177](https://github.com/bstockwelldev/agent-graph-builder/pull/177)), Phase 3 ([#178](https://github.com/bstockwelldev/agent-graph-builder/pull/178)); Phase 4's tests and docs landed inside them, and this is its closing pass. Follow-up: restyle the remaining shadcn surfaces (§11).** Builds on #173 (panel close, `/graphs` scroll, demo de-duplication).
 Supersedes the navigation parts of [studio-graph-workbench-redesign-plan.md](studio-graph-workbench-redesign-plan.md) Wave 2 (the 72px rail and the `/resources` hub). Everything else in that plan stands.
 
 ## 1. Goal
@@ -117,3 +117,19 @@ Phases 1–2 can ship with no visible regression. Phase 3 is the only one that r
 - Folders or tags in the picker.
 - Thumbnails of graphs in the picker (possible later, rendered from the stored node layout).
 - Changes to backend routes. `/api/graph-summaries` keeps returning demos, because subgraph pickers need them.
+
+## 11. What shipped, and where it differs from the plan
+
+All four phases are in. Phases 2, 1 and 3 merged in that order, because Phase 3's redirects land on Phase 1's `/`. Phase 4's test and doc work could not wait: deleting the pages would have broken CI, so each PR carried its own e2e moves, KB edits and README changes. This section is Phase 4's closing pass.
+
+Differences from §2–§5:
+
+- **Redirects** are `next.config` redirects (`lib/legacyRoutes.ts`), not page files, so the page directories are gone entirely. They are temporary (307), so a panel can move later. A graph-scoped `/analytics?graph=<id>` opens that graph's analytics; `/` opens a `?panel=` global panel on the empty canvas when there is no graph to reopen.
+- **The picker is a searchable list, not `Command`** (§3). A cmdk option cannot hold a delete button without failing the `nested-interactive` accessibility rule.
+- **The picker, the empty canvas and their modal frame are token-styled, not shadcn** (§3 said shadcn `Dialog`). Reviewing #177 showed it read as the old CRUD pages, so `AGENTS.md` now classes them canvas-side (`components/graph/GraphPicker.tsx`, `EmptyCanvas.tsx`, `ui/Modal.tsx`).
+- **Analytics parity was missing from §4** and was found in Phase 3: the page's runs-by-status, run-duration, model-call and per-node P95 charts, token columns and by-model table moved into the panel.
+- **§5 navigation** is built as written, plus an account entry (`useStudioAccount()`). The header's back button opens the picker.
+- **Not ported (by choice):** the card previews (prompt body, tool JSON, fixture list), and the Scope select on `/analytics` for choosing any graph (the panel has This graph / Workspace and By graph rows).
+- **Found on the way:** an open header menu could sit under a floating panel, and the Analytics By graph row for the open graph did nothing. Both fixed in #178.
+
+Follow-up, not started: the resource panels and editor dialogs, workspace policies, the GenUI catalog and the command palette are still shadcn, so they still carry the old CRUD look. Restyling them from the canvas tokens is its own PR.
