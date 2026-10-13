@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { GraphSummary, ReleaseIndexEntry } from "@bstockwelldev/agent-graph-sdk";
 import { useReleases } from "@bstockwelldev/agent-graph-sdk/react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/graph/ui/Button";
+import { Combobox } from "@/components/graph/ui/Combobox";
+import { Field } from "@/components/graph/ui/Field";
+import { TextInput } from "@/components/graph/ui/fields";
+import { fontFamily, localType, radius, spacing, surface, text } from "@/lib/graph-theme";
 import type { RunTarget } from "@/lib/chatRuns";
 
 const DRAFT = "__draft__";
@@ -18,6 +19,9 @@ const LATEST = "__latest__";
  * version (the saved draft, the latest release, or a specific release) and
  * one field per input variable. Submits a RunTarget; ChatPanel decides
  * whether it needs a confirm step.
+ *
+ * Token-styled (apps/studio/AGENTS.md): the chat panel lives on the
+ * token-styled graph canvas, so it uses graph-theme tokens, not Tailwind.
  */
 export function ChatRunPicker({
   graphs,
@@ -41,10 +45,23 @@ export function ChatRunPicker({
   // Newest first. No releases (or unreachable): the draft is still runnable.
   const releases = useReleases(graphId, { select: newestFirst }).data ?? [];
 
+  const formStyle: CSSProperties = {
+    margin: `0 ${spacing[3]}px ${spacing[2]}px`,
+    display: "flex",
+    flexDirection: "column",
+    gap: spacing[2],
+    borderRadius: radius.lg,
+    border: `1px solid ${surface.border}`,
+    background: surface.card,
+    padding: spacing[3],
+    ...localType.ui,
+    color: text.primary,
+  };
+
   return (
     <form
       aria-label="Run a graph"
-      className="bg-card mx-3 mb-2 space-y-2 rounded-lg border p-3"
+      style={formStyle}
       onSubmit={(event) => {
         event.preventDefault();
         if (!graph) return;
@@ -53,78 +70,58 @@ export function ChatRunPicker({
         onSubmit({ graph, release, input: filled, inferred: false });
       }}
     >
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor="chat-run-graph" className="text-xs">
-            Graph
-          </Label>
-          <Select
-            value={graphId}
-            onValueChange={(value) => {
-              if (!value) return;
-              setGraphId(value);
-              setVersion(DRAFT);
-            }}
-            items={Object.fromEntries(graphs.map((candidate) => [candidate.id, candidate.name]))}
-          >
-            <SelectTrigger id="chat-run-graph" className="h-8 w-full text-xs">
-              <SelectValue placeholder="Choose a graph" />
-            </SelectTrigger>
-            <SelectContent>
-              {graphs.map((candidate) => (
-                <SelectItem key={candidate.id} value={candidate.id}>
-                  {candidate.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="chat-run-version" className="text-xs">
-            Version
-          </Label>
-          <Select
-            value={version}
-            onValueChange={(value) => value && setVersion(value)}
-            items={{
-              [DRAFT]: "Draft (saved)",
-              [LATEST]: "Latest release",
-              ...Object.fromEntries(releases.map((release) => [release.release_id, release.release_id])),
-            }}
-          >
-            <SelectTrigger id="chat-run-version" className="h-8 w-full text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={DRAFT}>Draft (saved)</SelectItem>
-              {releases.length > 0 ? <SelectItem value={LATEST}>Latest release</SelectItem> : null}
-              {releases.map((release) => (
-                <SelectItem key={release.release_id} value={release.release_id}>
-                  {release.release_id} · {new Date(release.created_at).toLocaleDateString()}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: spacing[2] }}>
+        <Field label="Graph">
+          {(id) => (
+            <Combobox
+              id={id}
+              aria-label="Graph"
+              value={graphId}
+              options={graphs.map((candidate) => ({ value: candidate.id, label: candidate.name }))}
+              onChange={(value) => {
+                if (!value) return;
+                setGraphId(value);
+                setVersion(DRAFT);
+              }}
+              placeholder="Choose a graph"
+            />
+          )}
+        </Field>
+        <Field label="Version">
+          {(id) => (
+            <Combobox
+              id={id}
+              aria-label="Version"
+              value={version}
+              options={[
+                { value: DRAFT, label: "Draft (saved)" },
+                ...(releases.length > 0 ? [{ value: LATEST, label: "Latest release" }] : []),
+                ...releases.map((release) => ({
+                  value: release.release_id,
+                  label: `${release.release_id} · ${new Date(release.created_at).toLocaleDateString()}`,
+                })),
+              ]}
+              onChange={(value) => value && setVersion(value)}
+            />
+          )}
+        </Field>
       </div>
       {variables.map((name) => (
-        <div key={name} className="space-y-1">
-          <Label htmlFor={`chat-run-input-${name}`} className="font-mono text-xs">
-            {name}
-          </Label>
-          <Input
-            id={`chat-run-input-${name}`}
-            className="h-8 text-xs"
-            value={input[name] ?? ""}
-            onChange={(event) => setInput((current) => ({ ...current, [name]: event.target.value }))}
-          />
-        </div>
+        <Field key={name} label={<span style={{ fontFamily: fontFamily.mono }}>{name}</span>}>
+          {(id) => (
+            <TextInput
+              id={id}
+              value={input[name] ?? ""}
+              onChange={(event) => setInput((current) => ({ ...current, [name]: event.target.value }))}
+            />
+          )}
+        </Field>
       ))}
-      <div className="flex justify-end gap-2">
-        <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={onCancel}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: spacing[2] }}>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" variant="synth" className="h-7 text-xs" disabled={!graph}>
+        <Button type="submit" variant="primary" disabled={!graph}>
           {version === DRAFT ? "Run draft" : "Review & run"}
         </Button>
       </div>

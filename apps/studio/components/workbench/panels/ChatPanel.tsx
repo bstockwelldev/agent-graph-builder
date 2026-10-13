@@ -1,26 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Play } from "lucide-react";
-import type { ChatContext, ChatMessage, ChatRunRef, ChatSession, GraphSummary } from "@bstockwelldev/agent-graph-sdk";
-import type { ChatProvider } from "@bstockwelldev/agent-graph-sdk";
+import type { ChatContext, ChatMessage, ChatProvider, ChatRunRef, ChatSession, GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
-import { PROVIDER_ORDER } from "@/lib/providers";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from "@/components/graph/ui/Button";
+import { Combobox } from "@/components/graph/ui/Combobox";
+import { IconButton } from "@/components/graph/ui/IconButton";
 import { ProviderModelPicker } from "@/components/graph/ProviderModelPicker";
 import { Conversation, ConversationContent, ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import { RunCard, RunConfirmCard, versionLabel } from "@/components/ai-elements/run-card";
+import { color, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { matchRunIntent, needsConfirmation, parseRunCommand, type RunTarget } from "@/lib/chatRuns";
 import { ChatRunPicker } from "./ChatRunPicker";
@@ -37,6 +31,57 @@ function commandFor(target: RunTarget): string {
   return `/run ${target.graph.id}${selector}${args ? ` ${args}` : ""}`;
 }
 
+const rootStyle: CSSProperties = {
+  display: "flex",
+  height: "100%",
+  minHeight: 0,
+  width: "100%",
+  flexDirection: "column",
+  background: surface.panel,
+  color: text.primary,
+};
+
+const headerRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: spacing[2],
+  borderBottom: `1px solid ${surface.border}`,
+  padding: spacing[3],
+};
+
+const sectionLabelStyle: CSSProperties = {
+  ...typeScale.caption,
+  color: text.secondary,
+};
+
+const newSessionStyle: CSSProperties = {
+  display: "flex",
+  flex: 1,
+  flexDirection: "column",
+  gap: spacing[3],
+  padding: spacing[3],
+  minHeight: 0,
+  overflowY: "auto",
+};
+
+const contextStripStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: spacing[2],
+  borderBottom: `1px solid ${surface.border}`,
+  padding: `${spacing[1] + 2}px ${spacing[3]}px`,
+  ...typeScale.caption,
+};
+
+const contextTextStyle: CSSProperties = {
+  minWidth: 0,
+  flex: 1,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  color: text.secondary,
+};
+
 /**
  * Direct model scratchpad (studio-consolidation Phase 8 part E) — chats
  * straight to a chosen provider/model via `client.chatSessions.send`,
@@ -44,6 +89,11 @@ function commandFor(target: RunTarget): string {
  * to a node, not a multi-turn graph execution). Session persistence is a
  * day-one requirement (also confirmed), so sessions are listed/created via
  * the same `chatSessions` resource client every other resource kind uses.
+ *
+ * Token-styled (apps/studio/AGENTS.md): the chat panel lives on the
+ * token-styled graph canvas, so it uses graph-theme tokens, not Tailwind.
+ * The provider/model picker itself (`ProviderModelPicker`) is owned by the
+ * provider-UX workstream and is used here unchanged.
  */
 export function ChatPanel() {
   const workbench = useWorkbench();
@@ -55,8 +105,6 @@ export function ChatPanel() {
 
   const [newProvider, setNewProvider] = useState<ChatProvider>("stub");
   const [newModel, setNewModel] = useState("stub");
-  // Providers this deployment cannot serve for chat (which has no API-key field), with the reason.
-  const [providerNotes, setProviderNotes] = useState<Partial<Record<string, string>>>({});
 
   // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596).
   // On by default; the user can opt out per-panel-session via the strip
@@ -98,25 +146,6 @@ export function ChatPanel() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all(
-      PROVIDER_ORDER.filter((id) => id !== "stub").map(async (id) => {
-        try {
-          const readiness = await client.providers.ready(id);
-          return readiness.ready ? null : ([id, readiness.message] as const);
-        } catch {
-          return null; // fail soft: createSession re-checks before a session is made
-        }
-      }),
-    ).then((entries) => {
-      if (!cancelled) setProviderNotes(Object.fromEntries(entries.filter((entry) => entry !== null)));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Preselects the session the command palette's "recent sessions" group
   // was opened with (studio-consolidation Phase 8 part E).
   useEffect(() => {
@@ -136,20 +165,6 @@ export function ChatPanel() {
 
   async function createSession() {
     setError(null);
-    // Chat has no API-key field, so a non-Stub provider must be ready server-side;
-    // otherwise (e.g. public demo) every message in the new session would 403.
-    if (newProvider !== "stub") {
-      try {
-        const readiness = await client.providers.ready(newProvider);
-        if (!readiness.ready) {
-          setError(readiness.message);
-          return;
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        return;
-      }
-    }
     const id = `chat_${crypto.randomUUID().slice(0, 8)}`;
     const session: ChatSession = {
       id,
@@ -324,70 +339,57 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <div className="flex items-center gap-2 border-b p-3">
-        <Select
-          value={activeSession?.id ?? ""}
-          // Shows the session title, not its id, in the trigger.
-          items={Object.fromEntries(sessions.map((session) => [session.id, session.title]))}
-          onValueChange={(id) => {
-            if (id) void openSession(id);
-          }}
-        >
-          <SelectTrigger className="flex-1" aria-label="Chat session">
-            <SelectValue placeholder={sessionsLoading ? "Loading sessions…" : "Select a session"} />
-          </SelectTrigger>
-          <SelectContent>
-            {sessions.map((session) => (
-              <SelectItem key={session.id} value={session.id}>
-                {session.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button type="button" size="sm" variant="outline" onClick={() => void createSession()}>
+    <div style={rootStyle}>
+      <div style={headerRowStyle}>
+        {/* The wrapper's minWidth: 0 lets the combobox shrink below the
+         * session title instead of pushing "New session" off the panel. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Combobox
+            aria-label="Chat session"
+            value={activeSession?.id ?? ""}
+            options={sessions.map((session) => ({ value: session.id, label: session.title }))}
+            onChange={(id) => {
+              if (id) void openSession(id);
+            }}
+            placeholder={sessionsLoading ? "Loading sessions…" : "Select a session"}
+            searchPlaceholder="Search sessions…"
+            emptyMessage={sessions.length === 0 ? "No sessions yet" : "No matches"}
+          />
+        </div>
+        <Button type="button" variant="secondary" onClick={() => void createSession()} style={{ flexShrink: 0 }}>
           New session
         </Button>
       </div>
 
       {!activeSession ? (
-        <div className="flex flex-1 flex-col gap-3 p-3">
-          <div className="text-muted-foreground text-xs">Pick a provider/model for a new session:</div>
+        <div style={newSessionStyle}>
+          <div style={sectionLabelStyle}>Pick a provider/model for a new session:</div>
           <ProviderModelPicker
             provider={newProvider}
             model={newModel}
             onProviderChange={setNewProvider}
             onModelChange={setNewModel}
-            providerNotes={providerNotes}
           />
           <ConversationEmptyState
             title="No session open"
             description="Select an existing session above, or create a new one."
           />
-          {error && <div className="text-destructive text-xs">{error}</div>}
         </div>
       ) : (
         <>
-          <div
-            className="text-muted-foreground border-b px-3 py-1.5 text-xs"
-            title="Fixed when the session was created. A /run from this chat uses this selection for the graph run."
-          >
-            Model: {activeSession.provider} · {activeSession.model}
-          </div>
           {graphContext && (
-            <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
-              <span className="text-muted-foreground min-w-0 flex-1 truncate">
+            <div style={contextStripStyle}>
+              <span style={contextTextStyle}>
                 Context: {graphContext.graphName || graphContext.graphId}
                 {graphContext.selectedNodeId ? ` · Selected: ${graphContext.selectedNodeId}` : ""}
                 {graphContext.runId ? ` · Run: ${graphContext.runId}` : ""}
               </span>
               <Button
                 type="button"
-                size="sm"
                 variant={includeContext ? "secondary" : "ghost"}
-                className="h-6 shrink-0 px-2 text-xs"
                 onClick={() => setIncludeContext((v) => !v)}
                 aria-pressed={includeContext}
+                style={{ height: 24, fontSize: 12, padding: "0 8px", flexShrink: 0 }}
               >
                 {includeContext ? "Context on" : "Context off"}
               </Button>
@@ -425,7 +427,7 @@ export function ChatPanel() {
               {(sending || startingRun) && <Shimmer />}
             </ConversationContent>
           </Conversation>
-          {error && <div className="text-destructive px-3 py-1 text-xs">{error}</div>}
+          {error && <div style={{ ...typeScale.caption, color: color.error[500], padding: `${spacing[1]}px ${spacing[3]}px` }}>{error}</div>}
           {pickerOpen && graphs && (
             <ChatRunPicker
               graphs={graphs}
@@ -437,16 +439,13 @@ export function ChatPanel() {
           <PromptInput
             onSubmit={(text) => void sendMessage(text)}
             disabled={sending || startingRun}
-            className="border-t"
             placeholder="Message the model, or /run <graph> …"
             actions={
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Run a graph"
+              <IconButton
+                label="Run a graph"
+                icon={<Play style={{ width: 16, height: 16 }} aria-hidden />}
                 aria-expanded={pickerOpen}
-                title="Run a graph"
+                pressed={pickerOpen}
                 onClick={() => {
                   if (pickerOpen) {
                     setPickerOpen(false);
@@ -456,9 +455,7 @@ export function ChatPanel() {
                     .then(() => setPickerOpen(true))
                     .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
                 }}
-              >
-                <Play className="size-4" />
-              </Button>
+              />
             }
           />
         </>

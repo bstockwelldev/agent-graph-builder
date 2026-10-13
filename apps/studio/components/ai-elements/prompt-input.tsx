@@ -1,9 +1,9 @@
 "use client";
 
-import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode, useState } from "react";
+import { Button } from "@/components/graph/ui/Button";
+import { TextArea } from "@/components/graph/ui/fields";
+import { spacing, surface } from "@/lib/graph-theme";
 
 /**
  * Minimal composer (studio-consolidation Phase 8 part E) — a scaled-down
@@ -12,18 +12,29 @@ import { cn } from "@/lib/utils";
  * applies here per the Phase 8 plan: "the model/tool dropdown portion isn't
  * needed since the model is fixed per session." Just a textarea + send
  * button, Enter to submit, Shift+Enter for a newline.
+ *
+ * Token-styled (apps/studio/AGENTS.md): the chat panel lives on the
+ * token-styled graph canvas, so it uses graph-theme tokens, not Tailwind.
  */
+const formStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-end",
+  gap: spacing[2],
+  padding: spacing[3],
+  borderTop: `1px solid ${surface.border}`,
+};
+
 export function PromptInput({
   onSubmit,
   disabled = false,
   placeholder = "Message the model…",
-  className,
+  style,
   actions,
 }: {
   onSubmit: (text: string) => void;
   disabled?: boolean;
   placeholder?: string;
-  className?: string;
+  style?: CSSProperties;
   /** Extra composer controls left of the textarea (e.g. Chat's "Run a graph"). */
   actions?: ReactNode;
 }) {
@@ -49,17 +60,18 @@ export function PromptInput({
   };
 
   return (
-    <form onSubmit={handleSubmit} className={cn("flex items-end gap-2 p-3", className)}>
+    <form onSubmit={handleSubmit} style={{ ...formStyle, ...style }}>
       {actions}
-      <Textarea
+      <TextArea
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="max-h-32 min-h-9 flex-1 resize-none"
+        aria-label={placeholder}
+        style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 128, resize: "none" }}
       />
-      <Button type="submit" size="sm" disabled={disabled || value.trim().length === 0}>
+      <Button type="submit" variant="primary" disabled={disabled || value.trim().length === 0}>
         Send
       </Button>
     </form>
