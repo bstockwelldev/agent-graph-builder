@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/graph/ui/IconButton";
+import { border, spacing, surface, typeScale } from "@/lib/graph-theme";
 import { ShellDrawer } from "@/components/graph/ShellDrawer";
 import { usePresence } from "@/hooks/usePresence";
 import { useWorkbench } from "./WorkbenchProvider";
@@ -133,12 +134,24 @@ export function WorkbenchDrawer({
 function PanelTitleBar({ panelId, onClose }: { panelId: WorkbenchPanelId; onClose: () => void }) {
   const title = WORKBENCH_PANELS[panelId].title;
   return (
-    <div className="ghost-border bg-popover/80 sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b py-1.5 pr-2 pl-3 backdrop-blur">
-      <h2 className="flex-1 text-sm font-semibold">{title}</h2>
+    // The canvas's own panel header (graph kit tokens), shared by every workbench panel.
+    <div
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
+        display: "flex",
+        flexShrink: 0,
+        alignItems: "center",
+        gap: spacing[1],
+        padding: `${spacing[2]}px ${spacing[2]}px ${spacing[2]}px ${spacing[3]}px`,
+        borderBottom: `1px solid ${border.subtle}`,
+        background: surface.panel,
+      }}
+    >
+      <h2 style={{ flex: 1, margin: 0, ...typeScale.small, fontWeight: 600 }}>{title}</h2>
       <PanelHelpButton articleId={PANEL_ARTICLE[panelId]} />
-      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Close ${title}`} title={`Close ${title}`} onClick={onClose}>
-        <X className="size-4" />
-      </Button>
+      <IconButton label={`Close ${title}`} icon={<X size={16} aria-hidden="true" />} onClick={onClose} />
     </div>
   );
 }

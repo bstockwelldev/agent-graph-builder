@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { API_URL, expect, openGraph, test, waitForCanvasToSettle } from "../fixtures";
+import { API_URL, expect, openGraph, pickOption, test, waitForCanvasToSettle } from "../fixtures";
 
 // Canvas-first landing plan, Phase 2: the resource registries, workspace
 // policies and the GenUI catalog as workbench panels on the graph canvas.
@@ -56,8 +56,7 @@ test("a docked resource panel reserves its column: no node lies under it", async
 test("the kind switcher moves between registries", async ({ page, api }) => {
   const graph = await api.createDemoGraph(`E2E parity switch ${Date.now()}`);
   await openGraph(page, graph, "?panel=prompts");
-  await page.getByRole("combobox", { name: "Resource kind" }).click();
-  await page.getByRole("option", { name: "Datasets", exact: true }).click();
+  await pickOption(page, "Resource kind", /^Datasets$/);
   await expect(page.getByRole("button", { name: "Close Datasets" })).toBeVisible();
   await expect(page).toHaveURL(/[?&]panel=datasets/);
 });
@@ -75,7 +74,7 @@ test("?panel=<kind>&id=&tab= opens that resource's editor on its tab", async ({ 
 test("?panel=analytics&scope=workspace opens the workspace scope", async ({ page, api }) => {
   const graph = await api.createDemoGraph(`E2E parity scope ${Date.now()}`);
   await openGraph(page, graph, "?panel=analytics&scope=workspace");
-  await expect(page.getByRole("group", { name: "Analytics scope" }).getByRole("button", { name: "Workspace" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("radiogroup", { name: "Analytics scope" }).getByRole("radio", { name: "Workspace" })).toBeChecked();
 });
 
 test("a graph's Policies panel links to the workspace policies panel", async ({ page, api }) => {

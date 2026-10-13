@@ -71,6 +71,17 @@ describe("GraphSwitcherCombobox", () => {
     expect(screen.getByText("No graphs found.")).toBeTruthy();
   });
 
+  // canvas-styling-plan.md, PR 2: styled from the canvas tokens and the graph kit, so no shadcn primitive
+  // (every one carries a data-slot) may appear.
+  it("is styled from the canvas tokens, trigger and list alike, with no shadcn primitive", () => {
+    const { container } = render(<GraphSwitcherCombobox graphs={graphs} activeGraphId="g1" onSelect={vi.fn()} onBrowseAll={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Alpha" }));
+    expect(container.querySelector("[data-slot]")).toBeNull();
+    // The list is portaled to the body.
+    expect(document.body.querySelector("[data-slot]")).toBeNull();
+    expect(document.body.querySelector(".agb-cmdk")).toBeTruthy();
+  });
+
   // canvas-first-landing-plan.md §3: "Browse all…" opens the graph picker.
   it("offers Browse all… only when asked, which closes the switcher and opens the picker", () => {
     openSwitcher();

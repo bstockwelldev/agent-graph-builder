@@ -2,11 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Command } from "cmdk";
 import { Check, ChevronsUpDown } from "lucide-react";
 import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
-import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { border, fontFamily, localType, radius, shadow, spacing, surface, text, typeScale } from "@/lib/graph-theme";
+import { Button } from "./ui/Button";
+import { IconButton } from "./ui/IconButton";
+import { fieldStyle } from "./ui/fields";
 
 // Replaces the old "Switch graph" toggle button + reserved-width docked
 // side panel (studio-consolidation Phase 7/8's GraphLibrary): that pattern
@@ -15,6 +17,13 @@ import { cn } from "@/lib/utils";
 // itself. A combobox collapses both into one interaction — click, type to
 // filter, pick — and the canvas never loses width since nothing is
 // reserved for it while closed or open.
+//
+// Styled from the canvas tokens (canvas-styling-plan.md, PR 2). The list is
+// `cmdk` used headless, so filtering and the arrow-key behaviour are its own;
+// the highlighted row is styled in app/globals.css (`.agb-cmdk`), since an
+// inline style can't express cmdk's `data-selected`.
+const POPOVER_WIDTH = 288;
+
 export function GraphSwitcherCombobox({
   graphs,
   activeGraphId,
@@ -66,8 +75,8 @@ export function GraphSwitcherCombobox({
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    // w-72 = 288px; keep the popover on-screen horizontally.
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - 288 - 8));
+    // Keep the popover on-screen horizontally.
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - POPOVER_WIDTH - 8));
     setPopoverPos(
       openDirection === "up"
         ? { bottom: window.innerHeight - rect.top + 8, left }
@@ -89,26 +98,26 @@ export function GraphSwitcherCombobox({
   }, [open]);
 
   return (
-    <div className="relative" ref={triggerRef}>
-      <Button
-        type="button"
-        variant="outline"
-        size={iconOnly ? "icon-sm" : "sm"}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={iconOnly ? "Switch graph" : undefined}
-        className={iconOnly ? undefined : "max-w-56 justify-between gap-2"}
-        onClick={() => setOpenAndNotify(!open)}
-      >
-        {iconOnly ? (
-          <ChevronsUpDown className="size-4" />
-        ) : (
-          <>
-            <span className="truncate">{triggerLabel}</span>
-            <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" />
-          </>
-        )}
-      </Button>
+    <div style={{ position: "relative" }} ref={triggerRef}>
+      {iconOnly ? (
+        <IconButton
+          label="Switch graph"
+          icon={<ChevronsUpDown size={16} aria-hidden="true" />}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpenAndNotify(!open)}
+        />
+      ) : (
+        <Button
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpenAndNotify(!open)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: spacing[2], maxWidth: 224 }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{triggerLabel}</span>
+          <ChevronsUpDown size={14} aria-hidden="true" style={{ flexShrink: 0, color: text.secondary }} />
+        </Button>
+      )}
       {open &&
         typeof document !== "undefined" &&
         createPortal(
@@ -119,14 +128,12 @@ export function GraphSwitcherCombobox({
             <button
               type="button"
               aria-label="Close graph switcher"
-              className="fixed inset-0 z-30 cursor-default bg-transparent"
               onClick={() => setOpenAndNotify(false)}
+              style={{ position: "fixed", inset: 0, zIndex: 39, border: 0, padding: 0, background: "transparent", cursor: "default" }}
             />
             <div
-              className={cn(
-                "animate-in fade-in-0 zoom-in-95 fixed z-40 w-72 max-w-[calc(100vw-2rem)] duration-150",
-                openDirection === "up" ? "slide-in-from-bottom-1 origin-bottom-left" : "slide-in-from-top-1 origin-top-left",
-              )}
+              className="agb-pop"
+              data-graph-surface=""
               // Portaled to document.body: the trigger lives inside
               // GraphHeader's identity group, which is `overflow: hidden` (it
               // must stay that way so the group clips instead of overlapping
@@ -136,56 +143,87 @@ export function GraphSwitcherCombobox({
               // Hidden until measured so the first paint never flashes the
               // popover at the wrong spot (the layout effect above runs
               // before paint).
-              style={popoverPos ?? { visibility: "hidden" }}
+              style={{
+                position: "fixed",
+                zIndex: 40,
+                width: POPOVER_WIDTH,
+                maxWidth: "calc(100vw - 2rem)",
+                transformOrigin: openDirection === "up" ? "bottom left" : "top left",
+                ...(popoverPos ?? { visibility: "hidden" }),
+              }}
             >
-              <Command className="border border-border shadow-lg">
-                <CommandInput placeholder="Find a graph…" autoFocus />
-                <CommandList>
+              <Command
+                label="Graphs"
+                className="agb-cmdk"
+                style={{
+                  overflow: "hidden",
+                  borderRadius: radius.lg,
+                  border: `1px solid ${border.subtle}`,
+                  background: surface.panel,
+                  color: text.primary,
+                  boxShadow: shadow[4],
+                }}
+              >
+                <div style={{ padding: spacing[2], borderBottom: `1px solid ${border.subtle}` }}>
+                  <Command.Input
+                    placeholder="Find a graph…"
+                    autoFocus
+                    className="agb-field"
+                    style={{ ...fieldStyle, minHeight: 30, padding: "4px 10px" }}
+                  />
+                </div>
+                <Command.List style={{ maxHeight: 280, overflowY: "auto", padding: spacing[1] }}>
                   {loading ? (
-                    <div className="text-muted-foreground px-3 py-6 text-center text-sm">Loading graphs…</div>
+                    <div style={{ padding: `${spacing[4]}px ${spacing[3]}px`, textAlign: "center", ...typeScale.caption, color: text.secondary }}>Loading graphs…</div>
                   ) : (
                     <>
-                      <CommandEmpty>No graphs found.</CommandEmpty>
-                      <CommandGroup>
+                      <Command.Empty style={{ padding: `${spacing[4]}px ${spacing[3]}px`, textAlign: "center", ...typeScale.caption, color: text.secondary }}>
+                        No graphs found.
+                      </Command.Empty>
+                      <Command.Group>
                         {graphs.map((graph) => {
                           const active = graph.id === activeGraphId;
                           return (
-                            <CommandItem
+                            <Command.Item
                               key={graph.id}
                               value={`${graph.name} ${graph.id}`}
                               onSelect={() => {
                                 setOpenAndNotify(false);
                                 onSelect(graph.id);
                               }}
+                              style={itemStyle}
                             >
-                              <Check className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-0")} />
-                              <span className="flex min-w-0 flex-1 flex-col">
-                                <span className="truncate font-medium">{graph.name}</span>
-                                <span className="text-muted-foreground truncate text-xs">{graph.id}</span>
+                              <Check size={14} aria-hidden="true" style={{ flexShrink: 0, opacity: active ? 1 : 0 }} />
+                              <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{graph.name}</span>
+                                <span style={{ ...typeScale.caption, color: text.secondary, fontFamily: fontFamily.mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {graph.id}
+                                </span>
                               </span>
-                            </CommandItem>
+                            </Command.Item>
                           );
                         })}
-                      </CommandGroup>
+                      </Command.Group>
                     </>
                   )}
                   {onBrowseAll ? (
-                    <CommandGroup forceMount>
+                    <Command.Group forceMount>
                       {/* forceMount: stays listed whatever is typed. */}
-                      <CommandItem
+                      <Command.Item
                         forceMount
                         value="browse all graphs"
                         onSelect={() => {
                           setOpenAndNotify(false);
                           onBrowseAll();
                         }}
+                        style={{ ...itemStyle, borderTop: `1px solid ${border.subtle}`, marginTop: spacing[1] }}
                       >
-                        <span className="flex-1">Browse all…</span>
-                        <CommandShortcut>⌘O</CommandShortcut>
-                      </CommandItem>
-                    </CommandGroup>
+                        <span style={{ flex: 1 }}>Browse all…</span>
+                        <span style={{ ...typeScale.caption, color: text.secondary }}>⌘O</span>
+                      </Command.Item>
+                    </Command.Group>
                   ) : null}
-                </CommandList>
+                </Command.List>
               </Command>
             </div>
           </>,
@@ -194,3 +232,13 @@ export function GraphSwitcherCombobox({
     </div>
   );
 }
+
+const itemStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: spacing[2],
+  padding: `${spacing[2]}px ${spacing[2]}px`,
+  borderRadius: radius.md,
+  cursor: "pointer",
+  ...localType.ui,
+} as const;

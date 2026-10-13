@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import type {
   AgentProfile,
   LlmProfile,
@@ -17,6 +16,8 @@ import { BUILTIN_TOOL_IDS } from "@/lib/builtinTools";
 import { isChatProvider } from "@/lib/providers";
 import { fixturesFromText, fixturesTextIssue, fixturesToText, routingLabHref } from "@/lib/datasets";
 import { DEFAULT_SCORERS, suiteScorerKinds } from "@/lib/evals";
+
+import { DetailLink, DetailMeta, DetailRow } from "@/components/workbench/panelDetail";
 
 import { AgentFields } from "./agent-fields";
 import { DatasetFields, type DatasetForm } from "./dataset-fields";
@@ -120,8 +121,6 @@ function nameIdFields<T extends ResourceLike & { name?: string | null }>(props: 
     />
   );
 }
-
-const panelLinkClass = "text-primary text-xs font-medium underline-offset-4 hover:underline";
 
 // ---------------------------------------------------------------- prompts
 
@@ -268,12 +267,12 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
   itemLabel: (agent) => agent.name,
   deleteDescription: (agent) => `Remove agent "${agent.name}"?`,
   renderPanelDetail: (agent) => (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      <span className="text-muted-foreground font-mono text-[11px]">{agent.graph_id}</span>
-      <Link href={`/graphs/${encodeURIComponent(agent.graph_id)}?panel=run&agent=${encodeURIComponent(agent.id)}`} className={panelLinkClass} aria-label={`Run ${agent.name}`}>
+    <DetailRow>
+      <DetailMeta mono>{agent.graph_id}</DetailMeta>
+      <DetailLink href={`/graphs/${encodeURIComponent(agent.graph_id)}?panel=run&agent=${encodeURIComponent(agent.id)}`} label={`Run ${agent.name}`}>
         Run
-      </Link>
-    </div>
+      </DetailLink>
+    </DetailRow>
   ),
   emptyForm: () => ({
     id: genId("agent"),
@@ -553,16 +552,16 @@ export const datasetKind: ResourceKindConfig<DatasetForm> = {
   itemLabel: (dataset) => dataset.name,
   deleteDescription: (dataset) => `Remove dataset "${dataset.name}"? Graphs don't reference datasets, so nothing else changes.`,
   renderPanelDetail: (dataset) => (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      <span className="text-muted-foreground text-[11px]">
+    <DetailRow>
+      <DetailMeta>
         {dataset.fixtures.length} fixture{dataset.fixtures.length === 1 ? "" : "s"}
-      </span>
+      </DetailMeta>
       {dataset.graph_id ? (
-        <Link href={routingLabHref(dataset.graph_id, dataset.id)} className={panelLinkClass} aria-label={`Open ${dataset.name} in routing lab`}>
+        <DetailLink href={routingLabHref(dataset.graph_id, dataset.id)} label={`Open ${dataset.name} in routing lab`}>
           Open in routing lab
-        </Link>
+        </DetailLink>
       ) : null}
-    </div>
+    </DetailRow>
   ),
   emptyForm: () => ({ id: genId("ds"), name: "", description: "", graph_id: null, fixtures_text: "[]", source: "manual", source_run_ids: [] }),
   toForm: (dataset) => ({ ...dataset, fixtures_text: fixturesToText(dataset.fixtures) }),
@@ -619,12 +618,12 @@ export const evalSuiteKind: ResourceKindConfig<EvalSuiteForm> = {
   itemLabel: (suite) => suite.name,
   deleteDescription: (suite) => `Remove eval suite "${suite.name}"? Its stored runs stay readable by id.`,
   renderPanelDetail: (suite) => (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      <span className="text-muted-foreground font-mono text-[11px]">{suite.graph_id}</span>
-      <Link href={`/graphs/${encodeURIComponent(suite.graph_id)}?panel=evals&suite=${encodeURIComponent(suite.id)}`} className={panelLinkClass} aria-label={`Run ${suite.name}`}>
+    <DetailRow>
+      <DetailMeta mono>{suite.graph_id}</DetailMeta>
+      <DetailLink href={`/graphs/${encodeURIComponent(suite.graph_id)}?panel=evals&suite=${encodeURIComponent(suite.id)}`} label={`Run ${suite.name}`}>
         Run in the graph&apos;s Evals panel
-      </Link>
-    </div>
+      </DetailLink>
+    </DetailRow>
   ),
   emptyForm: () => ({
     id: genId("eval"),

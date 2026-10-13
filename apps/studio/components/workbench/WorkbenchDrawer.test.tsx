@@ -76,6 +76,14 @@ describe("WorkbenchDrawer (floating)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close Chat" }));
     expect(active()).toBe("none");
   });
+
+  // canvas-styling-plan.md, PR 2: styled from the canvas tokens and the graph kit, so no shadcn primitive
+  // (every one carries a data-slot) may appear.
+  it("draws its title bar and help button from the canvas tokens, not shadcn", () => {
+    setup();
+    openPanel("chat");
+    expect(screen.getByRole("heading", { name: "Chat" }).closest("[data-workbench-panel]")!.querySelector("[data-slot]")).toBeNull();
+  });
 });
 
 describe("WorkbenchProvider route changes", () => {

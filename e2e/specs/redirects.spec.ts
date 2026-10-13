@@ -63,5 +63,5 @@ test("an old graph-scoped Analytics link opens that graph's own analytics", asyn
   const graph = await api.createDemoGraph(`E2E redirect analytics ${Date.now()}`);
   await page.goto(`/analytics?graph=${graph.id}`);
   await expect(page).toHaveURL(new RegExp(`/graphs/${graph.id}`));
-  await expect(page.getByRole("group", { name: "Analytics scope" }).getByRole("button", { name: "This graph" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("radiogroup", { name: "Analytics scope" }).getByRole("radio", { name: "This graph" })).toBeChecked();
 });

@@ -1,4 +1,4 @@
-import { API_URL, expect, runOnStub, test } from "../fixtures";
+import { API_URL, expect, pickOption, runOnStub, test } from "../fixtures";
 
 // resource-forms-consistency-plan.md, slice 4: one Scope picker (Workspace
 // or a graph) on Policies and the resource panels, kept in `?graph=` and
@@ -13,8 +13,8 @@ test("Analytics scopes to one graph's runs and nodes", async ({ page, api }) => 
   // The old graph-scoped link opens that graph's own analytics.
   await page.goto(`/analytics?graph=${graph.id}`);
   await expect(page).toHaveURL(new RegExp(`/graphs/${graph.id}\\?`));
-  const scope = page.getByRole("group", { name: "Analytics scope" });
-  await expect(scope.getByRole("button", { name: "This graph" })).toHaveAttribute("aria-pressed", "true");
+  const scope = page.getByRole("radiogroup", { name: "Analytics scope" });
+  await expect(scope.getByRole("radio", { name: "This graph" })).toBeChecked();
   await expect(page.getByText("Runs (recent)")).toBeVisible();
   await expect(page.getByText("By graph", { exact: true })).toHaveCount(0);
   // Slice 5: charts over the graph's runs.
@@ -28,7 +28,7 @@ test("Analytics scopes to one graph's runs and nodes", async ({ page, api }) => 
   await expect(page).toHaveURL(/[?&]node=llm_classify/);
 
   // Workspace scope lists every graph; its row opens that graph's analytics.
-  await scope.getByRole("button", { name: "Workspace" }).click();
+  await scope.getByRole("radio", { name: "Workspace" }).click();
   await expect(page.getByText("By graph", { exact: true })).toBeVisible();
   // In the By graph table; the header's switcher button carries the same name.
   await page.getByRole("row", { name: new RegExp(graph.name) }).getByRole("button", { name: graph.name, exact: true }).click();
@@ -43,8 +43,7 @@ test("Policies in graph scope edit that graph's overrides, not the workspace", a
   await page.goto(`/policies?graph=${graph.id}`);
   const rule = page.getByTestId("policy-rule-POLICY_LLM_MODEL_NOT_PINNED");
   await expect(rule.getByRole("combobox")).toContainText(/^Inherit \(/);
-  await rule.getByRole("combobox").click();
-  await page.getByRole("option", { name: /^Block — Blocks runs/ }).click();
+  await pickOption(page, "LLM model not pinned enforcement", /^Block Blocks runs/);
   await expect(rule.getByLabel("Set by: This graph")).toBeVisible();
 
   const overrides = await (await request.get(`${API_URL}/api/graphs/${graph.id}/policies`)).json();
@@ -61,14 +60,12 @@ test("Resource panels list what the graph in scope uses, and remember the scope"
   await api.updateGraph(graph);
 
   await page.goto("/prompts");
-  await page.getByRole("combobox", { name: "Scope" }).click();
-  await page.getByRole("option", { name: graph.name }).click();
+  await pickOption(page, "Scope", new RegExp(graph.name));
   await expect(page.getByRole("status").filter({ hasText: `used by ${graph.name}` })).toContainText(/^1 of \d+ prompts used by/);
   await expect(page.getByRole("button", { name: `Edit Scoped ${stamp}`, exact: true })).toBeVisible();
 
   // Another kind keeps the scope.
-  await page.getByRole("combobox", { name: "Resource kind" }).click();
-  await page.getByRole("option", { name: "Tools", exact: true }).click();
+  await pickOption(page, "Resource kind", /^Tools$/);
   // The Prompts panel animates out; two panels would match "Show all" until it is gone.
   await expect(page.getByRole("button", { name: "Close Prompts" })).toHaveCount(0);
   await expect(page.getByText(`${graph.name} uses no tools.`)).toBeVisible();
