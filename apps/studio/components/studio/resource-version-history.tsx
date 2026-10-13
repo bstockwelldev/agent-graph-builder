@@ -8,9 +8,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 // P1 rollout plan, parallel track ("Versioned reusable entity registry" —
 // docs/planning/features/p1-rollout-plan.md). Shared across the five
-// versionable resource pages (prompts/tools/mcp/agents/llm-profiles): a
+// versionable resource panels (prompts/tools/mcp/agents/llm-profiles): a
 // "Publish version" action plus a compact history list, wired to each
-// page's `client.<kind>.versions` sub-client (backend/app/resource_versions.py).
+// kind's `client.<kind>.versions` sub-client (backend/app/resource_versions.py).
 // Not shown for a resource still being created (there's nothing to
 // version until the first save).
 type VersionsClient = {

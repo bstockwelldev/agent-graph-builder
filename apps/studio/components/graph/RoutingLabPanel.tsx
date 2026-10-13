@@ -98,7 +98,7 @@ export function RoutingLabPanel({
   reducedMotion?: boolean;
 }) {
   const [datasetText, setDatasetText] = useState(DEFAULT_DATASET_TEXT);
-  // `?dataset=<id>` (the Datasets page's "Open in routing lab") preloads a saved dataset.
+  // `?dataset=<id>` (the Datasets panel's "Open in routing lab") preloads a saved dataset.
   const [initialDatasetId, setInitialDatasetId] = useState<string | null>(null);
   useEffect(() => {
     setInitialDatasetId(new URLSearchParams(window.location.search).get("dataset"));

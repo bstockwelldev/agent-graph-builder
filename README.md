@@ -13,7 +13,8 @@ FastAPI + [LangGraph](https://github.com/langchain-ai/langgraph) execution API
 No sign-up or API key needed. The Run panel defaults to the **Stub (offline)**
 provider, a deterministic stand-in model that needs no key.
 
-1. Open **Classify & Route (demo)** from the Graphs page.
+1. Open **Classify & Route (demo)** from the graph picker. It opens by itself when
+   you have no graph, or press `⌘O`.
 2. Press **Run** in the bottom bar, then **Run** in the panel. The sample
    question ("How does a database index work?") is already filled in.
 3. Click any node on the canvas, then its **Run** tab, to see the exact input

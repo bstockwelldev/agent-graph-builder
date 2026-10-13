@@ -30,9 +30,9 @@ export function DatasetPicker({
   /** The editor's current fixtures; throws a user-readable Error when the text is invalid. */
   getFixtures: () => Fixture[];
   onLoad: (fixtures: Fixture[]) => void;
-  /** Recorded as a new dataset's provenance (the Datasets page groups by it). */
+  /** Recorded as a new dataset's provenance (the Datasets panel groups by it). */
   graphId?: string | null;
-  /** Selected and loaded once the list arrives: the Datasets page's "Open in routing lab". */
+  /** Selected and loaded once the list arrives: the Datasets panel's "Open in routing lab". */
   initialDatasetId?: string | null;
   disabled?: boolean;
 }) {

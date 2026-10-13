@@ -734,7 +734,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   }, [graphId, nodes, focusNode]);
 
   // Slice 6 (resource-forms-consistency-plan.md): agents built on this graph,
-  // for the Run panel's "Run as". `?agent=` (the Agents page's Run link)
+  // for the Run panel's "Run as". `?agent=` (the Agents panel's Run link)
   // preselects one.
   const [runAgents, setRunAgents] = useState<RunAgentOption[]>([]);
   const [runAgentId, setRunAgentId] = useState<string | null>(null);

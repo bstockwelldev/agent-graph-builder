@@ -311,7 +311,7 @@ export function AnalyticsPanel() {
 }
 
 /** What the graph view needs: the canvas's context in the panel, or just a
- * graph id on the Analytics page (links then open the editor instead). */
+ * graph id (node rows then link to the editor instead of focusing a node). */
 export type GraphAnalyticsContext = Pick<StudioGraphContext, "graphId" | "runId" | "focusNode" | "inspectRun">;
 
 export function GraphAnalyticsView({
