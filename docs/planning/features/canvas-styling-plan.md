@@ -1,6 +1,6 @@
 # Canvas styling: plan
 
-Status: **Proposed 2026-10-13. Waiting on the three decisions in §8; nothing is built.** Follow-up to [canvas-first-landing-plan.md](canvas-first-landing-plan.md) (§11), which removed the CRUD pages but left the shadcn surfaces that carried their look.
+Status: **Approved 2026-10-13, §8 defaults accepted as written. Nothing is built; PR 2 (the panels) is first.** Follow-up to [canvas-first-landing-plan.md](canvas-first-landing-plan.md) (§11), which removed the CRUD pages but left the shadcn surfaces that carried their look.
 
 ## 1. Goal
 
@@ -18,7 +18,7 @@ A survey of `origin/master` after #179 found 29 non-test files that import `comp
 | **B. Other shadcn panels** | ~9 | ~1.7k | `ChatPanel`, `ConsolePanel`, `HelpOverlay`, `ChatRunPicker`, `studio-confirm-dialog`, and the graph editor's dialogs (`capture-dataset`, `manage-layers`, `extract-subgraph`) |
 | **Out of scope** | 3 | ~370 | `/login` (`login-oauth-buttons`) and `ai-elements/*`: separate surfaces, unrelated to the removed pages |
 
-Tier B was never a CRUD page. Whether it is in scope is decision 1.
+Tier B was never a CRUD page. It is out of scope (decision 1).
 
 **Leverage.** Most of Tier A is a few base pieces, not 18 independent files. `resource-fields.tsx` (244 lines) is the field primitive that `dataset-fields`, `eval-suite-fields` and the others compose, so restyling it carries them. `studio-confirm-dialog` (64) and `scope-select` (40) are the same story. The risk is in the call sites, not the primitives.
 
@@ -69,11 +69,11 @@ Under the styling rule these become canvas-side, so they belong in `components/g
 5. Every e2e spec that touched a changed control still passes; none is deleted to get there.
 6. A browser check at 1440 px and 390 px for each PR, in the PR description.
 
-## 8. Decisions needed
+## 8. Decisions (accepted 2026-10-13)
 
-| Question | Proposed default | Why |
+| Question | Decision | Why |
 | --- | --- | --- |
-| 1. Tier A only, or A + B? | **A only.** B follows only if it still bothers anyone | Tier B was never a CRUD page, and nothing there is broken |
+| 1. Tier A only, or A + B? | **A only.** B follows only if it still bothers anyone | Tier B was never a CRUD page, and nothing there is broken. Revisit only if it still bothers anyone after PR 3 |
 | 2. `Select` → kit `Combobox` everywhere, or native `<select>` for short fixed lists? | **`Combobox` everywhere** | Native is far less churn but looks different from the rest of the kit, which is what this plan is removing |
 | 3. Move files into `components/graph/` as part of this? | **Restyle in place, then one mechanical move PR** | Keeps each diff reviewable as one kind of change |
 
