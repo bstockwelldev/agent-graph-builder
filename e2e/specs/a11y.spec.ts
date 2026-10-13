@@ -12,7 +12,30 @@ import { API_URL, expect, openGraph, test, type GraphJson } from "../fixtures";
 const KNOWN: Record<string, string[]> = {};
 
 const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
-  ["graph library", async (page) => void (await page.goto("/"))],
+  // `/` is the empty canvas with the graph picker open (canvas-first landing plan, Phase 1).
+  [
+    "landing (empty canvas, picker open)",
+    async (page) => {
+      await page.goto("/");
+      await page.getByRole("dialog", { name: "Open graph" }).waitFor();
+    },
+  ],
+  [
+    "graph picker over a graph",
+    async (page, graph) => {
+      await openGraph(page, graph);
+      await page.keyboard.press("ControlOrMeta+o");
+      await page.getByRole("dialog", { name: "Open graph" }).getByRole("link", { name: new RegExp(graph.name) }).waitFor();
+    },
+  ],
+  [
+    "empty canvas",
+    async (page) => {
+      await page.goto("/");
+      await page.keyboard.press("Escape");
+      await page.getByTestId("empty-canvas").waitFor();
+    },
+  ],
   ["editor", (page, graph) => openGraph(page, graph)],
   ["run panel", (page, graph) => openGraph(page, graph, "?panel=run")],
   ["node inspector", (page, graph) => openGraph(page, graph, "?node=llm_answer")],

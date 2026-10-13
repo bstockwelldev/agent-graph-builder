@@ -1,6 +1,6 @@
 # Canvas-first landing: plan
 
-Status: **Approved 2026-10-12, §9 defaults accepted as written. Phase 2 shipped ([#176](https://github.com/bstockwelldev/agent-graph-builder/pull/176)); Phase 1 (landing + picker) and Phase 3 (redirect + delete) next.** Builds on #173 (panel close, `/graphs` scroll, demo de-duplication).
+Status: **Approved 2026-10-12, §9 defaults accepted as written. Phase 2 shipped ([#176](https://github.com/bstockwelldev/agent-graph-builder/pull/176)); Phase 1 (landing + picker) in review ([#177](https://github.com/bstockwelldev/agent-graph-builder/pull/177)); Phase 3 (redirect + delete) next.** Builds on #173 (panel close, `/graphs` scroll, demo de-duplication).
 Supersedes the navigation parts of [studio-graph-workbench-redesign-plan.md](studio-graph-workbench-redesign-plan.md) Wave 2 (the 72px rail and the `/resources` hub). Everything else in that plan stands.
 
 ## 1. Goal

@@ -70,4 +70,20 @@ describe("GraphSwitcherCombobox", () => {
     fireEvent.click(screen.getByRole("button", { name: "Switch graph" }));
     expect(screen.getByText("No graphs found.")).toBeTruthy();
   });
+
+  // canvas-first-landing-plan.md §3: "Browse all…" opens the graph picker.
+  it("offers Browse all… only when asked, which closes the switcher and opens the picker", () => {
+    openSwitcher();
+    expect(screen.queryByRole("option", { name: /Browse all/ })).toBeNull();
+    cleanup();
+
+    const onBrowseAll = vi.fn();
+    render(<GraphSwitcherCombobox graphs={graphs} activeGraphId="g1" onSelect={vi.fn()} onBrowseAll={onBrowseAll} />);
+    fireEvent.click(screen.getByRole("button", { name: "Alpha" }));
+    // Listed even when the typed filter matches no graph.
+    fireEvent.change(screen.getByPlaceholderText("Find a graph…"), { target: { value: "zzz" } });
+    fireEvent.click(screen.getByRole("option", { name: /Browse all/ }));
+    expect(onBrowseAll).toHaveBeenCalledTimes(1);
+    expect(screen.queryByPlaceholderText("Find a graph…")).toBeNull();
+  });
 });

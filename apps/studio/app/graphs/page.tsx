@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { GraphSummary, SeededDemoSummary } from "@bstockwelldev/agent-graph-sdk";
-import { summarizeGraph } from "@bstockwelldev/agent-graph-sdk/graph";
+import { useState } from "react";
+import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 
-import { client } from "@/lib/api-client";
 import { StudioConfirmDialog } from "@/components/studio/studio-confirm-dialog";
 import { StudioPage } from "@/components/studio/studio-page";
 import { StudioPageHeader } from "@/components/studio/studio-page-header";
@@ -16,72 +14,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useGraphLibrary } from "@/hooks/use-graph-library";
 import { cn } from "@/lib/utils";
 
 export default function GraphsPage() {
-  const [graphs, setGraphs] = useState<GraphSummary[]>([]);
-  const [demos, setDemos] = useState<SeededDemoSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  // `loadError` replaces the list (there is nothing to show); `actionError`
-  // (a failed create or delete) sits above it, so the list stays usable.
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const library = useGraphLibrary();
+  const { demos, ownGraphs, loading, loadError, actionError, setActionError, refetch } = library;
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GraphSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const refetch = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    setActionError(null);
-    // Fetched together, so the list never renders before it knows which
-    // graphs are demos. The gallery is additive: a demos failure never
-    // blocks the graph list.
-    const [summaries, gallery] = await Promise.allSettled([client.graphs.summaries.list(), client.demos.list()]);
-    setDemos(gallery.status === "fulfilled" ? gallery.value : []);
-    if (summaries.status === "fulfilled") setGraphs(summaries.value);
-    else setLoadError(summaries.reason instanceof Error ? summaries.reason.message : String(summaries.reason));
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void refetch();
-  }, [refetch]);
-
-  // Seeded demos are stored graphs too, so the summaries list returns them
-  // as well as the gallery. Show each once, in the gallery: they're
-  // read-only, so they don't belong next to delete buttons.
-  const ownGraphs = useMemo(() => {
-    const demoIds = new Set(demos.map((demo) => demo.id));
-    return graphs.filter((graph) => !demoIds.has(graph.id));
-  }, [demos, graphs]);
-
   async function handleCreate() {
     setCreating(true);
-    setActionError(null);
-    try {
-      const created = await client.graphs.create({ name: `New graph ${new Date().toLocaleTimeString()}`, template: "blank" });
-      setGraphs((prev) => [summarizeGraph(created), ...prev]);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCreating(false);
-    }
+    await library.create();
+    setCreating(false);
   }
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    setActionError(null);
-    try {
-      await client.graphs.delete(deleteTarget.id);
-      setGraphs((prev) => prev.filter((graph) => graph.id !== deleteTarget.id));
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setDeleteTarget(null);
-      setDeleting(false);
-    }
+    await library.remove(deleteTarget.id);
+    setDeleteTarget(null);
+    setDeleting(false);
   }
 
   return (

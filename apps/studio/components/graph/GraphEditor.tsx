@@ -27,7 +27,6 @@ import {
   type GraphGroup,
   type GraphLayer,
   type GraphNote,
-  type GraphSummary,
   type GraphUsedBy,
   type GraphHealth,
   type GraphNode,
@@ -129,6 +128,9 @@ import {
 } from "@/lib/watchRun";
 import { cacheRun, getCachedRun, listCachedRuns, mergeRunHistory } from "@/lib/runCache";
 import { useUndoStack } from "@/hooks/useUndoStack";
+import { useOptionalGraphPicker } from "@/components/studio/graph-picker";
+import { useGraphLibrary } from "@/hooks/use-graph-library";
+import { writeLastGraph } from "@/lib/lastGraph";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
@@ -611,8 +613,10 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // applied yet (writes are held until then so they can't wipe the link).
   const [inspectorTab, setInspectorTab] = useState<string | null>(null);
   const urlStateAppliedRef = useRef<string | null>(null);
-  const [libraryGraphs, setLibraryGraphs] = useState<GraphSummary[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
+  // The header switcher's list: fetched when it opens, through the hook the
+  // graph picker shares (canvas-first-landing-plan.md §3).
+  const library = useGraphLibrary({ lazy: true });
+  const graphPicker = useOptionalGraphPicker();
   const workbench = useWorkbench();
   // Phones keep the canvas: Code and Split need the width.
   const shownMode: EditorMode = workbench.isCompact ? "canvas" : editorMode;
@@ -782,21 +786,18 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once at mount only, guarded above
   }, []);
 
-  const refreshLibraryGraphs = useCallback(async () => {
-    setLibraryLoading(true);
-    try {
-      setLibraryGraphs(await client.graphs.summaries.list());
-    } finally {
-      setLibraryLoading(false);
-    }
-  }, []);
-
+  const refreshLibrary = library.refetch;
   const handleGraphSwitcherOpenChange = useCallback(
     (open: boolean) => {
-      if (open) void refreshLibraryGraphs();
+      if (open) void refreshLibrary();
     },
-    [refreshLibraryGraphs],
+    [refreshLibrary],
   );
+
+  // `/` reopens this graph next time (lib/lastGraph.ts).
+  useEffect(() => {
+    if (graphId && !loading && !loadError) writeLastGraph(graphId);
+  }, [graphId, loading, loadError]);
 
   const handleLibrarySelect = useCallback(
     (selectedGraphId: string) => {
@@ -3177,12 +3178,13 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         graphSwitcher={
           <GraphSwitcherCombobox
             iconOnly={density !== "full"}
-            graphs={libraryGraphs}
+            graphs={library.graphs}
             activeGraphId={graphId}
             activeGraphName={graphName}
-            loading={libraryLoading}
+            loading={library.loading}
             onSelect={handleLibrarySelect}
             onOpenChange={handleGraphSwitcherOpenChange}
+            onBrowseAll={graphPicker ? graphPicker.open : undefined}
           />
         }
         graphName={graphName}
@@ -3569,7 +3571,9 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         <MobileTabBar
           aria-label="Graph actions"
           tabs={[
-            { id: "graphs", label: "Graphs", icon: <Workflow />, href: "/graphs" },
+            graphPicker
+              ? { id: "graphs", label: "Graphs", icon: <Workflow />, hasPopup: "dialog", onClick: graphPicker.open }
+              : { id: "graphs", label: "Graphs", icon: <Workflow />, href: "/graphs" },
             {
               id: "add",
               label: "Add",
