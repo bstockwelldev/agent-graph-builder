@@ -1307,6 +1307,10 @@ class ChatSessionMessageRequest(BaseModel):
     # optional, so an old client (or a request with nothing selected) still
     # gets exactly the pre-existing behavior.
     context: ChatContext | None = None
+    # Bring-your-own key (public demo mode): lets a chat session use a live
+    # provider with the caller's key, the same way runs already accept
+    # `api_key`. Held in memory client-side, never persisted.
+    api_key: str | None = None
 
 
 @app.post(
@@ -1329,7 +1333,7 @@ async def send_chat_session_message_route(
     session.messages.append(ChatMessage(role="user", content=body.content))
 
     system_prompt = build_chat_prompt(body.context, body.content)
-    chat_model = get_chat_model(model=session.model, provider=session.provider)
+    chat_model = get_chat_model(model=session.model, provider=session.provider, api_key=body.api_key)
     reply = await chat_model.generate(
         system_prompt=system_prompt, user_prompt=body.content, history=history
     )
