@@ -127,7 +127,7 @@ export type KnowledgeLineageRequest = { documentId?: string };
 export type DatasetFromRunsRequest = { name: string; description?: string; runIds: string[]; includeNodeOutputs?: boolean };
 /** `client.evals.run`: "draft" or a release id ("latest" works); Stub unless `provider` says otherwise. */
 export type EvalRunRequest = { target?: string; provider?: string; model?: string; apiKey?: string };
-export type ChatMessageRequest = { content: string; context?: ChatContext; apiKey?: string };
+export type ChatMessageRequest = { content: string; context?: ChatContext };
 
 export type RunHandle = {
   /** The run as the start call returned it (usually queued or running). */
@@ -519,7 +519,7 @@ export function buildNamespaces(transport: Transport) {
     chatSessions: {
       ...resourceNamespace(transport, "chat-sessions", chatSessionSchema),
       send: (sessionId: string, request: ChatMessageRequest) =>
-        transport.request(path`/api/chat-sessions/${sessionId}/messages`, json({ content: request.content, context: request.context, ...(request.apiKey ? { api_key: request.apiKey } : {}) }), chatSessionSchema),
+        transport.request(path`/api/chat-sessions/${sessionId}/messages`, json({ content: request.content, context: request.context }), chatSessionSchema),
     },
   };
 }
