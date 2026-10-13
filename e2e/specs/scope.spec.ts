@@ -1,32 +1,38 @@
 import { API_URL, expect, runOnStub, test } from "../fixtures";
 
 // resource-forms-consistency-plan.md, slice 4: one Scope picker (Workspace
-// or a graph) on Analytics, Policies and the Resources pages, kept in
-// `?graph=` and remembered across pages.
+// or a graph) on Policies and the resource panels, kept in `?graph=` and
+// remembered across panels. Analytics scopes through its own toggle and
+// `?scope=`. (These were pages until the canvas-first landing plan, Phase 3;
+// the old URLs redirect here.)
 
 test("Analytics scopes to one graph's runs and nodes", async ({ page, api }) => {
   const graph = await api.createDemoGraph(`E2E scope analytics ${Date.now()}`);
   await runOnStub(page, graph);
 
+  // The old graph-scoped link opens that graph's own analytics.
   await page.goto(`/analytics?graph=${graph.id}`);
-  await expect(page.getByRole("combobox", { name: "Scope" })).toContainText(graph.name);
+  await expect(page).toHaveURL(new RegExp(`/graphs/${graph.id}\\?`));
+  const scope = page.getByRole("group", { name: "Analytics scope" });
+  await expect(scope.getByRole("button", { name: "This graph" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("Runs (recent)")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "By graph" })).toHaveCount(0);
+  await expect(page.getByText("By graph", { exact: true })).toHaveCount(0);
   // Slice 5: charts over the graph's runs.
   await expect(page.getByRole("img", { name: /^Runs per day, by status: bar chart of succeeded/ })).toBeVisible();
   await expect(page.getByRole("img", { name: /^Run duration \(runs\): bar chart/ })).toBeVisible();
   await expect(page.getByRole("img", { name: /^Model calls: bar chart/ })).toBeVisible();
   await expect(page.getByRole("cell", { name: /^stub\// }).first()).toBeVisible();
   await expect(page.getByRole("img", { name: /^P95 latency by node \(ms\): bar chart/ })).toBeVisible();
-  const node = page.getByRole("link", { name: "llm_classify", exact: true });
-  await expect(node).toHaveAttribute("href", `/graphs/${graph.id}?node=llm_classify&tab=history`);
+  // A node row focuses that node on the canvas.
+  await page.getByRole("button", { name: "llm_classify", exact: true }).click();
+  await expect(page).toHaveURL(/[?&]node=llm_classify/);
 
-  // Back to the workspace, then into the graph again from its "By graph" row.
-  await page.getByRole("combobox", { name: "Scope" }).click();
-  await page.getByRole("option", { name: "Workspace", exact: true }).click();
-  await expect(page).not.toHaveURL(/graph=/);
-  await page.getByRole("button", { name: `Show analytics for ${graph.name}` }).click();
-  await expect(page).toHaveURL(new RegExp(`graph=${graph.id}`));
+  // Workspace scope lists every graph; its row opens that graph's analytics.
+  await scope.getByRole("button", { name: "Workspace" }).click();
+  await expect(page.getByText("By graph", { exact: true })).toBeVisible();
+  // In the By graph table; the header's switcher button carries the same name.
+  await page.getByRole("row", { name: new RegExp(graph.name) }).getByRole("button", { name: graph.name, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/graphs/${graph.id}`));
   await expect(page.getByText("Runs (recent)")).toBeVisible();
 });
 
@@ -46,7 +52,7 @@ test("Policies in graph scope edit that graph's overrides, not the workspace", a
   expect(await (await request.get(`${API_URL}/api/policies/workspace`)).json()).toEqual(workspaceBefore);
 });
 
-test("Resource pages list what the graph in scope uses, and remember the scope", async ({ page, api, request }) => {
+test("Resource panels list what the graph in scope uses, and remember the scope", async ({ page, api, request }) => {
   const stamp = Date.now();
   const promptId = `e2e_scoped_prompt_${stamp}`;
   expect((await request.post(`${API_URL}/api/prompts`, { data: { id: promptId, name: `Scoped ${stamp}`, body: "Answer: {question}" } })).ok()).toBe(true);
@@ -58,12 +64,15 @@ test("Resource pages list what the graph in scope uses, and remember the scope",
   await page.getByRole("combobox", { name: "Scope" }).click();
   await page.getByRole("option", { name: graph.name }).click();
   await expect(page.getByRole("status").filter({ hasText: `used by ${graph.name}` })).toContainText(/^1 of \d+ prompts used by/);
-  await expect(page.getByRole("button", { name: new RegExp(`^Edit prompt Scoped ${stamp}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Edit Scoped ${stamp}`, exact: true })).toBeVisible();
 
-  // Another resource page keeps the scope.
-  await page.getByRole("navigation", { name: "Resource types" }).getByRole("link", { name: "Tools" }).click();
+  // Another kind keeps the scope.
+  await page.getByRole("combobox", { name: "Resource kind" }).click();
+  await page.getByRole("option", { name: "Tools", exact: true }).click();
+  // The Prompts panel animates out; two panels would match "Show all" until it is gone.
+  await expect(page.getByRole("button", { name: "Close Prompts" })).toHaveCount(0);
   await expect(page.getByText(`${graph.name} uses no tools.`)).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/tools\\?graph=${graph.id}`));
+  await expect(page).toHaveURL(new RegExp(`graph=${graph.id}`));
   await page.getByRole("button", { name: "Show all" }).click();
   await expect(page.getByRole("combobox", { name: "Scope" })).toContainText("Workspace");
 });

@@ -56,15 +56,15 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
       await page.getByRole("textbox", { name: /^Graph code/ }).waitFor();
     },
   ],
-  // Seed a card / an exception row first so the scan covers them, not an empty state.
+  // Seed a row / an exception row first so the scan covers them, not an empty state (these open as floating panels on the empty canvas).
   [
     "transforms",
     async (page) => {
       await page.request.post(`${API_URL}/api/transforms`, {
         data: { id: `a11y_${Date.now()}`, name: `A11y transform ${Date.now()}`, type: "format_message", template: "{value}" },
       });
-      await page.goto("/transforms");
-      await page.getByRole("button", { name: /^Edit transform A11y transform/ }).first().waitFor();
+      await page.goto("/?panel=transforms");
+      await page.getByRole("button", { name: /^Edit A11y transform/ }).first().waitFor();
     },
   ],
   [
@@ -73,8 +73,8 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
       await page.request.post(`${API_URL}/api/datasets`, {
         data: { id: `ds_a11y_${Date.now()}`, name: `A11y dataset ${Date.now()}`, graph_id: graph.id, fixtures: [{ input: { question: "a" }, node_outputs: {} }] },
       });
-      await page.goto("/datasets");
-      await page.getByRole("button", { name: /^Edit dataset A11y dataset/ }).first().waitFor();
+      await page.goto("/?panel=datasets");
+      await page.getByRole("button", { name: /^Edit A11y dataset/ }).first().waitFor();
     },
   ],
   [
@@ -88,8 +88,8 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
         data: { id: `eval_a11y_${stamp}`, name: `A11y suite ${stamp}`, graph_id: graph.id, dataset_id: `ds_eval_a11y_${stamp}` },
       });
       await page.request.post(`${API_URL}/api/eval-suites/eval_a11y_${stamp}/runs`, { data: {} });
-      await page.goto("/eval-suites");
-      await page.getByRole("button", { name: /^Edit eval suite A11y suite/ }).first().waitFor();
+      await page.goto("/?panel=evalSuites");
+      await page.getByRole("button", { name: /^Edit A11y suite/ }).first().waitFor();
       await openGraph(page, graph, "?panel=evals");
       await page.getByRole("table", { name: "Eval cases" }).waitFor();
     },
@@ -101,7 +101,7 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
       await page.request.post(`${API_URL}/api/graphs/${graph.id}/policy-exceptions`, {
         data: { policy_code: "POLICY_LLM_MODEL_NOT_PINNED", reason: "a11y scan", expires_at: expires },
       });
-      await page.goto("/policies");
+      await page.goto("/?panel=workspacePolicies");
       await page.getByRole("link", { name: graph.id }).or(page.getByRole("link", { name: graph.name })).first().waitFor();
     },
   ],
@@ -117,10 +117,8 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
       await page.getByText(/A database index is a data structure/).first().waitFor();
     },
   ],
-  // The remaining top-level pages (resource pages share the card markup scanned on /transforms).
-  ...["/agents", "/prompts", "/tools", "/mcp", "/llm-profiles", "/analytics", "/runs", "/resources", "/genui"].map(
-    (path): [string, (page: Page, graph: GraphJson) => Promise<void>] => [`${path} page`, async (page) => void (await page.goto(path))],
-  ),
+  // The only other route (the retired pages redirect to panels, which are scanned above).
+  ["login page", async (page) => void (await page.goto("/login"))],
 ];
 
 for (const [name, open] of PAGES) {

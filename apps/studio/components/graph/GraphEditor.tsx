@@ -128,7 +128,9 @@ import {
 } from "@/lib/watchRun";
 import { cacheRun, getCachedRun, listCachedRuns, mergeRunHistory } from "@/lib/runCache";
 import { useUndoStack } from "@/hooks/useUndoStack";
-import { useOptionalGraphPicker } from "@/components/studio/graph-picker";
+import { buildAppMenuActions } from "./appMenu";
+import { useStudioAccount } from "@/hooks/use-studio-account";
+import { useOptionalGraphPicker } from "@/components/graph/GraphPicker";
 import { useGraphLibrary } from "@/hooks/use-graph-library";
 import { writeLastGraph } from "@/lib/lastGraph";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
@@ -617,7 +619,15 @@ export function GraphEditor({ graphId }: { graphId: string }) {
   // graph picker shares (canvas-first-landing-plan.md §3).
   const library = useGraphLibrary({ lazy: true });
   const graphPicker = useOptionalGraphPicker();
+  const account = useStudioAccount();
   const workbench = useWorkbench();
+  // The App group of the ⋯ menu and the mobile More menu (components/graph/appMenu.tsx).
+  const appActions = buildAppMenuActions({
+    openGraphPicker: graphPicker?.open,
+    openPanel: (panel) => workbench.open(panel),
+    account,
+    goTo: (href) => router.push(href),
+  });
   // Phones keep the canvas: Code and Split need the width.
   const shownMode: EditorMode = workbench.isCompact ? "canvas" : editorMode;
   // The canvas changes width (or reappears) with the mode: frame it again.
@@ -3189,7 +3199,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
         }
         graphName={graphName}
         onGraphNameChange={setGraphName}
-        onBack={() => router.push("/graphs")}
+        onBack={() => (graphPicker ? graphPicker.open() : router.push("/"))}
         dirty={dirty}
         saving={saving}
         onSave={() => void handleSave()}
@@ -3231,6 +3241,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
             writeStored(SHOW_MINIMAP_STORAGE_KEY, String(value));
           },
         }}
+        appActions={appActions}
         onExport={handleExportGraph}
         onImport={() => fileInputRef.current?.click()}
         onShowShortcuts={() => workbench.toggle("help")}
@@ -3573,7 +3584,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           tabs={[
             graphPicker
               ? { id: "graphs", label: "Graphs", icon: <Workflow />, hasPopup: "dialog", onClick: graphPicker.open }
-              : { id: "graphs", label: "Graphs", icon: <Workflow />, href: "/graphs" },
+              : { id: "graphs", label: "Graphs", icon: <Workflow />, href: "/" },
             {
               id: "add",
               label: "Add",
@@ -3660,6 +3671,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
               checked: workbench.activePanel === "health",
               onClick: () => workbench.toggle("health"),
             },
+            ...appActions,
             {
               label: "Help",
               icon: <HelpCircle size={14} />,

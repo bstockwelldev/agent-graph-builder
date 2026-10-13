@@ -40,12 +40,18 @@ a free-form LLM answer. Ask something non-technical to see the other branch run.
   model), a system prompt and instructions (prepended to every LLM and tool
   loop node), and a tool allow-list (a run that would call anything else is
   refused with a blocking diagnostic). Run one from its graph's Run panel
-  ("Run as"), from the Agents page, or with `/run @agent …` in chat. The run
+  ("Run as"), from the Agents panel, or with `/run @agent …` in chat. The run
   records `agent_id`, and its graph snapshot records the applied prompts.
 - **Supporting surfaces:** a per-graph knowledge base (RAG), versioned reusable
   resources (prompts, tools, LLM profiles, policies), fixture-based simulation,
-  a chat scratchpad, and usage/spend analytics. Analytics, Policies and the
-  resource pages share a Scope picker: the whole workspace, or one graph.
+  a chat scratchpad, and usage/spend analytics. Workspace policies and the
+  resource panels share a Scope picker: the whole workspace, or one graph;
+  Analytics has its own This graph / Workspace toggle.
+- **Navigation:** the studio is the canvas. `/` reopens the graph you had
+  open (or shows an empty canvas with the graph picker, also `⌘O`);
+  resources, Analytics, workspace policies and the GenUI catalog are panels,
+  opened from the graph header's `⋯` menu or `⌘K`. The old page URLs
+  (`/prompts`, `/analytics`, `/policies`, `/graphs`, …) redirect to them.
 
 ### Node vocabulary
 

@@ -2,7 +2,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Menu, MessageSquare, Workflow } from "lucide-react";
 
-import { isRailItemActive, STUDIO_RAIL_ITEMS } from "@/components/studio/studio-nav";
 import { MobileTabBar } from "./mobile-tab-bar";
 
 afterEach(() => cleanup());
@@ -33,22 +32,5 @@ describe("MobileTabBar", () => {
     expect(more.getAttribute("aria-haspopup")).toBe("menu");
     expect(more.getAttribute("aria-expanded")).toBe("true");
     expect(more.hasAttribute("aria-pressed")).toBe(false);
-  });
-
-  it("derives the global tabs from the rail, so Resources is current on a resource page", () => {
-    render(
-      <MobileTabBar
-        aria-label="Studio tabs"
-        tabs={STUDIO_RAIL_ITEMS.filter((item) => item.mobileTab !== false).map(({ href, label, icon: Icon, matches }) => ({
-          id: href,
-          label,
-          icon: <Icon />,
-          href,
-          active: isRailItemActive("/prompts", matches),
-        }))}
-      />,
-    );
-    expect(screen.getByRole("link", { name: "Resources" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Graphs" }).getAttribute("aria-current")).toBeNull();
   });
 });

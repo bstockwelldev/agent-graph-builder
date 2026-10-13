@@ -7,6 +7,7 @@ import type { AnalyticsDashboardPayload, GraphAnalytics } from "@bstockwelldev/a
 
 import { GenuiChart } from "@/components/graph/ui/genui/GenuiChart";
 import { client } from "@/lib/api-client";
+import { latencyRows, modelRows, statusByDay } from "@/lib/analyticsCharts";
 import { formatDurationMs, formatRate, isUnhealthy } from "@/lib/nodeMetrics";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,13 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-function WorkspaceAnalytics() {
+/**
+ * The dashboard body the retired /analytics page showed (canvas-first landing
+ * plan, Phase 3): totals, runs per day (a chart by status, and a table), run
+ * durations, model calls and spend per graph. Whole workspace, or one graph
+ * (`graphId`), in which case the totals and by-graph rows are left out.
+ */
+function AnalyticsDashboard({ graphId, onOpenGraph }: { graphId?: string; onOpenGraph?: (graphId: string) => void }) {
   const router = useRouter();
   const [payload, setPayload] = useState<AnalyticsDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,9 +50,11 @@ function WorkspaceAnalytics() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     async function load() {
       try {
-        const dashboard = await client.analytics.dashboard();
+        const dashboard = await client.analytics.dashboard(graphId ? { graphId } : {});
         if (!cancelled) setPayload(dashboard);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -57,9 +66,10 @@ function WorkspaceAnalytics() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [graphId]);
 
   const totals = payload?.totals;
+  const byStatus = payload ? statusByDay(payload.daily) : null;
 
   return (
     <div className="space-y-4">
@@ -68,33 +78,49 @@ function WorkspaceAnalytics() {
 
       {totals ? (
         <>
-          <section className="grid grid-cols-2 gap-3">
-            {(
-              [
-                ["Invocations", totals.invocations.toLocaleString()],
-                ["Total tokens (est.)", totals.total_tokens.toLocaleString()],
-                ["Estimated spend", USD_FORMATTER.format(totals.estimated_usd)],
-                ["Avg. duration", formatDuration(totals.avg_duration_ms)],
-              ] as const
-            ).map(([label, value]) => (
-              <Card key={label}>
-                <CardHeader className="pb-1">
-                  <CardTitle className="text-muted-foreground text-xs font-normal uppercase tracking-wide">
-                    {label}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-lg font-semibold">{value}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </section>
+          {graphId ? null : (
+            <section className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ["Invocations", totals.invocations.toLocaleString()],
+                  ["Total tokens (est.)", totals.total_tokens.toLocaleString()],
+                  ["Estimated spend", USD_FORMATTER.format(totals.estimated_usd)],
+                  ["Avg. duration", formatDuration(totals.avg_duration_ms)],
+                  ["Input / output tokens", `${totals.input_tokens.toLocaleString()} / ${totals.output_tokens.toLocaleString()}`],
+                ] as const
+              ).map(([label, value]) => (
+                <Card key={label}>
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-muted-foreground text-xs font-normal uppercase tracking-wide">{label}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-lg font-semibold">{value}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </section>
+          )}
 
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Daily trend</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              {payload && byStatus && payload.daily.length > 0 ? (
+                // One bar per status a day (a server without statuses falls back to the day's total).
+                byStatus.statuses.length > 0 ? (
+                  <GenuiChart kind="bar" title="Runs per day, by status" rows={byStatus.rows} x="day" y={byStatus.statuses} height={180} />
+                ) : (
+                  <GenuiChart
+                    kind="bar"
+                    title="Runs per day"
+                    rows={payload.daily.map((point) => ({ day: point.date.slice(5), runs: point.invocations }))}
+                    x="day"
+                    y={["runs"]}
+                    height={160}
+                  />
+                )
+              ) : null}
               {payload && payload.daily.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -102,6 +128,7 @@ function WorkspaceAnalytics() {
                       <tr className="text-muted-foreground border-b text-left uppercase tracking-wide">
                         <th className="py-1 pr-2 font-normal">Date</th>
                         <th className="py-1 pr-2 font-normal">Runs</th>
+                        <th className="py-1 pr-2 font-normal">Tokens</th>
                         <th className="py-1 font-normal">Est. spend</th>
                       </tr>
                     </thead>
@@ -110,6 +137,7 @@ function WorkspaceAnalytics() {
                         <tr key={point.date} className="border-b last:border-0">
                           <td className="py-1 pr-2">{point.date}</td>
                           <td className="py-1 pr-2">{point.invocations.toLocaleString()}</td>
+                          <td className="py-1 pr-2">{point.tokens.toLocaleString()}</td>
                           <td className="py-1">{USD_FORMATTER.format(point.estimated_usd)}</td>
                         </tr>
                       ))}
@@ -117,50 +145,100 @@ function WorkspaceAnalytics() {
                   </table>
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">No runs yet.</p>
+                <p className="text-muted-foreground text-sm">No runs in the last 30 days.</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">By graph</CardTitle>
+              <CardTitle className="text-sm">Latency and models</CardTitle>
             </CardHeader>
-            <CardContent>
-              {payload && payload.by_graph.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-muted-foreground border-b text-left uppercase tracking-wide">
-                        <th className="py-1 pr-2 font-normal">Graph</th>
-                        <th className="py-1 pr-2 font-normal">Runs</th>
-                        <th className="py-1 font-normal">Est. spend</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payload.by_graph.map((row) => (
-                        <tr key={row.graph_id} className="border-b last:border-0">
-                          <td className="py-1 pr-2">
-                            <button
-                              type="button"
-                              className="hover:text-primary text-left underline-offset-2 hover:underline"
-                              onClick={() => router.push(`/graphs/${row.graph_id}`)}
-                            >
-                              {row.name}
-                            </button>
-                          </td>
-                          <td className="py-1 pr-2">{row.invocations.toLocaleString()}</td>
-                          <td className="py-1">{USD_FORMATTER.format(row.estimated_usd)}</td>
+            <CardContent className="space-y-4">
+              {payload?.latency?.length ? (
+                <GenuiChart kind="bar" title="Run duration (runs)" rows={latencyRows(payload.latency)} x="duration" y={["runs"]} height={180} />
+              ) : (
+                <p className="text-muted-foreground text-sm">No finished runs in the last 30 days.</p>
+              )}
+              {payload?.by_model?.length ? (
+                <div className="space-y-3">
+                  <GenuiChart kind="bar" title="Model calls" rows={modelRows(payload.by_model)} x="model" y={["calls"]} height={180} />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-muted-foreground border-b text-left uppercase tracking-wide">
+                          <th className="py-1 pr-2 font-normal">Provider / model</th>
+                          <th className="py-1 pr-2 font-normal">Runs</th>
+                          <th className="py-1 pr-2 font-normal">Calls</th>
+                          <th className="py-1 pr-2 font-normal">Tokens</th>
+                          <th className="py-1 font-normal">Est. spend</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {payload.by_model.map((row) => (
+                          <tr key={`${row.provider}/${row.model}`} className="border-b last:border-0">
+                            <td className="py-1 pr-2 font-mono">
+                              {row.provider}/{row.model}
+                            </td>
+                            <td className="py-1 pr-2">{row.runs.toLocaleString()}</td>
+                            <td className="py-1 pr-2">{row.calls.toLocaleString()}</td>
+                            <td className="py-1 pr-2">{row.tokens.toLocaleString()}</td>
+                            <td className="py-1">{USD_FORMATTER.format(row.estimated_usd)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">No runs yet.</p>
+                <p className="text-muted-foreground text-sm">No model calls in the last 30 days.</p>
               )}
             </CardContent>
           </Card>
+
+          {graphId ? null : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">By graph</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {payload && payload.by_graph.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-muted-foreground border-b text-left uppercase tracking-wide">
+                          <th className="py-1 pr-2 font-normal">Graph</th>
+                          <th className="py-1 pr-2 font-normal">Runs</th>
+                          <th className="py-1 pr-2 font-normal">Tokens</th>
+                          <th className="py-1 font-normal">Est. spend</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payload.by_graph.map((row) => (
+                          <tr key={row.graph_id} className="border-b last:border-0">
+                            <td className="py-1 pr-2">
+                              <button
+                                type="button"
+                                className="hover:text-primary text-left underline-offset-2 hover:underline"
+                                onClick={() => (onOpenGraph ? onOpenGraph(row.graph_id) : router.push(`/graphs/${row.graph_id}?panel=analytics&scope=graph`))}
+                              >
+                                {row.name}
+                              </button>
+                            </td>
+                            <td className="py-1 pr-2">{row.invocations.toLocaleString()}</td>
+                            <td className="py-1 pr-2">{row.tokens.toLocaleString()}</td>
+                            <td className="py-1">{USD_FORMATTER.format(row.estimated_usd)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No runs yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       ) : null}
     </div>
@@ -176,6 +254,7 @@ function WorkspaceAnalytics() {
  * dashboard stays one toggle away.
  */
 export function AnalyticsPanel() {
+  const router = useRouter();
   const { graphContext, panelContext } = useWorkbench();
   // `?panel=analytics&scope=workspace|graph` arrives as the panel context
   // (lib/graphUrlState.ts); it re-applies whenever the panel is reopened.
@@ -216,7 +295,17 @@ export function AnalyticsPanel() {
           </div>
         )}
       </div>
-      {graphScoped ? <GraphAnalyticsView context={graphContext} /> : <WorkspaceAnalytics />}
+      {graphScoped ? (
+        <>
+          <GraphAnalyticsView context={graphContext} charts />
+          <AnalyticsDashboard graphId={graphContext.graphId} />
+        </>
+      ) : (
+        <AnalyticsDashboard
+          // The graph that is already open just switches scope; another graph opens with its analytics.
+          onOpenGraph={(id) => (graphContext && id === graphContext.graphId ? setScope("graph") : router.push(`/graphs/${id}?panel=analytics&scope=graph`))}
+        />
+      )}
     </div>
   );
 }
@@ -225,7 +314,16 @@ export function AnalyticsPanel() {
  * graph id on the Analytics page (links then open the editor instead). */
 export type GraphAnalyticsContext = Pick<StudioGraphContext, "graphId" | "runId" | "focusNode" | "inspectRun">;
 
-export function GraphAnalyticsView({ context, compact = true }: { context: GraphAnalyticsContext; compact?: boolean }) {
+export function GraphAnalyticsView({
+  context,
+  compact = true,
+  charts = !compact,
+}: {
+  context: GraphAnalyticsContext;
+  compact?: boolean;
+  /** The per-node P95 latency chart. On by default only when not compact; the panel asks for it in its narrow layout. */
+  charts?: boolean;
+}) {
   const [payload, setPayload] = useState<GraphAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { graphId, runId } = context;
@@ -279,7 +377,7 @@ export function GraphAnalyticsView({ context, compact = true }: { context: Graph
         ))}
       </section>
 
-      {!compact && latencyRows.length > 0 ? (
+      {charts && latencyRows.length > 0 ? (
         <Card>
           <CardContent className="pt-4">
             <GenuiChart kind="bar" title="P95 latency by node (ms)" rows={latencyRows} x="node" y={["p95 ms"]} height={200} />

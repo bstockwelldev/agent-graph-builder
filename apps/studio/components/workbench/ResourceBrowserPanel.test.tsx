@@ -89,7 +89,8 @@ describe("ResourceBrowserPanel", () => {
     renderPanel({ ...promptKind, client: promptClient as never }, { resourceId: "p_explain" });
     expect(await screen.findByRole("dialog", { name: "Edit prompt" })).toBeTruthy();
     expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Explain");
-    expect(screen.getByRole("link", { name: /Open full page/, hidden: true }).getAttribute("href")).toBe("/prompts?id=p_explain");
+    // The full pages are gone (canvas-first landing plan, Phase 3): the panel is the only view.
+    expect(screen.queryByRole("link", { name: /Open full page/, hidden: true })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: /Usage/ }));
     const usedBy = await screen.findByRole("region", { name: "Used by" });
     expect(usedBy.textContent).toContain("Support flow");

@@ -24,7 +24,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import { GraphPicker, GraphPickerProvider, useGraphPicker } from "./graph-picker";
+import { GraphPicker, GraphPickerProvider, useGraphPicker } from "./GraphPicker";
 
 // The seeded demo is stored like any graph, so the summaries list returns it too.
 // A fresh store per test: several tests delete graphs.
@@ -65,7 +65,7 @@ function renderPicker(open = true) {
   );
 }
 
-const confirmDelete = async () => fireEvent.click(await screen.findByRole("button", { name: "Delete", exact: true }));
+const confirmDelete = async (name: string) => fireEvent.click(await screen.findByRole("button", { name: `Confirm delete ${name}` }));
 
 describe("graph picker", () => {
   it("lists your graphs under Recent and each demo once under Demos", async () => {
@@ -107,6 +107,28 @@ describe("graph picker", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Open graph" })).toBeNull());
   });
 
+  it("asks inline before deleting, and Cancel keeps the graph", async () => {
+    renderPicker();
+    await screen.findByText("Billing triage");
+    fireEvent.click(screen.getByRole("button", { name: "Delete Billing triage" }));
+    expect(screen.getByText(/Delete “Billing triage”\?/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByText("Billing triage")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Confirm delete/ })).toBeNull();
+    expect(store.graphs.has("billing")).toBe(true);
+  });
+
+  // The picker is how you choose what goes on the canvas, so it is styled like the canvas.
+  // Every shadcn primitive carries a data-slot: none may appear (the CRUD pages' look).
+  it("is styled from the canvas tokens, with no shadcn primitive in it", async () => {
+    renderPicker();
+    const dialog = await screen.findByRole("dialog", { name: "Open graph" });
+    await within(dialog).findByText("Support flow");
+    expect(dialog.querySelector("[data-slot]")).toBeNull();
+    // And the browser's own history of past entries mustn't float over the list.
+    expect(within(dialog).getByRole("searchbox", { name: "Search graphs" }).getAttribute("autocomplete")).toBe("off");
+  });
+
   it("closes on Escape", async () => {
     renderPicker();
     await screen.findByRole("dialog", { name: "Open graph" });
@@ -146,7 +168,7 @@ describe("graph picker", () => {
     expect(screen.queryByRole("button", { name: `Delete ${demoGraph().name}` })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Delete Billing triage" }));
     expect(store.graphs.has("billing")).toBe(true);
-    await confirmDelete();
+    await confirmDelete("Billing triage");
     await waitFor(() => expect(store.graphs.has("billing")).toBe(false));
     expect(window.localStorage.getItem(LAST_GRAPH_KEY)).toBeNull();
     await waitFor(() => expect(screen.queryByText("Billing triage")).toBeNull());
@@ -156,7 +178,7 @@ describe("graph picker", () => {
     renderPicker();
     await screen.findByText("Support flow");
     fireEvent.click(screen.getByRole("button", { name: "Delete Support flow" }));
-    await confirmDelete();
+    await confirmDelete("Support flow");
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/?open=picker"));
   });
 
@@ -165,7 +187,7 @@ describe("graph picker", () => {
     renderPicker();
     await screen.findByText("Billing triage");
     fireEvent.click(screen.getByRole("button", { name: "Delete Billing triage" }));
-    await confirmDelete();
+    await confirmDelete("Billing triage");
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("storage unavailable");
     expect(screen.getByText("Billing triage")).toBeTruthy();

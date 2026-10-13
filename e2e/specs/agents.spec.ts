@@ -10,8 +10,8 @@ test("creates an agent with pickers and runs it from its graph's Run panel", asy
   const graph = await api.createDemoGraph(`E2E agent graph ${stamp}`);
   const name = `Terse helper ${stamp}`;
 
-  await page.goto("/agents");
-  await page.getByRole("button", { name: /New agent/i }).first().click();
+  await page.goto("/?panel=agents");
+  await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByLabel("Name").fill(name);
   await page.getByRole("combobox", { name: "Graph", exact: true }).click();
   await page.getByRole("option", { name: `E2E agent graph ${stamp}` }).click();
@@ -24,7 +24,7 @@ test("creates an agent with pickers and runs it from its graph's Run panel", asy
   const agent = agents.find((entry) => entry.name === name)!;
   expect(agent).toMatchObject({ graph_id: graph.id, tool_ids: ["lookup_topic"] });
 
-  // The card's Run link opens the graph with the agent preselected.
+  // The row's Run link opens the graph with the agent preselected.
   await page.getByRole("link", { name: `Run ${name}` }).click();
   await expect(page).toHaveURL(new RegExp(`/graphs/${graph.id}\\?.*agent=${agent.id}`));
   await expect(page.getByRole("combobox", { name: "Agent", exact: true })).toHaveValue(agent.id);

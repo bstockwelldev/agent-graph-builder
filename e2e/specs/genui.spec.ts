@@ -3,9 +3,9 @@ import { API_URL, expect, openGraph, save, test, type GraphJson } from "../fixtu
 // resource-forms-consistency-plan.md, slice 5 part 2: the component library,
 // the human_gate surface editor, and the backend's surface validation.
 
-test("the GenUI library has a card per component, with a preview, props and Copy JSON", async ({ page, context }) => {
+test("the GenUI catalog panel has a card per component, with a preview, props and Copy JSON", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto("/genui");
+  await page.goto("/?panel=genui");
   const chart = page.getByRole("region", { name: "Chart" }).or(page.locator("#genui-chart"));
   await expect(chart.getByRole("img", { name: /^Weekly revenue and churn: line chart/ })).toBeVisible();
   await expect(chart.getByRole("table", { name: "Chart props" })).toContainText("data");

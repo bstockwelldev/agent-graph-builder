@@ -98,4 +98,38 @@ describe("WorkspacePoliciesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm revoke" }));
     await waitFor(() => expect(clientMock.policies.exceptions.delete).toHaveBeenCalledWith("g1", "pexc_live"));
   });
+
+  // Ported from the retired /policies page test (canvas-first landing plan, Phase 3).
+  it("filters exceptions and names their graph", async () => {
+    render(<WorkspacePoliciesPanel />);
+    const list = await screen.findByRole("list", { name: "Policy exceptions" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText(/0 expiring soon · 1 active · 1 expired/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expired" }));
+    const expired = screen.getByRole("list", { name: "Policy exceptions" });
+    expect(within(expired).getByText(/expired 3 days ago/)).toBeTruthy();
+    expect(within(expired).getByRole("button", { name: /Extend/ }).textContent).toBe("Renew 30 days");
+
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(within(screen.getByRole("list", { name: "Policy exceptions" })).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  // Slice 4: with a graph in scope the panel edits that graph's overrides.
+  it("edits a graph's overrides, showing what it inherits", async () => {
+    window.history.replaceState(null, "", "/?graph=g1");
+    const base = rule("reliability", "POLICY_LLM_MODEL_NOT_PINNED", "LLM model not pinned");
+    clientMock.policies.effective.mockImplementation(async (request?: { graphId?: string }) =>
+      request?.graphId ? [{ ...base, enforcement: "block", enforcement_source: "graph" }] : [{ ...base, enforcement: "off", enforcement_source: "workspace" }],
+    );
+    clientMock.policies.graph.get.mockResolvedValue({ rules: { POLICY_LLM_MODEL_NOT_PINNED: { enforcement: "block" } }, updated_at: "2026-09-29T00:00:00Z" });
+    clientMock.policies.exceptions.list.mockResolvedValue([exception("pexc_live", 20)]);
+    render(<WorkspacePoliciesPanel />);
+
+    expect(await screen.findByLabelText("Set by: This graph")).toBeTruthy();
+    await waitFor(() => expect(clientMock.policies.exceptions.list).toHaveBeenCalledWith({ graphId: "g1" }));
+    expect(clientMock.policies.graph.get).toHaveBeenCalledWith("g1");
+    expect(clientMock.policies.workspace.get).not.toHaveBeenCalled();
+    expect(screen.getByText("Time-boxed waivers on Support flow.", { exact: false })).toBeTruthy();
+  });
 });

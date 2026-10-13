@@ -28,10 +28,9 @@ export function isAuthProtectStudioEnabled(): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
-/** Prevent open redirects after OAuth. AGB's landing route is /graphs, not
- * MUI's /dashboard (see studio-shell.tsx's isGraphCanvasRoute / 4c's route
- * mapping — AGB has no dashboard route). */
+/** Prevent open redirects after OAuth. AGB's landing route is `/`, which
+ * reopens the last graph or opens the picker (canvas-first landing plan). */
 export function safeAuthNextPath(raw: string | null | undefined): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/graphs";
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
   return raw;
 }

@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Workflow } from "lucide-react";
 
-import { useGraphPicker } from "@/components/studio/graph-picker";
-import { Button } from "@/components/ui/button";
+import { EmptyCanvas } from "@/components/graph/EmptyCanvas";
+import { useGraphPicker } from "@/components/graph/GraphPicker";
 import { client } from "@/lib/api-client";
+import { WORKBENCH_PANELS, type WorkbenchPanelId } from "@/components/workbench/panels";
+import { useOptionalWorkbench } from "@/components/workbench/WorkbenchProvider";
+import { panelContextFromUrl } from "@/lib/graphUrlState";
 import { clearLastGraph, readLastGraph } from "@/lib/lastGraph";
 
 /**
@@ -14,10 +16,16 @@ import { clearLastGraph, readLastGraph } from "@/lib/lastGraph";
  * list: the last one you had open if it still exists (keeping any `?panel=`
  * and related params), otherwise an empty canvas with the picker open.
  * `?open=picker` skips the reopen, which is how "no graph open" is asked for.
+ *
+ * The retired resource, analytics, policies and GenUI pages redirect here
+ * with `?panel=` (lib/legacyRoutes.ts). With a graph to reopen the editor
+ * opens that panel; on the empty canvas this page opens it instead, floating,
+ * and leaves the picker closed since the panel is what was asked for.
  */
 export default function HomePage() {
   const router = useRouter();
   const picker = useGraphPicker();
+  const workbench = useOptionalWorkbench();
   // Nothing renders while the last graph is being checked, so a returning
   // visitor never sees an intermediate list.
   const [checking, setChecking] = useState(true);
@@ -28,13 +36,20 @@ export default function HomePage() {
     const forced = url.searchParams.get("open") === "picker";
     const lastGraph = forced ? null : readLastGraph();
 
-    const showPicker = () => {
+    const requestedPanel = url.searchParams.get("panel");
+    const panel =
+      requestedPanel && requestedPanel in WORKBENCH_PANELS && WORKBENCH_PANELS[requestedPanel as WorkbenchPanelId].scope === "global"
+        ? (requestedPanel as WorkbenchPanelId)
+        : null;
+
+    const showEmptyCanvas = () => {
       if (cancelled) return;
       setChecking(false);
-      picker.open();
+      if (panel && workbench) workbench.open(panel, panelContextFromUrl(url.search));
+      else picker.open();
     };
     if (!lastGraph) {
-      showPicker();
+      showEmptyCanvas();
       return;
     }
     client.graphs.summaries.list().then(
@@ -46,10 +61,10 @@ export default function HomePage() {
         }
         // Deleted since: forget it, and fall back to the picker.
         clearLastGraph();
-        showPicker();
+        showEmptyCanvas();
       },
       // The API is unreachable: the picker shows the load error with a retry.
-      showPicker,
+      showEmptyCanvas,
     );
     return () => {
       cancelled = true;
@@ -59,26 +74,4 @@ export default function HomePage() {
 
   if (checking) return <div className="flex-1" aria-busy="true" />;
   return <EmptyCanvas onOpenPicker={picker.open} />;
-}
-
-/** The canvas with no graph on it: a dotted ground and one way forward, never a blank screen. */
-function EmptyCanvas({ onOpenPicker }: { onOpenPicker: () => void }) {
-  return (
-    <div
-      data-testid="empty-canvas"
-      className="flex flex-1 items-center justify-center bg-[radial-gradient(circle,var(--border)_1px,transparent_1px)] [background-size:24px_24px]"
-    >
-      <div className="bg-card flex max-w-sm flex-col items-center gap-3 rounded-xl p-8 text-center ring-1 ring-foreground/10">
-        <Workflow className="text-muted-foreground size-8" aria-hidden />
-        <h1 className="text-lg font-semibold tracking-tight">No graph open</h1>
-        <p className="text-muted-foreground text-sm">Open one of your graphs or a demo, or start a blank graph.</p>
-        <Button type="button" variant="synth" onClick={onOpenPicker}>
-          Open or create a graph
-        </Button>
-        <p className="text-muted-foreground text-xs">
-          or press <kbd className="font-mono">⌘O</kbd>
-        </p>
-      </div>
-    </div>
-  );
 }

@@ -1,9 +1,9 @@
 import { API_URL, expect, openGraph, test } from "../fixtures";
 
-// resource-forms-consistency-plan.md, slice 7: a Datasets page to browse,
+// resource-forms-consistency-plan.md, slice 7: a Datasets panel to browse,
 // rename and delete saved Routing Lab datasets, with "Open in routing lab".
 
-test("the Datasets page renames a dataset, opens it in the routing lab, and deletes it", async ({ page, api, request }) => {
+test("the Datasets panel renames a dataset, opens it in the routing lab, and deletes it", async ({ page, api, request }) => {
   const stamp = Date.now();
   const graph = await api.createDemoGraph(`E2E datasets ${stamp}`);
   const id = `ds_e2e_${stamp}`;
@@ -16,10 +16,9 @@ test("the Datasets page renames a dataset, opens it in the routing lab, and dele
     (await request.post(`${API_URL}/api/datasets`, { data: { id, name, graph_id: graph.id, fixtures, created_at: "2026-01-01T00:00:00Z" } })).ok(),
   ).toBe(true);
 
-  await page.goto("/datasets");
-  const card = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Edit dataset ${name}` }) });
+  await page.goto("/?panel=datasets");
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: `Edit ${name}`, exact: true }) });
   await expect(card.getByText("2 fixtures")).toBeVisible();
-  await expect(card.getByRole("list", { name: `${name} fixtures` })).toContainText("· 1 frozen output");
 
   // Rename: fixtures, provenance and creation time survive.
   await card.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
@@ -38,7 +37,7 @@ test("the Datasets page renames a dataset, opens it in the routing lab, and dele
   expect(saved).toMatchObject({ name: renamed, graph_id: graph.id, fixtures, created_at: expect.stringMatching(/^2026-01-01T00:00:00/) });
 
   // Graph scope lists datasets captured from that graph.
-  await page.goto(`/datasets?graph=${graph.id}`);
+  await page.goto(`/?panel=datasets&graph=${graph.id}`);
   await expect(page.getByRole("status").filter({ hasText: `used by ${graph.name}` })).toContainText(/^1 of \d+ datasets used by/);
 
   // "Open in routing lab" loads it into the graph's Routing Lab.
@@ -48,12 +47,12 @@ test("the Datasets page renames a dataset, opens it in the routing lab, and dele
   await expect(page.getByLabel("Saved dataset")).toHaveValue(id);
   await expect(page.getByRole("button", { name: `Update “${renamed}”` })).toBeVisible();
 
-  // Delete from the page (back in the workspace scope).
-  await page.goto(`/datasets?graph=${graph.id}`);
+  // Delete from the panel (back in the workspace scope).
+  await page.goto(`/?panel=datasets&graph=${graph.id}`);
   await page.getByRole("button", { name: "Show all" }).click();
   await page.getByRole("button", { name: `Delete ${renamed}` }).click();
   await page.getByRole("dialog", { name: "Delete dataset" }).getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByRole("button", { name: `Edit dataset ${renamed}` })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Edit ${renamed}`, exact: true })).toHaveCount(0);
   // The card leaves the list before the DELETE request settles.
   await expect.poll(async () => (await request.get(`${API_URL}/api/datasets/${id}`)).status()).toBe(404);
 });

@@ -43,6 +43,8 @@ token-styled even if it's small; a full page or a dialog reachable from
 the sidebar nav is Tailwind/shadcn even if it's graph-adjacent (e.g.
 `/runs/[graphId]`).
 
-A dialog the shell renders once and opens from anywhere (the command palette,
-the graph picker) is shadcn too, since it isn't part of the canvas tree. The
-graph header's switcher opens that picker with "Browse all…" and ⌘O.
+The graph picker and the empty canvas at `/` are canvas-side, so they are
+token-styled (`components/graph/GraphPicker.tsx`, `EmptyCanvas.tsx`, on the
+`ui/Modal.tsx` frame), not shadcn: choosing what goes on the canvas should look
+like the canvas, not like the CRUD pages it replaced. The graph header's
+switcher opens the picker with "Browse all…" and ⌘O.
