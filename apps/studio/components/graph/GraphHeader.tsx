@@ -101,7 +101,6 @@ export function GraphHeader({
   structure,
   recentRuns = [],
   onSelectRun,
-  appActions = [],
 }: {
   hudRef?: Ref<HTMLDivElement>;
   compact: boolean;
@@ -147,8 +146,6 @@ export function GraphHeader({
   /** Newest first; listed under "Recent runs" in the Run ▾ menu. */
   recentRuns?: RunSummary[];
   onSelectRun?: (runId: string) => void;
-  /** The App group of the ⋯ menu (components/graph/appMenu.tsx). */
-  appActions?: NodeContextMenuAction[];
 }) {
   const [menu, setMenu] = useState<{ id: MenuId; x: number; y: number } | null>(null);
   const runMenuRef = useRef<HTMLButtonElement>(null);
@@ -315,17 +312,14 @@ export function GraphHeader({
     },
     { label: "Export JSON", icon: <Download size={14} />, onClick: onExport },
     { label: "Import JSON…", icon: <Upload size={14} />, onClick: onImport },
-    ...appActions,
     { label: "Help", icon: <HelpCircle size={14} />, shortcut: "?", separatorBefore: true, onClick: onShowShortcuts },
   ];
 
   const saveStateLabel = saving ? "Saving…" : dirty ? "Unsaved" : "Saved";
   const saveDotColor = saving ? statusColor.running : dirty ? color.warning[500] : statusColor.succeeded;
 
-  // The HUD sits under floating workbench panels (z-30), so an open menu would
-  // be hidden by one: lift it above them while a menu is open.
   return (
-    <div ref={hudRef} role="toolbar" aria-label="Graph" className="glass-panel ghost-border" style={menu ? { ...headerStyle, zIndex: 35 } : headerStyle}>
+    <div ref={hudRef} role="toolbar" aria-label="Graph" className="glass-panel ghost-border" style={headerStyle}>
       {/* Identity. Clips rather than drawing over the next group if its
           children still don't fit (they overlapped before, §8). */}
       <div style={{ ...groupStyle, minWidth: 0, flex: "1 1 auto", overflow: "hidden", flexShrink: 1 }}>
@@ -517,7 +511,11 @@ const headerStyle: CSSProperties = {
   position: "absolute",
   left: spacing[3],
   right: spacing[3],
-  top: spacing[3],
+  // Clear the notch/Dynamic Island once the root viewport uses
+  // `viewport-fit=cover` (see app/layout.tsx): without the inset the pill
+  // would slide up under the status bar on notched iPhones. `env()` is 0
+  // everywhere the inset doesn't apply, so desktop is unaffected.
+  top: `calc(${spacing[3]}px + env(safe-area-inset-top))`,
   zIndex: 20,
   display: "flex",
   alignItems: "center",
