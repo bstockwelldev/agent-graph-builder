@@ -16,4 +16,11 @@ describe("GenuiPanel", () => {
     const nav = screen.getByRole("navigation", { name: "Components" });
     expect(nav.querySelectorAll("a")).toHaveLength(GENUI_CATALOG.length);
   });
+
+  // canvas-styling-plan.md, PR 2: styled from the canvas tokens and the graph kit, so no shadcn primitive
+  // (every one carries a data-slot) may appear.
+  it("is styled from the canvas tokens, with no shadcn primitive", () => {
+    const { container } = render(<GenuiPanel />);
+    expect(container.querySelector("[data-slot]")).toBeNull();
+  });
 });

@@ -71,7 +71,8 @@ describe("GraphAnalyticsView", () => {
     render(<GraphAnalyticsView context={context} />);
     expect(await screen.findByText("75%")).toBeTruthy();
     expect(screen.getByText("1.50 s")).toBeTruthy();
-    expect(screen.getByText("50%").className).toContain("text-destructive");
+    // An unhealthy node rate is drawn in the destructive token colour.
+    expect(getComputedStyle(screen.getByText("50%")).color).toBe("rgb(240, 160, 160)");
   });
 
   it("focuses the node (History tab) and inspects its last run", async () => {
@@ -104,7 +105,20 @@ describe("AnalyticsPanel scope", () => {
       </WorkbenchProvider>,
     );
     expect(await screen.findByText("75%")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "This graph" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("radio", { name: "This graph" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  // canvas-styling-plan.md, PR 2: styled from the canvas tokens and the graph kit, so no shadcn primitive
+  // (every one carries a data-slot) may appear.
+  it("is styled from the canvas tokens, with no shadcn primitive", async () => {
+    const { container } = render(
+      <WorkbenchProvider>
+        <OpenAnalytics scope="workspace" />
+        <AnalyticsPanel />
+      </WorkbenchProvider>,
+    );
+    await screen.findByText("Invocations");
+    expect(container.querySelector("[data-slot]")).toBeNull();
   });
 
   it("opens on the workspace when the panel context asks for it", async () => {
@@ -115,7 +129,7 @@ describe("AnalyticsPanel scope", () => {
       </WorkbenchProvider>,
     );
     expect(await screen.findByText("Invocations")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Workspace" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("radio", { name: "Workspace" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.queryByText("75%")).toBeNull();
   });
 });

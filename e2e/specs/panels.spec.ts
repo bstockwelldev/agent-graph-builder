@@ -25,9 +25,9 @@ test("analytics summarizes the graph's runs per node", async ({ page, api }) => 
   await expect(page).toHaveURL(/[?&]node=tool_lookup/);
 
   // Workspace scope: totals across graphs, with a row per graph.
-  const workspace = page.getByRole("group", { name: "Analytics scope" }).getByRole("button", { name: "Workspace" });
+  const workspace = page.getByRole("radiogroup", { name: "Analytics scope" }).getByRole("radio", { name: "Workspace" });
   await workspace.click();
-  await expect(workspace).toHaveAttribute("aria-pressed", "true");
+  await expect(workspace).toBeChecked();
   await expect.poll(async () => Number((await stat("Invocations").textContent())?.replace(/,/g, ""))).toBeGreaterThanOrEqual(1);
   // The by-graph row: name, runs, tokens, estimated spend.
   await expect(page.getByRole("row", { name: new RegExp(`${graph.name} 1 [\\d,]+ \\$0\\.00`) })).toBeVisible();

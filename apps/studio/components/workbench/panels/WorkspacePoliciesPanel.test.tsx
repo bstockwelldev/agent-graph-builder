@@ -78,6 +78,15 @@ describe("WorkspacePoliciesPanel", () => {
     );
   });
 
+  // canvas-styling-plan.md, PR 2: styled from the canvas tokens and the graph kit, so no shadcn primitive
+  // (every one carries a data-slot) may appear.
+  it("is styled from the canvas tokens, with no shadcn primitive", async () => {
+    const { container } = render(<WorkspacePoliciesPanel />);
+    await screen.findByText("Reliability");
+    await screen.findByRole("list", { name: "Policy exceptions" });
+    expect(container.querySelector("[data-slot]")).toBeNull();
+  });
+
   it("shows a refused save as an alert (the public demo's read-only workspace policies)", async () => {
     clientMock.policies.workspace.save.mockRejectedValue(new Error("Workspace policies are read-only on the public demo. Override a rule on a graph."));
     render(<WorkspacePoliciesPanel />);

@@ -40,8 +40,7 @@ test.describe("public demo mode", () => {
     await page.goto("/?panel=workspacePolicies");
     const rule = page.getByRole("combobox", { name: "LLM model not pinned enforcement" });
     await expect(rule).toContainText("Default (Warn)");
-    await rule.click();
-    await page.getByRole("option", { name: /^Block(?! publish)/ }).click();
+    await pickOption(page, "LLM model not pinned enforcement", /^Block(?! publish)/);
     await expect(page.getByRole("alert").filter({ hasText: "Workspace policies are read-only on the public demo" })).toBeVisible();
     // The change was refused and nothing was stored.
     await expect(rule).toContainText("Default (Warn)");
@@ -54,8 +53,7 @@ test.describe("public demo mode", () => {
     await page.goto(`/graphs/${graphs[0].id}?panel=workspacePolicies`);
     const rule = page.getByRole("combobox", { name: "LLM model not pinned enforcement" });
     await expect(rule).toContainText("Default (Warn)");
-    await rule.click();
-    await page.getByRole("option", { name: /^Block(?! publish)/ }).click();
+    await pickOption(page, "LLM model not pinned enforcement", /^Block(?! publish)/);
     await expect(page.getByRole("alert").filter({ hasText: "Workspace policies are read-only on the public demo" })).toBeVisible();
     await expect(rule).toContainText("Default (Warn)");
   });

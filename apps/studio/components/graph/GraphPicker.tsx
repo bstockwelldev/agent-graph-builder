@@ -10,6 +10,7 @@ import { useGraphLibrary } from "@/hooks/use-graph-library";
 import { accentSurface, border, fontFamily, localType, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { clearLastGraph, readLastGraph, sortRecent } from "@/lib/lastGraph";
 import { Button } from "./ui/Button";
+import { Chip } from "./ui/Chip";
 import { TextInput } from "./ui/fields";
 import { IconButton } from "./ui/IconButton";
 import { Modal } from "./ui/Modal";
@@ -92,14 +93,6 @@ const rowLink: CSSProperties = {
   color: text.primary,
   textDecoration: "none",
   ...localType.ui,
-};
-const chip: CSSProperties = {
-  ...typeScale.caption,
-  padding: "1px 6px",
-  borderRadius: radius.md,
-  border: `1px solid ${border.subtle}`,
-  background: surface.card,
-  color: text.secondary,
 };
 const alertBox: CSSProperties = {
   display: "flex",
@@ -358,9 +351,7 @@ function DemosSection({ demos, currentGraphId, onOpen }: { demos: SeededDemoSumm
                 <span style={caption}>{demo.tagline}</span>
                 <span style={{ display: "flex", flexWrap: "wrap", gap: spacing[1], paddingTop: 2 }}>
                   {demo.node_types.map((nodeType) => (
-                    <span key={nodeType} style={chip}>
-                      {nodeType}
-                    </span>
+                    <Chip key={nodeType}>{nodeType}</Chip>
                   ))}
                 </span>
               </Link>

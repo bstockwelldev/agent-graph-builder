@@ -1,23 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Check, Copy } from "lucide-react";
 
+import { Button } from "@/components/graph/ui/Button";
+import { Card } from "@/components/graph/ui/Card";
+import { Chip } from "@/components/graph/ui/Chip";
 import { GenuiSurface } from "@/components/graph/ui/GenuiSurface";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { border, color, fontFamily, localType, radius, spacing, surface, text, typeScale } from "@/lib/graph-theme";
 import { GENUI_CATALOG, GENUI_PATTERN, SAMPLE_DATA, surfaceJson, type GenuiCatalogEntry } from "@/lib/genuiCatalog";
+
+// Styled from the canvas tokens and the graph kit (canvas-styling-plan.md,
+// PR 2). The props table stays local: it is the only table in the workbench.
 
 function CopyJsonButton({ json, label }: { json: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
-      type="button"
-      size="sm"
-      variant="outline"
       aria-label={`Copy ${label} JSON`}
+      style={{ display: "inline-flex", alignItems: "center", gap: spacing[1] }}
       onClick={() =>
         void navigator.clipboard?.writeText(json).then(
           () => {
@@ -28,7 +29,7 @@ function CopyJsonButton({ json, label }: { json: string; label: string }) {
         )
       }
     >
-      {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+      {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
       {copied ? "Copied" : "Copy JSON"}
     </Button>
   );
@@ -41,98 +42,112 @@ function JsonBlock({ json, label }: { json: string; label: string }) {
       tabIndex={0}
       role="region"
       aria-label={label}
-      className="focus-visible:ring-primary/60 border-border bg-muted/40 text-foreground/90 max-h-56 overflow-auto rounded-lg border p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
+      className="agb-focus-ring"
+      style={{
+        margin: 0,
+        maxHeight: 224,
+        overflow: "auto",
+        padding: spacing[3],
+        borderRadius: radius.lg,
+        border: `1px solid ${border.default}`,
+        background: surface.inset,
+        color: text.primary,
+        fontFamily: fontFamily.mono,
+        fontSize: 11,
+        lineHeight: "16px",
+        whiteSpace: "pre-wrap",
+      }}
     >
       {json}
     </pre>
   );
 }
 
+const cell: CSSProperties = { padding: `${spacing[1]}px ${spacing[2]}px`, borderBottom: `1px solid ${border.subtle}`, verticalAlign: "top", overflowWrap: "anywhere" };
+const head: CSSProperties = { ...cell, ...localType.label, color: text.secondary, textAlign: "left", fontWeight: 400 };
+
+function PropsTable({ entry }: { entry: GenuiCatalogEntry }) {
+  return (
+    // Focusable, so a table that overflows a narrow workbench panel can still be scrolled by keyboard.
+    <div tabIndex={0} role="region" aria-label={`${entry.type} props table`} className="agb-focus-ring" style={{ overflowX: "auto" }}>
+      <table aria-label={`${entry.type} props`} style={{ width: "100%", borderCollapse: "collapse", ...typeScale.caption, color: text.primary }}>
+        <thead>
+          <tr>
+            <th style={head}>Prop</th>
+            <th style={head}>Type</th>
+            <th style={head}>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entry.props.map((prop) => (
+            <tr key={prop.name}>
+              <td style={{ ...cell, fontFamily: fontFamily.mono }}>
+                {prop.name}
+                {prop.required ? (
+                  <Chip style={{ marginLeft: spacing[2], fontSize: 10 }}>required</Chip>
+                ) : null}
+              </td>
+              <td style={{ ...cell, fontFamily: fontFamily.mono }}>{prop.type}</td>
+              <td style={{ ...cell, color: text.secondary }}>{prop.description}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ComponentCard({ entry }: { entry: GenuiCatalogEntry }) {
   const json = surfaceJson(entry.example);
   return (
-    <Card id={`genui-${entry.type.toLowerCase()}`} aria-labelledby={`genui-${entry.type}-title`}>
-      <CardHeader>
-        <CardTitle id={`genui-${entry.type}-title`} className="font-mono">
-          {entry.type}
-        </CardTitle>
-        <CardDescription>{entry.summary}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Card id={`genui-${entry.type.toLowerCase()}`} titleId={`genui-${entry.type}-title`} title={<span style={{ fontFamily: fontFamily.mono }}>{entry.type}</span>} description={entry.summary}>
+      <div style={{ display: "flex", flexDirection: "column", gap: spacing[3] }}>
         <GenuiSurface surface={{ root: entry.example }} data={SAMPLE_DATA} />
-        {/* Focusable, so a table that overflows a narrow workbench panel can still be scrolled by keyboard. */}
-        <Table
-          aria-label={`${entry.type} props`}
-          containerProps={{ tabIndex: 0, role: "region", "aria-label": `${entry.type} props table` }}
-          className="[&_td]:break-words [&_td]:whitespace-normal [&_th]:whitespace-normal"
-        >
-          <TableHeader>
-            <TableRow>
-              <TableHead>Prop</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Notes</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entry.props.map((prop) => (
-              <TableRow key={prop.name}>
-                <TableCell className="font-mono text-xs">
-                  {prop.name}
-                  {prop.required ? (
-                    <Badge variant="outline" className="ml-2 text-[10px]">
-                      required
-                    </Badge>
-                  ) : null}
-                </TableCell>
-                <TableCell className="font-mono text-xs whitespace-normal">{prop.type}</TableCell>
-                <TableCell className="text-muted-foreground text-xs whitespace-normal">{prop.description}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground text-xs">Example surface</span>
+        <PropsTable entry={entry} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: spacing[2] }}>
+          <span style={{ ...typeScale.caption, color: text.secondary }}>Example surface</span>
           <CopyJsonButton json={json} label={entry.type} />
         </div>
         <JsonBlock json={json} label={`${entry.type} example JSON`} />
-      </CardContent>
+      </div>
     </Card>
   );
 }
 
-/** The /genui library body: a checkpoint pattern, then a card per component. */
+/** The catalog body: a checkpoint pattern, then a card per component. */
 export function GenuiLibrary() {
   const patternJson = surfaceJson(GENUI_PATTERN);
   return (
-    <>
-      <nav aria-label="Components" className="flex flex-wrap gap-2">
+    <div style={{ display: "flex", flexDirection: "column", gap: spacing[3] }}>
+      <nav aria-label="Components" style={{ display: "flex", flexWrap: "wrap", gap: spacing[2] }}>
         {GENUI_CATALOG.map((entry) => (
-          <a key={entry.type} href={`#genui-${entry.type.toLowerCase()}`} className="text-primary font-mono text-xs underline-offset-2 hover:underline">
+          <a
+            key={entry.type}
+            href={`#genui-${entry.type.toLowerCase()}`}
+            className="agb-focus-ring"
+            style={{ ...typeScale.caption, fontFamily: fontFamily.mono, color: color.primary[500], textDecoration: "none" }}
+          >
             {entry.type}
           </a>
         ))}
       </nav>
-      <Card>
-        <CardHeader>
-          <CardTitle>Pattern · approval checkpoint</CardTitle>
-          <CardDescription>
-            A summary from the run to approve, the numbers behind it, and the answers the next nodes need. Previews on this page use sample run data
-            for their $refs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Card
+        title="Pattern · approval checkpoint"
+        description="A summary from the run to approve, the numbers behind it, and the answers the next nodes need. Previews here use sample run data for their $refs."
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: spacing[3] }}>
           <GenuiSurface surface={{ root: GENUI_PATTERN }} data={SAMPLE_DATA} />
-          <div className="flex justify-end">
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <CopyJsonButton json={patternJson} label="pattern" />
           </div>
           <JsonBlock json={patternJson} label="Pattern JSON" />
-        </CardContent>
+        </div>
       </Card>
-      <section aria-label="Component reference" className="grid gap-4 lg:grid-cols-2">
+      <section aria-label="Component reference" style={{ display: "flex", flexDirection: "column", gap: spacing[3] }}>
         {GENUI_CATALOG.map((entry) => (
           <ComponentCard key={entry.type} entry={entry} />
         ))}
       </section>
-    </>
+    </div>
   );
 }

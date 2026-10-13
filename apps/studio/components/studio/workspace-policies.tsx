@@ -4,15 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EffectivePolicyRule, GraphSummary, PolicyEnforcement, PolicyException, PolicySettings } from "@bstockwelldev/agent-graph-sdk";
 
+import { Button } from "@/components/graph/ui/Button";
+import { Card } from "@/components/graph/ui/Card";
+import { Chip, type ChipTone } from "@/components/graph/ui/Chip";
+import { Combobox, type ComboboxOption } from "@/components/graph/ui/Combobox";
+import { TextInput } from "@/components/graph/ui/fields";
 import { ScopeSelect } from "@/components/studio/scope-select";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGraphScope } from "@/hooks/use-graph-scope";
 import { client } from "@/lib/api-client";
+import { accentSurface, border, color, fontFamily, localType, spacing, text, typeScale } from "@/lib/graph-theme";
 import { errorDetail } from "@/lib/knowledgePanel";
 import {
   CATEGORY_LABEL,
@@ -26,17 +26,15 @@ import {
   sortExceptions,
   type ExceptionState,
 } from "@bstockwelldev/agent-graph-sdk/graph";
-import { cn } from "@/lib/utils";
 
-// Workspace policies (STO-608), shared by the /policies page and the
-// "workspacePolicies" workbench panel (canvas-first landing plan, Phase 2):
-// the defaults every graph inherits unless its own Policies panel overrides
-// a rule, plus every graph's time-boxed
-// exceptions in one place so expiring waivers get noticed. Changes save
-// immediately; the backend re-evaluates on the next validate/compile/publish.
-// With a graph in scope (slice 4) the page edits that graph's overrides
-// instead, shows where each rule's setting comes from, and lists only that
-// graph's exceptions.
+// Workspace policies (STO-608), the "workspacePolicies" workbench panel: the
+// defaults every graph inherits unless its own Policies panel overrides a
+// rule, plus every graph's time-boxed exceptions in one place so expiring
+// waivers get noticed. Changes save immediately; the backend re-evaluates on
+// the next validate/compile/publish. With a graph in scope (slice 4) it edits
+// that graph's overrides instead, shows where each rule's setting comes from,
+// and lists only that graph's exceptions. Styled from the canvas tokens and
+// the graph kit (canvas-styling-plan.md, PR 2).
 
 const DEFAULT = "default";
 const CATEGORIES = ["security", "reliability", "cost", "governance"] as const;
@@ -47,10 +45,10 @@ const SOURCE_LABEL: Record<EffectivePolicyRule["enforcement_source"], string> = 
   graph: "This graph",
 };
 
-const STATE_BADGE: Record<ExceptionState, { label: string; className: string }> = {
-  active: { label: "Active", className: "bg-emerald-500/15 text-emerald-400" },
-  expiring: { label: "Expiring soon", className: "bg-amber-500/15 text-amber-400" },
-  expired: { label: "Expired", className: "bg-destructive/15 text-destructive" },
+const STATE_TONE: Record<ExceptionState, { label: string; tone: ChipTone }> = {
+  active: { label: "Active", tone: "success" },
+  expiring: { label: "Expiring soon", tone: "warning" },
+  expired: { label: "Expired", tone: "danger" },
 };
 
 type ExceptionFilter = "all" | "open" | "expired";
@@ -151,27 +149,29 @@ export function WorkspacePolicies() {
   );
 
   const description = graph
-            ? `${graph.name}'s overrides of the workspace rules. A rule left on Inherit follows the workspace, which follows the built-in default.`
-            : "Workspace defaults for the security, reliability, cost and governance checks every graph runs. A graph can override a rule from its own Policies panel, or here with the graph in scope.";
+    ? `${graph.name}'s overrides of the workspace rules. A rule left on Inherit follows the workspace, which follows the built-in default.`
+    : "Workspace defaults for the security, reliability, cost and governance checks every graph runs. A graph can override a rule from its own Policies panel, or here with the graph in scope.";
   return (
-    <div className="space-y-4 p-3">
-      <div className="mb-3 space-y-2">
-        <p className="text-muted-foreground text-xs">{description}</p>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ScopeSelect scope={scope} />
+    <div style={{ display: "flex", flexDirection: "column", gap: spacing[3], padding: spacing[3], color: text.primary }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: spacing[2] }}>
+        <p style={{ margin: 0, ...typeScale.caption, color: text.secondary }}>{description}</p>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: spacing[2] }}>
+          <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+            <ScopeSelect scope={scope} />
+          </div>
           {/* Not disabled while loading: a disabled button fades back in when the load ends, and a scan
               that lands mid-fade sees low contrast. */}
-          <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" aria-busy={loading} onClick={() => void load()}>
+          <Button variant="ghost" aria-busy={loading} onClick={() => void load()}>
             Refresh
           </Button>
         </div>
       </div>
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" style={{ margin: 0, ...localType.ui, color: accentSurface.destructive.text }}>
           {error}
         </p>
       ) : null}
-      <p className="text-muted-foreground text-xs" role="status">
+      <p role="status" style={{ margin: 0, ...typeScale.caption, color: text.secondary }}>
         {saving
           ? "Saving…"
           : savedAt
@@ -181,123 +181,118 @@ export function WorkspacePolicies() {
               : "Using built-in defaults"}
       </p>
 
-      <div className="grid gap-4">
-        {CATEGORIES.map((category) => {
-          const categoryRules = rules.filter((rule) => rule.rule.category === category);
-          if (categoryRules.length === 0) return null;
-          return (
-            <Card key={category}>
-              <CardHeader>
-                <CardTitle className="text-base">{CATEGORY_LABEL[category]}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {categoryRules.map((rule) => (
-                  <RuleRow
-                    key={rule.rule.code}
-                    rule={rule}
-                    inherited={graphId ? (inherited[rule.rule.code] ?? null) : null}
-                    settings={settings}
-                    disabled={saving}
-                    onChange={(next) => void save(next)}
-                  />
-                ))}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {CATEGORIES.map((category) => {
+        const categoryRules = rules.filter((rule) => rule.rule.category === category);
+        if (categoryRules.length === 0) return null;
+        return (
+          <Card key={category} title={CATEGORY_LABEL[category]}>
+            <div style={{ display: "flex", flexDirection: "column", gap: spacing[4] }}>
+              {categoryRules.map((rule) => (
+                <RuleRow
+                  key={rule.rule.code}
+                  rule={rule}
+                  inherited={graphId ? (inherited[rule.rule.code] ?? null) : null}
+                  settings={settings}
+                  disabled={saving}
+                  onChange={(next) => void save(next)}
+                />
+              ))}
+            </div>
+          </Card>
+        );
+      })}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Exceptions</CardTitle>
-          <CardDescription>
-            {graph ? `Time-boxed waivers on ${graph.name}.` : "Time-boxed waivers granted from each graph's Run panel."} {counts.expiring} expiring soon · {counts.active} active · {counts.expired} expired.
-          </CardDescription>
-          <div role="group" aria-label="Filter exceptions" className="flex gap-1 pt-2">
-            {(
-              [
-                ["open", "Active"],
-                ["expired", "Expired"],
-                ["all", "All"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button key={value} type="button" size="sm" variant={filter === value ? "secondary" : "ghost"} aria-pressed={filter === value} onClick={() => setFilter(value)}>
-                {label}
-              </Button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {visibleExceptions.length === 0 ? (
-            <p className="text-muted-foreground text-sm" role="status">
-              {exceptions.length === 0 ? "No exceptions granted yet." : "Nothing in this view."}
-            </p>
-          ) : (
-            <ul className="divide-border divide-y" aria-label="Policy exceptions">
-              {visibleExceptions.map((exception) => {
-                const state = exceptionStatus(exception, now).state;
-                const busy = busyId === exception.id;
-                const name = titles[exception.policy_code] ?? exception.policy_code;
-                return (
-                  <li key={exception.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">{name}</span>
-                        <Badge className={cn("border-0", STATE_BADGE[state].className)}>{STATE_BADGE[state].label}</Badge>
-                      </div>
-                      <p className="text-muted-foreground text-xs">
-                        <Link href={`/graphs/${exception.graph_id}`} className="text-primary underline underline-offset-2 hover:no-underline">
-                          {graphNames[exception.graph_id] ?? exception.graph_id}
-                        </Link>
-                        {exception.node_id ? (
-                          <>
-                            {" · node "}
-                            <span className="font-mono">{exception.node_id}</span>
-                          </>
-                        ) : null}
-                        {" · "}
-                        {state === "expired" ? "expired" : "expires"} {formatExpiry(exception, now)}
-                        {exception.reason ? ` · “${exception.reason}”` : ""}
-                      </p>
+      <Card
+        title="Exceptions"
+        description={`${graph ? `Time-boxed waivers on ${graph.name}.` : "Time-boxed waivers granted from each graph's Run panel."} ${counts.expiring} expiring soon · ${counts.active} active · ${counts.expired} expired.`}
+      >
+        <div role="group" aria-label="Filter exceptions" style={{ display: "flex", gap: spacing[1], marginBottom: spacing[2] }}>
+          {(
+            [
+              ["open", "Active"],
+              ["expired", "Expired"],
+              ["all", "All"],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              aria-pressed={filter === value}
+              variant={filter === value ? "secondary" : "ghost"}
+              onClick={() => setFilter(value)}
+              style={filter === value ? { borderColor: border.focus } : undefined}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        {visibleExceptions.length === 0 ? (
+          <p role="status" style={{ margin: 0, ...typeScale.caption, color: text.secondary }}>
+            {exceptions.length === 0 ? "No exceptions granted yet." : "Nothing in this view."}
+          </p>
+        ) : (
+          <ul aria-label="Policy exceptions" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {visibleExceptions.map((exception, index) => {
+              const state = exceptionStatus(exception, now).state;
+              const busy = busyId === exception.id;
+              const name = titles[exception.policy_code] ?? exception.policy_code;
+              const graphName = graphNames[exception.graph_id] ?? exception.graph_id;
+              return (
+                <li
+                  key={exception.id}
+                  style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: spacing[2], padding: `${spacing[3]}px 0`, borderTop: index === 0 ? "none" : `1px solid ${border.subtle}` }}
+                >
+                  <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: spacing[2] }}>
+                      <span style={{ ...localType.ui, fontWeight: 600 }}>{name}</span>
+                      <Chip tone={STATE_TONE[state].tone}>{STATE_TONE[state].label}</Chip>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        aria-label={`Extend ${name} exception on ${graphNames[exception.graph_id] ?? exception.graph_id} by 30 days`}
-                        onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.update(exception.graph_id, exception.id, { expiresAt: extendExpiry(exception, 30) }))}
-                      >
-                        {state === "expired" ? "Renew 30 days" : "Extend 30 days"}
-                      </Button>
-                      {pendingRevokeId === exception.id ? (
+                    <p style={{ margin: "2px 0 0", ...typeScale.caption, color: text.secondary }}>
+                      <Link href={`/graphs/${exception.graph_id}`} className="agb-focus-ring" style={{ color: color.primary[500] }}>
+                        {graphName}
+                      </Link>
+                      {exception.node_id ? (
                         <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            disabled={busy}
-                            onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.delete(exception.graph_id, exception.id))}
-                          >
-                            Confirm revoke
-                          </Button>
-                          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setPendingRevokeId(null)}>
-                            Cancel
-                          </Button>
+                          {" · node "}
+                          <span style={{ fontFamily: fontFamily.mono }}>{exception.node_id}</span>
                         </>
-                      ) : (
-                        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setPendingRevokeId(exception.id)}>
-                          Revoke
+                      ) : null}
+                      {" · "}
+                      {state === "expired" ? "expired" : "expires"} {formatExpiry(exception, now)}
+                      {exception.reason ? ` · “${exception.reason}”` : ""}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: spacing[2] }}>
+                    <Button
+                      disabled={busy}
+                      aria-label={`Extend ${name} exception on ${graphName} by 30 days`}
+                      onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.update(exception.graph_id, exception.id, { expiresAt: extendExpiry(exception, 30) }))}
+                    >
+                      {state === "expired" ? "Renew 30 days" : "Extend 30 days"}
+                    </Button>
+                    {pendingRevokeId === exception.id ? (
+                      <>
+                        <Button
+                          variant="destructive"
+                          disabled={busy}
+                          onClick={() => void exceptionAction(exception.id, () => client.policies.exceptions.delete(exception.graph_id, exception.id))}
+                        >
+                          Confirm revoke
                         </Button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
+                        <Button variant="ghost" disabled={busy} onClick={() => setPendingRevokeId(null)}>
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="ghost" disabled={busy} onClick={() => setPendingRevokeId(exception.id)}>
+                        Revoke
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
     </div>
   );
@@ -323,47 +318,44 @@ function RuleRow({
   const defaultLabel = inherited
     ? `Inherit (${enforcementLabel(inherited.enforcement)})`
     : `Default (${enforcementLabel(rule.rule.default_enforcement)})`;
+  const enforcementOptions: ComboboxOption[] = [
+    { value: DEFAULT, label: defaultLabel },
+    ...ENFORCEMENT_OPTIONS.map((option) => ({ value: option.value, label: option.label, description: option.description })),
+  ];
   return (
-    <div className="space-y-2" data-testid={`policy-rule-${code}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Label htmlFor={selectId} className="text-sm font-medium">
+    <div style={{ display: "flex", flexDirection: "column", gap: spacing[2] }} data-testid={`policy-rule-${code}`}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: spacing[2] }}>
+        <label htmlFor={selectId} style={{ ...localType.ui, fontWeight: 600 }}>
           {rule.rule.title}
-        </Label>
-        {rule.rule.gate === "publish" ? <Badge variant="outline">Publish only</Badge> : null}
+        </label>
+        {rule.rule.gate === "publish" ? <Chip>Publish only</Chip> : null}
         {inherited ? (
-          <Badge variant="secondary" aria-label={`Set by: ${SOURCE_LABEL[rule.enforcement_source]}`}>
+          <Chip tone="neutral" aria-label={`Set by: ${SOURCE_LABEL[rule.enforcement_source]}`}>
             {SOURCE_LABEL[rule.enforcement_source]}
-          </Badge>
+          </Chip>
         ) : null}
       </div>
-      <p className="text-muted-foreground text-xs leading-snug">{rule.rule.description}</p>
-      <Select
-        value={setting?.enforcement ?? DEFAULT}
-        disabled={disabled}
-        onValueChange={(value) => value && onChange(setRuleEnforcement(settings, code, value === DEFAULT ? null : (value as PolicyEnforcement)))}
-        items={{ [DEFAULT]: defaultLabel, ...Object.fromEntries(ENFORCEMENT_OPTIONS.map((option) => [option.value, option.label])) }}
-      >
-        <SelectTrigger id={selectId} aria-label={`${rule.rule.title} enforcement`} className="h-8 w-full sm:w-60">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={DEFAULT}>{defaultLabel}</SelectItem>
-          {ENFORCEMENT_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label} — <span className="text-muted-foreground">{option.description}</span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <p style={{ margin: 0, ...typeScale.caption, color: text.secondary }}>{rule.rule.description}</p>
+      <div style={{ maxWidth: 280 }}>
+        <Combobox
+          id={selectId}
+          aria-label={`${rule.rule.title} enforcement`}
+          value={setting?.enforcement ?? DEFAULT}
+          options={enforcementOptions}
+          disabled={disabled}
+          searchPlaceholder="Find a setting…"
+          onChange={(value) => onChange(setRuleEnforcement(settings, code, value === DEFAULT ? null : (value as PolicyEnforcement)))}
+        />
+      </div>
       {rule.rule.params.map((spec) => {
         const overridden = setting?.params?.[spec.name] !== undefined;
         const value = rule.params[spec.name] ?? spec.default;
         const inputId = `${selectId}-${spec.name}`;
         return (
-          <div key={spec.name} className="flex flex-wrap items-center gap-2">
-            <Label htmlFor={inputId} className="text-muted-foreground text-xs">
+          <div key={spec.name} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: spacing[2] }}>
+            <label htmlFor={inputId} style={{ ...typeScale.caption, color: text.secondary }}>
               {spec.label}
-            </Label>
+            </label>
             {spec.type === "integer" ? (
               <IntegerInput
                 id={inputId}
@@ -373,30 +365,24 @@ function RuleRow({
                 onCommit={(next) => onChange(setRuleParam(settings, code, spec.name, next))}
               />
             ) : (
-              <Select
-                value={String(value)}
-                disabled={disabled}
-                onValueChange={(next) => next && onChange(setRuleParam(settings, code, spec.name, next))}
-                items={Object.fromEntries((spec.choices ?? []).map((choice) => [choice, choice]))}
-              >
-                <SelectTrigger id={inputId} className="h-8 w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(spec.choices ?? []).map((choice) => (
-                    <SelectItem key={choice} value={choice}>
-                      {choice}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div style={{ width: 160 }}>
+                <Combobox
+                  id={inputId}
+                  aria-label={spec.label}
+                  value={String(value)}
+                  options={(spec.choices ?? []).map((choice) => ({ value: choice, label: choice }))}
+                  disabled={disabled}
+                  searchPlaceholder="Find a choice…"
+                  onChange={(next) => next && onChange(setRuleParam(settings, code, spec.name, next))}
+                />
+              </div>
             )}
             {overridden ? (
-              <Button type="button" size="sm" variant="link" className="h-7 px-1 text-xs" disabled={disabled} onClick={() => onChange(setRuleParam(settings, code, spec.name, undefined))}>
+              <Button variant="ghost" disabled={disabled} onClick={() => onChange(setRuleParam(settings, code, spec.name, undefined))}>
                 {inherited ? `Inherit (${String(inherited.params[spec.name] ?? spec.default)})` : `Reset to ${String(spec.default)}`}
               </Button>
             ) : (
-              <span className="text-muted-foreground text-xs">{inherited ? (rule.param_sources[spec.name] ?? "default") : "default"}</span>
+              <span style={{ ...typeScale.caption, color: text.secondary }}>{inherited ? (rule.param_sources[spec.name] ?? "default") : "default"}</span>
             )}
           </div>
         );
@@ -418,14 +404,14 @@ function IntegerInput({ id, value, min, disabled, onCommit }: { id: string; valu
     if (parsed !== value) onCommit(parsed);
   };
   return (
-    <Input
+    <TextInput
       id={id}
       type="number"
       inputMode="numeric"
       min={min}
       value={draft}
       disabled={disabled}
-      className="h-8 w-24"
+      style={{ width: 96 }}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {

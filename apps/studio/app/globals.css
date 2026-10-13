@@ -297,6 +297,14 @@
   .agb-hoverable:not(:disabled):hover {
     background: rgba(255, 255, 255, 0.06) !important;
   }
+  /* cmdk lists in the graph kit (GraphSwitcherCombobox): the highlighted row,
+     which cmdk marks with data-selected and inline styles cannot express. */
+  .agb-cmdk [cmdk-item][data-selected="true"] {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .agb-cmdk [cmdk-item][data-disabled="true"] {
+    opacity: 0.5;
+  }
   /* Menu items (NodeContextMenu.tsx) keep their background out of the inline
      style: an inline background beats these rules, which is why hover never
      showed before (canvas-workbench-ergonomics-plan.md §3). Hover moves focus,

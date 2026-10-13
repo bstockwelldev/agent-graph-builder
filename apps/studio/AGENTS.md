@@ -37,14 +37,27 @@ existing token-styled component for a new purpose (the Run console's
 trigger's bounding rect instead, rather than pulling in the unused
 shadcn `DropdownMenu`).
 
-The dividing line is the route, not the file's location on disk: a
-component that only ever renders inside the graph canvas is
-token-styled even if it's small; a full page or a dialog reachable from
-the sidebar nav is Tailwind/shadcn even if it's graph-adjacent (e.g.
-`/runs/[graphId]`).
+The dividing line used to be the route: graph-canvas components were
+token-styled and the CRUD pages were shadcn. The pages are gone (the
+canvas-first landing plan), so everything now renders on or over the canvas and
+belongs on the token side. What is still shadcn is a migration backlog, not a
+design choice, tracked in
+[canvas-styling-plan.md](../../docs/planning/features/canvas-styling-plan.md).
+Do not add new shadcn surfaces.
 
-The graph picker and the empty canvas at `/` are canvas-side, so they are
-token-styled (`components/graph/GraphPicker.tsx`, `EmptyCanvas.tsx`, on the
-`ui/Modal.tsx` frame), not shadcn: choosing what goes on the canvas should look
-like the canvas, not like the CRUD pages it replaced. The graph header's
-switcher opens the picker with "Browse all…" and ⌘O.
+Token-styled so far, from `lib/graph-theme.ts` and the graph kit (`components/graph/ui/`):
+
+- the graph picker, the empty canvas at `/` and the `ui/Modal.tsx` frame
+  (`components/graph/GraphPicker.tsx`, `EmptyCanvas.tsx`);
+- the resource panels, workspace policies, the GenUI catalog and Analytics
+  (`components/workbench/ResourceBrowserPanel.tsx`, `components/studio/workspace-policies.tsx`,
+  `genui-library.tsx`, `components/workbench/panels/*`), plus the drawer title bar and
+  the graph header's switcher (`GraphSwitcherCombobox.tsx`).
+
+Still shadcn, to be migrated: the resource editor dialog and its field components,
+the confirm dialog, the graph editor's dialogs, the command palette, and the chat,
+console and help panels. The shared kit pieces (`Card`, `Chip`, `Combobox`,
+`IconButton`, `Button`, `Modal`) cover most of what they need.
+
+When you restyle a surface, add a test that it contains no shadcn primitive (every
+one carries a `data-slot`), as the picker's and the panels' tests do.

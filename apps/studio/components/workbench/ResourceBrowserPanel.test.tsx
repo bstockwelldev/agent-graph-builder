@@ -21,25 +21,6 @@ const graphsClient = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api-client", () => ({ client: { graphs: graphsClient } }));
 
-// Base UI's Select popup never settles in jsdom (its floating-ui positioning
-// loops), so the wiring is tested through a native <select> stand-in: the
-// <option>s come from the real SelectItems, the change from the real onValueChange.
-vi.mock("@/components/ui/select", async () => {
-  const React = await import("react");
-  const Context = React.createContext<{ value?: string; onValueChange?: (value: string) => void }>({});
-  return {
-    Select: ({ value, onValueChange, children }: { value?: string; onValueChange?: (value: string) => void; children: React.ReactNode }) =>
-      React.createElement(Context.Provider, { value: { value, onValueChange } }, children),
-    SelectTrigger: () => null,
-    SelectValue: () => null,
-    SelectContent: ({ children }: { children: React.ReactNode }) => {
-      const { value, onValueChange } = React.useContext(Context);
-      return React.createElement("select", { "aria-label": "Select", value, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => onValueChange?.(event.target.value) }, children);
-    },
-    SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => React.createElement("option", { value }, children),
-  };
-});
-
 import { ResourceBrowserPanel } from "./ResourceBrowserPanel";
 import { WorkbenchDrawer } from "./WorkbenchDrawer";
 import { WorkbenchProvider, useWorkbench } from "./WorkbenchProvider";
@@ -193,13 +174,23 @@ describe("resource kind switcher", () => {
         </WorkbenchDrawer>
       </WorkbenchProvider>,
     );
-    // The first select is the kind switcher; the Scope select follows it.
-    const [switcher] = await screen.findAllByRole("combobox");
-    expect((switcher as HTMLSelectElement).value).toBe("prompts");
-    const options = within(switcher).getAllByRole("option");
+    // The kit Combobox: a trigger, then a listbox that selects on mousedown.
+    const switcher = await screen.findByRole("combobox", { name: "Resource kind" });
+    expect(switcher.textContent).toContain("Prompts");
+    fireEvent.click(switcher);
+    const options = await screen.findAllByRole("option");
     expect(options.map((option) => option.textContent)).toEqual(RESOURCE_KINDS.map((kind) => kind.panelTitle));
     expect(options).toHaveLength(8);
-    fireEvent.change(switcher, { target: { value: "datasets" } });
+    fireEvent.mouseDown(options.find((option) => option.textContent === "Datasets")!);
     await vi.waitFor(() => expect(screen.getByTestId("active").textContent).toBe("datasets"));
+  });
+});
+
+// canvas-styling-plan.md, PR 2: the panel is styled from the canvas tokens and the graph kit.
+describe("ResourceBrowserPanel styling", () => {
+  it("has no shadcn primitive in it (every one carries a data-slot)", async () => {
+    const { container } = renderPanel({ ...promptKind, client: makeClient(prompts) as never });
+    await screen.findByRole("button", { name: "Delete Explain" });
+    expect(container.querySelector("[data-slot]")).toBeNull();
   });
 });
