@@ -277,7 +277,7 @@
         "node-human-gate",
         "runs-and-traces"
       ],
-      "body": "A GenUI surface is a small JSON description of UI, such as a summary, chart, table, diff, diagram or form, that the studio renders safely. Human gates use them to show what needs approval; values bind to run data with `{\"$ref\": \"/nodes/<id>/output\"}`.\n\n## How do I…\n- **Browse and preview surfaces:** the **GenUI** page.\n- **Use one at a checkpoint:** set it on a Human gate node. Form values the approver enters become a run variable named after the gate."
+      "body": "A GenUI surface is a small JSON description of UI, such as a summary, chart, table, diff, diagram or form, that the studio renders safely. Human gates use them to show what needs approval; values bind to run data with `{\"$ref\": \"/nodes/<id>/output\"}`.\n\n## How do I…\n- **Browse and preview surfaces:** open the **GenUI catalog** panel (⌘K).\n- **Use one at a checkpoint:** set it on a Human gate node. Form values the approver enters become a run variable named after the gate."
     },
     {
       "id": "getting-started",
@@ -696,9 +696,10 @@
       ],
       "related": [
         "validation",
-        "releases"
+        "releases",
+        "workspace-policies"
       ],
-      "body": "Policies are rules every graph is checked against, such as \"LLM models must be pinned\". Each policy is an error or a warning, and can block publishing.\n\n## How do I…\n- **Set workspace defaults:** the **Policies** page.\n- **Override for one graph:** the graph's **Policies** panel (⋯ menu).\n- **Waive one temporarily:** add an exception with a reason and an expiry date; it lapses on its own."
+      "body": "Policies are rules every graph is checked against, such as \"LLM models must be pinned\". Each policy is an error or a warning, and can block publishing.\n\n## How do I…\n- **Set workspace defaults:** open the **Workspace policies** panel from the command palette (⌘K), or from the link in a graph's Policies panel.\n- **Override for one graph:** the graph's **Policies** panel (⋯ menu).\n- **Waive one temporarily:** add an exception with a reason and an expiry date; it lapses on its own."
     },
     {
       "id": "ports-and-contracts",
@@ -1040,6 +1041,28 @@
         "routing"
       ],
       "body": "The studio validates the graph as you edit. **Errors** block runs and releases; **warnings** don't block, but point at something that may not work as intended.\n\nIssues come from four checks: **structure** (entry node, reachability, router edges), **contracts** (port kinds), **policies** (workspace and graph rules) and **capabilities** (what the runtime supports).\n\n## How do I…\n- **See all issues:** the header's validation chip and the Run panel's **Issues** tab list them.\n- **Jump to one:** click it. The canvas pans to the node or edge and opens the tab that holds the setting.\n- **Read the details:** each issue names the node or edge; the inspector shows field-level issues next to the field."
+    },
+    {
+      "id": "workspace-policies",
+      "title": "Workspace policies",
+      "summary": "The default rules every graph inherits, and every graph's exceptions",
+      "category": "panel",
+      "keywords": [
+        "workspace",
+        "policy",
+        "policies",
+        "defaults",
+        "exceptions",
+        "waiver",
+        "expiring",
+        "inherit"
+      ],
+      "related": [
+        "policies",
+        "validation",
+        "releases"
+      ],
+      "body": "Workspace policies sets the default enforcement for each rule (security, reliability, cost, governance) that every graph inherits. It also lists the time-boxed exceptions granted on any graph, so waivers that are about to lapse get noticed.\n\n## How do I…\n- **Change a default:** pick Off, Warn or Block on a rule. It saves at once.\n- **See or edit one graph's overrides:** use the Scope picker, or open that graph's own **Policies** panel.\n- **Extend or revoke an exception:** use the buttons on its row."
     }
   ]
 }

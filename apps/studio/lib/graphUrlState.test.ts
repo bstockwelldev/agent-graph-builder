@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseGraphUrlState, serializeGraphUrlState } from "./graphUrlState";
+import { panelContextFromUrl, parseGraphUrlState, serializeGraphUrlState } from "./graphUrlState";
 
 // studio-graph-workbench-redesign-plan.md, Wave 2.
 describe("graph URL state", () => {
@@ -14,6 +14,8 @@ describe("graph URL state", () => {
       section: "observe-history",
       view: null,
       mode: null,
+      id: null,
+      scope: null,
     });
   });
 
@@ -43,5 +45,18 @@ describe("graph URL state", () => {
   it("round-trips", () => {
     const search = serializeGraphUrlState({ node: "n", tab: "io", run: "r", panel: "releases" });
     expect(serializeGraphUrlState(parseGraphUrlState(search))).toBe(search);
+  });
+
+  // Canvas-first landing plan, Phase 2: `?panel=<kind>&id=&tab=` and `?panel=analytics&scope=`.
+  it("hands a resource panel its id and tab, and Analytics its scope, as panel context", () => {
+    expect(panelContextFromUrl("?panel=datasets&id=ds_1&tab=usage")).toEqual({ resourceId: "ds_1", tab: "usage" });
+    expect(panelContextFromUrl("?panel=prompts&id=p_1")).toEqual({ resourceId: "p_1" });
+    expect(panelContextFromUrl("?panel=analytics&scope=workspace")).toEqual({ scope: "workspace" });
+    expect(panelContextFromUrl("?panel=prompts&tab=usage")).toBeUndefined();
+    expect(panelContextFromUrl("")).toBeUndefined();
+  });
+
+  it("drops the one-shot id and scope on the next write but keeps unrelated params", () => {
+    expect(serializeGraphUrlState({ panel: "prompts" }, "?panel=prompts&id=p_1&tab=usage&scope=workspace&utm=x")).toBe("?utm=x&panel=prompts");
   });
 });

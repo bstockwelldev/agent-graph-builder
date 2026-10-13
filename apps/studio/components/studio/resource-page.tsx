@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { ResourceEditorDialog, isResourceEditorTab } from "@/components/studio/resource-editor-dialog";
-import type { AnyResourceKind, ResourceKindId } from "@/components/studio/resource-kinds";
+import type { AnyResourceKind } from "@/components/studio/resource-kinds";
 import { ScopeSelect } from "@/components/studio/scope-select";
 import { StudioConfirmDialog } from "@/components/studio/studio-confirm-dialog";
 import { StudioPage } from "@/components/studio/studio-page";
@@ -16,44 +16,9 @@ import {
 } from "@/components/studio/studio-resource-card-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useGraphScope } from "@/hooks/use-graph-scope";
 import { useResourceEditor } from "@/hooks/use-resource-editor";
-import { client } from "@/lib/api-client";
-import { errorDetail } from "@/lib/apiErrors";
+import { useScopedResourceItems } from "@/hooks/use-scoped-resource-items";
 import { cn } from "@/lib/utils";
-
-/** Each kind's key in `GET /api/graphs/{id}/resources`. */
-const SCOPE_KEY: Record<ResourceKindId, string> = {
-  prompts: "prompts",
-  tools: "tools",
-  agents: "agents",
-  mcp: "mcp-servers",
-  llmProfiles: "llm-profiles",
-  transforms: "transforms",
-  datasets: "datasets",
-  evalSuites: "eval-suites",
-};
-
-/** With a graph in scope: the ids of this kind it uses (null while loading). */
-function useScopedIds(kind: AnyResourceKind, graphId: string | null, refreshKey: unknown) {
-  const [state, setState] = useState<{ graphId: string; ids: Set<string> | null; error: string | null } | null>(null);
-  useEffect(() => {
-    if (!graphId) {
-      setState(null);
-      return;
-    }
-    let cancelled = false;
-    setState({ graphId, ids: null, error: null });
-    client.graphs.resources(graphId).then(
-      ({ ids }) => !cancelled && setState({ graphId, ids: new Set(ids[SCOPE_KEY[kind.id]] ?? []), error: null }),
-      (err: unknown) => !cancelled && setState({ graphId, ids: null, error: errorDetail(err) }),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [graphId, kind.id, refreshKey]);
-  return state?.graphId === graphId ? state : null;
-}
 
 /**
  * The full page for one resource registry (studio-graph-workbench-redesign-
@@ -66,10 +31,7 @@ export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
   const editor = useResourceEditor(kind);
   const { items: allItems, loading, error, refetch, saving, saveError, clearSaveError } = editor;
   // Slice 4: with a graph in scope, only what that graph uses.
-  const scope = useGraphScope();
-  const scoped = useScopedIds(kind, scope.graphId, allItems);
-  const items = scoped?.ids ? allItems.filter((item) => scoped.ids!.has(item.id)) : allItems;
-  const noun = kind.panelTitle.toLowerCase();
+  const { scope, items, status, emptyText } = useScopedResourceItems(kind, allItems);
 
   // Deep link, read from location rather than useSearchParams so the page
   // stays statically renderable (no Suspense boundary needed). Applied once,
@@ -96,13 +58,9 @@ export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
         onRefresh={refetch}
         actions={<ScopeSelect scope={scope} />}
       />
-      {scope.graph ? (
+      {status ? (
         <p className="text-muted-foreground mb-3 text-sm" role="status">
-          {scoped?.error
-            ? `Couldn't load what ${scope.graph.name} uses: ${scoped.error}`
-            : scoped?.ids
-              ? `${items.length} of ${allItems.length} ${noun} used by ${scope.graph.name}.`
-              : `Loading what ${scope.graph.name} uses…`}{" "}
+          {status}{" "}
           <Button type="button" variant="link" size="xs" className="h-auto p-0" onClick={() => scope.setGraphId(null)}>
             Show all
           </Button>
@@ -166,7 +124,7 @@ export function ResourcePage({ kind }: { kind: AnyResourceKind }) {
             })}
           </ul>
           {items.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{scope.graph && scoped?.ids ? `${scope.graph.name} uses no ${noun}.` : kind.emptyText}</p>
+            <p className="text-muted-foreground text-sm">{emptyText}</p>
           ) : null}
         </>
       ) : null}

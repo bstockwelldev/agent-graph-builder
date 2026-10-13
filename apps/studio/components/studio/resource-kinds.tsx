@@ -88,6 +88,9 @@ export type ResourceKindConfig<T extends ResourceLike> = {
   renderCardHeader: (item: T) => ReactNode;
   /** Optional card body under the actions (a prompt's body, a tool's params). */
   renderCardBody?: (item: T) => ReactNode;
+  /** Optional compact line under an item in the workbench panel: the card's
+   * links and key facts, without its card-sized previews (those live in the editor). */
+  renderPanelDetail?: (item: T) => ReactNode;
   emptyForm: () => Partial<T>;
   /** Editor state for an existing item (defaults to the item itself). */
   toForm?: (item: T) => Partial<T>;
@@ -130,6 +133,8 @@ function nameIdFields<T extends ResourceLike & { name?: string | null }>(props: 
     />
   );
 }
+
+const panelLinkClass = "text-primary text-xs font-medium underline-offset-4 hover:underline";
 
 const preClass =
   "bg-surface-container-lowest/90 overflow-auto rounded-lg font-mono whitespace-pre-wrap ring-1 ring-outline-variant/20";
@@ -329,6 +334,14 @@ export const agentKind: ResourceKindConfig<AgentProfile> = {
         className="text-primary text-sm font-medium underline-offset-4 hover:underline"
         aria-label={`Run ${agent.name}`}
       >
+        Run
+      </Link>
+    </div>
+  ),
+  renderPanelDetail: (agent) => (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="text-muted-foreground font-mono text-[11px]">{agent.graph_id}</span>
+      <Link href={`/graphs/${encodeURIComponent(agent.graph_id)}?panel=run&agent=${encodeURIComponent(agent.id)}`} className={panelLinkClass} aria-label={`Run ${agent.name}`}>
         Run
       </Link>
     </div>
@@ -700,6 +713,18 @@ export const datasetKind: ResourceKindConfig<DatasetForm> = {
       )}
     </div>
   ),
+  renderPanelDetail: (dataset) => (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="text-muted-foreground text-[11px]">
+        {dataset.fixtures.length} fixture{dataset.fixtures.length === 1 ? "" : "s"}
+      </span>
+      {dataset.graph_id ? (
+        <Link href={routingLabHref(dataset.graph_id, dataset.id)} className={panelLinkClass} aria-label={`Open ${dataset.name} in routing lab`}>
+          Open in routing lab
+        </Link>
+      ) : null}
+    </div>
+  ),
   emptyForm: () => ({ id: genId("ds"), name: "", description: "", graph_id: null, fixtures_text: "[]", source: "manual", source_run_ids: [] }),
   toForm: (dataset) => ({ ...dataset, fixtures_text: fixturesToText(dataset.fixtures) }),
   issues: (form) => {
@@ -780,6 +805,14 @@ export const evalSuiteKind: ResourceKindConfig<EvalSuiteForm> = {
         aria-label={`Run ${suite.name}`}
         onClick={(event) => event.stopPropagation()}
       >
+        Run in the graph&apos;s Evals panel
+      </Link>
+    </div>
+  ),
+  renderPanelDetail: (suite) => (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="text-muted-foreground font-mono text-[11px]">{suite.graph_id}</span>
+      <Link href={`/graphs/${encodeURIComponent(suite.graph_id)}?panel=evals&suite=${encodeURIComponent(suite.id)}`} className={panelLinkClass} aria-label={`Run ${suite.name}`}>
         Run in the graph&apos;s Evals panel
       </Link>
     </div>

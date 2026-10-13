@@ -8,7 +8,11 @@
  * `?panel=…` for the open workbench panel -- so a reload, a shared link, or
  * browser history lands on the same node/run/panel. `section` is read-only
  * (a one-shot "open this Run panel section" used by the retired /runs
- * redirect) and is dropped on the next write. Unknown params are preserved.
+ * redirect) and is dropped on the next write, as are `id` (open this resource
+ * in a resource panel's editor, with `tab` choosing Overview / Usage /
+ * History) and `scope` (the Analytics panel's workspace/graph toggle) -- both
+ * are handed to the panel as its context when it opens. Unknown params are
+ * preserved.
  */
 export type GraphUrlState = {
   node: string | null;
@@ -21,9 +25,13 @@ export type GraphUrlState = {
   view: string | null;
   /** Editor mode (canvas-workbench-ergonomics-plan.md §5): code or split; canvas is omitted. */
   mode: string | null;
+  /** One-shot: a resource panel opens this resource's editor. */
+  id: string | null;
+  /** One-shot: the Analytics panel's scope, "workspace" or "graph". */
+  scope: string | null;
 };
 
-const KEYS = ["node", "edge", "run", "panel", "tab", "section", "view", "mode"] as const;
+const KEYS = ["node", "edge", "run", "panel", "tab", "section", "view", "mode", "id", "scope"] as const;
 
 export const EMPTY_GRAPH_URL_STATE: GraphUrlState = {
   node: null,
@@ -34,6 +42,8 @@ export const EMPTY_GRAPH_URL_STATE: GraphUrlState = {
   section: null,
   view: null,
   mode: null,
+  id: null,
+  scope: null,
 };
 
 export function parseGraphUrlState(search: string): GraphUrlState {
@@ -48,6 +58,22 @@ export function parseGraphUrlState(search: string): GraphUrlState {
   // A tab only means something alongside a node.
   if (!state.node) state.tab = null;
   return state;
+}
+
+/**
+ * What a `?panel=` deep link hands the panel as its context (WorkbenchProvider
+ * `panelContext`): a resource panel gets `{ resourceId, tab }` from `id`/`tab`,
+ * Analytics gets `{ scope }`. Reads `tab` from the raw query, since
+ * `parseGraphUrlState` drops it when no node is selected.
+ */
+export function panelContextFromUrl(search: string): { resourceId?: string; tab?: string; scope?: string } | undefined {
+  const state = parseGraphUrlState(search);
+  const tab = new URLSearchParams(search).get("tab")?.trim();
+  const context = {
+    ...(state.id ? { resourceId: state.id, ...(tab ? { tab } : {}) } : {}),
+    ...(state.scope ? { scope: state.scope } : {}),
+  };
+  return Object.keys(context).length > 0 ? context : undefined;
 }
 
 /** Returns the new query string (with leading "?", or "" when empty). */

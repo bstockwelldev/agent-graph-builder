@@ -83,7 +83,7 @@ const PAGES: [string, (page: Page, graph: GraphJson) => Promise<void>][] = [
     },
   ],
   // Every other graph-editor panel, and the run panel after a run finishes.
-  ...(["routingLab", "knowledge", "policies", "health", "graphConfig", "notes", "chat", "console", "help", "palette"] as const).map(
+  ...(["routingLab", "knowledge", "policies", "health", "graphConfig", "notes", "chat", "console", "help", "palette", "agents", "prompts", "tools", "mcp", "llmProfiles", "transforms", "datasets", "evalSuites", "workspacePolicies", "genui", "analytics"] as const).map(
     (panel): [string, (page: Page, graph: GraphJson) => Promise<void>] => [`${panel} panel`, (page, graph) => openGraph(page, graph, `?panel=${panel}`)],
   ),
   [

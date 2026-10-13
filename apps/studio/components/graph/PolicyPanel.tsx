@@ -21,6 +21,7 @@ import {
   SOURCE_LABEL,
   type ExceptionState,
 } from "@bstockwelldev/agent-graph-sdk/graph";
+import { useOptionalWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { Button } from "./ui/Button";
 import { CollapsibleSection } from "./ui/CollapsibleSection";
 import { Combobox } from "./ui/Combobox";
@@ -34,6 +35,8 @@ import { SkeletonBlock } from "./ui/Skeleton";
 
 const INHERIT = "inherit";
 
+const workspaceLinkStyle: CSSProperties = { color: color.primary[500], textDecoration: "underline", textUnderlineOffset: 2 };
+
 export function PolicyPanel({
   graphId,
   layout = "rail",
@@ -46,6 +49,7 @@ export function PolicyPanel({
   /** Called after an override or exception changes, to refresh diagnostics. */
   onPoliciesChanged?: () => void;
 }) {
+  const workbench = useOptionalWorkbench();
   const queryClient = useQueryClient();
   const invalidate = useAgentGraphInvalidation();
   // SDK 6/7: one cached query for the graph's effective rules, the
@@ -118,9 +122,20 @@ export function PolicyPanel({
         <CollapsibleSection sectionId="policy-rules" title="Rules" defaultOpen reducedMotion={reducedMotion}>
           <div style={{ ...typeScale.caption, opacity: 0.7, lineHeight: "16px", marginBottom: spacing[2] }}>
             Overrides for this graph. Anything left on Inherit follows the{" "}
-            <Link href="/policies" style={{ color: color.primary[500], textDecoration: "underline", textUnderlineOffset: 2 }}>
-              workspace policies
-            </Link>
+            {workbench ? (
+              // The workspace defaults are a global panel now (canvas-first landing plan, Phase 2).
+              <button
+                type="button"
+                onClick={() => workbench.open("workspacePolicies")}
+                style={{ ...workspaceLinkStyle, background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer" }}
+              >
+                workspace policies
+              </button>
+            ) : (
+              <Link href="/policies" style={workspaceLinkStyle}>
+                workspace policies
+              </Link>
+            )}
             .
           </div>
           {loading ? (

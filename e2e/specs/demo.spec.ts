@@ -47,4 +47,16 @@ test.describe("public demo mode", () => {
     await expect(rule).toContainText("Default (Warn)");
     expect((await (await request.get(`${DEMO_MODE_API_URL}/api/policies/workspace`)).json()).rules).toEqual({});
   });
+
+  // Canvas-first landing plan, Phase 2: the same refusal from the panel on a graph.
+  test("workspace policies stay read-only from the panel", async ({ page, request, demoModeApi: _ }) => {
+    const graphs: { id: string }[] = await (await request.get(`${DEMO_MODE_API_URL}/api/graph-summaries`)).json();
+    await page.goto(`/graphs/${graphs[0].id}?panel=workspacePolicies`);
+    const rule = page.getByRole("combobox", { name: "LLM model not pinned enforcement" });
+    await expect(rule).toContainText("Default (Warn)");
+    await rule.click();
+    await page.getByRole("option", { name: /^Block(?! publish)/ }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Workspace policies are read-only on the public demo" })).toBeVisible();
+    await expect(rule).toContainText("Default (Warn)");
+  });
 });

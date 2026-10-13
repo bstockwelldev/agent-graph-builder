@@ -132,6 +132,9 @@ import { useUndoStack } from "@/hooks/useUndoStack";
 import { useWorkbench } from "@/components/workbench/WorkbenchProvider";
 import { WorkbenchDrawer } from "@/components/workbench/WorkbenchDrawer";
 import { ChatPanel } from "@/components/workbench/panels/ChatPanel";
+import { ResourceBrowserPanel } from "@/components/workbench/ResourceBrowserPanel";
+import { WorkspacePoliciesPanel } from "@/components/workbench/panels/WorkspacePoliciesPanel";
+import { RESOURCE_KINDS } from "@/components/studio/resource-kinds";
 import type { WorkbenchPanelId } from "@/components/workbench/panels";
 import { EdgeInspector, NodeInspector } from "./NodeInspector";
 import { NodePalette } from "./NodePalette";
@@ -183,7 +186,7 @@ import { CanvasActionsProvider, type CanvasActions } from "./canvasActions";
 import type { EdgeRunState } from "./edges/LabeledEdge";
 import { findFreePosition, type LayoutSpacing } from "@/layout/dagreLayout";
 import { shell, surface } from "@/lib/graph-theme";
-import { parseEditorMode, parseGraphUrlState, serializeGraphUrlState, type EditorMode } from "@/lib/graphUrlState";
+import { panelContextFromUrl, parseEditorMode, parseGraphUrlState, serializeGraphUrlState, type EditorMode } from "@/lib/graphUrlState";
 import { WORKBENCH_PANELS } from "@/components/workbench/panels";
 import { CaptureDatasetDialog } from "@/components/studio/capture-dataset-dialog";
 import { emitResourceChanged } from "@/lib/resourceEvents";
@@ -251,6 +254,10 @@ const INSPECTOR_EXCLUSIVE_PANELS = new Set<WorkbenchPanelId | null>([
   "graphConfig",
   "notes",
   "chat",
+  // Canvas-first landing plan, Phase 2: the resource panels and workspace
+  // policies dock here instead of floating over nodes.
+  ...RESOURCE_KINDS.map((kind) => kind.panelId),
+  "workspacePolicies",
 ]);
 
 // Compact/mobile selection dock positioning. The dock used to anchor at a
@@ -767,7 +774,7 @@ export function GraphEditor({ graphId }: { graphId: string }) {
     // which the Run panel would otherwise cover).
     const fromUrl = parseGraphUrlState(window.location.search);
     if (fromUrl.panel && fromUrl.panel in WORKBENCH_PANELS) {
-      workbench.open(fromUrl.panel as WorkbenchPanelId);
+      workbench.open(fromUrl.panel as WorkbenchPanelId, panelContextFromUrl(window.location.search));
       return;
     }
     if (fromUrl.node || fromUrl.edge) return;
@@ -3714,6 +3721,17 @@ export function GraphEditor({ graphId }: { graphId: string }) {
           run panel, so it never covers nodes. */}
       <WorkbenchDrawer panelId="chat" side="right" mode="docked-reserve" titleBar dockedClassName="flex w-96 flex-col overflow-hidden border-l">
         <ChatPanel />
+      </WorkbenchDrawer>
+      {/* Canvas-first landing plan, Phase 2: the resource registries and the
+          workspace policies reserve a column here instead of floating over
+          nodes (they float from studio-shell.tsx everywhere else). */}
+      {RESOURCE_KINDS.map((kind) => (
+        <WorkbenchDrawer key={kind.id} panelId={kind.panelId} side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
+          <ResourceBrowserPanel kind={kind} />
+        </WorkbenchDrawer>
+      ))}
+      <WorkbenchDrawer panelId="workspacePolicies" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
+        <WorkspacePoliciesPanel />
       </WorkbenchDrawer>
       <WorkbenchDrawer panelId="releases" side="right" mode="docked-reserve" titleBar dockedClassName="w-96 border-l overflow-y-auto">
         <ReleasesPanel layout="rail" graphId={graphId} diagnostics={diagnostics} dirty={dirty} getDraftGraph={buildGraphDefinition} />

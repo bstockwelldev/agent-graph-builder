@@ -176,8 +176,14 @@ function WorkspaceAnalytics() {
  * dashboard stays one toggle away.
  */
 export function AnalyticsPanel() {
-  const { graphContext } = useWorkbench();
-  const [scope, setScope] = useState<"graph" | "workspace">("graph");
+  const { graphContext, panelContext } = useWorkbench();
+  // `?panel=analytics&scope=workspace|graph` arrives as the panel context
+  // (lib/graphUrlState.ts); it re-applies whenever the panel is reopened.
+  const requestedScope = (panelContext as { scope?: string } | null)?.scope;
+  const [scope, setScope] = useState<"graph" | "workspace">(requestedScope === "workspace" ? "workspace" : "graph");
+  useEffect(() => {
+    if (requestedScope === "workspace" || requestedScope === "graph") setScope(requestedScope);
+  }, [requestedScope, panelContext]);
   const graphScoped = scope === "graph" && graphContext !== null;
 
   return (

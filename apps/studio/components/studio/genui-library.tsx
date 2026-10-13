@@ -60,7 +60,12 @@ function ComponentCard({ entry }: { entry: GenuiCatalogEntry }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <GenuiSurface surface={{ root: entry.example }} data={SAMPLE_DATA} />
-        <Table aria-label={`${entry.type} props`}>
+        {/* Focusable, so a table that overflows a narrow workbench panel can still be scrolled by keyboard. */}
+        <Table
+          aria-label={`${entry.type} props`}
+          containerProps={{ tabIndex: 0, role: "region", "aria-label": `${entry.type} props table` }}
+          className="[&_td]:break-words [&_td]:whitespace-normal [&_th]:whitespace-normal"
+        >
           <TableHeader>
             <TableRow>
               <TableHead>Prop</TableHead>

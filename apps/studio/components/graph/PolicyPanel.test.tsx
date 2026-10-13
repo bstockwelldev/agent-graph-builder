@@ -5,6 +5,7 @@ import { resetClientMock } from "@/lib/mockClient";
 
 import { PolicyPanel } from "./PolicyPanel";
 import { agentGraphWrapper } from "@/lib/agentGraphTestWrapper";
+import { WorkbenchProvider, useWorkbench } from "@/components/workbench/WorkbenchProvider";
 
 const { clientMock } = vi.hoisted(() => ({
   clientMock: {
@@ -110,5 +111,33 @@ describe("PolicyPanel", () => {
     expect(clientMock.policies.exceptions.delete).not.toHaveBeenCalled();
     fireEvent.click(within(first).getByRole("button", { name: "Confirm revoke" }));
     await waitFor(() => expect(clientMock.policies.exceptions.delete).toHaveBeenCalledWith("g1", "pexc_soon"));
+  });
+
+  // Canvas-first landing plan, Phase 2 (§4 item 3): the workspace defaults are a panel now.
+  it("opens the workspace policies panel instead of navigating to /policies", async () => {
+    window.matchMedia ??= ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    function Active() {
+      return <output data-testid="active">{useWorkbench().activePanel}</output>;
+    }
+    const wrapper = agentGraphWrapper(clientMock);
+    render(
+      <WorkbenchProvider>
+        <Active />
+        <PolicyPanel graphId="g1" />
+      </WorkbenchProvider>,
+      { wrapper },
+    );
+    expect(screen.queryByRole("link", { name: "workspace policies" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "workspace policies" }));
+    expect(screen.getByTestId("active").textContent).toBe("workspacePolicies");
   });
 });

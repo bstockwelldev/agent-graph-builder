@@ -23,7 +23,7 @@ test("Analytics scopes to one graph's runs and nodes", async ({ page, api }) => 
 
   // Back to the workspace, then into the graph again from its "By graph" row.
   await page.getByRole("combobox", { name: "Scope" }).click();
-  await page.getByRole("option", { name: "Workspace" }).click();
+  await page.getByRole("option", { name: "Workspace", exact: true }).click();
   await expect(page).not.toHaveURL(/graph=/);
   await page.getByRole("button", { name: `Show analytics for ${graph.name}` }).click();
   await expect(page).toHaveURL(new RegExp(`graph=${graph.id}`));
