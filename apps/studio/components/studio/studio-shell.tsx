@@ -20,6 +20,7 @@ import { AnalyticsPanel } from "@/components/workbench/panels/AnalyticsPanel";
 import { ConsolePanel } from "@/components/workbench/panels/ConsolePanel";
 import { GenuiPanel } from "@/components/workbench/panels/GenuiPanel";
 import { WorkspacePoliciesPanel } from "@/components/workbench/panels/WorkspacePoliciesPanel";
+import { GraphPicker } from "@/components/studio/graph-picker";
 import { CommandPalette } from "@/components/workbench/CommandPalette";
 import { HelpOverlay } from "@/components/workbench/HelpOverlay";
 
@@ -46,6 +47,10 @@ export function StudioShell({
   const safePathname = pathname ?? "";
   const graphCanvas = isGraphCanvasRoute(safePathname);
   const isGraphsListPage = safePathname === "/graphs";
+  // `/` is the empty canvas (canvas-first landing plan): full-bleed like a
+  // graph, but with no GraphEditor, so the app-wide panels still float.
+  const landing = safePathname === "/";
+  const fullBleed = graphCanvas || landing;
 
   const openStudioNav = useCallback(() => {
     setMobileNavOpen(true);
@@ -97,7 +102,7 @@ export function StudioShell({
           // route needs the identical clamp for the same reason — its
           // docked run/palette panels and node/edge inspector all depend on
           // a genuinely bounded ancestor height to scroll internally.
-          (isGraphsListPage || graphCanvas) && "h-dvh max-h-dvh min-h-0 overflow-hidden",
+          (isGraphsListPage || fullBleed) && "h-dvh max-h-dvh min-h-0 overflow-hidden",
           className,
         )}
       >
@@ -122,10 +127,10 @@ export function StudioShell({
             "bg-sidebar text-sidebar-foreground shrink-0 flex-col items-center gap-4 border-r border-sidebar-border py-4",
             // Graph canvas: keep aside fully hidden at all breakpoints — base `md:flex` would
             // otherwise override `hidden` at md+ and duplicate the Sheet nav.
-            graphCanvas ? "hidden" : "hidden w-[72px] md:flex",
+            fullBleed ? "hidden" : "hidden w-[72px] md:flex",
           )}
           aria-label="Studio navigation"
-          aria-hidden={graphCanvas}
+          aria-hidden={fullBleed}
         >
           <StudioRail pathname={safePathname} footer={<StudioAuthSection compact />} />
         </aside>
@@ -133,7 +138,7 @@ export function StudioShell({
           <header
             className={cn(
               "border-outline-variant/15 bg-surface-container-low/90 sticky top-0 z-40 flex h-12 items-center justify-between border-b px-3 backdrop-blur-md md:hidden",
-              graphCanvas && "hidden",
+              fullBleed && "hidden",
             )}
           >
             <Link
@@ -147,12 +152,12 @@ export function StudioShell({
             className={cn(
               "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
               // Room for the mobile tab bar (64px + safe area) so it never covers content.
-              !graphCanvas && "pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0",
+              !fullBleed && "pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0",
             )}
           >
             <div
               className={cn(
-                graphCanvas
+                fullBleed
                   ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
                   : isGraphsListPage
                     ? "mx-auto flex w-full max-w-6xl min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-5 sm:py-6 md:px-6"
@@ -163,7 +168,7 @@ export function StudioShell({
               {children}
             </div>
           </main>
-          {!graphCanvas && <MobileTabBar aria-label="Studio tabs" tabs={mobileTabs} className="md:hidden" />}
+          {!fullBleed && <MobileTabBar aria-label="Studio tabs" tabs={mobileTabs} className="md:hidden" />}
         </div>
       </div>
 
@@ -203,6 +208,7 @@ export function StudioShell({
       <WorkbenchDrawer panelId="console" side="right" dockedClassName="right-4 bottom-4 flex h-96 w-[32rem] flex-col overflow-hidden">
         <ConsolePanel />
       </WorkbenchDrawer>
+      <GraphPicker />
       <CommandPalette />
       <HelpOverlay />
     </StudioNavProvider>

@@ -13,6 +13,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import type { CanvasCommand, CanvasCommandGroup } from "@/components/graph/canvasCommands";
+import { useOptionalGraphPicker } from "@/components/studio/graph-picker";
 import { studioNavGroups } from "@/components/studio/studio-nav";
 import { client } from "@/lib/api-client";
 import { KB_ARTICLES } from "@/lib/kb";
@@ -34,6 +35,7 @@ export function CommandPalette() {
   // per opening so they reflect the selection at that moment.
   const [canvasCommands, setCanvasCommands] = useState<CanvasCommand[]>([]);
   const router = useRouter();
+  const picker = useOptionalGraphPicker();
   const workbench = useWorkbench();
   // Studio-config-editor-and-console-plan.md §7's "HUD toggle shows a
   // count/severity badge" — this repo's global panels have no persistent
@@ -142,6 +144,22 @@ export function CommandPalette() {
             </CommandGroup>
           );
         })}
+        {picker && (
+          <CommandGroup heading="Graphs">
+            <CommandItem
+              value="Open graph"
+              keywords={["browse", "switch", "graphs", "demos", "new graph"]}
+              onSelect={() => {
+                setOpen(false);
+                setSearch("");
+                picker.open();
+              }}
+            >
+              <span className="flex-1">Open graph…</span>
+              <CommandShortcut>⌘O</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
+        )}
         {studioNavGroups.map((group) => (
           <CommandGroup key={group.label} heading={group.label}>
             {group.items.map((item) => (

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown } from "lucide-react";
 import type { GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
 // Replaces the old "Switch graph" toggle button + reserved-width docked
@@ -24,6 +24,7 @@ export function GraphSwitcherCombobox({
   openDirection = "down",
   onSelect,
   onOpenChange,
+  onBrowseAll,
 }: {
   graphs: Pick<GraphSummary, "id" | "name">[];
   activeGraphId: string | null;
@@ -41,6 +42,8 @@ export function GraphSwitcherCombobox({
   onSelect: (graphId: string) => void;
   /** Fired on open/close so the caller can lazily (re)fetch `graphs`. */
   onOpenChange?: (open: boolean) => void;
+  /** Adds a "Browse all…" item that opens the graph picker (canvas-first-landing-plan.md §3). */
+  onBrowseAll?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -166,6 +169,22 @@ export function GraphSwitcherCombobox({
                       </CommandGroup>
                     </>
                   )}
+                  {onBrowseAll ? (
+                    <CommandGroup forceMount>
+                      {/* forceMount: stays listed whatever is typed. */}
+                      <CommandItem
+                        forceMount
+                        value="browse all graphs"
+                        onSelect={() => {
+                          setOpenAndNotify(false);
+                          onBrowseAll();
+                        }}
+                      >
+                        <span className="flex-1">Browse all…</span>
+                        <CommandShortcut>⌘O</CommandShortcut>
+                      </CommandItem>
+                    </CommandGroup>
+                  ) : null}
                 </CommandList>
               </Command>
             </div>

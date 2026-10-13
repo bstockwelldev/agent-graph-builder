@@ -42,3 +42,7 @@ component that only ever renders inside the graph canvas is
 token-styled even if it's small; a full page or a dialog reachable from
 the sidebar nav is Tailwind/shadcn even if it's graph-adjacent (e.g.
 `/runs/[graphId]`).
+
+A dialog the shell renders once and opens from anywhere (the command palette,
+the graph picker) is shadcn too, since it isn't part of the canvas tree. The
+graph header's switcher opens that picker with "Browse all…" and ⌘O.
