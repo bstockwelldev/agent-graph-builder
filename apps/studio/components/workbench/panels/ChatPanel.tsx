@@ -2,11 +2,13 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Play } from "lucide-react";
+import { KeyRound, Play } from "lucide-react";
 import type { ChatContext, ChatMessage, ChatProvider, ChatRunRef, ChatSession, GraphSummary } from "@bstockwelldev/agent-graph-sdk";
 import { client } from "@/lib/api-client";
 import { Button } from "@/components/graph/ui/Button";
 import { Combobox } from "@/components/graph/ui/Combobox";
+import { Field } from "@/components/graph/ui/Field";
+import { PasswordInput } from "@/components/graph/ui/fields";
 import { IconButton } from "@/components/graph/ui/IconButton";
 import { ProviderModelPicker } from "@/components/graph/ProviderModelPicker";
 import { Conversation, ConversationContent, ConversationEmptyState } from "@/components/ai-elements/conversation";
@@ -21,6 +23,9 @@ import { ChatRunPicker } from "./ChatRunPicker";
 
 /** A run waiting on the user's Confirm (release runs, free-text proposals). */
 type PendingRun = { target: RunTarget; command: string; reason: string };
+
+/** Live providers need a caller-supplied key when the server won't spend its own (public demo). */
+const API_KEY_PROVIDERS: ChatProvider[] = ["groq", "google", "azure", "openai_compat"];
 
 function commandFor(target: RunTarget): string {
   const selector = target.release === null ? "" : target.release === "latest" ? "@latest" : `@${target.release}`;
@@ -105,6 +110,10 @@ export function ChatPanel() {
 
   const [newProvider, setNewProvider] = useState<ChatProvider>("stub");
   const [newModel, setNewModel] = useState("stub");
+  // Bring-your-own key for live providers. In-memory only (never persisted):
+  // sent with each message so a chat session works even where the server
+  // won't spend its own key (public demo mode).
+  const [apiKey, setApiKey] = useState("");
 
   // Chat context binding (studio-ux-gap-remediation-plan.md §3, STO-596).
   // On by default; the user can opt out per-panel-session via the strip
@@ -218,16 +227,18 @@ export function ChatPanel() {
       }
       const provider = activeSession.provider as ChatProvider;
       const model = activeSession.model || undefined;
+      const runApiKey = apiKey.trim() || undefined;
       const summary = target.agent
         ? // An agent with an LLM profile picks its own model.
           await client.agents.run(target.agent.id, {
             input: target.input,
             ...(target.agent.llm_profile_id ? {} : { provider, model }),
+            ...(runApiKey ? { apiKey: runApiKey } : {}),
           })
         : (
             releaseId
-              ? await client.releases.run(releaseId, { input: target.input, provider, model })
-              : await client.runs.start({ graphId: target.graph.id, input: target.input, provider, model })
+              ? await client.releases.run(releaseId, { input: target.input, provider, model, ...(runApiKey ? { apiKey: runApiKey } : {}) })
+              : await client.runs.start({ graphId: target.graph.id, input: target.input, provider, model, ...(runApiKey ? { apiKey: runApiKey } : {}) })
           ).run;
       const run: ChatRunRef = {
         run_id: summary.run_id,
@@ -328,7 +339,11 @@ export function ChatPanel() {
               run_id: graphContext.runId,
             }
           : undefined;
-      const updated = await client.chatSessions.send(activeSession.id, { content, context });
+      const updated = await client.chatSessions.send(activeSession.id, {
+        content,
+        context,
+        apiKey: apiKey.trim() || undefined,
+      });
       setActiveSession(updated);
       setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (err) {
@@ -370,6 +385,28 @@ export function ChatPanel() {
             onProviderChange={setNewProvider}
             onModelChange={setNewModel}
           />
+          {API_KEY_PROVIDERS.includes(newProvider) && (
+            <Field
+              label={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <KeyRound size={12} aria-hidden="true" />
+                  API key
+                </span>
+              }
+              hint="Sent with each message; kept in memory only, never stored."
+            >
+              {(id) => (
+                <PasswordInput
+                  id={id}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Enter your API key for this provider"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              )}
+            </Field>
+          )}
           <ConversationEmptyState
             title="No session open"
             description="Select an existing session above, or create a new one."
