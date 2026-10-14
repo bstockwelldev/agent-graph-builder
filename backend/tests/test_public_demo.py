@@ -236,3 +236,53 @@ def test_private_mode_keeps_server_keys_usable(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("GROQ_API_KEY", "server-key")
     require_live_provider_allowed("groq", None)
     assert client.get("/api/providers/groq/credentials").json()["configured"] is True
+
+
+# --- Chat bring-your-own key ------------------------------------------------
+
+
+def _create_chat_session(session_id: str, provider: str) -> None:
+    body = {"id": session_id, "title": "Demo chat", "provider": provider, "model": "stub"}
+    response = client.post("/api/chat-sessions", json=body)
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.usefixtures("public_mode")
+def test_public_mode_chat_rejects_live_provider_without_key() -> None:
+    session_id = "chat_demo_no_key"
+    _create_chat_session(session_id, "groq")
+    try:
+        response = client.post(f"/api/chat-sessions/{session_id}/messages", json={"content": "hi"})
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "live_provider_requires_api_key"
+    finally:
+        client.delete(f"/api/chat-sessions/{session_id}")
+
+
+@pytest.mark.usefixtures("public_mode")
+def test_public_mode_chat_accepts_caller_supplied_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.main as main_module
+
+    captured: dict = {}
+
+    class RecordingChatModel:
+        async def generate(self, *, system_prompt, user_prompt, history=None):
+            return f"[live answer] {user_prompt}"
+
+    def fake_get_chat_model(**kwargs):
+        captured.update(kwargs)
+        return RecordingChatModel()
+
+    monkeypatch.setattr(main_module, "get_chat_model", fake_get_chat_model)
+    session_id = "chat_demo_caller_key"
+    _create_chat_session(session_id, "groq")
+    try:
+        response = client.post(
+            f"/api/chat-sessions/{session_id}/messages",
+            json={"content": "hi", "api_key": "caller-key"},
+        )
+        assert response.status_code == 200, response.text
+        assert captured.get("api_key") == "caller-key"
+        assert captured.get("provider") == "groq"
+    finally:
+        client.delete(f"/api/chat-sessions/{session_id}")
