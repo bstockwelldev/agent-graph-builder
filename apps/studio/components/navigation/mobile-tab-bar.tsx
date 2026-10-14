@@ -24,10 +24,13 @@ export const MOBILE_TAB_BAR_HEIGHT = 64;
 /**
  * Mobile bottom tab bar (roadmap P3 "Mobile bottom nav tray", STO-607):
  * the standard app pattern -- up to five icon-over-label tabs, 44px+ touch
- * targets, a pill behind the active icon, safe-area aware. One component
- * for both uses: global destinations on regular pages (StudioShell) and
- * canvas actions on the graph route (GraphEditor). Plain Tailwind + lucide
- * (no shadcn primitives), so the token-styled graph route can use it too.
+ * targets, a pill behind the active icon. It floats: inset from the left,
+ * right, and bottom edges (never bleeding into the home-indicator gesture
+ * zone that swallows taps on full-bleed bars), clearing the larger of a
+ * 12px margin and the device safe-area inset. One component for both uses:
+ * global destinations on regular pages (StudioShell) and canvas actions on
+ * the graph route (GraphEditor). Plain Tailwind + lucide (no shadcn
+ * primitives), so the token-styled graph route can use it too.
  */
 export function MobileTabBar({
   tabs,
@@ -42,7 +45,7 @@ export function MobileTabBar({
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "bg-surface-container-low/95 border-outline-variant/20 fixed inset-x-0 bottom-0 z-30 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur-md",
+        "bg-surface-container-low/95 border-outline-variant/20 fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 rounded-2xl border shadow-xl backdrop-blur-md",
         className,
       )}
     >
