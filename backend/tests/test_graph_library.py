@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.demo_graph import SEEDED_DEMOS
 from app.graph_templates import (
     build_blank_graph,
     build_graph_from_demo_template,
@@ -58,3 +59,18 @@ def test_post_graphs_creates_from_demo_template(client: TestClient) -> None:
     body = response.json()
     assert body["name"] == "Demo copy"
     assert len(body["nodes"]) == 8
+
+
+def test_demos_lists_seeded_gallery(client) -> None:
+    """STO-703: GET /api/demos serves the seeded, read-only gallery the
+    studio's graph picker lists (it degraded to a permanent spinner when
+    the route/SDK resource was removed)."""
+    response = client.get("/api/demos")
+    assert response.status_code == 200
+    demos = response.json()
+    assert len(demos) == len(SEEDED_DEMOS)
+    by_id = {demo["id"]: demo for demo in demos}
+    assert by_id["demo_classify_and_route"]["title"] == "Classify & Route"
+    for demo in demos:
+        assert set(demo) == {"id", "title", "tagline", "node_types"}
+        assert demo["node_types"]  # every gallery entry names its node types

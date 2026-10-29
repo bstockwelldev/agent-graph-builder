@@ -58,6 +58,7 @@ import {
   routingLabReportSchema,
   runGraphSnapshotSchema,
   runSummarySchema,
+  seededDemoSummarySchema,
   simulateResultSchema,
   subgraphExtractResponseSchema,
   toolDefinitionSchema,
@@ -245,6 +246,13 @@ export function buildNamespaces(transport: Transport) {
       /** Runs the draft with no live tool/LLM calls (`fixture.node_outputs` stubs nodes). */
       simulate: (graphId: string, fixture: Fixture) =>
         transport.request(path`/api/graphs/${graphId}/simulate`, json(fixture), simulateResultSchema),
+    },
+
+    /** The public demo gallery: seeded, read-only workflows (GET /api/demos).
+     * A failing gallery call degrades to "no demos" via Promise.allSettled in
+     * the studio's useGraphLibrary -- it never blocks the graph list. */
+    demos: {
+      list: () => transport.request("/api/demos", undefined, seededDemoSummarySchema.array()),
     },
 
     runs: {

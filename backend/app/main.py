@@ -23,7 +23,7 @@ from .bindings import resource_usages
 from .chat_context import ChatContext, build_chat_prompt
 from .kb import KbArticle, KbArticleSummary, get_article, load_articles, search_articles
 from .datasets import DatasetBuildError, build_dataset_from_runs
-from .demo_graph import build_demo_graph, protected_graph
+from .demo_graph import build_demo_graph, iter_seeded_demos, protected_graph
 from .env_config import (
     load_app_env,
     public_demo_mode_enabled,
@@ -93,6 +93,7 @@ from .models import (
     RunResumeRequest,
     RunRoutingDatasetRequest,
     RunSummary,
+    SeededDemoSummary,
     SimulateResult,
     TransformPreviewRequest,
     TransformPreviewResponse,
@@ -333,6 +334,20 @@ def list_graph_summaries(page: Page) -> list[GraphSummary]:
     """Every saved graph without its nodes/edges -- for lists and pickers.
     Unpaged order: newest-updated first. Paged order: by id."""
     return paginate(storage.list_graph_summaries(), page, key=field_key("id"))
+
+
+@app.get("/api/demos")
+def list_seeded_demos() -> list[SeededDemoSummary]:
+    """The public demo gallery: seeded, read-only workflows visitors can run and fork."""
+    return [
+        SeededDemoSummary(
+            id=demo.id,
+            title=demo.title,
+            tagline=demo.tagline,
+            node_types=list(demo.node_types),
+        )
+        for demo in iter_seeded_demos()
+    ]
 
 
 @app.post("/api/graphs")
