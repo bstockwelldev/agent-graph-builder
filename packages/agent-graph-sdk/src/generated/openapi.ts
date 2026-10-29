@@ -4,7 +4,7 @@
 // `pnpm --filter @bstockwelldev/agent-graph-sdk run generate`.
 
 /** The API contract version these types were generated from (server header X-AGB-API-Version). */
-export const CONTRACT_API_VERSION = "0.4.0";
+export const CONTRACT_API_VERSION = "0.5.0";
 
 export type paths = {
     "/api/agents": {
@@ -2081,6 +2081,8 @@ export type components = {
         };
         /** ChatSessionMessageRequest */
         ChatSessionMessageRequest: {
+            /** Api Key */
+            api_key?: string | null;
             /** Content */
             content: string;
             context?: components["schemas"]["ChatContext"] | null;
@@ -3495,7 +3497,13 @@ export type components = {
              */
             status: "queued" | "running" | "succeeded" | "failed" | "paused";
         };
-        /** SeededDemoSummary */
+        /**
+         * SeededDemoSummary
+         * @description One public demo gallery entry (GET /api/demos): seeded, read-only
+         *     workflows visitors can run and fork. Keep in sync with
+         *     backend/app/demo_graph.py SEEDED_DEMOS and the SDK's
+         *     seededDemoSummarySchema.
+         */
         SeededDemoSummary: {
             /** Id */
             id: string;

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app import public_writes, storage
 from app.demo_graph import DEMO_GRAPH_ID
-from app.main import _seed_demo_graphs, app
+from app.main import _seed_demo_graph, app
 from tests.helpers import editable_demo_graph
 
 client = TestClient(app)
@@ -31,7 +31,7 @@ def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
         for window in ("HOUR", "DAY"):
             monkeypatch.delenv(f"PUBLIC_{bucket}_LIMIT_PER_{window}", raising=False)
     public_writes.reset_local_quotas()
-    _seed_demo_graphs()
+    _seed_demo_graph()
 
 
 @pytest.fixture

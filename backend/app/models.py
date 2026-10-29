@@ -243,6 +243,18 @@ class GraphSummary(BaseModel):
     subgraph_ids: list[str] = []
 
 
+class SeededDemoSummary(BaseModel):
+    """One public demo gallery entry (GET /api/demos): seeded, read-only
+    workflows visitors can run and fork. Keep in sync with
+    backend/app/demo_graph.py SEEDED_DEMOS and the SDK's
+    seededDemoSummarySchema."""
+
+    id: str
+    title: str
+    tagline: str
+    node_types: list[str]
+
+
 class GraphCatalogEntry(BaseModel):
     """What cross-graph readers need from a graph without loading it: names
     for analytics, bindings for resource "used by", subgraph targets for
